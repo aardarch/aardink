@@ -1,0 +1,76 @@
+package com.aardarch.editor.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.aardarch.editor.core.HoverDoc
+
+/**
+ * Floating popup showing hover documentation for the token under the cursor.
+ *
+ * Positioned by the Popup system near the current anchor. The caller dismisses it
+ * via [onDismiss] (typically when the cursor moves or a key is pressed).
+ */
+@Composable
+fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Popup(
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = false),
+    ) {
+        Surface(
+            modifier = modifier
+                .widthIn(max = 360.dp)
+                .shadow(8.dp, RoundedCornerShape(10.dp)),
+            shape = RoundedCornerShape(10.dp),
+            tonalElevation = 4.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = doc.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                HorizontalDivider(thickness = 0.5.dp)
+                Text(
+                    text = doc.content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (doc.example != null) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = doc.example,
+                            modifier = Modifier.padding(8.dp),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
