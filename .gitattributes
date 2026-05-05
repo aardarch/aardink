@@ -1,0 +1,25 @@
+* text=auto eol=lf
+
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+gradlew     text eol=lf
+gradlew.bat text eol=crlf
+
+*.kt   text diff=kotlin
+*.kts  text diff=kotlin
+*.java text diff=java
+*.md   text diff=markdown
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.ico  binary
+*.jks  binary
+*.keystore binary
+*.jar  binary
+*.aar  binary
+
+api/*.api          linguist-generated=true
+gradle/wrapper/**  linguist-vendored=true
