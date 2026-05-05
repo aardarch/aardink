@@ -3,6 +3,15 @@
 build/
 **/build/
 local.properties
+gradle/gradle-daemon-jvm.properties
+
+# Kotlin
+.kotlin/
+
+# Native build / profiling / logs
+.cxx/
+*.hprof
+*.log
 
 # Android
 *.apk
