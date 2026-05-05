@@ -17,9 +17,9 @@ jvm = "21"
 androidx-compose-bom = "2026.04.01"
 
 # Library versions
-androidx-activity = "1.10.1"
+androidx-activity = "1.13.0"
 androidx-lifecycle = "2.10.0"
-google-material = "1.14.0-rc01"
+google-material = "1.13.0"
 junit-jupiter = "6.0.3"
 
 ####################################################################################################
