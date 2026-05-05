@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Aardarch
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.aardarch.editor.ui
 
 import androidx.compose.foundation.ScrollState
@@ -170,10 +185,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
     val maxY = size.height
     var visualRow = 0
     for (lineIndex in 0 until lineCount) {
-        if (lineIndex in hiddenLines) continue  // inside a folded region — not visible
+        if (lineIndex in hiddenLines) continue // inside a folded region — not visible
 
         val lineTop = topPaddingPx + visualRow * lineHeightPx - scrollOffsetPx
-        if (lineTop + lineHeightPx < 0f) { visualRow++; continue }
+        if (lineTop + lineHeightPx < 0f) {
+            visualRow++
+            continue
+        }
         if (lineTop > maxY) break
 
         // 1. Diff bar (leftmost, full line height minus 1 px padding each side)
