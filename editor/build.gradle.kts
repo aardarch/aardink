@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.plugin.android.library)
     alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.spotless)
-    alias(libs.plugins.plugin.kotlin.binary.compat)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
 }
 
@@ -126,5 +125,6 @@ mavenPublishing {
 }
 
 // ── API compatibility tracking ────────────────────────────────────────────────
-// Run `./gradlew :editor:apiDump` to regenerate api/editor.api after intentional API changes.
-// Run `./gradlew :editor:apiCheck` (also part of `check`) to verify no accidental API breaks.
+// TODO: Re-enable kotlinx.binary-compatibility-validator (or migrate to KGP's
+// built-in ABI validation) once Android library support is stable. See the
+// note in the root build.gradle.kts for context.
