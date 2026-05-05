@@ -6,7 +6,7 @@ It is extracted from [Aardflex](https://github.com/aardarch/aardflex) and publis
 
 ## Project Layout
 
-```
+```text
 editor/          # The library module — the published artifact
   src/main/java/com/aardarch/editor/
     core/        # Document model, tokenization, undo, find, folding
@@ -30,16 +30,32 @@ sample/          # Minimal Android app for local development and manual testing
 
 All commands run from the repo root (`c:\repos\aardarch\aardink`).
 
-```
+```pwsh
 ./gradlew :editor:test              # Unit tests
 ./gradlew :editor:lint              # Lint
-./gradlew :editor:apiCheck          # Binary compatibility check
-./gradlew :editor:apiDump           # Regenerate api/editor.api (after intentional API changes)
 ./gradlew :editor:spotlessCheck     # Formatting check
 ./gradlew :editor:spotlessApply     # Auto-format
 ./gradlew :sample:installDebug      # Install sample app
 ./gradlew :editor:publishToMavenLocal  # Publish to ~/.m2 for local testing
 ```
+
+### Pre-push end-to-end check
+
+Before pushing, run the full local equivalent of CI:
+
+```pwsh
+./pre-push.ps1                      # Full check + Spotless auto-fix
+./pre-push.ps1 -NoFix               # Check-only (matches CI exactly)
+./pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (lint + format + apiCheck)
+```
+
+The script runs: secret scan, Apache 2.0 header check, Spotless, lint, unit
+tests, sample build, and `publishToMavenLocal` sanity.
+
+> **Note:** `apiCheck` / `apiDump` are temporarily disabled — the
+> `kotlinx.binary-compatibility-validator` plugin doesn't yet register tasks on
+> Android library modules under AGP 9 + Kotlin 2.3. See the comment in the root
+> `build.gradle.kts` for re-enable context.
 
 ## Code Conventions
 
@@ -54,6 +70,7 @@ All commands run from the repo root (`c:\repos\aardarch\aardink`).
 ## Separation of Concerns
 
 The `editor` module is intentionally language-agnostic:
+
 - Generic highlighting, gutter, undo, find/replace, folding → belongs in `editor`
 - Language-specific logic (XML, Kotlin, etc.) → belongs in the consumer app via `LanguageService` + `IncrementalTokenizer`
 - Aardflex-specific state (WallpaperRepository, ViewModels) → never touches `editor`
@@ -61,7 +78,7 @@ The `editor` module is intentionally language-agnostic:
 ## Public API Surface (key entry points)
 
 | Symbol | Description |
-|--------|-------------|
+| --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
 | `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor |
 | `LanguageService` | Interface — implement for completions, diagnostics, hover, formatting |
