@@ -7,11 +7,16 @@ It is extracted from [Aardflex](https://github.com/aardarch/aardflex) and publis
 ## Project Layout
 
 ```text
-editor/          # The library module — the published artifact
+editor/          # The library module — the published artifact (com.aardarch:aardink)
   src/main/java/com/aardarch/editor/
     core/        # Document model, tokenization, undo, find, folding
     ui/          # Composables: CodeEditorLayout, EditorGutter, etc.
   src/test/      # JUnit 5 unit tests
+
+languages/       # Built-in language support — published as com.aardarch:aardink-languages
+  src/main/java/com/aardarch/editor/languages/
+    LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
+    internal/    # Per-language tokenizers + folding providers (regex-driven v1)
 
 sample/          # Minimal Android app for local development and manual testing
   src/main/java/com/aardarch/aardink/sample/
@@ -31,12 +36,12 @@ sample/          # Minimal Android app for local development and manual testing
 All commands run from the repo root (`c:\repos\aardarch\aardink`).
 
 ```pwsh
-./gradlew :editor:test              # Unit tests
-./gradlew :editor:lint              # Lint
-./gradlew :editor:spotlessCheck     # Formatting check
-./gradlew :editor:spotlessApply     # Auto-format
-./gradlew :sample:installDebug      # Install sample app
-./gradlew :editor:publishToMavenLocal  # Publish to ~/.m2 for local testing
+./gradlew :editor:test :languages:test          # Unit tests
+./gradlew :editor:lint :languages:lint          # Lint
+./gradlew :editor:spotlessCheck :languages:spotlessCheck     # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply     # Auto-format
+./gradlew :sample:installDebug                  # Install sample app
+./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal  # Publish to ~/.m2
 ```
 
 ### Pre-push end-to-end check
@@ -72,8 +77,10 @@ tests, sample build, and `publishToMavenLocal` sanity.
 The `editor` module is intentionally language-agnostic:
 
 - Generic highlighting, gutter, undo, find/replace, folding → belongs in `editor`
-- Language-specific logic (XML, Kotlin, etc.) → belongs in the consumer app via `LanguageService` + `IncrementalTokenizer`
-- Aardflex-specific state (WallpaperRepository, ViewModels) → never touches `editor`
+- Language-specific logic (Kotlin, TS, JSON, XML, HTML, CSS, Markdown, plain text) → belongs in
+  `languages` (or in a consumer override) via `IncrementalTokenizer` + `FoldingProvider`,
+  packaged as `LanguageDefinition` and resolved through `LanguageRegistry`
+- Aardflex-specific state (WallpaperRepository, ViewModels) → never touches `editor` or `languages`
 
 ## Public API Surface (key entry points)
 
