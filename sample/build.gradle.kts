@@ -44,10 +44,12 @@ composeCompiler {
 
 dependencies {
     implementation(project(":editor"))
+    implementation(project(":languages"))
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.bundles.compose.core)
+    implementation(libs.compose.icons.core)
     debugImplementation(libs.bundles.compose.debug)
 
     implementation(libs.androidx.activity.compose)
