@@ -4,7 +4,7 @@
 [versions]
 
 # Plugin versions
-plugin-agp = "9.2.0"
+plugin-agp = "9.2.1"
 plugin-kotlin = "2.3.21"
 plugin-spotless = "8.4.0"
 plugin-kotlin-binary-compat = "0.18.1"
@@ -14,7 +14,7 @@ plugin-vanniktech-maven-publish = "0.36.0"
 jvm = "21"
 
 # BOMs
-androidx-compose-bom = "2026.04.01"
+androidx-compose-bom = "2026.05.00"
 
 # Library versions
 androidx-activity = "1.13.0"
@@ -34,6 +34,7 @@ androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = 
 androidx-compose-foundation-foundation = { module = "androidx.compose.foundation:foundation" }
 androidx-compose-foundation-foundation-layout = { module = "androidx.compose.foundation:foundation-layout" }
 androidx-compose-material3-material3 = { module = "androidx.compose.material3:material3" }
+compose-icons-core = { module = "androidx.compose.material:material-icons-core" }
 androidx-compose-runtime-runtime = { module = "androidx.compose.runtime:runtime" }
 androidx-compose-runtime-runtime-saveable = { module = "androidx.compose.runtime:runtime-saveable" }
 androidx-compose-ui-ui = { module = "androidx.compose.ui:ui" }
