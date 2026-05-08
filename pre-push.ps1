@@ -95,7 +95,14 @@ try {
 
     # ── 2. License header check (Apache 2.0 on every Kotlin source) ────
     Invoke-Check 'Apache 2.0 license headers' {
-        $Sources = Get-ChildItem -Path (Join-Path $ProjectRoot 'editor' 'src') -Recurse -Include '*.kt' -ErrorAction SilentlyContinue
+        $SourceRoots = @(
+            (Join-Path $ProjectRoot 'editor' 'src'),
+            (Join-Path $ProjectRoot 'languages' 'src'),
+            (Join-Path $ProjectRoot 'sample' 'src')
+        )
+        $Sources = $SourceRoots |
+            Where-Object { Test-Path $_ } |
+            ForEach-Object { Get-ChildItem -Path $_ -Recurse -Include '*.kt' -ErrorAction SilentlyContinue }
         $Missing = @()
         foreach ($File in $Sources) {
             $Head = Get-Content $File.FullName -TotalCount 20 -ErrorAction SilentlyContinue
@@ -110,24 +117,28 @@ try {
     }
 
     # ── 3. Spotless (format check or auto-fix) ─────────────────────────
-    $SpotlessTask = if ($NoFix) { ':editor:spotlessCheck' } else { ':editor:spotlessApply' }
+    $SpotlessTasks = if ($NoFix) {
+        @(':editor:spotlessCheck', ':languages:spotlessCheck')
+    } else {
+        @(':editor:spotlessApply', ':languages:spotlessApply')
+    }
     $SpotlessLabel = if ($NoFix) { 'Spotless check' } else { 'Spotless apply (auto-fix)' }
 
     Invoke-Check $SpotlessLabel {
-        & $Gradlew $SpotlessTask --quiet 2>&1 | Out-Host
+        & $Gradlew @SpotlessTasks --quiet 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Spotless failed' }
     }
 
     # ── 4. Android Lint ─────────────────────────────────────────────────
     Invoke-Check 'Android lint' {
-        & $Gradlew ':editor:lint' --quiet 2>&1 | Out-Host
+        & $Gradlew ':editor:lint' ':languages:lint' --quiet 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
     }
 
     # ── 5. Unit tests ───────────────────────────────────────────────────
     if (-not $SkipTests) {
         Invoke-Check 'Unit tests' {
-            & $Gradlew ':editor:test' --quiet 2>&1 | Out-Host
+            & $Gradlew ':editor:test' ':languages:test' --quiet 2>&1 | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
         }
     }
@@ -143,7 +154,7 @@ try {
     # ── 7. Local Maven publish dry-run ─────────────────────────────────
     if (-not $SkipBuild) {
         Invoke-Check 'Publish to mavenLocal (dry sanity)' {
-            & $Gradlew ':editor:publishToMavenLocal' --quiet 2>&1 | Out-Host
+            & $Gradlew ':editor:publishToMavenLocal' ':languages:publishToMavenLocal' --quiet 2>&1 | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'publishToMavenLocal failed' }
         }
     }
