@@ -97,19 +97,17 @@ class TokenCache {
     // ── Internal ─────────────────────────────────────────────────────────────
 
     private fun bucketAndStore(document: CodeDocument, tokens: List<Token>) {
+        // Group the incoming tokens by line in a fresh staging map so we never mutate the existing
+        // (immutable) cache entries — a previous bucketAndStore stored size-0 / size-1 results as
+        // emptyList() / listOf(x), which are NOT MutableList and would crash any cast-and-mutate.
+        val perLine = HashMap<Int, MutableList<Token>>()
         for (token in tokens) {
             val (line, _) = document.offsetToLineCol(token.start)
-            cache.getOrPut(line) { mutableListOf() }.let { list ->
-                (list as MutableList).add(token)
-            }
+            perLine.getOrPut(line) { mutableListOf() }.add(token)
         }
-        // Sort each line's tokens by start offset
-        for ((line, list) in cache) {
-            if (list is MutableList && list.size > 1) {
-                list.sortBy { it.start }
-            }
-            // Freeze to read-only list for thread safety
-            cache[line] = (list as MutableList<Token>).toList()
+        for ((line, list) in perLine) {
+            if (list.size > 1) list.sortBy { it.start }
+            cache[line] = list.toList()
         }
     }
 }

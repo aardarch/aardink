@@ -95,6 +95,35 @@ class TokenCacheTest {
     }
 
     @Test
+    fun `reset followed by merge does not crash on lines that had a single token`() {
+        // Regression: previously bucketAndStore stored size-1 lists as listOf(x) (immutable) and
+        // a subsequent merge cast getOrPut's existing entry to MutableList → ClassCastException.
+        val cache = TokenCache()
+        val text = "x\ny\nz" // three lines of one char each → three lines with one token each
+        val document = doc(text)
+        cache.reset(
+            document,
+            listOf(
+                Token(0, 1, TokenType.Identifier),
+                Token(2, 3, TokenType.Identifier),
+                Token(4, 5, TokenType.Identifier),
+            ),
+        )
+        // Now merge new tokens that re-cover the same single-token lines.
+        cache.merge(
+            document,
+            0..2,
+            listOf(
+                Token(0, 1, TokenType.Keyword),
+                Token(2, 3, TokenType.Keyword),
+                Token(4, 5, TokenType.Keyword),
+            ),
+        )
+        assertEquals(3, cache.tokens.size)
+        assertTrue(cache.tokens.all { it.type == TokenType.Keyword })
+    }
+
+    @Test
     fun `tokens are sorted by start offset after reset`() {
         val cache = TokenCache()
         val text = "abc def"

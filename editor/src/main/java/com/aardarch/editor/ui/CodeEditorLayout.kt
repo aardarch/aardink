@@ -15,6 +15,7 @@
  */
 package com.aardarch.editor.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +65,7 @@ import com.aardarch.editor.core.LanguageService
 import com.aardarch.editor.core.LineDiffKind
 import com.aardarch.editor.core.NoOpFoldingProvider
 import com.aardarch.editor.core.SimpleDiffProvider
+import com.aardarch.editor.core.TokenType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,13 +108,25 @@ fun CodeEditorLayout(
     val horizontalScrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
 
-    val textColor = MaterialTheme.colorScheme.onSurface
-    val gutterBackground = MaterialTheme.colorScheme.surfaceContainerLow
-    val gutterForeground = textColor.copy(alpha = 0.4f)
-    val cursorColor = MaterialTheme.colorScheme.primary
+    val theme = LocalEditorTheme.current
+    val textColor = theme.tokenColors[TokenType.Default] ?: MaterialTheme.colorScheme.onSurface
+    val gutterBackground = theme.gutterBackground
+    val gutterForeground = theme.gutterForeground
+    val cursorColor = theme.cursorColor
 
     val textVersion = state.textVersion
+    val tokenVersion = state.tokenVersion
     val lineCount = remember(textVersion) { state.document.lineCount }
+
+    // Auto-derive an AnnotatedString from the token cache + theme when the consumer didn't pass
+    // one explicitly. Recomputed on token-cache or theme changes; clamped to the current text so
+    // a stale token list (one tokenization tick behind an edit) is safe.
+    val effectiveAnnotatedText: AnnotatedString? = remember(annotatedText, tokenVersion, textVersion, theme) {
+        if (annotatedText != null) return@remember annotatedText
+        val cachedTokens = state.tokenCache.tokens
+        if (cachedTokens.isEmpty()) return@remember null
+        annotateTokens(state.document.text, cachedTokens, theme)
+    }
 
     var fieldValue by remember { mutableStateOf(TextFieldValue(state.document.text)) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -255,10 +269,10 @@ fun CodeEditorLayout(
     val foldedRanges = foldState?.foldedRanges() ?: emptyList()
 
     val syntaxTransformation =
-        remember(annotatedText, textColor, matches, currentMatchIndex, matchHighlight, currentMatchHighlight, foldedRanges) {
+        remember(effectiveAnnotatedText, textColor, matches, currentMatchIndex, matchHighlight, currentMatchHighlight, foldedRanges) {
             VisualTransformation { inputText ->
-                val base = if (annotatedText != null && annotatedText.text == inputText.text) {
-                    annotatedText
+                val base = if (effectiveAnnotatedText != null && effectiveAnnotatedText.text == inputText.text) {
+                    effectiveAnnotatedText
                 } else {
                     buildAnnotatedString {
                         append(inputText.text)
@@ -300,6 +314,7 @@ fun CodeEditorLayout(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(theme.background)
             .imePadding(),
     ) {
         // ── Find/Replace panel (slides down from the top) ────────────────────
@@ -388,7 +403,13 @@ fun CodeEditorLayout(
                         end = EditorDefaults.contentPaddingHorizontal,
                     )
                     .drawBehind {
-                        drawSquiggles(diagnostics, textLayoutResult)
+                        drawSquiggles(
+                            diagnostics = diagnostics,
+                            textLayoutResult = textLayoutResult,
+                            errorColor = theme.errorColor,
+                            warningColor = theme.warningColor,
+                            infoColor = theme.infoColor,
+                        )
                     },
             ) {
                 BasicTextField(

@@ -18,9 +18,8 @@ package com.aardarch.editor.core
 /**
  * A diagnostic annotation produced by a [LanguageService].
  *
- * Unlike the legacy [com.aardarch.aardflex.service.ValidationDiagnostic] which carries only a
- * line number, this type carries a document-absolute [IntRange] so the renderer can draw precise
- * squiggle underlines beneath the exact offending token.
+ * Carries a document-absolute [IntRange] so the renderer can draw precise squiggle underlines
+ * beneath the exact offending token, rather than just a line number.
  */
 data class Diagnostic(
     /** Document-absolute character range of the problematic text (exclusive end). */

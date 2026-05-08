@@ -30,8 +30,17 @@ import com.aardarch.editor.core.DiagnosticSeverity
  * Draws wavy squiggle underlines for each [Diagnostic] whose range maps to a known character
  * position in [textLayoutResult]. The squiggles are drawn in the calling [DrawScope]'s local
  * coordinate space — add this to a `Modifier.drawBehind` on the same Box as `BasicTextField`.
+ *
+ * Pass the colours from the active [com.aardarch.editor.core.EditorTheme] so the underlines stay
+ * coherent with the rest of the editor's palette.
  */
-fun DrawScope.drawSquiggles(diagnostics: List<Diagnostic>, textLayoutResult: TextLayoutResult?) {
+fun DrawScope.drawSquiggles(
+    diagnostics: List<Diagnostic>,
+    textLayoutResult: TextLayoutResult?,
+    errorColor: Color,
+    warningColor: Color,
+    infoColor: Color,
+) {
     if (textLayoutResult == null || diagnostics.isEmpty()) return
     val textLength = textLayoutResult.layoutInput.text.length
     if (textLength == 0) return
@@ -41,9 +50,9 @@ fun DrawScope.drawSquiggles(diagnostics: List<Diagnostic>, textLayoutResult: Tex
         val rangeEnd = (diagnostic.range.last).coerceIn(rangeStart, textLength - 1)
 
         val color = when (diagnostic.severity) {
-            DiagnosticSeverity.Error -> Color(0xFFFF6B6B)
-            DiagnosticSeverity.Warning -> Color(0xFFFFD93D)
-            DiagnosticSeverity.Info -> Color(0xFF6BCB77)
+            DiagnosticSeverity.Error -> errorColor
+            DiagnosticSeverity.Warning -> warningColor
+            DiagnosticSeverity.Info -> infoColor
         }
 
         val lineIndex = textLayoutResult.getLineForOffset(rangeStart)

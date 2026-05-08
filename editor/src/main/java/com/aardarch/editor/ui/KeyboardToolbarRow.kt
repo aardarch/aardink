@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -106,7 +110,6 @@ private fun ToolbarContent(
     val onSurface = MaterialTheme.colorScheme.onSurface
     val primary = MaterialTheme.colorScheme.primary
 
-    // Stable lambdas via rememberUpdatedState
     val insertChar by rememberUpdatedState(onInsertChar)
 
     LazyRow(
@@ -114,46 +117,78 @@ private fun ToolbarContent(
             .background(background)
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        // Cursor nudge — always first
         item {
-            ToolbarButton(label = "←", enabled = true, color = primary, onClick = onMoveCursorLeft)
+            ToolbarIconButton(
+                icon = EditorIcons.KeyboardArrowLeft,
+                contentDescription = "Move cursor left",
+                tint = primary,
+                onClick = onMoveCursorLeft,
+            )
         }
         item {
-            ToolbarButton(label = "→", enabled = true, color = primary, onClick = onMoveCursorRight)
+            ToolbarIconButton(
+                icon = EditorIcons.KeyboardArrowRight,
+                contentDescription = "Move cursor right",
+                tint = primary,
+                onClick = onMoveCursorRight,
+            )
         }
 
-        // Quick-insert characters
         items(quickChars, key = { it }) { char ->
-            ToolbarButton(
+            ToolbarCharButton(
                 label = char.toString(),
-                enabled = true,
                 color = onSurface,
                 onClick = { insertChar(char) },
             )
         }
 
-        // Undo / Redo — always last
         item {
-            ToolbarButton(label = "↩", enabled = canUndo, color = onSurface, onClick = onUndo)
+            ToolbarIconButton(
+                icon = EditorIcons.Undo,
+                contentDescription = "Undo",
+                tint = onSurface,
+                enabled = canUndo,
+                onClick = onUndo,
+            )
         }
         item {
-            ToolbarButton(label = "↪", enabled = canRedo, color = onSurface, onClick = onRedo)
+            ToolbarIconButton(
+                icon = EditorIcons.Redo,
+                contentDescription = "Redo",
+                tint = onSurface,
+                enabled = canRedo,
+                onClick = onRedo,
+            )
         }
     }
 }
 
 @Composable
-private fun ToolbarButton(label: String, enabled: Boolean, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    TextButton(
+private fun ToolbarIconButton(icon: ImageVector, contentDescription: String, tint: Color, onClick: () -> Unit, enabled: Boolean = true) {
+    IconButton(
         onClick = onClick,
         enabled = enabled,
+        modifier = Modifier.padding(horizontal = 2.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) tint else tint.copy(alpha = 0.38f),
+        )
+    }
+}
+
+@Composable
+private fun ToolbarCharButton(label: String, color: Color, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
         modifier = Modifier.padding(horizontal = 2.dp),
     ) {
         Text(
             text = label,
             fontSize = 16.sp,
             fontFamily = FontFamily.Monospace,
-            color = if (enabled) color else color.copy(alpha = 0.38f),
+            color = color,
         )
     }
 }

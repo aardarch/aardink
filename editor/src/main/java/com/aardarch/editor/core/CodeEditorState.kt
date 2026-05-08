@@ -189,6 +189,12 @@ class CodeEditorState(
     private var tokenizationJob: Job? = null
     private val tokenizationScope = scope
 
+    init {
+        // Tokenize the initial document so consumers see syntax highlighting on first frame
+        // without having to type a character first.
+        if (document.length > 0) scheduleTokenization()
+    }
+
     /**
      * Schedules an incremental tokenization pass after [tokenizeDebounceMs].
      * Cancels any in-flight pass so only the final state of a burst of edits is processed.

@@ -20,7 +20,8 @@ package com.aardarch.editor.core
  * `object` or `data class` implementations, including across module boundaries.
  *
  * Built-in implementations cover common programming constructs. Language-specific token types
- * (e.g. [com.aardarch.aardflex.service.XmlTokenType]) are defined in the language package.
+ * are defined in their own language package — e.g. the bundled `aardink-languages` module
+ * extends this interface for XML attribute-name/value distinctions, JSON property keys, and so on.
  */
 interface TokenType {
     /** Unstyled text (default color). */
