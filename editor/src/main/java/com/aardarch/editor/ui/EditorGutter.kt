@@ -74,6 +74,7 @@ fun EditorGutter(
     onToggleFold: (Int) -> Unit = {},
     diffAnnotations: Map<Int, LineDiffKind> = emptyMap(),
     onAnnotationTap: (Int) -> Unit = {},
+    showLineNumbers: Boolean = true,
 ) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
@@ -86,7 +87,7 @@ fun EditorGutter(
     val foldLaneWidthPx = with(density) { if (hasFoldLane) FOLD_LANE_WIDTH.toPx() else 0f }
     val annotLaneWidthPx = with(density) { if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.toPx() else 0f }
 
-    val gutterWidth = rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, density)
+    val gutterWidth = rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers, density)
 
     val textStyle = remember(foreground) {
         TextStyle(
@@ -156,6 +157,7 @@ fun EditorGutter(
                     annotLaneWidthPx = annotLaneWidthPx,
                     gutterWidth = size.width,
                     paddingHorizontalPx = with(density) { EditorDefaults.gutterPaddingHorizontal.toPx() },
+                    showLineNumbers = showLineNumbers,
                 )
             },
     )
@@ -181,6 +183,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
     annotLaneWidthPx: Float,
     gutterWidth: Float,
     paddingHorizontalPx: Float,
+    showLineNumbers: Boolean,
 ) {
     val maxY = size.height
     var visualRow = 0
@@ -208,11 +211,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
         }
 
         // 2. Line number (right-aligned)
-        val label = (lineIndex + 1).toString()
-        val measured = textMeasurer.measure(label, textStyle)
-        val numX = gutterWidth - paddingHorizontalPx - measured.size.width
-        val numY = lineTop + (lineHeightPx - measured.size.height) / 2f
-        drawText(measured, topLeft = Offset(numX, numY))
+        if (showLineNumbers) {
+            val label = (lineIndex + 1).toString()
+            val measured = textMeasurer.measure(label, textStyle)
+            val numX = gutterWidth - paddingHorizontalPx - measured.size.width
+            val numY = lineTop + (lineHeightPx - measured.size.height) / 2f
+            drawText(measured, topLeft = Offset(numX, numY))
+        }
 
         // 3. Fold triangle
         if (lineIndex in foldableLines && foldLaneWidthPx > 0f) {
@@ -274,21 +279,28 @@ private val DIFF_LANE_WIDTH = 4.dp
 private val FOLD_LANE_WIDTH = 16.dp
 private val ANNOTATION_LANE_WIDTH = 12.dp
 
+/** Breathing room between the rightmost lane and the start of the line-number text. */
+private val LANE_TO_NUMBER_GAP = 2.dp
+
 @Composable
 private fun rememberGutterWidth(
     lineCount: Int,
     hasDiffLane: Boolean,
     hasFoldLane: Boolean,
     hasAnnotationLane: Boolean,
+    showLineNumbers: Boolean,
     density: Density,
-): Dp = remember(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane) {
+): Dp = remember(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers) {
     val digits = lineCount.toString().length.coerceAtLeast(EditorDefaults.GUTTER_MIN_DIGITS)
     with(density) {
         val charWidth = EditorDefaults.fontSize.value * 0.7f
         val lanesExtra = (if (hasDiffLane) DIFF_LANE_WIDTH.value else 0f) +
             (if (hasFoldLane) FOLD_LANE_WIDTH.value else 0f) +
             (if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.value else 0f)
-        val totalDp = digits * charWidth + EditorDefaults.gutterPaddingHorizontal.value * 2 + 8f + lanesExtra
+        val hasAnyLane = hasDiffLane || hasFoldLane || hasAnnotationLane
+        val laneToNumberGap = if (showLineNumbers && hasAnyLane) LANE_TO_NUMBER_GAP.value else 0f
+        val numbersWidth = if (showLineNumbers) digits * charWidth else 0f
+        val totalDp = numbersWidth + EditorDefaults.gutterPaddingHorizontal.value * 2 + lanesExtra + laneToNumberGap
         totalDp.dp
     }
 }

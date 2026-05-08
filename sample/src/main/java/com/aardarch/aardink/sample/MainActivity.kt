@@ -30,7 +30,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.aardarch.editor.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.sample.samples.SampleAssets
 import com.aardarch.aardink.sample.theme.AardInkSampleTheme
 import com.aardarch.aardink.sample.ui.LanguageCard
@@ -143,8 +149,31 @@ private fun StartScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            items(items = languages, key = { it.id }) { def ->
-                LanguageCard(language = def, onClick = { onSelect(def) })
+
+            val (advanced, basic) = languages.partition { it.languageService != null }
+
+            if (advanced.isNotEmpty()) {
+                item("section-advanced") {
+                    SectionHeader(
+                        title = "Full language support",
+                        subtitle = "Diagnostics, completions, hover, formatting",
+                    )
+                }
+                items(items = advanced, key = { it.id }) { def ->
+                    LanguageCard(language = def, onClick = { onSelect(def) })
+                }
+            }
+
+            if (basic.isNotEmpty()) {
+                item("section-basic") {
+                    SectionHeader(
+                        title = "Syntax highlighting",
+                        subtitle = "Tokenization and folding",
+                    )
+                }
+                items(items = basic, key = { it.id }) { def ->
+                    LanguageCard(language = def, onClick = { onSelect(def) })
+                }
             }
         }
     }
@@ -163,6 +192,17 @@ private fun EditorScreen(
         tokenizer = language.tokenizer,
     )
     val foldState = remember(language.id) { FoldState() }
+
+    var toolbarPlacementName by rememberSaveable {
+        mutableStateOf(KeyboardToolbarPlacement.BottomHover.name)
+    }
+    val toolbarPlacement = KeyboardToolbarPlacement.valueOf(toolbarPlacementName)
+
+    var showGutter by rememberSaveable { mutableStateOf(true) }
+    var showLineNumbers by rememberSaveable { mutableStateOf(true) }
+    var showFoldMarkers by rememberSaveable { mutableStateOf(true) }
+    var showDiagnosticDots by rememberSaveable { mutableStateOf(true) }
+    var showDiffMarkers by rememberSaveable { mutableStateOf(true) }
 
     var diagnostics by remember(language.id) { mutableStateOf<List<Diagnostic>>(emptyList()) }
     val service = language.languageService
@@ -203,6 +243,22 @@ private fun EditorScreen(
                         )
                     }
                 },
+                actions = {
+                    SampleOptionsMenu(
+                        placement = toolbarPlacement,
+                        onPlacementChange = { toolbarPlacementName = it.name },
+                        showGutter = showGutter,
+                        onShowGutterChange = { showGutter = it },
+                        showLineNumbers = showLineNumbers,
+                        onShowLineNumbersChange = { showLineNumbers = it },
+                        showFoldMarkers = showFoldMarkers,
+                        onShowFoldMarkersChange = { showFoldMarkers = it },
+                        showDiagnosticDots = showDiagnosticDots,
+                        onShowDiagnosticDotsChange = { showDiagnosticDots = it },
+                        showDiffMarkers = showDiffMarkers,
+                        onShowDiffMarkersChange = { showDiffMarkers = it },
+                    )
+                },
             )
         },
         modifier = Modifier.fillMaxSize(),
@@ -213,9 +269,165 @@ private fun EditorScreen(
             foldingProvider = language.foldingProvider,
             languageService = language.languageService,
             diagnostics = diagnostics,
+            keyboardToolbarPlacement = toolbarPlacement,
+            showGutter = showGutter,
+            showLineNumbers = showLineNumbers,
+            showFoldMarkers = showFoldMarkers,
+            showDiagnosticAnnotations = showDiagnosticDots,
+            showDiffMarkers = showDiffMarkers,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         )
     }
+}
+
+@Composable
+private fun SampleOptionsMenu(
+    placement: KeyboardToolbarPlacement,
+    onPlacementChange: (KeyboardToolbarPlacement) -> Unit,
+    showGutter: Boolean,
+    onShowGutterChange: (Boolean) -> Unit,
+    showLineNumbers: Boolean,
+    onShowLineNumbersChange: (Boolean) -> Unit,
+    showFoldMarkers: Boolean,
+    onShowFoldMarkersChange: (Boolean) -> Unit,
+    showDiagnosticDots: Boolean,
+    onShowDiagnosticDotsChange: (Boolean) -> Unit,
+    showDiffMarkers: Boolean,
+    onShowDiffMarkersChange: (Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }) {
+        Icon(imageVector = Icons.Filled.Menu, contentDescription = "Sample options")
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SectionLabel("Keyboard toolbar")
+        ToolbarPlacementItem(
+            label = "Hover above keyboard",
+            target = KeyboardToolbarPlacement.BottomHover,
+            current = placement,
+            onSelect = { onPlacementChange(it); expanded = false },
+        )
+        ToolbarPlacementItem(
+            label = "Top of editor",
+            target = KeyboardToolbarPlacement.Top,
+            current = placement,
+            onSelect = { onPlacementChange(it); expanded = false },
+        )
+        ToolbarPlacementItem(
+            label = "Bottom of editor",
+            target = KeyboardToolbarPlacement.BottomFixed,
+            current = placement,
+            onSelect = { onPlacementChange(it); expanded = false },
+        )
+        HorizontalDivider()
+        ToolbarPlacementItem(
+            label = "Hidden",
+            target = KeyboardToolbarPlacement.Hidden,
+            current = placement,
+            onSelect = { onPlacementChange(it); expanded = false },
+        )
+
+        HorizontalDivider()
+        SectionLabel("Gutter")
+        ToggleItem(
+            label = "Show gutter",
+            checked = showGutter,
+            onChange = onShowGutterChange,
+        )
+        ToggleItem(
+            label = "Line numbers",
+            checked = showLineNumbers,
+            enabled = showGutter,
+            onChange = onShowLineNumbersChange,
+        )
+        ToggleItem(
+            label = "Fold markers",
+            checked = showFoldMarkers,
+            enabled = showGutter,
+            onChange = onShowFoldMarkersChange,
+        )
+        ToggleItem(
+            label = "Diagnostic dots",
+            checked = showDiagnosticDots,
+            enabled = showGutter,
+            onChange = onShowDiagnosticDotsChange,
+        )
+        ToggleItem(
+            label = "Diff markers",
+            checked = showDiffMarkers,
+            enabled = showGutter,
+            onChange = onShowDiffMarkersChange,
+        )
+    }
+}
+
+@Composable
+private fun ToggleItem(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        trailingIcon = {
+            if (checked) {
+                Icon(imageVector = Icons.Filled.Check, contentDescription = null)
+            }
+        },
+        enabled = enabled,
+        onClick = { onChange(!checked) },
+    )
+}
+
+@Composable
+private fun SectionHeader(title: String, subtitle: String? = null) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun ToolbarPlacementItem(
+    label: String,
+    target: KeyboardToolbarPlacement,
+    current: KeyboardToolbarPlacement,
+    onSelect: (KeyboardToolbarPlacement) -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        trailingIcon = {
+            if (current == target) {
+                Icon(imageVector = Icons.Filled.Check, contentDescription = null)
+            }
+        },
+        onClick = { onSelect(target) },
+    )
 }

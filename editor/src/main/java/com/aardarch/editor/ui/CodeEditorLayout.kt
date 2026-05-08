@@ -99,6 +99,13 @@ fun CodeEditorLayout(
     savedText: String = "",
     onCursorChange: (line: Int, column: Int) -> Unit = { _, _ -> },
     readOnly: Boolean = false,
+    toolbarStyle: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
+    keyboardToolbarPlacement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.BottomHover,
+    showGutter: Boolean = true,
+    showLineNumbers: Boolean = true,
+    showFoldMarkers: Boolean = true,
+    showDiagnosticAnnotations: Boolean = true,
+    showDiffMarkers: Boolean = true,
 ) {
     val density = LocalDensity.current
     val lineHeightPx = with(density) { EditorDefaults.lineHeight.toPx() }
@@ -116,7 +123,7 @@ fun CodeEditorLayout(
 
     val textVersion = state.textVersion
     val tokenVersion = state.tokenVersion
-    val lineCount = remember(textVersion) { state.document.lineCount }
+    val documentLineCount = remember(textVersion) { state.document.lineCount }
 
     // Auto-derive an AnnotatedString from the token cache + theme when the consumer didn't pass
     // one explicitly. Recomputed on token-cache or theme changes; clamped to the current text so
@@ -311,6 +318,55 @@ fun CodeEditorLayout(
     val foldableLines = foldState?.foldableRanges?.map { it.startLine }?.toSet() ?: emptySet()
     // foldedRanges already computed above for syntaxTransformation
 
+    val toolbar: @Composable () -> Unit = {
+        if (keyboardToolbarPlacement != KeyboardToolbarPlacement.Hidden) {
+            KeyboardToolbarRow(
+                quickChars = remember(state.tokenizer) { state.tokenizer.keyboardToolbarChars() },
+                canUndo = state.undoManager.canUndo,
+                canRedo = state.undoManager.canRedo,
+                onInsertChar = { char ->
+                    val sel = fieldValue.selection
+                    val insertAt = sel.start
+                    val newText = fieldValue.text.let {
+                        it.substring(0, insertAt) + char + it.substring(insertAt)
+                    }
+                    val newSelection = TextRange(insertAt + 1)
+                    state.applyEdit(insertAt, 0, char.toString(), newSelection)
+                    fieldValue = TextFieldValue(newText, newSelection)
+                },
+                onMoveCursorLeft = {
+                    val newPos = (fieldValue.selection.start - 1).coerceAtLeast(0)
+                    val newSel = TextRange(newPos)
+                    state.selection = newSel
+                    fieldValue = fieldValue.copy(selection = newSel)
+                    showCompletion = false
+                },
+                onMoveCursorRight = {
+                    val newPos = (fieldValue.selection.start + 1).coerceAtMost(fieldValue.text.length)
+                    val newSel = TextRange(newPos)
+                    state.selection = newSel
+                    fieldValue = fieldValue.copy(selection = newSel)
+                    showCompletion = false
+                },
+                onUndo = {
+                    state.undo()?.let { newText ->
+                        fieldValue = TextFieldValue(newText, state.selection)
+                        showCompletion = false
+                    }
+                },
+                onRedo = {
+                    state.redo()?.let { newText ->
+                        fieldValue = TextFieldValue(newText, state.selection)
+                        showCompletion = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                style = toolbarStyle,
+                alwaysVisible = keyboardToolbarPlacement != KeyboardToolbarPlacement.BottomHover,
+            )
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -366,30 +422,47 @@ fun CodeEditorLayout(
             )
         }
 
+        if (keyboardToolbarPlacement == KeyboardToolbarPlacement.Top) {
+            toolbar()
+        }
+
         // ── Editor body: gutter + text area ──────────────────────────────────
         Row(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            EditorGutter(
-                lineCount = lineCount,
-                scrollState = verticalScrollState,
-                lineHeightPx = lineHeightPx,
-                topPaddingPx = topPaddingPx,
-                background = gutterBackground,
-                foreground = gutterForeground,
-                annotations = gutterAnnotations,
-                foldableLines = foldableLines,
-                foldedRanges = foldedRanges,
-                onToggleFold = { line -> foldState?.toggle(line) },
-                diffAnnotations = diffAnnotations,
-                onAnnotationTap = { lineIndex ->
-                    tooltipDiagnostic = diagnostics
-                        .filter { it.lineNumber == lineIndex }
-                        .maxByOrNull { it.severity.ordinal }
-                },
-            )
+            if (showGutter) {
+                // Reconstruct the logical document line count from what Compose actually
+                // laid out: visible rows + rows hidden by folds. This stays in sync with
+                // the textfield even when the document text ends with a trailing newline
+                // (which `state.document.lineCount` counts as an extra phantom line that
+                // Compose may or may not render). Falls back to the document count on the
+                // first frame before layout completes.
+                val foldedLineCount = foldedRanges.sumOf { it.endLine - it.startLine }
+                val gutterLineCount = textLayoutResult
+                    ?.let { it.lineCount + foldedLineCount }
+                    ?: documentLineCount
+                EditorGutter(
+                    lineCount = gutterLineCount,
+                    scrollState = verticalScrollState,
+                    lineHeightPx = lineHeightPx,
+                    topPaddingPx = topPaddingPx,
+                    background = gutterBackground,
+                    foreground = gutterForeground,
+                    annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
+                    foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
+                    foldedRanges = foldedRanges,
+                    onToggleFold = { line -> foldState?.toggle(line) },
+                    diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
+                    onAnnotationTap = { lineIndex ->
+                        tooltipDiagnostic = diagnostics
+                            .filter { it.lineNumber == lineIndex }
+                            .maxByOrNull { it.severity.ordinal }
+                    },
+                    showLineNumbers = showLineNumbers,
+                )
+            }
 
             Box(
                 modifier = Modifier
@@ -470,49 +543,12 @@ fun CodeEditorLayout(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        // ── Keyboard toolbar ─────────────────────────────────────────────────
-        KeyboardToolbarRow(
-            quickChars = remember(state.tokenizer) { state.tokenizer.keyboardToolbarChars() },
-            canUndo = state.undoManager.canUndo,
-            canRedo = state.undoManager.canRedo,
-            onInsertChar = { char ->
-                val sel = fieldValue.selection
-                val insertAt = sel.start
-                val newText = fieldValue.text.let {
-                    it.substring(0, insertAt) + char + it.substring(insertAt)
-                }
-                val newSelection = TextRange(insertAt + 1)
-                state.applyEdit(insertAt, 0, char.toString(), newSelection)
-                fieldValue = TextFieldValue(newText, newSelection)
-            },
-            onMoveCursorLeft = {
-                val newPos = (fieldValue.selection.start - 1).coerceAtLeast(0)
-                val newSel = TextRange(newPos)
-                state.selection = newSel
-                fieldValue = fieldValue.copy(selection = newSel)
-                showCompletion = false
-            },
-            onMoveCursorRight = {
-                val newPos = (fieldValue.selection.start + 1).coerceAtMost(fieldValue.text.length)
-                val newSel = TextRange(newPos)
-                state.selection = newSel
-                fieldValue = fieldValue.copy(selection = newSel)
-                showCompletion = false
-            },
-            onUndo = {
-                state.undo()?.let { newText ->
-                    fieldValue = TextFieldValue(newText, state.selection)
-                    showCompletion = false
-                }
-            },
-            onRedo = {
-                state.redo()?.let { newText ->
-                    fieldValue = TextFieldValue(newText, state.selection)
-                    showCompletion = false
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // ── Keyboard toolbar (when placed at bottom) ─────────────────────────
+        if (keyboardToolbarPlacement == KeyboardToolbarPlacement.BottomHover ||
+            keyboardToolbarPlacement == KeyboardToolbarPlacement.BottomFixed
+        ) {
+            toolbar()
+        }
     }
 }
 
