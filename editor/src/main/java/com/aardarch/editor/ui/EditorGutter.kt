@@ -75,6 +75,14 @@ fun EditorGutter(
     diffAnnotations: Map<Int, LineDiffKind> = emptyMap(),
     onAnnotationTap: (Int) -> Unit = {},
     showLineNumbers: Boolean = true,
+    // When non-null, lineCount counts logical document lines and the callback returns the top-Y
+    // (in content space, before subtracting scrollOffset) of each logical line. Used in soft-wrap
+    // mode where one logical line spans multiple visual rows. When null, logical lines and visual
+    // rows are 1:1 (after subtracting hidden lines).
+    lineTopProvider: ((Int) -> Float)? = null,
+    // Returns the bottom-Y (in content space) of the last visual row of the logical line. Used to
+    // size the diff lane bar across all wrapped rows. Only consulted when [lineTopProvider] is set.
+    lineBottomProvider: ((Int) -> Float)? = null,
 ) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
@@ -109,19 +117,33 @@ fun EditorGutter(
             .fillMaxHeight()
             .background(background)
             .verticalScroll(scrollState)
-            .pointerInput(foldableLines, annotations, lineHeightPx, topPaddingPx, hiddenLines) {
+            .pointerInput(foldableLines, annotations, lineHeightPx, topPaddingPx, hiddenLines, lineTopProvider) {
                 detectTapGestures { offset ->
-                    val visualRow = ((offset.y + scrollState.value - topPaddingPx) / lineHeightPx)
-                        .toInt().coerceAtLeast(0)
-                    // Map visual row → original line index, skipping hidden lines
-                    var row = 0
-                    var lineIndex = 0
-                    while (lineIndex < lineCount) {
-                        if (lineIndex !in hiddenLines) {
-                            if (row == visualRow) break
-                            row++
+                    val tappedY = offset.y + scrollState.value
+                    // Map y → original line index. With soft wrap, find the logical line whose
+                    // [top, bottom] range contains the tapped y.
+                    var lineIndex = if (lineTopProvider != null) {
+                        var found = 0
+                        for (i in 0 until lineCount) {
+                            if (i in hiddenLines) continue
+                            val top = lineTopProvider(i)
+                            if (top.isNaN()) continue
+                            if (top <= tappedY) found = i else break
                         }
-                        lineIndex++
+                        found
+                    } else {
+                        val visualRow = ((tappedY - topPaddingPx) / lineHeightPx)
+                            .toInt().coerceAtLeast(0)
+                        var row = 0
+                        var li = 0
+                        while (li < lineCount) {
+                            if (li !in hiddenLines) {
+                                if (row == visualRow) break
+                                row++
+                            }
+                            li++
+                        }
+                        li
                     }
                     lineIndex = lineIndex.coerceIn(0, lineCount - 1)
                     val foldStart = diffLaneWidthPx
@@ -158,6 +180,8 @@ fun EditorGutter(
                     gutterWidth = size.width,
                     paddingHorizontalPx = with(density) { EditorDefaults.gutterPaddingHorizontal.toPx() },
                     showLineNumbers = showLineNumbers,
+                    lineTopProvider = lineTopProvider,
+                    lineBottomProvider = lineBottomProvider,
                 )
             },
     )
@@ -184,20 +208,31 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
     gutterWidth: Float,
     paddingHorizontalPx: Float,
     showLineNumbers: Boolean,
+    lineTopProvider: ((Int) -> Float)?,
+    lineBottomProvider: ((Int) -> Float)?,
 ) {
     val maxY = size.height
     var visualRow = 0
     for (lineIndex in 0 until lineCount) {
         if (lineIndex in hiddenLines) continue // inside a folded region — not visible
 
-        val lineTop = topPaddingPx + visualRow * lineHeightPx - scrollOffsetPx
-        if (lineTop + lineHeightPx < 0f) {
+        // Y positions in content space (before subtracting scroll). When a layout-driven provider
+        // is supplied it gives the true top/bottom of each line as Compose laid it out; otherwise
+        // we fall back to the running visual-row counter. A NaN top marks a logical line that
+        // collapsed onto the previous visual row (phantom trailing line) — skip it.
+        val providedTop = lineTopProvider?.invoke(lineIndex)
+        if (providedTop != null && providedTop.isNaN()) continue
+        val contentTop = providedTop ?: (topPaddingPx + visualRow * lineHeightPx)
+        val contentBottom = lineBottomProvider?.invoke(lineIndex) ?: (contentTop + lineHeightPx)
+        val lineTop = contentTop - scrollOffsetPx
+        val lineSpanHeight = (contentBottom - contentTop).coerceAtLeast(lineHeightPx)
+        if (lineTop + lineSpanHeight < 0f) {
             visualRow++
             continue
         }
         if (lineTop > maxY) break
 
-        // 1. Diff bar (leftmost, full line height minus 1 px padding each side)
+        // 1. Diff bar (leftmost, spans all visual rows of this logical line)
         val diffKind = diffAnnotations[lineIndex]
         if (diffKind != null && diffLaneWidthPx > 0f) {
             drawRect(
@@ -206,11 +241,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
                     LineDiffKind.Modified -> Color(0xFF2196F3)
                 },
                 topLeft = Offset(0f, lineTop + 1f),
-                size = Size(diffLaneWidthPx, lineHeightPx - 2f),
+                size = Size(diffLaneWidthPx, lineSpanHeight - 2f),
             )
         }
 
-        // 2. Line number (right-aligned)
+        // 2. Line number (right-aligned, drawn on the first visual row)
         if (showLineNumbers) {
             val label = (lineIndex + 1).toString()
             val measured = textMeasurer.measure(label, textStyle)
@@ -219,7 +254,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
             drawText(measured, topLeft = Offset(numX, numY))
         }
 
-        // 3. Fold triangle
+        // 3. Fold triangle (first visual row)
         if (lineIndex in foldableLines && foldLaneWidthPx > 0f) {
             drawFoldTriangle(
                 centerX = diffLaneWidthPx + foldLaneWidthPx / 2f,
@@ -229,7 +264,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
             )
         }
 
-        // 4. Annotation dot
+        // 4. Annotation dot (first visual row)
         val annotation = annotations[lineIndex]
         if (annotation != null && annotLaneWidthPx > 0f) {
             drawAnnotationDot(

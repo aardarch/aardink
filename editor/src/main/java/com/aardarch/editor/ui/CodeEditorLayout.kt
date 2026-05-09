@@ -255,8 +255,17 @@ fun CodeEditorLayout(
     LaunchedEffect(state) {
         snapshotFlow { state.pendingNavigation }.collect { nav ->
             if (nav == null) return@collect
-            val (line, _) = state.document.offsetToLineCol(nav.targetOffset)
-            val targetY = (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+            val tlr = textLayoutResult
+            val targetY = if (tlr != null) {
+                val transformedLength = tlr.layoutInput.text.length
+                val offset = nav.targetOffset.coerceIn(0, transformedLength)
+                val visualRow = tlr.getLineForOffset(offset)
+                    .coerceIn(0, (tlr.lineCount - 1).coerceAtLeast(0))
+                (topPaddingPx + tlr.getLineTop(visualRow) - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+            } else {
+                val (line, _) = state.document.offsetToLineCol(nav.targetOffset)
+                (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+            }
             verticalScrollState.animateScrollTo(targetY)
             if (nav.select != null) {
                 fieldValue = fieldValue.copy(selection = nav.select)
@@ -435,16 +444,54 @@ fun CodeEditorLayout(
                 .fillMaxWidth(),
         ) {
             if (showGutter) {
-                // Reconstruct the logical document line count from what Compose actually
-                // laid out: visible rows + rows hidden by folds. This stays in sync with
-                // the textfield even when the document text ends with a trailing newline
-                // (which `state.document.lineCount` counts as an extra phantom line that
-                // Compose may or may not render). Falls back to the document count on the
-                // first frame before layout completes.
-                val foldedLineCount = foldedRanges.sumOf { it.endLine - it.startLine }
-                val gutterLineCount = textLayoutResult
-                    ?.let { it.lineCount + foldedLineCount }
-                    ?: documentLineCount
+                // Use the document's logical line count as the source of truth and ask the
+                // text layout where each line actually sits. This keeps the gutter aligned
+                // with what BasicTextField rendered, regardless of trailing-newline phantom
+                // lines, soft wrap, or folds. NaN entries mark logical lines that collapsed
+                // onto the previous visual row (a phantom trailing line not rendered by
+                // Compose) and are skipped by the gutter renderer.
+                val gutterLineCount = documentLineCount
+                val lineTops: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
+                    val tlr = textLayoutResult ?: return@remember null
+                    val transformedLength = tlr.layoutInput.text.length
+                    val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
+                    var prevRow = -1
+                    FloatArray(documentLineCount) { i ->
+                        val docOffset = state.document.lineStart(i).coerceIn(0, transformedLength)
+                        val visualRow = tlr.getLineForOffset(docOffset).coerceIn(0, maxRow)
+                        if (visualRow == prevRow) {
+                            Float.NaN
+                        } else {
+                            prevRow = visualRow
+                            topPaddingPx + tlr.getLineTop(visualRow)
+                        }
+                    }
+                }
+                val lineBottoms: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
+                    val tlr = textLayoutResult ?: return@remember null
+                    val transformedLength = tlr.layoutInput.text.length
+                    val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
+                    FloatArray(documentLineCount) { i ->
+                        // The bottom of a logical line = top of the next non-collapsed logical
+                        // line, or the last visual row's bottom for the final one.
+                        var nextI = i + 1
+                        var bottom = Float.NaN
+                        while (nextI < documentLineCount) {
+                            val nextOffset = state.document.lineStart(nextI).coerceIn(0, transformedLength)
+                            val nextRow = tlr.getLineForOffset(nextOffset).coerceIn(0, maxRow)
+                            val thisOffset = state.document.lineStart(i).coerceIn(0, transformedLength)
+                            val thisRow = tlr.getLineForOffset(thisOffset).coerceIn(0, maxRow)
+                            if (nextRow != thisRow) {
+                                bottom = topPaddingPx + tlr.getLineTop(nextRow)
+                                break
+                            }
+                            nextI++
+                        }
+                        if (bottom.isNaN()) topPaddingPx + tlr.getLineBottom(maxRow) else bottom
+                    }
+                }
+                val lineTopProvider: ((Int) -> Float)? = lineTops?.let { tops -> { i -> tops.getOrElse(i) { Float.NaN } } }
+                val lineBottomProvider: ((Int) -> Float)? = lineBottoms?.let { bottoms -> { i -> bottoms.getOrElse(i) { 0f } } }
                 EditorGutter(
                     lineCount = gutterLineCount,
                     scrollState = verticalScrollState,
@@ -463,6 +510,8 @@ fun CodeEditorLayout(
                             .maxByOrNull { it.severity.ordinal }
                     },
                     showLineNumbers = showLineNumbers,
+                    lineTopProvider = lineTopProvider,
+                    lineBottomProvider = lineBottomProvider,
                 )
             }
 
