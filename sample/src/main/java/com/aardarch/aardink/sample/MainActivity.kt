@@ -203,6 +203,7 @@ private fun EditorScreen(
     var showFoldMarkers by rememberSaveable { mutableStateOf(true) }
     var showDiagnosticDots by rememberSaveable { mutableStateOf(true) }
     var showDiffMarkers by rememberSaveable { mutableStateOf(true) }
+    var softWrap by rememberSaveable { mutableStateOf(false) }
 
     var diagnostics by remember(language.id) { mutableStateOf<List<Diagnostic>>(emptyList()) }
     val service = language.languageService
@@ -257,6 +258,8 @@ private fun EditorScreen(
                         onShowDiagnosticDotsChange = { showDiagnosticDots = it },
                         showDiffMarkers = showDiffMarkers,
                         onShowDiffMarkersChange = { showDiffMarkers = it },
+                        softWrap = softWrap,
+                        onSoftWrapChange = { softWrap = it },
                     )
                 },
             )
@@ -275,6 +278,7 @@ private fun EditorScreen(
             showFoldMarkers = showFoldMarkers,
             showDiagnosticAnnotations = showDiagnosticDots,
             showDiffMarkers = showDiffMarkers,
+            softWrap = softWrap,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -296,6 +300,8 @@ private fun SampleOptionsMenu(
     onShowDiagnosticDotsChange: (Boolean) -> Unit,
     showDiffMarkers: Boolean,
     onShowDiffMarkersChange: (Boolean) -> Unit,
+    softWrap: Boolean,
+    onSoftWrapChange: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     IconButton(onClick = { expanded = true }) {
@@ -327,6 +333,14 @@ private fun SampleOptionsMenu(
             target = KeyboardToolbarPlacement.Hidden,
             current = placement,
             onSelect = { onPlacementChange(it); expanded = false },
+        )
+
+        HorizontalDivider()
+        SectionLabel("Editor")
+        ToggleItem(
+            label = "Soft wrap",
+            checked = softWrap,
+            onChange = onSoftWrapChange,
         )
 
         HorizontalDivider()

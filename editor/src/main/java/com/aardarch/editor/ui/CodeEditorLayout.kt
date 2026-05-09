@@ -85,6 +85,7 @@ import kotlinx.coroutines.withContext
  *
  * @param diagnostics Language-service diagnostics; rendered as gutter dots and squiggle underlines.
  * @param savedText Baseline text for the diff lane (typically the last-saved version).
+ * @param softWrap When true, long lines wrap to the editor width and horizontal scrolling is disabled.
  */
 @Composable
 fun CodeEditorLayout(
@@ -106,6 +107,7 @@ fun CodeEditorLayout(
     showFoldMarkers: Boolean = true,
     showDiagnosticAnnotations: Boolean = true,
     showDiffMarkers: Boolean = true,
+    softWrap: Boolean = false,
 ) {
     val density = LocalDensity.current
     val lineHeightPx = with(density) { EditorDefaults.lineHeight.toPx() }
@@ -469,7 +471,7 @@ fun CodeEditorLayout(
                     .weight(1f)
                     .fillMaxHeight()
                     .verticalScroll(verticalScrollState)
-                    .horizontalScroll(horizontalScrollState)
+                    .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
                     .padding(
                         start = EditorDefaults.contentPaddingHorizontal,
                         top = EditorDefaults.contentPaddingTop,
