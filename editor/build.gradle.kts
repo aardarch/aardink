@@ -89,6 +89,9 @@ dependencies {
 // ── Publishing ────────────────────────────────────────────────────────────────
 
 mavenPublishing {
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
+
     coordinates(
         groupId = "com.aardarch",
         artifactId = "aardink",
@@ -96,7 +99,7 @@ mavenPublishing {
     )
 
     pom {
-        name.set("AardInk")
+        name.set("Aardink")
         description.set(
             "A Jetpack Compose-native code editor: incremental tokenization, " +
                 "LSP-lite language services, code folding, find/replace, and rich gutter annotations.",

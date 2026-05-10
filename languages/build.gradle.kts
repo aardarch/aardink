@@ -91,6 +91,9 @@ dependencies {
 // ── Publishing ────────────────────────────────────────────────────────────────
 
 mavenPublishing {
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
+
     coordinates(
         groupId = "com.aardarch",
         artifactId = "aardink-languages",
@@ -98,9 +101,9 @@ mavenPublishing {
     )
 
     pom {
-        name.set("AardInk Languages")
+        name.set("Aardink Languages")
         description.set(
-            "Built-in language support for AardInk: tokenizers, folding providers, and a " +
+            "Built-in language support for Aardink: tokenizers, folding providers, and a " +
                 "pluggable LanguageRegistry covering Kotlin, TypeScript, JSON, XML, HTML, CSS, " +
                 "Markdown, and plain text.",
         )
