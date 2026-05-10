@@ -53,11 +53,7 @@ fun applyFolding(
     var origPos = 0
     for (fold in sorted) {
         val hStart = document.lineEnd(fold.startLine).coerceIn(0, origLen)
-        val hEnd = if (fold.endLine + 1 < document.lineCount) {
-            document.lineStart(fold.endLine + 1)
-        } else {
-            document.length
-        }.coerceIn(0, origLen)
+        val hEnd = document.lineEnd(fold.endLine).coerceIn(0, origLen)
 
         if (hStart < origPos) continue // nested inside an already-folded region
         if (hStart >= hEnd) continue // degenerate / stale range
@@ -110,4 +106,37 @@ fun applyFolding(
             override fun transformedToOriginal(offset: Int): Int = transToOrig[offset.coerceIn(0, transToOrig.size - 1)]
         },
     )
+}
+
+/**
+ * Pure offset translation for callers that need to project an original document offset into
+ * folded display space without re-running the full [applyFolding] transform. Mirrors the mapping
+ * built inside [applyFolding] — keep the two in sync.
+ *
+ * Callers in this file: [com.aardarch.editor.ui.CodeEditorLayout]'s gutter line-top calculation,
+ * which queries `TextLayoutResult.getLineForOffset` (transformed-space) for each logical document
+ * line (original-space).
+ */
+internal fun originalToTransformedOffset(
+    document: CodeDocument,
+    foldedRanges: List<FoldRange>,
+    originalOffset: Int,
+): Int {
+    if (foldedRanges.isEmpty()) return originalOffset
+    val origLen = document.length
+    val clamped = originalOffset.coerceIn(0, origLen)
+    val sorted = foldedRanges.sortedBy { it.startLine }
+    var shift = 0
+    var prevHEnd = 0
+    for (fold in sorted) {
+        val hStart = document.lineEnd(fold.startLine).coerceIn(0, origLen)
+        val hEnd = document.lineEnd(fold.endLine).coerceIn(0, origLen)
+        if (hStart < prevHEnd || hStart >= hEnd) continue // nested or degenerate — skipped by applyFolding
+        val placeholderLen = 1 + fold.placeholder.length // matches " ${fold.placeholder}" in applyFolding
+        if (clamped <= hStart) return clamped - shift
+        if (clamped < hEnd) return hStart - shift // hidden offset → start of placeholder
+        shift += (hEnd - hStart) - placeholderLen
+        prevHEnd = hEnd
+    }
+    return clamped - shift
 }

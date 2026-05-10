@@ -457,8 +457,10 @@ fun CodeEditorLayout(
                     val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
                     var prevRow = -1
                     FloatArray(documentLineCount) { i ->
-                        val docOffset = state.document.lineStart(i).coerceIn(0, transformedLength)
-                        val visualRow = tlr.getLineForOffset(docOffset).coerceIn(0, maxRow)
+                        val origOffset = state.document.lineStart(i)
+                        val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
+                            .coerceIn(0, transformedLength)
+                        val visualRow = tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
                         if (visualRow == prevRow) {
                             Float.NaN
                         } else {
@@ -471,16 +473,20 @@ fun CodeEditorLayout(
                     val tlr = textLayoutResult ?: return@remember null
                     val transformedLength = tlr.layoutInput.text.length
                     val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
+                    fun visualRowOf(line: Int): Int {
+                        val origOffset = state.document.lineStart(line)
+                        val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
+                            .coerceIn(0, transformedLength)
+                        return tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
+                    }
                     FloatArray(documentLineCount) { i ->
                         // The bottom of a logical line = top of the next non-collapsed logical
                         // line, or the last visual row's bottom for the final one.
+                        val thisRow = visualRowOf(i)
                         var nextI = i + 1
                         var bottom = Float.NaN
                         while (nextI < documentLineCount) {
-                            val nextOffset = state.document.lineStart(nextI).coerceIn(0, transformedLength)
-                            val nextRow = tlr.getLineForOffset(nextOffset).coerceIn(0, maxRow)
-                            val thisOffset = state.document.lineStart(i).coerceIn(0, transformedLength)
-                            val thisRow = tlr.getLineForOffset(thisOffset).coerceIn(0, maxRow)
+                            val nextRow = visualRowOf(nextI)
                             if (nextRow != thisRow) {
                                 bottom = topPaddingPx + tlr.getLineTop(nextRow)
                                 break
