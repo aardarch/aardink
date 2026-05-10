@@ -1,6 +1,6 @@
-# Contributing to AardInk
+# Contributing to Aardink
 
-Thanks for your interest in contributing! AardInk is a Jetpack Compose-native code
+Thanks for your interest in contributing! Aardink is a Jetpack Compose-native code
 editor library, published as `com.aardarch:aardink` on Maven Central.
 
 ## Getting started

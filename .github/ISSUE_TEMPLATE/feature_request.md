@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an enhancement to AardInk
+about: Suggest an enhancement to Aardink
 title: "[feature] "
 labels: enhancement
 ---

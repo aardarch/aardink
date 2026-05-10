@@ -265,7 +265,7 @@ object SampleAssets {
             "name": "aardink-sample",
             "version": "0.1.0",
             "private": true,
-            "description": "A long JSON file showcasing nested objects, arrays, numbers, booleans, and null values for the AardInk sample app.",
+            "description": "A long JSON file showcasing nested objects, arrays, numbers, booleans, and null values for the Aardink sample app.",
             "engines": {
                 "node": ">=20.0.0",
                 "npm": ">=10.0.0"
@@ -441,8 +441,8 @@ object SampleAssets {
         <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <meta name="description" content="A long HTML sample for the AardInk editor showcase." />
-            <title>AardInk &mdash; HTML sample</title>
+            <meta name="description" content="A long HTML sample for the Aardink editor showcase." />
+            <title>Aardink &mdash; HTML sample</title>
             <link rel="stylesheet" href="/styles/main.css" />
             <link rel="icon" href="/favicon.ico" type="image/x-icon" />
             <script defer src="/scripts/app.js"></script>
@@ -451,7 +451,7 @@ object SampleAssets {
             <header class="site-header">
                 <a class="brand" href="/">
                     <img src="/img/logo.svg" alt="" width="32" height="32" />
-                    <span>AardInk</span>
+                    <span>Aardink</span>
                 </a>
                 <nav class="site-nav" aria-label="Primary">
                     <ul>
@@ -497,7 +497,7 @@ object SampleAssets {
                         <h2>Compared to plain text</h2>
                         <table>
                             <thead>
-                                <tr><th>Feature</th><th>Plain</th><th>AardInk</th></tr>
+                                <tr><th>Feature</th><th>Plain</th><th>Aardink</th></tr>
                             </thead>
                             <tbody>
                                 <tr><td>Highlighting</td><td>&minus;</td><td>&#10003;</td></tr>
@@ -526,7 +526,7 @@ object SampleAssets {
     """.trimIndent()
 
     private val CSS: String = """
-        /* AardInk sample stylesheet — reset + theme + components. */
+        /* Aardink sample stylesheet — reset + theme + components. */
 
         :root {
             --bg: #0b1220;
@@ -663,9 +663,9 @@ object SampleAssets {
     """.trimIndent()
 
     private val MARKDOWN: String = """
-        # AardInk user guide
+        # Aardink user guide
 
-        AardInk is a Compose-native code editor library for Android. This document is here
+        Aardink is a Compose-native code editor library for Android. This document is here
         to give the editor's Markdown highlighting and folding something to chew on.
 
         ## Overview
@@ -774,7 +774,7 @@ object SampleAssets {
 
         1. A minimal reproduction.
         2. The language id and a code snippet.
-        3. Logs from `adb logcat -s AardInk`.
+        3. Logs from `adb logcat -s Aardink`.
 
         ---
 
@@ -782,12 +782,11 @@ object SampleAssets {
     """.trimIndent()
 
     private val PLAIN_TEXT: String = """
-        AardInk — a quick tour
+        Aardink — a quick tour
         ===========================
 
-        AardInk started as the editor inside Aardflex, a tool for designing
-        Android wallpapers from XML and Compose. Once the editor outgrew that
-        single use case it was extracted into its own library.
+        Aardink started as the editor inside Aardflex, a tool for designing Android wallpapers/widgets from XML and Compose.
+        Once the editor outgrew that single use case it was extracted into its own library.
 
         The library has three goals:
 
@@ -795,7 +794,7 @@ object SampleAssets {
              surprise legacy.
           2. Stay small. The only runtime dependency is Jetpack Compose.
           3. Stay extensible. Tokenisation, folding, completions, and themes
-             are all replaceable.
+             are all replaceable/extendable.
 
         Why a sample app?
         -----------------
@@ -820,8 +819,8 @@ object SampleAssets {
           - Markdown for notes and READMEs
           - Plain text for everything else
 
-        If your stack needs Python, Go, or Rust, the registry's override
-        and register hooks are the way to add them.
+        If your stack needs anything else, like Python, Go, or Rust,
+        the registry's override and register hooks are the way to add them.
 
         A note on regex tokenisers
         --------------------------

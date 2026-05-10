@@ -22,7 +22,6 @@ package com.aardarch.editor.core
  * document formatting for a specific language or DSL. All `suspend` functions are safe to call
  * from a coroutine on [kotlinx.coroutines.Dispatchers.Default].
  *
- * The Aardflex XML implementation lives in the `:app` module as [AardflexXmlLanguageService].
  * External library consumers implement this interface for their own DSLs.
  */
 interface LanguageService {

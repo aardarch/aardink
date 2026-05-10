@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-AardInk is pre-1.0. Only the latest published version on Maven Central
+Aardink is pre-1.0. Only the latest published version on Maven Central
 receives fixes.
 
 | Version | Supported |

@@ -53,7 +53,7 @@ fun WelcomeCard(modifier: Modifier = Modifier) {
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Welcome to AardInk",
+                    text = "Welcome to Aardink",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

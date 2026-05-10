@@ -1,1 +1,1 @@
-# Consumer ProGuard rules for AardInk.
+# Consumer ProGuard rules for Aardink.

@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Placeholder for the AardInk mascot — a stylised aardvark silhouette inside a rounded
+ * Placeholder for the Aardink mascot — a stylised aardvark silhouette inside a rounded
  * blob, plus an "Æ" monogram.
  *
  * TODO: replace with final mascot artwork once designed.

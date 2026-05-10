@@ -54,7 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.aardarch.editor.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.sample.samples.SampleAssets
-import com.aardarch.aardink.sample.theme.AardInkSampleTheme
+import com.aardarch.aardink.sample.theme.AardinkSampleTheme
 import com.aardarch.aardink.sample.ui.LanguageCard
 import com.aardarch.aardink.sample.ui.SampleThemeChoice
 import com.aardarch.aardink.sample.ui.ThemePicker
@@ -97,7 +97,7 @@ private fun SampleApp() {
     val active = themeChoices.firstOrNull { it.id == themeId } ?: themeChoices.first()
     val selected = selectedId?.let(registry::byId)
 
-    AardInkSampleTheme(editorTheme = active.theme) {
+    AardinkSampleTheme(editorTheme = active.theme) {
         if (selected == null) {
             StartScreen(
                 languages = registry.all,
@@ -124,7 +124,7 @@ private fun StartScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("AardInk samples") })
+            TopAppBar(title = { Text("Aardink samples") })
         },
         modifier = Modifier.fillMaxSize(),
     ) { innerPadding ->

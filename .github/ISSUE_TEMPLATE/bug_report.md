@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a defect in AardInk
+about: Report a defect in Aardink
 title: "[bug] "
 labels: bug
 ---
@@ -21,7 +21,7 @@ labels: bug
 
 ## Environment
 
-- AardInk version: <!-- e.g. 0.1.0 -->
+- Aardink version: <!-- e.g. 0.1.0 -->
 - Android API level / device:
 - Compose BOM version:
 - Kotlin version:

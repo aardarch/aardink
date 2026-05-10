@@ -1,1 +1,1 @@
-# Consumer ProGuard rules for AardInk Languages.
+# Consumer ProGuard rules for Aardink Languages.

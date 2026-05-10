@@ -34,7 +34,7 @@ import com.aardarch.editor.ui.LocalEditorTheme
  * The editor surface itself continues to honour [LocalEditorTheme] for its syntax colours.
  */
 @Composable
-fun AardInkSampleTheme(
+fun AardinkSampleTheme(
     editorTheme: EditorTheme,
     content: @Composable () -> Unit,
 ) {

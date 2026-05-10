@@ -27,7 +27,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AardInk"
+rootProject.name = "Aardink"
 include(":editor")
 include(":languages")
 include(":sample")

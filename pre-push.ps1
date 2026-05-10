@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Pre-push verification script for AardInk.
+    Pre-push verification script for Aardink.
     Mirrors the CI pipeline checks so issues are caught locally before push.
 
 .DESCRIPTION

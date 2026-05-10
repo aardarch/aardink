@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to AardInk! -->
+<!-- Thanks for contributing to Aardink! -->
 
 ## Summary
 
