@@ -1,7 +1,6 @@
-# AardInk — Agent Instructions
+# Aardink — Agent Instructions
 
-AardInk is a standalone Jetpack Compose-native code editor library for Android.
-It is extracted from [Aardflex](https://github.com/aardarch/aardflex) and published as
+Aardink is a standalone Jetpack Compose-native code editor library for Android published as
 `com.aardarch:aardink` on Maven Central.
 
 ## Project Layout
@@ -33,7 +32,7 @@ sample/          # Minimal Android app for local development and manual testing
 
 ## Build Commands
 
-All commands run from the repo root (`c:\repos\aardarch\aardink`).
+All commands run from the repo root.
 
 ```pwsh
 ./gradlew :editor:test :languages:test          # Unit tests
@@ -49,8 +48,8 @@ All commands run from the repo root (`c:\repos\aardarch\aardink`).
 Before pushing, run the full local equivalent of CI:
 
 ```pwsh
-./pre-push.ps1                      # Full check + Spotless auto-fix
-./pre-push.ps1 -NoFix               # Check-only (matches CI exactly)
+./pre-push.ps1                        # Full check + Spotless auto-fix
+./pre-push.ps1 -NoFix                 # Check-only (matches CI exactly)
 ./pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (lint + format + apiCheck)
 ```
 
@@ -64,6 +63,8 @@ tests, sample build, and `publishToMavenLocal` sanity.
 
 ## Code Conventions
 
+- **Modern Android** - No explicit support for ancient, legacy Android versions, full support for modern Android
+- **Kotlin only** - Kotlin and Kotlin-idiomatic code only, no legacy, no Java
 - **Compose-only** — zero XML layouts, zero Android resource files in the editor module
 - **No cross-module imports** — `editor` must not import from `sample` or any external module
 - **Public API discipline** — run `apiDump` after any intentional API change, commit the updated `.api` file
@@ -80,7 +81,6 @@ The `editor` module is intentionally language-agnostic:
 - Language-specific logic (Kotlin, TS, JSON, XML, HTML, CSS, Markdown, plain text) → belongs in
   `languages` (or in a consumer override) via `IncrementalTokenizer` + `FoldingProvider`,
   packaged as `LanguageDefinition` and resolved through `LanguageRegistry`
-- Aardflex-specific state (WallpaperRepository, ViewModels) → never touches `editor` or `languages`
 
 ## Public API Surface (key entry points)
 
@@ -96,5 +96,5 @@ The `editor` module is intentionally language-agnostic:
 
 ## Versioning
 
-SemVer. Breaking API changes require a major version bump.
+SemVer. Breaking API changes require a major version bump. Don't introduce breaking changes lightly.
 After any intentional public API change, run `./gradlew :editor:apiDump` and commit the result.
