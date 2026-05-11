@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -27,6 +27,21 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-provider: basic # MIT-licensed
+
+      - name: Make gradlew executable
+        run: chmod +x ./${{ env.WORKING_DIR }}/gradlew
+
+      - name: Verify tag matches VERSION_NAME
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          props_version="$(grep -E '^VERSION_NAME=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          echo "Tag version:        $tag_version"
+          echo "gradle.properties:  $props_version"
+          if [ "$tag_version" != "$props_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION_NAME=$props_version in gradle.properties."
+            exit 1
+          fi
 
       - name: Run checks before publish
         run: ./gradlew :editor:test :editor:lint :languages:test :languages:lint
@@ -38,3 +53,28 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes_file="$(mktemp)"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { in_section = 1; next }
+            in_section && /^## \[/    { exit }
+            in_section                { print }
+          ' CHANGELOG.md > "$notes_file"
+          if ! [ -s "$notes_file" ]; then
+            echo "::error::No ## [$version] section found in CHANGELOG.md (or it was empty)."
+            exit 1
+          fi
+          echo "file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "${{ steps.notes.outputs.file }}" \
+            --verify-tag
