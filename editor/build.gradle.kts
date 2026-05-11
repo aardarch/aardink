@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
+    signing
 }
 
 android {
@@ -87,6 +88,12 @@ dependencies {
 }
 
 // ── Publishing ────────────────────────────────────────────────────────────────
+
+if (providers.gradleProperty("signingInMemoryKey").orNull == null) {
+    signing {
+        useGpgCmd()
+    }
+}
 
 mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
