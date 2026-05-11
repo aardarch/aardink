@@ -5,13 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<!-- Release workflow:cdfxxx
-  1. Add entries under [Unreleased] in your PR (CI warns if empty).
-  2. When ready to release, rename [Unreleased] to [X.Y.Z] - YYYY-MM-DD
-     and add a fresh empty [Unreleased] section above it.
-  3. Commit, then tag: git tag vX.Y.Z && git push origin vX.Y.Z
-  4. The release pipeline extracts this section for the GitHub Release body.
-     It will fail if no matching ## [X.Y.Z] section exists. -->
+<!-- Release workflow:
+  Day-to-day:
+    Add entries under [Unreleased] in your PR. You can run ./update-changelog.ps1
+    on main to auto-classify commits since the last tag into the right sections.
+
+  Cutting a release:
+    1. ./create-release.ps1            # bumps gradle.properties VERSION_NAME,
+                                       # cuts [Unreleased] -> [X.Y.Z] - YYYY-MM-DD,
+                                       # commits, and creates an annotated tag.
+    2. git show vX.Y.Z                 # review the staged commit and tag.
+    3. ./release.ps1                   # pushes main + tag, triggering CI publish.
+
+  CI (.github/workflows/release.yml) verifies the tag matches VERSION_NAME, publishes
+  to Maven Central, then extracts this matching ## [X.Y.Z] section to create the
+  GitHub Release. It will fail if no matching section exists. -->
 
 <!-- Commit prefix → Changelog heading (1:1 mapping)
 
