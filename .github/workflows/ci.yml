@@ -28,6 +28,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-provider: basic # MIT-licensed
 
       - name: Make gradlew executable
         run: chmod +x ./${{ env.WORKING_DIR }}/gradlew
