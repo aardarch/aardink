@@ -12,9 +12,9 @@
     Use -SkipTests to skip unit tests.
 
 .EXAMPLE
-    .\pre-push.ps1
-    .\pre-push.ps1 -NoFix
-    .\pre-push.ps1 -SkipBuild -SkipTests
+    .\scripts\pre-push.ps1
+    .\scripts\pre-push.ps1 -NoFix
+    .\scripts\pre-push.ps1 -SkipBuild -SkipTests
 #>
 param(
     [switch]$NoFix,
@@ -26,7 +26,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
 # ── Resolve paths ───────────────────────────────────────────────────
-$ProjectRoot = $PSScriptRoot
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Gradlew = Join-Path $ProjectRoot 'gradlew.bat'
 
 if (-not (Test-Path $Gradlew)) {

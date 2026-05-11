@@ -117,7 +117,7 @@ A minimal Android app for manual testing lives under [`sample/`](sample/):
 ./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal   # Publish to ~/.m2
 ```
 
-For the full build/test/release workflow — including the `pre-push.ps1`
+For the full build/test/release workflow — including the `scripts/pre-push.ps1`
 end-to-end check — see [AGENTS.md](AGENTS.md).
 
 ## Contributing

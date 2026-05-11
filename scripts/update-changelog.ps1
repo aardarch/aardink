@@ -7,7 +7,7 @@
     - Verifies you are on main and in sync with origin/main.
     - Detects the latest semver tag (vX.Y.Z) and the commits since.
     - Classifies commits using Keep a Changelog categories (shared logic in
-      scripts/Release-Common.ps1).
+      Release-Common.ps1, sibling to this script).
     - Replaces the [Unreleased] section in CHANGELOG.md with the categorized list.
     - Suggests the next version based on conventional-commit signals.
     - Idempotent.
@@ -16,10 +16,10 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ScriptDir = $PSScriptRoot
-Push-Location $ScriptDir
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $RepoRoot
 try {
-    . (Join-Path $ScriptDir 'scripts/Release-Common.ps1')
+    . (Join-Path $PSScriptRoot 'Release-Common.ps1')
 
     if (-not (Test-Path .git)) {
         Write-Host "Error: Not in the root of a git repository." -ForegroundColor Red
@@ -80,7 +80,7 @@ try {
         }
     }
 
-    $changelogPath = Join-Path $ScriptDir 'CHANGELOG.md'
+    $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
     if (-not (Test-Path $changelogPath)) {
         Write-Host "Error: Changelog not found at $changelogPath" -ForegroundColor Red
         exit 1

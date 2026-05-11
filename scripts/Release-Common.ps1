@@ -3,8 +3,8 @@
 .SYNOPSIS
     Shared functions for the release scripts (update-changelog.ps1, create-release.ps1, release.ps1).
 .DESCRIPTION
-    Dot-source this file from any release script:
-        . (Join-Path $PSScriptRoot 'scripts/Release-Common.ps1')
+    Dot-source this file from any sibling release script in scripts/:
+        . (Join-Path $PSScriptRoot 'Release-Common.ps1')
     Provides commit classification, version detection from gradle.properties, next-version
     suggestion, and CHANGELOG section helpers.
 #>

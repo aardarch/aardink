@@ -48,9 +48,9 @@ All commands run from the repo root.
 Before pushing, run the full local equivalent of CI:
 
 ```pwsh
-./pre-push.ps1                        # Full check + Spotless auto-fix
-./pre-push.ps1 -NoFix                 # Check-only (matches CI exactly)
-./pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (lint + format + apiCheck)
+./scripts/pre-push.ps1                        # Full check + Spotless auto-fix
+./scripts/pre-push.ps1 -NoFix                 # Check-only (matches CI exactly)
+./scripts/pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (lint + format + apiCheck)
 ```
 
 The script runs: secret scan, Apache 2.0 header check, Spotless, lint, unit
@@ -108,16 +108,16 @@ Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
 Two scripts handle the release flow; nothing should be done by hand:
 
 ```pwsh
-./update-changelog.ps1   # (optional) auto-fill [Unreleased] from commits since last tag
-./create-release.ps1     # bump VERSION_NAME, cut CHANGELOG, commit + tag (no push)
-git show vX.Y.Z          # review the staged release
-./release.ps1            # push main + tag → triggers Maven Central publish + GH Release
+./scripts/update-changelog.ps1   # (optional) auto-fill [Unreleased] from commits since last tag
+./scripts/create-release.ps1     # bump VERSION_NAME, cut CHANGELOG, commit + tag (no push)
+git show vX.Y.Z                  # review the staged release
+./scripts/release.ps1            # push main + tag → triggers Maven Central publish + GH Release
 ```
 
-`create-release.ps1` runs `pre-push.ps1 -NoFix` as a gate, prompts for the next version
+`scripts/create-release.ps1` runs `scripts/pre-push.ps1 -NoFix` as a gate, prompts for the next version
 (default = SemVer suggestion derived from conventional-commit signals), and refuses to
 proceed if the tag exists or if `[Unreleased]` is empty (override with
-`-AllowEmptyChangelog`). `release.ps1` only pushes if HEAD is a `chore(release): vX.Y.Z`
+`-AllowEmptyChangelog`). `scripts/release.ps1` only pushes if HEAD is a `chore(release): vX.Y.Z`
 commit whose tag matches `VERSION_NAME`.
 
 The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))

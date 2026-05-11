@@ -13,10 +13,10 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ScriptDir = $PSScriptRoot
-Push-Location $ScriptDir
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $RepoRoot
 try {
-    . (Join-Path $ScriptDir 'scripts/Release-Common.ps1')
+    . (Join-Path $PSScriptRoot 'Release-Common.ps1')
 
     if (-not (Test-Path .git)) { throw "Not in the root of a git repository." }
     $branch = git rev-parse --abbrev-ref HEAD
@@ -34,7 +34,7 @@ try {
         throw "Expected tag $expectedTag at HEAD but found: $($tagsAtHead -join ', ')."
     }
 
-    $propsVersion = Get-VersionFromGradleProperties -RepoRoot $ScriptDir
+    $propsVersion = Get-VersionFromGradleProperties -RepoRoot $RepoRoot
     if ($propsVersion -ne $commitVersion) {
         throw "VERSION_NAME ($propsVersion) does not match release commit version ($commitVersion)."
     }

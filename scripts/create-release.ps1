@@ -37,10 +37,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ScriptDir = $PSScriptRoot
-Push-Location $ScriptDir
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $RepoRoot
 try {
-    . (Join-Path $ScriptDir 'scripts/Release-Common.ps1')
+    . (Join-Path $PSScriptRoot 'Release-Common.ps1')
 
     # --- Gates ---
     if (-not (Test-Path .git)) {
@@ -63,7 +63,7 @@ try {
     }
 
     # --- Target version ---
-    $currentVersion = Get-VersionFromGradleProperties -RepoRoot $ScriptDir
+    $currentVersion = Get-VersionFromGradleProperties -RepoRoot $RepoRoot
     Write-Host "Current VERSION_NAME: $currentVersion" -ForegroundColor Cyan
 
     $latestTag = Get-LatestSemverTag
@@ -95,7 +95,7 @@ try {
     }
 
     # --- CHANGELOG sanity ---
-    $changelogPath = Join-Path $ScriptDir 'CHANGELOG.md'
+    $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
     if (-not (Test-Path $changelogPath)) { throw "CHANGELOG.md not found." }
     $unreleased = Get-ChangelogSection -ChangelogPath $changelogPath -Version 'Unreleased'
     if ($null -eq $unreleased) {
@@ -109,7 +109,7 @@ try {
     if (-not $SkipPrePush) {
         Write-Host ""
         Write-Host "Running ./pre-push.ps1 -NoFix..." -ForegroundColor Cyan
-        & (Join-Path $ScriptDir 'pre-push.ps1') -NoFix
+        & (Join-Path $PSScriptRoot 'pre-push.ps1') -NoFix
         if ($LASTEXITCODE -ne 0) {
             throw "pre-push.ps1 failed (exit $LASTEXITCODE). Fix and re-run."
         }
@@ -120,13 +120,13 @@ try {
     # --- Mutate: gradle.properties ---
     Write-Host ""
     Write-Host "Bumping VERSION_NAME: $currentVersion -> $Version" -ForegroundColor Cyan
-    Set-VersionInGradleProperties -RepoRoot $ScriptDir -NewVersion $Version
+    Set-VersionInGradleProperties -RepoRoot $RepoRoot -NewVersion $Version
 
     # --- Mutate: CHANGELOG ---
     $today = (Get-Date).ToString('yyyy-MM-dd')
     Write-Host "Cutting CHANGELOG: [Unreleased] -> [$Version] - $today" -ForegroundColor Cyan
     $content = Get-Content $changelogPath -Raw
-    $replacement = "## [Unreleased]`n`n## [$Version] - $today"
+    $replacement = "## [Unreleased]`n`n## [$Version] - $today`n"
     $newContent = $content -replace '(?m)^## \[Unreleased\]\s*$', $replacement
     Set-Content -Path $changelogPath -Value $newContent -NoNewline
 
