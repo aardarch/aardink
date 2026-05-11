@@ -98,3 +98,28 @@ The `editor` module is intentionally language-agnostic:
 
 SemVer. Breaking API changes require a major version bump. Don't introduce breaking changes lightly.
 After any intentional public API change, run `./gradlew :editor:apiDump` and commit the result.
+
+The single source of truth for the published version is `VERSION_NAME` in
+`gradle.properties`. Both `editor` and `languages` modules read it via the vanniktech
+Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
+
+## Releasing
+
+Two scripts handle the release flow; nothing should be done by hand:
+
+```pwsh
+./update-changelog.ps1   # (optional) auto-fill [Unreleased] from commits since last tag
+./create-release.ps1     # bump VERSION_NAME, cut CHANGELOG, commit + tag (no push)
+git show vX.Y.Z          # review the staged release
+./release.ps1            # push main + tag → triggers Maven Central publish + GH Release
+```
+
+`create-release.ps1` runs `pre-push.ps1 -NoFix` as a gate, prompts for the next version
+(default = SemVer suggestion derived from conventional-commit signals), and refuses to
+proceed if the tag exists or if `[Unreleased]` is empty (override with
+`-AllowEmptyChangelog`). `release.ps1` only pushes if HEAD is a `chore(release): vX.Y.Z`
+commit whose tag matches `VERSION_NAME`.
+
+The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
+verifies the tag matches `VERSION_NAME`, publishes both artifacts, and creates a
+GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body.
