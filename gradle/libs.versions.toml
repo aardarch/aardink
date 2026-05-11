@@ -9,6 +9,7 @@ plugin-kotlin = "2.3.21"
 plugin-spotless = "8.4.0"
 plugin-kotlin-binary-compat = "0.18.1"
 plugin-vanniktech-maven-publish = "0.36.0"
+plugin-dokka = "2.1.0"
 
 # Major version definitions
 jvm = "21"
@@ -96,6 +97,9 @@ plugin-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.re
 
 # Code formatting
 plugin-spotless = { id = "com.diffplug.spotless", version.ref = "plugin-spotless" }
+
+# Documentation
+plugin-dokka = { id = "org.jetbrains.dokka", version.ref = "plugin-dokka" }
 
 # Publishing
 plugin-kotlin-binary-compat = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "plugin-kotlin-binary-compat" }

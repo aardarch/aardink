@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -39,8 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aardarch.editor.core.CompletionItem
-import com.aardarch.editor.core.CompletionKind
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
 
 /**
  * Horizontal strip of completion chips shown above the keyboard toolbar when completions

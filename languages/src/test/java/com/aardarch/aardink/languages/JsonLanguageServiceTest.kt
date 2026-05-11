@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.DiagnosticSeverity
-import com.aardarch.editor.languages.internal.json.JsonLanguageService
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

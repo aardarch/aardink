@@ -41,8 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.aardarch.editor.core.EditorTheme
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.TokenType
 
 /**
  * One [EditorTheme] choice, with its display name and stable id.

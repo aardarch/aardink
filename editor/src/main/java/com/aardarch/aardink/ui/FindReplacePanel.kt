@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -38,13 +38,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.aardarch.editor.core.FindReplaceState
+import com.aardarch.aardink.core.FindReplaceState
 
 /**
  * Slide-down find/replace panel anchored to the top of the editor.
  *
  * The panel mutates [state] directly. The host (typically [CodeEditorLayout]) is responsible for
- * watching the state and re-running [com.aardarch.editor.core.FindEngine.findAll] on changes.
+ * watching the state and re-running [com.aardarch.aardink.core.FindEngine.findAll] on changes.
  *
  * @param state The state holder backing this panel.
  * @param onNext User pressed the "next match" arrow — host should scroll/select that match.

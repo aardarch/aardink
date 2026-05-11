@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.xml
+package com.aardarch.aardink.languages.internal.xml
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.Diagnostic
-import com.aardarch.editor.core.DiagnosticSeverity
-import com.aardarch.editor.languages.internal.BaseLanguageService
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.languages.internal.BaseLanguageService
 
 /**
  * Lightweight XML well-formedness checker.

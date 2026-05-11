@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import com.aardarch.editor.core.EditorTheme
-import com.aardarch.editor.core.Token
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.core.TokenType
 
 /**
  * Builds an [AnnotatedString] from a token list and the active [EditorTheme].

@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.css
+package com.aardarch.aardink.languages.internal.css
 
-import com.aardarch.editor.core.TokenType
-import com.aardarch.editor.languages.internal.RegexTokenizer
+import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.RegexTokenizer
 
 /** Regex-driven CSS tokenizer. */
 object CssTokenizer : RegexTokenizer() {

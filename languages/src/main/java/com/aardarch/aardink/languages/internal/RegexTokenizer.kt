@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal
+package com.aardarch.aardink.languages.internal
 
-import com.aardarch.editor.core.IncrementalTokenizer
-import com.aardarch.editor.core.Token
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.core.TokenType
 
 /**
  * Base class for the regex-driven tokenizers shipped with `:languages`.

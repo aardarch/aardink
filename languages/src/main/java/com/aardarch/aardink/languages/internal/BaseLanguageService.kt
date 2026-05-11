@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal
+package com.aardarch.aardink.languages.internal
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.CompletionItem
-import com.aardarch.editor.core.Diagnostic
-import com.aardarch.editor.core.HoverDoc
-import com.aardarch.editor.core.LanguageService
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.LanguageService
 
 /**
  * No-op default for every [LanguageService] method. Subclasses override only what they actually

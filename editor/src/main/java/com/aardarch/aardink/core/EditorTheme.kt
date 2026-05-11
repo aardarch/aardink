@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.core
+package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.sp
 /**
  * Complete visual specification for the code editor.
  *
- * Obtain pre-built instances from [com.aardarch.editor.ui.EditorThemes], or build your own.
- * Override for a specific editor instance via [com.aardarch.editor.ui.LocalEditorTheme].
+ * Obtain pre-built instances from [com.aardarch.aardink.ui.EditorThemes], or build your own.
+ * Override for a specific editor instance via [com.aardarch.aardink.ui.LocalEditorTheme].
  */
 @Immutable
 data class EditorTheme(

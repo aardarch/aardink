@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -53,19 +53,19 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
-import com.aardarch.editor.core.CodeEditorState
-import com.aardarch.editor.core.CompletionItem
-import com.aardarch.editor.core.Diagnostic
-import com.aardarch.editor.core.DiagnosticSeverity
-import com.aardarch.editor.core.FindEngine
-import com.aardarch.editor.core.FindReplaceState
-import com.aardarch.editor.core.FoldState
-import com.aardarch.editor.core.FoldingProvider
-import com.aardarch.editor.core.LanguageService
-import com.aardarch.editor.core.LineDiffKind
-import com.aardarch.editor.core.NoOpFoldingProvider
-import com.aardarch.editor.core.SimpleDiffProvider
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FindEngine
+import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.FoldingProvider
+import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.LineDiffKind
+import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.SimpleDiffProvider
+import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
 /**
  * Mutable, ordered map of [LanguageDefinition] values keyed by [LanguageDefinition.id].

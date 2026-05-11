@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** Renamed library packages `com.aardarch.editor.*` → `com.aardarch.aardink.*`
+  (and `com.aardarch.editor.languages.*` → `com.aardarch.aardink.languages.*`) so the JVM
+  packages match the Maven artifact IDs. Consumers must update imports. Maven coordinates
+  (`com.aardarch:aardink`, `com.aardarch:aardink-languages`) are unchanged.
+
 ## [0.1.0] - 2026-05-12
 
 ### Added

@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.FoldRange
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.FoldRange
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

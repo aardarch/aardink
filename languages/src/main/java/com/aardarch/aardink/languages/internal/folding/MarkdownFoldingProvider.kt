@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.folding
+package com.aardarch.aardink.languages.internal.folding
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.FoldRange
-import com.aardarch.editor.core.FoldingProvider
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.FoldingProvider
 
 /**
  * Folds Markdown heading sections. A heading folds everything until the next heading at the same

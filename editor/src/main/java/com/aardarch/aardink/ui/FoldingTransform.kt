@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.core.FoldRange
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.FoldRange
 
 /**
  * Collapses folded regions in [text] for display in a [BasicTextField].
@@ -113,7 +113,7 @@ fun applyFolding(
  * folded display space without re-running the full [applyFolding] transform. Mirrors the mapping
  * built inside [applyFolding] — keep the two in sync.
  *
- * Callers in this file: [com.aardarch.editor.ui.CodeEditorLayout]'s gutter line-top calculation,
+ * Callers in this file: [com.aardarch.aardink.ui.CodeEditorLayout]'s gutter line-top calculation,
  * which queries `TextLayoutResult.getLineForOffset` (transformed-space) for each logical document
  * line (original-space).
  */

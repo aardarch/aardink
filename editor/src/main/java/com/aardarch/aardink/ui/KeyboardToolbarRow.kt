@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -57,7 +57,7 @@ import androidx.compose.ui.semantics.Role
  * The row is only visible when the IME is open ([WindowInsets.ime] bottom > 0).
  *
  * @param quickChars Characters to display as single-tap insert buttons. Supplied by
- *   [com.aardarch.editor.core.IncrementalTokenizer.keyboardToolbarChars].
+ *   [com.aardarch.aardink.core.IncrementalTokenizer.keyboardToolbarChars].
  * @param canUndo Whether the undo button should be enabled.
  * @param canRedo Whether the redo button should be enabled.
  * @param onInsertChar Called when the user taps a quick-insert character button.

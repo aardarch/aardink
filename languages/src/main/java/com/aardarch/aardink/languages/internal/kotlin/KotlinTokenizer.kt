@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.kotlin
+package com.aardarch.aardink.languages.internal.kotlin
 
-import com.aardarch.editor.core.TokenType
-import com.aardarch.editor.languages.internal.RegexTokenizer
+import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.RegexTokenizer
 
-/** Regex-driven Kotlin tokenizer used by [com.aardarch.editor.languages.BuiltInLanguages.Kotlin]. */
+/** Regex-driven Kotlin tokenizer used by [com.aardarch.aardink.languages.BuiltInLanguages.Kotlin]. */
 object KotlinTokenizer : RegexTokenizer() {
 
     private val keywords = setOf(

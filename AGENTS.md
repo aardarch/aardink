@@ -7,13 +7,13 @@ Aardink is a standalone Jetpack Compose-native code editor library for Android p
 
 ```text
 editor/          # The library module — the published artifact (com.aardarch:aardink)
-  src/main/java/com/aardarch/editor/
+  src/main/java/com/aardarch/aardink/
     core/        # Document model, tokenization, undo, find, folding
     ui/          # Composables: CodeEditorLayout, EditorGutter, etc.
   src/test/      # JUnit 5 unit tests
 
 languages/       # Built-in language support — published as com.aardarch:aardink-languages
-  src/main/java/com/aardarch/editor/languages/
+  src/main/java/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
     internal/    # Per-language tokenizers + folding providers (regex-driven v1)
 

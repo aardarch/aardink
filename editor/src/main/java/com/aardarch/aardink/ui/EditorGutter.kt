@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -40,8 +40,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.aardarch.editor.core.FoldRange
-import com.aardarch.editor.core.LineDiffKind
+import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.LineDiffKind
 
 /**
  * Canvas-based line-number gutter with fold triangles, annotation dots, and diff indicators.

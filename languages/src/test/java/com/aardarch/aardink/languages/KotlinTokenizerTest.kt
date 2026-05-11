@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.TokenType
-import com.aardarch.editor.languages.internal.kotlin.KotlinTokenizer
+import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 

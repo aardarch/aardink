@@ -58,11 +58,11 @@ dependencies {
 
 ```kotlin
 import androidx.compose.runtime.Composable
-import com.aardarch.editor.ui.CodeEditorLayout
-import com.aardarch.editor.ui.EditorThemes
-import com.aardarch.editor.ui.LocalEditorTheme
-import com.aardarch.editor.state.rememberCodeEditorState
-import com.aardarch.editor.languages.LanguageRegistry
+import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorThemes
+import com.aardarch.aardink.ui.LocalEditorTheme
+import com.aardarch.aardink.core.rememberCodeEditorState
+import com.aardarch.aardink.languages.LanguageRegistry
 import androidx.compose.runtime.CompositionLocalProvider
 
 @Composable

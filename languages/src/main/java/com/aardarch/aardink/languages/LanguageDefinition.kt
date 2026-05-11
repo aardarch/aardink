@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.FoldingProvider
-import com.aardarch.editor.core.IncrementalTokenizer
-import com.aardarch.editor.core.LanguageService
-import com.aardarch.editor.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.FoldingProvider
+import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.NoOpFoldingProvider
 
 /**
  * Bundle of everything the editor needs to render a particular language.

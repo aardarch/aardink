@@ -23,9 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import com.aardarch.editor.core.EditorTheme
-import com.aardarch.editor.core.TokenType
-import com.aardarch.editor.ui.LocalEditorTheme
+import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.ui.LocalEditorTheme
 
 /**
  * Wraps content in a [MaterialTheme] whose [ColorScheme] is derived from the supplied

@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
-import com.aardarch.editor.core.EditorTheme
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.TokenType
 import org.json.JSONException
 import org.json.JSONObject
 

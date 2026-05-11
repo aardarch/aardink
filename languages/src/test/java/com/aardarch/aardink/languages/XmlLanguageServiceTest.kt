@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.languages.internal.xml.HtmlLanguageService
-import com.aardarch.editor.languages.internal.xml.XmlLanguageService
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
+import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

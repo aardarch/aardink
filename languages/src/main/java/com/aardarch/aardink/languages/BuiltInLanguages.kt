@@ -13,29 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.NoOpFoldingProvider
-import com.aardarch.editor.core.PlainTextTokenizer
-import com.aardarch.editor.languages.internal.css.CssTokenizer
-import com.aardarch.editor.languages.internal.folding.BraceFoldingProvider
-import com.aardarch.editor.languages.internal.folding.MarkdownFoldingProvider
-import com.aardarch.editor.languages.internal.folding.TagFoldingProvider
-import com.aardarch.editor.languages.internal.html.HtmlTokenizer
-import com.aardarch.editor.languages.internal.json.JsonLanguageService
-import com.aardarch.editor.languages.internal.json.JsonTokenizer
-import com.aardarch.editor.languages.internal.kotlin.KotlinTokenizer
-import com.aardarch.editor.languages.internal.markdown.MarkdownTokenizer
-import com.aardarch.editor.languages.internal.typescript.TypeScriptTokenizer
-import com.aardarch.editor.languages.internal.xml.HtmlLanguageService
-import com.aardarch.editor.languages.internal.xml.XmlLanguageService
-import com.aardarch.editor.languages.internal.xml.XmlTokenizer
+import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.PlainTextTokenizer
+import com.aardarch.aardink.languages.internal.css.CssTokenizer
+import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
+import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
+import com.aardarch.aardink.languages.internal.folding.TagFoldingProvider
+import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
+import com.aardarch.aardink.languages.internal.json.JsonLanguageService
+import com.aardarch.aardink.languages.internal.json.JsonTokenizer
+import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
+import com.aardarch.aardink.languages.internal.markdown.MarkdownTokenizer
+import com.aardarch.aardink.languages.internal.typescript.TypeScriptTokenizer
+import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
+import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
+import com.aardarch.aardink.languages.internal.xml.XmlTokenizer
 
 /**
  * Pre-built [LanguageDefinition] instances shipped with `:languages`.
  *
  * Use [LanguageRegistry.withBuiltIns] for a registry pre-populated with all of these, or
- * reference individual entries to wire one language directly into a [com.aardarch.editor.core.CodeEditorState].
+ * reference individual entries to wire one language directly into a [com.aardarch.aardink.core.CodeEditorState].
  */
 object BuiltInLanguages {
 

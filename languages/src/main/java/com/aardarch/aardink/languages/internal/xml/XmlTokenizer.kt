@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.xml
+package com.aardarch.aardink.languages.internal.xml
 
-import com.aardarch.editor.core.IncrementalTokenizer
-import com.aardarch.editor.core.Token
-import com.aardarch.editor.core.TokenType
+import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.core.TokenType
 
 /**
  * XML tokenizer with an explicit state machine — regex on its own struggles to keep tag names,

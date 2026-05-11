@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages.internal.markdown
+package com.aardarch.aardink.languages.internal.markdown
 
-import com.aardarch.editor.core.TokenType
-import com.aardarch.editor.languages.internal.RegexTokenizer
+import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.RegexTokenizer
 
 /**
  * Regex-driven Markdown tokenizer. The editor doesn't ship a "Heading" token type, so token types

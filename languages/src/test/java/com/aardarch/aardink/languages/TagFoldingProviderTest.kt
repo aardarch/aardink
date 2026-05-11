@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.languages
+package com.aardarch.aardink.languages
 
-import com.aardarch.editor.core.CodeDocument
-import com.aardarch.editor.languages.internal.folding.TagFoldingProvider
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.languages.internal.folding.TagFoldingProvider
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

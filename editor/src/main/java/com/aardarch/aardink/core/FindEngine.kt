@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.core
+package com.aardarch.aardink.core
 
 /**
  * Stateless search engine producing match ranges for the find/replace UI.

@@ -4,13 +4,14 @@ val jvmVersionInt = jvmVersion.toInt()
 plugins {
     alias(libs.plugins.plugin.android.library)
     alias(libs.plugins.plugin.kotlin.compose)
+    alias(libs.plugins.plugin.dokka)
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
     signing
 }
 
 android {
-    namespace = "com.aardarch.editor"
+    namespace = "com.aardarch.aardink"
     compileSdk = 37
 
     defaultConfig {

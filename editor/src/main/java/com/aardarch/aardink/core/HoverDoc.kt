@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.core
+package com.aardarch.aardink.core
 
 /**
  * Documentation shown in a hover popup when the cursor rests on a token.

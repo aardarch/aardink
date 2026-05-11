@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.aardarch.editor.ui
+package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -23,15 +23,15 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import com.aardarch.editor.core.Diagnostic
-import com.aardarch.editor.core.DiagnosticSeverity
+import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticSeverity
 
 /**
  * Draws wavy squiggle underlines for each [Diagnostic] whose range maps to a known character
  * position in [textLayoutResult]. The squiggles are drawn in the calling [DrawScope]'s local
  * coordinate space — add this to a `Modifier.drawBehind` on the same Box as `BasicTextField`.
  *
- * Pass the colours from the active [com.aardarch.editor.core.EditorTheme] so the underlines stay
+ * Pass the colours from the active [com.aardarch.aardink.core.EditorTheme] so the underlines stay
  * coherent with the rest of the editor's palette.
  */
 fun DrawScope.drawSquiggles(
