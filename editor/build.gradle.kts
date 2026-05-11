@@ -102,7 +102,7 @@ mavenPublishing {
     coordinates(
         groupId = "com.aardarch",
         artifactId = "aardink",
-        version = "0.1.0",
+        version = providers.gradleProperty("VERSION_NAME").get(),
     )
 
     pom {
