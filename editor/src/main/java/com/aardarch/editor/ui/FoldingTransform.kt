@@ -117,11 +117,7 @@ fun applyFolding(
  * which queries `TextLayoutResult.getLineForOffset` (transformed-space) for each logical document
  * line (original-space).
  */
-internal fun originalToTransformedOffset(
-    document: CodeDocument,
-    foldedRanges: List<FoldRange>,
-    originalOffset: Int,
-): Int {
+internal fun originalToTransformedOffset(document: CodeDocument, foldedRanges: List<FoldRange>, originalOffset: Int): Int {
     if (foldedRanges.isEmpty()) return originalOffset
     val origLen = document.length
     val clamped = originalOffset.coerceIn(0, origLen)
