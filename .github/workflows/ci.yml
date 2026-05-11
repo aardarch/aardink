@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  CI: true
+
 jobs:
   check:
     name: Lint, format, test, API check
@@ -25,6 +28,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Make gradlew executable
+        run: chmod +x ./${{ env.WORKING_DIR }}/gradlew
 
       - name: Spotless check
         run: ./gradlew :editor:spotlessCheck
