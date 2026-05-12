@@ -75,8 +75,8 @@ function ConvertTo-ChangelogEntry {
 }
 
 function Get-LatestSemverTag {
-    $allTags = git tag --sort=-v:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' }
-    if ($allTags -and $allTags.Count -gt 0) { return $allTags[0] }
+    $allTags = @(git tag --sort=-v:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
+    if ($allTags.Count -gt 0) { return $allTags[0] }
     return $null
 }
 
