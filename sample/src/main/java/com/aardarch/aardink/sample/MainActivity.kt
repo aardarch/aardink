@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,6 +61,7 @@ import com.aardarch.aardink.sample.ui.SampleThemeChoice
 import com.aardarch.aardink.sample.ui.ThemePicker
 import com.aardarch.aardink.sample.ui.WelcomeCard
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.rememberCodeEditorState
 import com.aardarch.aardink.languages.LanguageDefinition
@@ -192,6 +194,7 @@ private fun EditorScreen(
         tokenizer = language.tokenizer,
     )
     val foldState = remember(language.id) { FoldState() }
+    val findReplaceState = remember(language.id) { FindReplaceState() }
 
     var toolbarPlacementName by rememberSaveable {
         mutableStateOf(KeyboardToolbarPlacement.BottomHover.name)
@@ -245,6 +248,16 @@ private fun EditorScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            if (findReplaceState.visible) findReplaceState.hide() else findReplaceState.show()
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "Find and replace",
+                        )
+                    }
                     SampleOptionsMenu(
                         placement = toolbarPlacement,
                         onPlacementChange = { toolbarPlacementName = it.name },
@@ -269,6 +282,7 @@ private fun EditorScreen(
         CodeEditorLayout(
             state = state,
             foldState = foldState,
+            findReplaceState = findReplaceState,
             foldingProvider = language.foldingProvider,
             languageService = language.languageService,
             diagnostics = diagnostics,
