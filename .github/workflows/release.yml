@@ -54,6 +54,20 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
+      - name: Generate API docs (GFM)
+        run: ./gradlew dokkaAllGfm
+
+      - name: Bundle API docs
+        id: docs
+        run: |
+          staging="$(mktemp -d)"
+          mkdir -p "$staging/aardink-docs/editor" "$staging/aardink-docs/languages"
+          cp -R editor/build/dokka/markdown/. "$staging/aardink-docs/editor/"
+          cp -R languages/build/dokka/markdown/. "$staging/aardink-docs/languages/"
+          archive="aardink-docs-${GITHUB_REF_NAME}.tgz"
+          tar -czf "$archive" -C "$staging" aardink-docs
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |
@@ -77,4 +91,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file "${{ steps.notes.outputs.file }}" \
-            --verify-tag
+            --verify-tag \
+            "${{ steps.docs.outputs.archive }}"
