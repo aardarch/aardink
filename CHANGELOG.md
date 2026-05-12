@@ -36,12 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show find and replace functionality in sample editor screen
+- Add dokka markdown output
+
 ### Changed
 
-- **BREAKING:** Renamed library packages `com.aardarch.editor.*` → `com.aardarch.aardink.*`
-  (and `com.aardarch.editor.languages.*` → `com.aardarch.aardink.languages.*`) so the JVM
-  packages match the Maven artifact IDs. Consumers must update imports. Maven coordinates
-  (`com.aardarch:aardink`, `com.aardarch:aardink-languages`) are unchanged.
+- Simplify the sample ui logo/mascot placeholder
+- Fix aardink namespace typo
 
 ## [0.1.0] - 2026-05-12
 
