@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.plugin.android.application) apply false
     alias(libs.plugins.plugin.android.library) apply false
     alias(libs.plugins.plugin.kotlin.compose) apply false
-    alias(libs.plugins.plugin.dokka) apply false
     alias(libs.plugins.plugin.spotless) apply false
     alias(libs.plugins.plugin.kotlin.binary.compat) apply false
     alias(libs.plugins.plugin.vanniktech.maven.publish) apply false
@@ -12,6 +11,12 @@ tasks.register("dokkaAll") {
     group = "documentation"
     description = "Generates Dokka HTML documentation for all published modules."
     dependsOn(":editor:dokkaGenerateHtml", ":languages:dokkaGenerateHtml")
+}
+
+tasks.register("dokkaAllGfm") {
+    group = "documentation"
+    description = "Generates Dokka GFM (Markdown) documentation for all published modules."
+    dependsOn(":editor:dokkaGenerateMarkdown", ":languages:dokkaGenerateMarkdown")
 }
 
 // NOTE: kotlinx.binary-compatibility-validator (BCV 0.18) is currently parked.

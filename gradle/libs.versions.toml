@@ -9,7 +9,7 @@ plugin-kotlin = "2.3.21"
 plugin-spotless = "8.4.0"
 plugin-kotlin-binary-compat = "0.18.1"
 plugin-vanniktech-maven-publish = "0.36.0"
-plugin-dokka = "2.1.0"
+plugin-dokka = "2.2.0"
 
 # Major version definitions
 jvm = "21"

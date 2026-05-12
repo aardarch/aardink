@@ -41,6 +41,8 @@ All commands run from the repo root.
 ./gradlew :editor:spotlessApply :languages:spotlessApply     # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal  # Publish to ~/.m2
+./gradlew dokkaAll                              # API docs (HTML) for both modules
+./gradlew dokkaAllGfm                           # API docs (GitHub-Flavored Markdown)
 ```
 
 ### Pre-push end-to-end check

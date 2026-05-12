@@ -4,7 +4,7 @@ val jvmVersionInt = jvmVersion.toInt()
 plugins {
     alias(libs.plugins.plugin.android.library)
     alias(libs.plugins.plugin.kotlin.compose)
-    alias(libs.plugins.plugin.dokka)
+    id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
     signing
