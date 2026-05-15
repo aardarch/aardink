@@ -6,7 +6,7 @@
 # Plugin versions
 plugin-agp = "9.2.1"
 plugin-kotlin = "2.3.21"
-plugin-spotless = "8.4.0"
+plugin-spotless = "8.5.0"
 plugin-kotlin-binary-compat = "0.18.1"
 plugin-vanniktech-maven-publish = "0.36.0"
 plugin-dokka = "2.2.0"
@@ -20,7 +20,7 @@ androidx-compose-bom = "2026.05.00"
 # Library versions
 androidx-activity = "1.13.0"
 androidx-lifecycle = "2.10.0"
-google-material = "1.13.0"
+google-material = "1.14.0"
 junit-jupiter = "6.0.3"
 
 ####################################################################################################
