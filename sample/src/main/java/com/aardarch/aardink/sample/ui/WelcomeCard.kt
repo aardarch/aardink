@@ -49,7 +49,7 @@ fun WelcomeCard(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start,
         ) {
-            MascotPlaceholder()
+            Mascot()
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
