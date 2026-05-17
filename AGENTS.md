@@ -36,9 +36,9 @@ All commands run from the repo root.
 
 ```pwsh
 ./gradlew :editor:test :languages:test          # Unit tests
-./gradlew :editor:lint :languages:lint          # Lint
-./gradlew :editor:spotlessCheck :languages:spotlessCheck     # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply     # Auto-format
+./gradlew :editor:lint :languages:lint :sample:lintDebug     # Lint
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :sample:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal  # Publish to ~/.m2
 ./gradlew dokkaAll                              # API docs (HTML) for both modules

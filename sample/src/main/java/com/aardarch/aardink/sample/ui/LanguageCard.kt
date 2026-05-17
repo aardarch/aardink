@@ -42,11 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.languages.LanguageDefinition
 
 @Composable
-fun LanguageCard(
-    language: LanguageDefinition,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun LanguageCard(language: LanguageDefinition, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val tint = badgeTint(
         language.id,

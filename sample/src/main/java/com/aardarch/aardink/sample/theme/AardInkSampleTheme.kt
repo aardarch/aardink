@@ -34,10 +34,7 @@ import com.aardarch.aardink.ui.LocalEditorTheme
  * The editor surface itself continues to honour [LocalEditorTheme] for its syntax colours.
  */
 @Composable
-fun AardinkSampleTheme(
-    editorTheme: EditorTheme,
-    content: @Composable () -> Unit,
-) {
+fun AardinkSampleTheme(editorTheme: EditorTheme, content: @Composable () -> Unit) {
     val scheme = editorTheme.toColorScheme()
     CompositionLocalProvider(LocalEditorTheme provides editorTheme) {
         MaterialTheme(colorScheme = scheme, content = content)

@@ -118,9 +118,9 @@ try {
 
     # ── 3. Spotless (format check or auto-fix) ─────────────────────────
     $SpotlessTasks = if ($NoFix) {
-        @(':editor:spotlessCheck', ':languages:spotlessCheck')
+        @(':editor:spotlessCheck', ':languages:spotlessCheck', ':sample:spotlessCheck')
     } else {
-        @(':editor:spotlessApply', ':languages:spotlessApply')
+        @(':editor:spotlessApply', ':languages:spotlessApply', ':sample:spotlessApply')
     }
     $SpotlessLabel = if ($NoFix) { 'Spotless check' } else { 'Spotless apply (auto-fix)' }
 
@@ -131,7 +131,7 @@ try {
 
     # ── 4. Android Lint ─────────────────────────────────────────────────
     Invoke-Check 'Android lint' {
-        & $Gradlew ':editor:lint' ':languages:lint' --quiet 2>&1 | Out-Host
+        & $Gradlew ':editor:lint' ':languages:lint' ':sample:lintDebug' --quiet 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
     }
 

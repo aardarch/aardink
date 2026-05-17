@@ -53,21 +53,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.aardarch.aardink.ui.KeyboardToolbarPlacement
-import com.aardarch.aardink.sample.samples.SampleAssets
-import com.aardarch.aardink.sample.theme.AardinkSampleTheme
-import com.aardarch.aardink.sample.ui.LanguageCard
-import com.aardarch.aardink.sample.ui.SampleThemeChoice
-import com.aardarch.aardink.sample.ui.ThemePicker
-import com.aardarch.aardink.sample.ui.WelcomeCard
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.rememberCodeEditorState
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.sample.samples.SampleAssets
+import com.aardarch.aardink.sample.theme.AardinkSampleTheme
+import com.aardarch.aardink.sample.ui.LanguageCard
+import com.aardarch.aardink.sample.ui.SampleThemeChoice
+import com.aardarch.aardink.sample.ui.ThemePicker
+import com.aardarch.aardink.sample.ui.WelcomeCard
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorThemes
+import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -183,10 +183,7 @@ private fun StartScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditorScreen(
-    language: LanguageDefinition,
-    onBack: () -> Unit,
-) {
+private fun EditorScreen(language: LanguageDefinition, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val initialText = remember(language.id) { SampleAssets.forId(language.id) }
     val state = rememberCodeEditorState(
@@ -327,26 +324,38 @@ private fun SampleOptionsMenu(
             label = "Hover above keyboard",
             target = KeyboardToolbarPlacement.BottomHover,
             current = placement,
-            onSelect = { onPlacementChange(it); expanded = false },
+            onSelect = {
+                onPlacementChange(it)
+                expanded = false
+            },
         )
         ToolbarPlacementItem(
             label = "Top of editor",
             target = KeyboardToolbarPlacement.Top,
             current = placement,
-            onSelect = { onPlacementChange(it); expanded = false },
+            onSelect = {
+                onPlacementChange(it)
+                expanded = false
+            },
         )
         ToolbarPlacementItem(
             label = "Bottom of editor",
             target = KeyboardToolbarPlacement.BottomFixed,
             current = placement,
-            onSelect = { onPlacementChange(it); expanded = false },
+            onSelect = {
+                onPlacementChange(it)
+                expanded = false
+            },
         )
         HorizontalDivider()
         ToolbarPlacementItem(
             label = "Hidden",
             target = KeyboardToolbarPlacement.Hidden,
             current = placement,
-            onSelect = { onPlacementChange(it); expanded = false },
+            onSelect = {
+                onPlacementChange(it)
+                expanded = false
+            },
         )
 
         HorizontalDivider()
@@ -392,12 +401,7 @@ private fun SampleOptionsMenu(
 }
 
 @Composable
-private fun ToggleItem(
-    label: String,
-    checked: Boolean,
-    enabled: Boolean = true,
-    onChange: (Boolean) -> Unit,
-) {
+private fun ToggleItem(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     DropdownMenuItem(
         text = { Text(label) },
         trailingIcon = {

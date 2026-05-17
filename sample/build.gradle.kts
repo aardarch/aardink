@@ -4,6 +4,7 @@ val jvmVersionInt = jvmVersion.toInt()
 plugins {
     alias(libs.plugins.plugin.android.application)
     alias(libs.plugins.plugin.kotlin.compose)
+    alias(libs.plugins.plugin.spotless)
 }
 
 android {
@@ -40,6 +41,25 @@ kotlin {
 
 composeCompiler {
     reportsDestination = layout.buildDirectory.dir("compose_compiler")
+}
+
+spotless {
+    kotlin {
+        target("src/**/*.kt")
+        ktlint().editorConfigOverride(
+            mapOf(
+                "ktlint_standard_function-naming" to "disabled",
+                "ktlint_standard_no-wildcard-imports" to "disabled",
+                "ktlint_standard_no-empty-file" to "disabled",
+            ),
+        )
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktlint()
+    }
 }
 
 dependencies {
