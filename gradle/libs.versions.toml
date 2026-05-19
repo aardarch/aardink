@@ -21,7 +21,7 @@ androidx-compose-bom = "2026.05.00"
 androidx-activity = "1.13.0"
 androidx-lifecycle = "2.10.0"
 google-material = "1.14.0"
-junit-jupiter = "6.0.3"
+junit-jupiter = "6.1.0"
 
 ####################################################################################################
 # LIBRARIES
