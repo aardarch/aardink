@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.AardinkSample" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Force Android 12+ startup splash to use the new launcher foreground asset. -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenBackground">@android:color/transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>
+
+

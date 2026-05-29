@@ -31,11 +31,11 @@ import com.aardarch.aardink.sample.R
 @Composable
 fun Mascot(modifier: Modifier = Modifier, size: Dp = 88.dp) {
     Image(
-        painter = painterResource(R.drawable.aardink_mascot),
+        painter = painterResource(R.drawable.ic_launcher_foreground),
         contentDescription = "Aardink mascot",
         contentScale = ContentScale.Fit,
         modifier = modifier
-            .size(size)
-            .clip(RoundedCornerShape(size * 0.2f)),
+            .clip(RoundedCornerShape(size * 0.2f))
+            .size(size),
     )
 }

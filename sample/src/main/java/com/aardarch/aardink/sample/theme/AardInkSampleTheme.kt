@@ -31,7 +31,7 @@ import com.aardarch.aardink.ui.LocalEditorTheme
  * Wraps content in a [MaterialTheme] whose [ColorScheme] is derived from the supplied
  * [EditorTheme], so the whole sample app reskin tracks the editor theme dropdown.
  *
- * The editor surface itself continues to honour [LocalEditorTheme] for its syntax colours.
+ * The editor surface itself continues to honour [LocalEditorTheme] for its syntax colors.
  */
 @Composable
 fun AardinkSampleTheme(editorTheme: EditorTheme, content: @Composable () -> Unit) {
