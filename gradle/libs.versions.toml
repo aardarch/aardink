@@ -5,7 +5,7 @@
 
 # Plugin versions
 plugin-agp = "9.2.1"
-plugin-kotlin = "2.3.21"
+plugin-kotlin = "2.4.0"
 plugin-spotless = "8.5.1"
 plugin-kotlin-binary-compat = "0.18.1"
 plugin-vanniktech-maven-publish = "0.36.0"
