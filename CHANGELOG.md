@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add adaptive launcher icons and update themes for Android 12+
+- Refactor Dokka configuration and add version management
+- Add spotless to sample app, floss files
+- Add proper mascot to the sample app
+
+### Fixed
+
+- Rename variable for user input in version prompt for clarity
+
 ## [0.2.0] - 2026-05-12
 
 ### Added
