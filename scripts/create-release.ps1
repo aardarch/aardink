@@ -78,8 +78,8 @@ try {
     if (-not $Version) {
         $defaultVersion = if ($suggested) { $suggested.Version } else { $currentVersion }
         $reason = if ($suggested) { " ($($suggested.Reason))" } else { '' }
-        $input = Read-Host "Target version [default v$defaultVersion$reason]"
-        $Version = if ([string]::IsNullOrWhiteSpace($input)) { $defaultVersion } else { $input }
+        $inputVal = Read-Host "Target version [default v$defaultVersion$reason]"
+        $Version = if ([string]::IsNullOrWhiteSpace($inputVal)) { $defaultVersion } else { $inputVal }
     }
     $Version = $Version -replace '^v', ''
     if ($Version -notmatch '^\d+\.\d+\.\d+(?:[-+].+)?$') {
