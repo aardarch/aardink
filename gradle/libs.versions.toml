@@ -15,7 +15,7 @@ plugin-dokka = "2.2.0"
 jvm = "21"
 
 # BOMs
-androidx-compose-bom = "2026.06.00"
+androidx-compose-bom = "2026.06.01"
 
 # Library versions
 androidx-activity = "1.13.0"
