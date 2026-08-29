@@ -16,6 +16,8 @@ Keep a Changelog headings:
 
 Append `!` after the type/scope for breaking changes, e.g. `feat!:` or `fix!:`.
 
-Keep the subject line under 72 characters, imperative mood, no trailing period.
+Keep the subject line under 72 characters including scope, imperative mood, no trailing period.
+
+Updates to `CHANGELOG.md` is always a chore
 
 Based on [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
