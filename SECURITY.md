@@ -14,7 +14,7 @@ receives fixes.
 
 Please **do not** open a public GitHub issue for security problems.
 
-Email **security@aardarch.com** with:
+Email **<security@aardarch.com>** with:
 
 - a description of the issue,
 - steps to reproduce (or a proof of concept),
