@@ -55,7 +55,7 @@ import com.aardarch.aardink.core.LineDiffKind
  * @param annotations Per-line severity dot. Tap triggers [onAnnotationTap].
  * @param diffAnnotations Per-line diff kind for the left colored bar.
  * @param foldableLines 0-based line indices that have a foldable region.
- * @param foldedLines Subset of [foldableLines] currently collapsed.
+ * @param foldedRanges Currently-collapsed ranges; their start lines are a subset of [foldableLines].
  * @param onToggleFold Called with the line index when a fold triangle is tapped.
  * @param onAnnotationTap Called with the line index when an annotation dot is tapped.
  */

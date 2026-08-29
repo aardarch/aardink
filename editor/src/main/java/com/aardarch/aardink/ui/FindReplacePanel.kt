@@ -49,7 +49,7 @@ import com.aardarch.aardink.core.FindReplaceState
  * @param state The state holder backing this panel.
  * @param onNext User pressed the "next match" arrow — host should scroll/select that match.
  * @param onPrev User pressed the "previous match" arrow.
- * @param onReplace Replace the current match with [state.replacement].
+ * @param onReplace Replace the current match with [FindReplaceState.replacement].
  * @param onReplaceAll Replace every match in the document.
  * @param onClose Close the panel (typically calls [FindReplaceState.hide]).
  */

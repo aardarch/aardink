@@ -54,7 +54,7 @@ import androidx.compose.ui.semantics.Role
  * - Cursor nudge arrows (← →) for precise caret placement
  * - Language-specific quick-insert characters from [quickChars]
  *
- * The row is only visible when the IME is open ([WindowInsets.ime] bottom > 0).
+ * The row is only visible when the IME is open ([ime] inset bottom > 0).
  *
  * @param quickChars Characters to display as single-tap insert buttons. Supplied by
  *   [com.aardarch.aardink.core.IncrementalTokenizer.keyboardToolbarChars].

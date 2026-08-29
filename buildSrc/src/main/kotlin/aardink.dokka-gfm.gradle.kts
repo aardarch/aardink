@@ -1,5 +1,5 @@
 import java.net.URI
-import org.gradle.api.attributes.Attribute
+import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
 import org.jetbrains.dokka.gradle.DokkaExtension
@@ -58,21 +58,21 @@ pluginManager.withPlugin("com.android.library") {
 
                 // Module compile classpath — gives Dokka the Compose, AndroidX, and
                 // kotlinx-coroutines jars so KDoc refs like `[LaunchedEffect]` or
-                // `[Dispatchers.Default]` resolve. Use an artifactView with the AGP
-                // `artifactType` attribute pinned to `android-classes-jar`, otherwise
-                // resolution of project-to-project deps (e.g. languages → editor) is
-                // ambiguous across the many AGP variants.
+                // `[Dispatchers.Default]` resolve. We pull the exact classpath the
+                // Kotlin compiler sees from the `compileDebugKotlin` task's `libraries`
+                // (a ConfigurableFileCollection). That covers every compile dependency —
+                // including project-to-project deps (languages → editor) — without the
+                // artifact-attribute juggling AGP variants would otherwise require.
+                //
+                // buildSrc can't import the KGP task type (see the bootClasspath note
+                // above for why AGP/KGP are kept off its classpath), so reach it
+                // reflectively. Wiring it as a lazy provider only resolves the dependency
+                // jars; it does not force compilation to run before Dokka.
                 classpath.from(
-                    configurations.named("debugCompileClasspath").map { cfg ->
-                        cfg.incoming.artifactView {
-                            attributes {
-                                attribute(
-                                    Attribute.of("artifactType", String::class.java),
-                                    "android-classes-jar",
-                                )
-                            }
-                            lenient(true)
-                        }.files
+                    tasks.named("compileDebugKotlin").map { task ->
+                        task.javaClass
+                            .getMethod("getLibraries")
+                            .invoke(task) as FileCollection
                     },
                 )
 

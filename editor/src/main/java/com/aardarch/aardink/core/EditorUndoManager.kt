@@ -29,7 +29,7 @@ class EditorUndoManager(private val maxOperations: Int = 200) {
     sealed class EditOperation {
         /**
          * Characters [text] were inserted at [offset].
-         * Undo: delete [text.length] chars starting at [offset].
+         * Undo: delete `text.length` chars starting at [offset].
          */
         data class Insert(val offset: Int, val text: String) : EditOperation()
 

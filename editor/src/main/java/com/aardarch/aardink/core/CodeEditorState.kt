@@ -16,12 +16,14 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The central state holder for a [CodeEditor].
+ * The central state holder for a [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout].
  *
  * All mutations flow through this class — the document, token cache, undo manager, and selection
  * are co-located here so that invariants between them can be maintained atomically.
@@ -85,8 +87,9 @@ class CodeEditorState(
         get() = !selection.collapsed
 
     /**
-     * One-shot navigation request. Set by Find/Replace and Go-To-Line; consumed by [CodeEditorLayout]
-     * which scrolls the viewport to the target offset and (optionally) updates the selection.
+     * One-shot navigation request. Set by Find/Replace and Go-To-Line; consumed by
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] which scrolls the viewport to the
+     * target offset and (optionally) updates the selection.
      */
     var pendingNavigation by mutableStateOf<Navigation?>(null)
         private set
@@ -98,7 +101,7 @@ class CodeEditorState(
         pendingNavigation = Navigation(offset.coerceIn(0, document.length), select)
     }
 
-    /** Called by [CodeEditorLayout] after consuming [pendingNavigation]. */
+    /** Called by [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] after consuming [pendingNavigation]. */
     fun clearNavigation() {
         pendingNavigation = null
     }
