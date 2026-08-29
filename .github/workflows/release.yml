@@ -55,7 +55,16 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
       - name: Generate API docs (GFM)
-        run: ./gradlew dokkaAllGfm
+        # Dokka's Android adapter can't read AGP 9's `androidComponents` extension
+        # (classloader mismatch under `android.newDsl=true`); it logs a benign warning
+        # while our convention plugin configures the source set manually. No upstream fix
+        # exists at Dokka 2.2.0 — see Kotlin/dokka#4256 and #4439. Filter the known noise
+        # lines (pipefail keeps a real Gradle failure fatal). Drop this once Dokka ships
+        # AGP 9 support.
+        run: |
+          set -o pipefail
+          ./gradlew dokkaAllGfm 2>&1 | grep -vE \
+            'failed to get extension androidComponents|Please make sure plugins in all subprojects are consistent|^  Applied plugins:|^  Available extensions:'
 
       - name: Bundle API docs
         id: docs
