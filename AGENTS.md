@@ -60,7 +60,7 @@ tests, sample build, and `publishToMavenLocal` sanity.
 
 > **Note:** `apiCheck` / `apiDump` are temporarily disabled — the
 > `kotlinx.binary-compatibility-validator` plugin doesn't yet register tasks on
-> Android library modules under AGP 9 + Kotlin 2.3. See the comment in the root
+> Android library modules under AGP 9 + Kotlin 2.4. See the comment in the root
 > `build.gradle.kts` for re-enable context.
 
 ## Code Conventions
@@ -90,11 +90,11 @@ The `editor` module is intentionally language-agnostic:
 | --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
 | `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor |
-| `LanguageService` | Interface — implement for completions, diagnostics, hover, formatting |
+| `LanguageService` | Interface — implement for completions, diagnostics, hover, formatting; `triggerCharacters` has a default empty-set implementation |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
 | `FoldingProvider` | Interface — implement for code folding |
 | `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal |
-| `EditorThemes` | Pre-built themes (VsCodeDark, MidnightOcean, etc.) |
+| `EditorThemes` | Pre-built themes (VsCodeDark, VsCodeLight, MaterialDark, MaterialLight, MidnightOcean, SolarizedDark) |
 
 ## Versioning
 
