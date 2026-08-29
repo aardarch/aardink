@@ -67,7 +67,7 @@ try {
     Write-Host "Current VERSION_NAME: $currentVersion" -ForegroundColor Cyan
 
     $latestTag = Get-LatestSemverTag
-    $commits = Get-CommitsSinceTag -Tag $latestTag
+    $commits = @(Get-CommitsSinceTag -Tag $latestTag)
     $suggested = $null
     if ($commits.Count -gt 0) {
         $cat = Get-CategorizedCommits -Commits $commits

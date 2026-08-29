@@ -59,7 +59,7 @@ try {
         $currentVersion = '1.0.0'
     }
 
-    $commits = Get-CommitsSinceTag -Tag $latestTag
+    $commits = @(Get-CommitsSinceTag -Tag $latestTag)
     if ($commits.Count -eq 0) {
         Write-Host "No new releasable commits since $latestTag. Nothing to do." -ForegroundColor Yellow
         exit 0

@@ -84,8 +84,10 @@ function Get-CommitsSinceTag {
     param([string]$Tag)
     $range = if ($Tag) { "$Tag..HEAD" } else { 'HEAD' }
     $raw = git log $range --pretty=format:"%s" --no-merges
-    if (-not $raw) { return @() }
-    return @($raw | Where-Object { Test-CommitIncluded $_ })
+    # Leading comma prevents PowerShell from unrolling the array on return, so callers
+    # always receive an array (an empty one would otherwise arrive as $null).
+    if (-not $raw) { return , @() }
+    return , @($raw | Where-Object { Test-CommitIncluded $_ })
 }
 
 function Get-CategorizedCommits {
