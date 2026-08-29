@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Use compileDebugKotlin classpath for Dokka fix: keep commit lists as arrays in release scripts fix: update note on binary compatibility validator and enhance LanguageService description
+
 ## [0.3.0] - 2026-06-22
 
 ### Added
