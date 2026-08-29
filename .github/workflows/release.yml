@@ -30,7 +30,7 @@ jobs:
           cache-provider: basic # MIT-licensed
 
       - name: Make gradlew executable
-        run: chmod +x ./${{ env.WORKING_DIR }}/gradlew
+        run: chmod +x ./gradlew
 
       - name: Verify tag matches VERSION_NAME
         run: |
@@ -76,6 +76,14 @@ jobs:
           archive="aardink-docs-${GITHUB_REF_NAME}.tgz"
           tar -czf "$archive" -C "$staging" aardink-docs
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Build sample APK
+        id: apk
+        run: |
+          ./gradlew :sample:assembleRelease
+          apk="aardink-sample-${GITHUB_REF_NAME}.apk"
+          cp sample/build/outputs/apk/release/sample-release.apk "$apk"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
 
       - name: Extract release notes from CHANGELOG
         id: notes

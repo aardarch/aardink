@@ -123,5 +123,10 @@ proceed if the tag exists or if `[Unreleased]` is empty (override with
 commit whose tag matches `VERSION_NAME`.
 
 The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
-verifies the tag matches `VERSION_NAME`, publishes both artifacts, and creates a
-GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body.
+verifies the tag matches `VERSION_NAME`, publishes both artifacts, builds the sample app,
+and creates a GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body
+and two assets: the API docs tarball and `aardink-sample-vX.Y.Z.apk`.
+
+The sample APK is signed with the default debug key (no private keystore is needed) and
+reads its `versionName`/`versionCode` from `VERSION_NAME`. CI also uploads debug and release
+sample APKs as a `sample-apks` workflow artifact on every push/PR for sideloading.

@@ -1,6 +1,17 @@
 val jvmVersion: String = libs.versions.jvm.get()
 val jvmVersionInt = jvmVersion.toInt()
 
+// The sample follows the library version (VERSION_NAME in gradle.properties) so each
+// release ships an installable APK whose versionCode increases monotonically.
+val sampleVersionName: String = providers.gradleProperty("VERSION_NAME").get()
+val sampleVersionCode: Int =
+    sampleVersionName
+        .substringBefore('-')
+        .substringBefore('+')
+        .split('.')
+        .map { it.toInt() }
+        .let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+
 plugins {
     alias(libs.plugins.plugin.android.application)
     alias(libs.plugins.plugin.kotlin.compose)
@@ -15,13 +26,20 @@ android {
         applicationId = "com.aardarch.aardink.sample"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = sampleVersionCode
+        versionName = sampleVersionName
     }
 
     buildTypes {
+        debug {
+            // Lets a debug build coexist with the release APK from GitHub Releases.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = false
+            // The sample is a demo, not a store app: sign it with the debug key so the
+            // release APK attached to GitHub Releases installs without a private keystore.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
