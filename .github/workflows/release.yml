@@ -109,4 +109,5 @@ jobs:
             --title "$GITHUB_REF_NAME" \
             --notes-file "${{ steps.notes.outputs.file }}" \
             --verify-tag \
-            "${{ steps.docs.outputs.archive }}"
+            "${{ steps.docs.outputs.archive }}" \
+            "${{ steps.apk.outputs.apk }}#Sample app (APK, debug-signed)"
