@@ -162,6 +162,42 @@ class CodeEditorState(
     }
 
     /**
+     * Applies a batch of [TextEdit]s atomically to the document, recording the operation in
+     * undo history as a single batch and scheduling tokenization.
+     */
+    fun applyTextEdits(edits: List<TextEdit>) {
+        if (edits.isEmpty()) return
+        undoManager.flushPendingInsert()
+
+        // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent ranges
+        val sorted = edits.sortedByDescending { it.range.first }
+        val ops = mutableListOf<EditorUndoManager.EditOperation>()
+
+        for (edit in sorted) {
+            val start = edit.range.first.coerceIn(0, document.length)
+            val end = (edit.range.last + 1).coerceIn(start, document.length)
+            val deleteLen = end - start
+            val deletedText = if (deleteLen > 0) document.text.substring(start, end) else ""
+
+            if (deleteLen > 0) {
+                document.delete(start, deleteLen)
+                ops.add(EditorUndoManager.EditOperation.Delete(start, deleteLen, deletedText))
+            }
+            if (edit.newText.isNotEmpty()) {
+                document.insert(start, edit.newText)
+                ops.add(EditorUndoManager.EditOperation.Insert(start, edit.newText))
+            }
+        }
+
+        if (ops.isNotEmpty()) {
+            undoManager.recordBatch(ops)
+        }
+
+        textVersion++
+        scheduleTokenization()
+    }
+
+    /**
      * Undoes the most recent edit and returns the new document text (for the IME bridge to sync),
      * or null if there is nothing to undo.
      */

@@ -1,0 +1,79 @@
+/*
+ * Copyright 2026 Aardarch
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.aardarch.aardink.core
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Test
+
+class CodeEditorStateTest {
+
+    private fun testState(text: String): CodeEditorState = CodeEditorState(
+        initialText = text,
+        tokenizeDebounceMs = 0,
+        scope = CoroutineScope(Dispatchers.Unconfined),
+    ).apply {
+        computeDispatcher = Dispatchers.Unconfined
+    }
+
+    @Test
+    fun `applyTextEdits applies multiple edits atomically`() {
+        val state = testState("foo bar baz")
+        val edits = listOf(
+            TextEdit(range = 0..2, newText = "FOO"),
+            TextEdit(range = 8..10, newText = "BAZ"),
+        )
+
+        state.applyTextEdits(edits)
+        assertEquals("FOO bar BAZ", state.text)
+    }
+
+    @Test
+    fun `applyTextEdits undoes as a single batch`() {
+        val state = testState("hello world")
+        val edits = listOf(
+            TextEdit(range = 0..4, newText = "HELLO"),
+            TextEdit(range = 6..10, newText = "WORLD"),
+        )
+
+        state.applyTextEdits(edits)
+        assertEquals("HELLO WORLD", state.text)
+
+        val undone = state.undo()
+        assertNotNull(undone)
+        assertEquals("hello world", state.text)
+    }
+
+    @Test
+    fun `applyTextEdits redo reapplies all edits`() {
+        val state = testState("val x = 1")
+        val edits = listOf(
+            TextEdit(range = 4..4, newText = "y"),
+            TextEdit(range = 8..8, newText = "2"),
+        )
+
+        state.applyTextEdits(edits)
+        assertEquals("val y = 2", state.text)
+
+        state.undo()
+        assertEquals("val x = 1", state.text)
+
+        state.redo()
+        assertEquals("val y = 2", state.text)
+    }
+}

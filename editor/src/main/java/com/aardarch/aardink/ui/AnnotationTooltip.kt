@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.DiagnosticSeverity
 
@@ -33,7 +34,13 @@ import com.aardarch.aardink.core.DiagnosticSeverity
  * Appears as a colored strip between the find panel and the editor body.
  */
 @Composable
-fun AnnotationTooltip(message: String, severity: DiagnosticSeverity, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun AnnotationTooltip(
+    message: String,
+    severity: DiagnosticSeverity,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    onQuickFix: (() -> Unit)? = null,
+) {
     val (bg, fg) = when (severity) {
         DiagnosticSeverity.Error ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
@@ -48,7 +55,6 @@ fun AnnotationTooltip(message: String, severity: DiagnosticSeverity, onDismiss: 
         modifier = modifier
             .fillMaxWidth()
             .background(bg)
-            .clickable(onClick = onDismiss)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -56,13 +62,27 @@ fun AnnotationTooltip(message: String, severity: DiagnosticSeverity, onDismiss: 
             text = message,
             color = fg,
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onDismiss),
         )
+        if (onQuickFix != null) {
+            Text(
+                text = "💡 Quick Fix",
+                color = fg,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier
+                    .clickable(onClick = onQuickFix)
+                    .padding(horizontal = 8.dp),
+            )
+        }
         Text(
             text = "✕",
             color = fg.copy(alpha = 0.6f),
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(start = 8.dp),
+            modifier = Modifier
+                .clickable(onClick = onDismiss)
+                .padding(start = 8.dp),
         )
     }
 }

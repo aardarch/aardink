@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
@@ -64,6 +65,7 @@ import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
@@ -144,6 +146,34 @@ fun CodeEditorLayout(
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
     var showCompletion by remember { mutableStateOf(false) }
     var completionJob by remember { mutableStateOf<Job?>(null) }
+
+    // Code actions & Signature help state
+    var currentCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
+    var showCodeActionsMenu by remember { mutableStateOf(false) }
+    var currentSignatureHelp by remember { mutableStateOf<SignatureHelp?>(null) }
+    var showSignatureHelp by remember { mutableStateOf(false) }
+
+    if (languageService != null) {
+        LaunchedEffect(languageService, state.selection, textVersion) {
+            val offset = state.selection.start
+            if (offset >= 0 && offset <= state.document.length) {
+                val charBefore = if (offset > 0) state.document.text.getOrNull(offset - 1) else null
+                if (charBefore == '(' || charBefore == ',') {
+                    val sig = withContext(Dispatchers.Default) {
+                        languageService.signatureHelp(state.document, offset)
+                    }
+                    currentSignatureHelp = sig
+                    showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
+                } else {
+                    showSignatureHelp = false
+                }
+
+                currentCodeActions = withContext(Dispatchers.Default) {
+                    languageService.codeActions(state.document, offset..offset)
+                }
+            }
+        }
+    }
 
     // Annotation tooltip: shown when user taps a gutter dot
     var tooltipDiagnostic by remember { mutableStateOf<Diagnostic?>(null) }
@@ -430,6 +460,31 @@ fun CodeEditorLayout(
                 message = tooltip.message,
                 severity = tooltip.severity,
                 onDismiss = { tooltipDiagnostic = null },
+                onQuickFix = if (currentCodeActions.isNotEmpty()) {
+                    { showCodeActionsMenu = true }
+                } else {
+                    null
+                },
+            )
+        }
+
+        // ── Signature help & Code action popups ──────────────────────────────
+        if (showSignatureHelp && currentSignatureHelp != null) {
+            SignatureHelpPopup(
+                help = currentSignatureHelp!!,
+                onDismiss = { showSignatureHelp = false },
+            )
+        }
+
+        if (showCodeActionsMenu && currentCodeActions.isNotEmpty()) {
+            CodeActionMenu(
+                actions = currentCodeActions,
+                onSelectAction = { action ->
+                    state.applyTextEdits(action.edits)
+                    fieldValue = TextFieldValue(state.document.text, state.selection)
+                    showCodeActionsMenu = false
+                },
+                onDismiss = { showCodeActionsMenu = false },
             )
         }
 

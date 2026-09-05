@@ -16,11 +16,12 @@
 package com.aardarch.aardink.core
 
 /**
- * LSP-lite language service contract.
+ * LSP language service contract.
  *
- * Implementations provide completions, diagnostics, smart-indent, auto-close, hover docs, and
- * document formatting for a specific language or DSL. All `suspend` functions are safe to call
- * from a coroutine on [kotlinx.coroutines.Dispatchers.Default].
+ * Implementations provide completions, diagnostics, smart-indent, auto-close, hover docs,
+ * document formatting, code actions/quick fixes, definition lookup, signature help, and rename
+ * refactoring for a specific language or DSL. All `suspend` functions are safe to call from a
+ * coroutine on [kotlinx.coroutines.Dispatchers.Default].
  *
  * External library consumers implement this interface for their own DSLs.
  */
@@ -74,6 +75,42 @@ interface LanguageService {
      * Returns the original text unchanged if formatting fails.
      */
     suspend fun format(document: CodeDocument): String
+
+    /**
+     * Returns available code actions / quick fixes for [range] in [document].
+     */
+    suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> = emptyList()
+
+    /**
+     * Returns the target location where the symbol at [offset] is defined.
+     */
+    suspend fun definition(document: CodeDocument, offset: Int): Location? = null
+
+    /**
+     * Returns all references to the symbol at [offset].
+     */
+    suspend fun references(document: CodeDocument, offset: Int): List<Location> = emptyList()
+
+    /**
+     * Returns signature help for a function call at [offset].
+     */
+    suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? = null
+
+    /**
+     * Prepares for a symbol rename at [offset]. Returns the valid identifier range or null if
+     * the symbol cannot be renamed.
+     */
+    suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = null
+
+    /**
+     * Performs a symbol rename at [offset] to [newName]. Returns text edits to apply.
+     */
+    suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> = emptyList()
+
+    /**
+     * Formats only the specified [range] of [document].
+     */
+    suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> = emptyList()
 
     /**
      * Characters that should trigger a completion request when typed.
