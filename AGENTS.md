@@ -31,6 +31,7 @@ sample/          # Minimal Android app for local development and manual testing
 - Material 3
 - JUnit 5 for tests
 - Spotless + ktlint for formatting
+- kotlinx-serialization-json (`:languages-lsp` only) for LSP JSON-RPC payloads
 - Binary compatibility validator (apiDump / apiCheck)
 - vanniktech Maven Publish plugin
 
@@ -77,7 +78,7 @@ tests, sample build, and `publishToMavenLocal` sanity.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
 - Tests: JUnit 5 (`@Test` from `org.junit.jupiter.api`), no Mockk needed in the editor module
-- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose
+- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose; `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads
 
 ## Separation of Concerns
 

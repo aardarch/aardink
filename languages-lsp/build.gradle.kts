@@ -4,6 +4,7 @@ val jvmVersionInt = jvmVersion.toInt()
 plugins {
     alias(libs.plugins.plugin.android.library)
     alias(libs.plugins.plugin.kotlin.compose)
+    alias(libs.plugins.plugin.kotlin.serialization)
     id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
@@ -79,6 +80,8 @@ spotless {
 
 dependencies {
     api(project(":editor"))
+    // JsonElement is part of LspClient's public API, hence `api` rather than `implementation`.
+    api(libs.kotlinx.serialization.json)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

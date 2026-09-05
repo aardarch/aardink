@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Extended LSP Protocol Models & Contract**: `TextEdit`, `Location`, `CodeAction`, `SignatureHelp` data models in `:editor`, and extended `LanguageService` default methods for code actions, definition lookup, references, signature help, and rename refactorings.
 - **Atomic Multi-Edit Batch Application**: `CodeEditorState.applyTextEdits()` to apply multi-edit batches in reverse offset order and record them as single undoable operations in `EditorUndoManager`.
 - **LSP Editor UI Components**: Floating `SignatureHelpPopup` for parameter hints, `CodeActionMenu` popup for quick fixes/refactorings, "💡 Quick Fix" button in `AnnotationTooltip`, and `RenameDialog` prompt for symbol renaming.
-- **External Language Server Bridge Module (`:languages-lsp`)**: New published module `com.aardarch:aardink-languages-lsp` shipping `LspClient` (coroutine JSON-RPC 2.0 client), `LspTransport` (stdio/socket stream framing), and `LspLanguageService` adapter.
+- **External Language Server Bridge Module (`:languages-lsp`)**: New published module `com.aardarch:aardink-languages-lsp` shipping `LspClient` (coroutine JSON-RPC 2.0 client built on kotlinx-serialization, with multi-listener `publishDiagnostics` fan-out), `LspTransport` (stdio/socket stream framing), and `LspLanguageService` — a full `LanguageService` adapter that maps completions, diagnostics, hover, formatting, code actions, definition/references, signature help, prepare-rename and rename onto LSP requests with offset ↔ line/column conversion.
 
 ## [0.3.1] - 2026-08-29
 
