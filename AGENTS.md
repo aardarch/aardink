@@ -110,8 +110,8 @@ SemVer. Breaking API changes require a major version bump. Don't introduce break
 After any intentional public API change, run `./gradlew :editor:apiDump` and commit the result.
 
 The single source of truth for the published version is `VERSION_NAME` in
-`gradle.properties`. Both `editor` and `languages` modules read it via the vanniktech
-Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
+`gradle.properties`. The `editor`, `languages` and `languages-lsp` modules all read it via the
+vanniktech Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
 
 ## Releasing
 
@@ -131,7 +131,7 @@ proceed if the tag exists or if `[Unreleased]` is empty (override with
 commit whose tag matches `VERSION_NAME`.
 
 The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
-verifies the tag matches `VERSION_NAME`, publishes both artifacts, builds the sample app,
+verifies the tag matches `VERSION_NAME`, publishes all three artifacts, builds the sample app,
 and creates a GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body
 and two assets: the API docs tarball and `aardink-sample-vX.Y.Z.apk`.
 
