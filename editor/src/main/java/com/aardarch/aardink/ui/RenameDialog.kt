@@ -34,11 +34,7 @@ import androidx.compose.ui.unit.dp
  * Material 3 AlertDialog prompting the user for a new symbol name during rename refactoring.
  */
 @Composable
-fun RenameDialog(
-    currentName: String,
-    onConfirm: (newName: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
+fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDismiss: () -> Unit) {
     var newName by remember(currentName) { mutableStateOf(currentName) }
 
     AlertDialog(

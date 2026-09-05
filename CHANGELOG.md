@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **TOML Language Support**: Built-in TOML tokenizer (`TomlTokenizer`), folding provider (`TomlFoldingProvider`), and language service (`TomlLanguageService`) supporting Android Version Catalog completions, duplicate key diagnostics, auto-closing, and formatting.
+- **Enhanced XML & HTML Services**: Smart tag auto-closing (`<tag>` -> `</tag>`, `</` tag completion), Android XML element/attribute/value completions, duplicate attribute diagnostics, unescaped `&` warnings, and tag-depth formatting.
+- **Enhanced JSON Service**: Auto-closing (`{`, `[`, `"`), value/property completions, duplicate key diagnostics, smart indentation, and 4-space JSON formatting.
+- **Kotlin Language Service**: Built-in `KotlinLanguageService` with syntax error diagnostics, dot completions for stdlib methods (`map`, `filter`, `let`, `apply`), `@` annotation completions (`@Composable`, `@OptIn`, `@Preview`), `@Composable` snippets, auto-closing, and formatting.
+- **Extended LSP Protocol Models & Contract**: `TextEdit`, `Location`, `CodeAction`, `SignatureHelp` data models in `:editor`, and extended `LanguageService` default methods for code actions, definition lookup, references, signature help, and rename refactorings.
+- **Atomic Multi-Edit Batch Application**: `CodeEditorState.applyTextEdits()` to apply multi-edit batches in reverse offset order and record them as single undoable operations in `EditorUndoManager`.
+- **LSP Editor UI Components**: Floating `SignatureHelpPopup` for parameter hints, `CodeActionMenu` popup for quick fixes/refactorings, "💡 Quick Fix" button in `AnnotationTooltip`, and `RenameDialog` prompt for symbol renaming.
+- **External Language Server Bridge Module (`:languages-lsp`)**: New published module `com.aardarch:aardink-languages-lsp` shipping `LspClient` (coroutine JSON-RPC 2.0 client), `LspTransport` (stdio/socket stream framing), and `LspLanguageService` adapter.
+
 ## [0.3.1] - 2026-08-29
 
 ### Fixed
