@@ -25,6 +25,9 @@ package com.aardarch.aardink.core
  * @param documentation Optional secondary text shown below the label in the dropdown.
  * @param filterText String used for fuzzy-filtering as the user continues typing. Defaults to [label].
  * @param sortPriority Lower values sort earlier in the list (0 = highest priority).
+ * @param replaceRange Exact document range [insertText] replaces when the item is accepted, for
+ *   providers that know it (a language server's `textEdit`). When null the editor falls back to
+ *   replacing the token before the cursor.
  */
 data class CompletionItem(
     val label: String,
@@ -33,6 +36,7 @@ data class CompletionItem(
     val documentation: String? = null,
     val filterText: String = label,
     val sortPriority: Int = 0,
+    val replaceRange: IntRange? = null,
 )
 
 enum class CompletionKind {

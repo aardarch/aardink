@@ -253,6 +253,50 @@ class LspLanguageServiceTest {
 
         assertEquals(listOf("xyz()"), items.map { it.insertText })
         assertEquals(CompletionKind.Snippet, items[0].kind)
+        assertEquals(2 until 2, items[0].replaceRange, "an insertion point stays empty")
+    }
+
+    @Test
+    fun `completions carry the textEdit range and let it beat insertText`() = withServer("val v = fo") {
+        val server = async {
+            respond(
+                "textDocument/completion",
+                """[{"label":"forEach","insertText":"ignored","textEdit":{"range":${range(0, 8, 0, 10)},"newText":"forEach"}}]""",
+            )
+        }
+
+        val items = service.completions(doc, 10)
+        server.await()
+
+        assertEquals("forEach", items[0].insertText, "textEdit.newText wins over insertText")
+        assertEquals(8 until 10, items[0].replaceRange)
+    }
+
+    @Test
+    fun `completions prefer the insert range of an InsertReplaceEdit`() = withServer("val v = foBar") {
+        val server = async {
+            respond(
+                "textDocument/completion",
+                """[{"label":"forEach","textEdit":{"newText":"forEach",
+                   |"insert":${range(0, 8, 0, 10)},"replace":${range(0, 8, 0, 13)}}}]
+                """.trimMargin(),
+            )
+        }
+
+        val items = service.completions(doc, 10)
+        server.await()
+
+        assertEquals(8 until 10, items[0].replaceRange, "accepting must not swallow text after the cursor")
+    }
+
+    @Test
+    fun `completions without a textEdit leave the range to the editor`() = withServer("x.") {
+        val server = async { respond("textDocument/completion", """[{"label":"size","insertText":"size"}]""") }
+
+        val items = service.completions(doc, 2)
+        server.await()
+
+        assertNull(items[0].replaceRange)
     }
 
     @Test

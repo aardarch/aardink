@@ -160,6 +160,24 @@ data class LspCompletionItem(
 @Serializable
 data class LspCompletionList(val isIncomplete: Boolean = false, val items: List<LspCompletionItem> = emptyList())
 
+/**
+ * `CompletionItem.textEdit`, which is `TextEdit | InsertReplaceEdit`: [range] carries a plain
+ * `TextEdit`, [insert] and [replace] an `InsertReplaceEdit`.
+ */
+@Serializable
+data class LspCompletionEdit(
+    val newText: String,
+    val range: LspRange? = null,
+    val insert: LspRange? = null,
+    val replace: LspRange? = null,
+) {
+    /**
+     * The range the edit applies to. For an `InsertReplaceEdit` the shorter [insert] range wins, so
+     * accepting a completion never overwrites text the cursor has already moved past.
+     */
+    val effectiveRange: LspRange? get() = range ?: insert ?: replace
+}
+
 /** LSP `Hover`. [contents] is `MarkedString | MarkedString[] | MarkupContent`. */
 @Serializable
 data class LspHover(val contents: JsonElement, val range: LspRange? = null)

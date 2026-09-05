@@ -140,7 +140,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
             is JsonObject -> decodeOrNull(LspCompletionList.serializer(), result)?.items
             else -> null
         } ?: return emptyList()
-        return items.map { it.toCompletionItem() }
+        return items.map { it.toCompletionItem(document) }
     }
 
     /**
@@ -420,10 +420,13 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
         return (label as? JsonPrimitive)?.contentOrNull ?: ""
     }
 
-    private fun LspCompletionItem.toCompletionItem(): CompletionItem {
-        val rawInsert = insertText
-            ?: ((textEdit as? JsonObject)?.get("newText") as? JsonPrimitive)?.contentOrNull
-            ?: label
+    /**
+     * `textEdit` wins over `insertText` per the protocol, and carries the exact range to replace so
+     * the editor does not have to guess a token boundary.
+     */
+    private fun LspCompletionItem.toCompletionItem(document: CodeDocument): CompletionItem {
+        val edit = (textEdit as? JsonObject)?.let { decodeOrNull(LspCompletionEdit.serializer(), it) }
+        val rawInsert = edit?.newText ?: insertText ?: label
         val insert = if (insertTextFormat == INSERT_TEXT_FORMAT_SNIPPET) stripSnippetSyntax(rawInsert) else rawInsert
         return CompletionItem(
             label = label,
@@ -431,6 +434,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
             insertText = insert,
             documentation = markupText(documentation) ?: detail,
             filterText = filterText ?: label,
+            replaceRange = edit?.effectiveRange?.let { offsetRangeOf(document, it) },
         )
     }
 

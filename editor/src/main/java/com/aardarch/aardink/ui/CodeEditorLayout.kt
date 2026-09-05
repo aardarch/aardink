@@ -769,17 +769,32 @@ private fun applyCompletion(
     item: CompletionItem,
     onFieldValue: (TextFieldValue) -> Unit,
 ) {
-    val cursorPos = fieldValue.selection.start
-    val text = fieldValue.text
-    val triggerOrBoundary = setOf('<', '>', '{', '}', '"', '\'', '=', ' ', '\n', '\t', '@', '|', ':')
-    var tokenStart = cursorPos
-    while (tokenStart > 0 && text[tokenStart - 1] !in triggerOrBoundary) {
-        tokenStart--
-    }
-    val deleteLength = cursorPos - tokenStart
-    val newSelection = TextRange(tokenStart + item.insertText.length)
-    state.applyEdit(tokenStart, deleteLength, item.insertText, newSelection)
+    val target = completionReplaceRange(fieldValue.text, fieldValue.selection.start, item)
+    val newSelection = TextRange(target.first + item.insertText.length)
+    state.applyEdit(target.first, target.last - target.first + 1, item.insertText, newSelection)
     onFieldValue(TextFieldValue(state.document.text, newSelection))
+}
+
+private val COMPLETION_BOUNDARY_CHARS = setOf('<', '>', '{', '}', '"', '\'', '=', ' ', '\n', '\t', '@', '|', ':')
+
+/**
+ * Half-open-as-inclusive range in [text] that accepting [item] at [cursorPos] replaces.
+ *
+ * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
+ * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
+ */
+internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
+    val cursor = cursorPos.coerceIn(0, text.length)
+    item.replaceRange?.let { provided ->
+        val start = provided.first.coerceIn(0, text.length)
+        val end = (provided.last + 1).coerceIn(start, text.length)
+        return start until end
+    }
+    var start = cursor
+    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
+        start--
+    }
+    return start until cursor
 }
 
 // ── Edit delta computation ─────────────────────────────────────────────────────
