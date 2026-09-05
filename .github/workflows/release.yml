@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Run checks before publish
-        run: ./gradlew :editor:test :editor:lint :languages:test :languages:lint
+        run: ./gradlew :editor:test :editor:lint :languages:test :languages:lint :languages-lsp:test :languages-lsp:lint
 
       - name: Publish to Maven Central
         run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache

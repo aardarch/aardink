@@ -34,13 +34,13 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Spotless check
-        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :sample:spotlessCheck
+        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck
 
       - name: Lint
-        run: ./gradlew :editor:lint :languages:lint :sample:lintDebug
+        run: ./gradlew :editor:lint :languages:lint :languages-lsp:lint :sample:lintDebug
 
       - name: Unit tests
-        run: ./gradlew :editor:test :languages:test
+        run: ./gradlew :editor:test :languages:test :languages-lsp:test
 
       - name: Build sample app (debug + release)
         run: ./gradlew :sample:assembleDebug :sample:assembleRelease
@@ -62,6 +62,7 @@ jobs:
           path: |
             editor/build/reports/tests/
             languages/build/reports/tests/
+            languages-lsp/build/reports/tests/
 
       - name: Upload lint results
         if: always()
@@ -71,4 +72,5 @@ jobs:
           path: |
             editor/build/reports/lint-results-*.html
             languages/build/reports/lint-results-*.html
+            languages-lsp/build/reports/lint-results-*.html
             sample/build/reports/lint-results-*.html
