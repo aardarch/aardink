@@ -413,6 +413,77 @@ class LspLanguageServiceTest {
     // ── Code actions ─────────────────────────────────────────────────────────
 
     @Test
+    fun `codeActions omit an action whose command runs after its edit`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/codeAction",
+                """[
+                  {"title":"Import and organize","kind":"quickfix",
+                   "command":{"title":"Organize","command":"kotlin.organize"},
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":"import foo\n"}]}}},
+                  {"title":"Import only","kind":"quickfix",
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":"import bar\n"}]}}}
+                ]""",
+            )
+        }
+
+        val actions = service.codeActions(doc, 1..1)
+        server.await()
+
+        // Applying the edit alone would do half of what "Import and organize" promises.
+        assertEquals(listOf("Import only"), actions.map { it.title })
+    }
+
+    @Test
+    fun `triggerCharactersFrom reads the server's completion provider`() {
+        val capabilities = LspJson.parseToJsonElement(
+            """{"completionProvider":{"triggerCharacters":[".","::","@"]}}""",
+        )
+
+        // "::" is multi-character; the editor asks per typed character, so the last one stands in.
+        assertEquals(setOf('.', ':', '@'), LspLanguageService.triggerCharactersFrom(capabilities))
+    }
+
+    @Test
+    fun `triggerCharactersFrom is null when the server declares none`() {
+        assertNull(LspLanguageService.triggerCharactersFrom(null))
+        assertNull(LspLanguageService.triggerCharactersFrom(LspJson.parseToJsonElement("""{"hoverProvider":true}""")))
+        assertNull(
+            LspLanguageService.triggerCharactersFrom(LspJson.parseToJsonElement("""{"completionProvider":{"triggerCharacters":[]}}""")),
+        )
+    }
+
+    @Test
+    fun `a service without server trigger characters keeps the editor defaults`() {
+        val client = LspClient(ChannelLspTransport(), CoroutineScope(Dispatchers.Default))
+        val plain = LspLanguageService(client, URI, "kotlin")
+        val configured = LspLanguageService(client, URI, "kotlin", serverTriggerCharacters = setOf('.', ':'))
+
+        assertTrue('.' !in plain.triggerCharacters, "the editor defaults omit '.', which is why servers must say so")
+        assertEquals(setOf('.', ':'), configured.triggerCharacters)
+    }
+
+    @Test
+    fun `format keeps several inserts at one position in server order`() = withServer("foo()") {
+        val server = async {
+            respond(
+                "textDocument/formatting",
+                """[
+                  {"range":${range(0, 0, 0, 0)},"newText":"a"},
+                  {"range":${range(0, 0, 0, 0)},"newText":"b"},
+                  {"range":${range(0, 0, 0, 0)},"newText":"c"}
+                ]""",
+            )
+        }
+
+        val formatted = service.format(doc)
+        server.await()
+
+        // Applied high-to-low, so edits sharing a position must not come out reversed.
+        assertEquals("abcfoo()", formatted)
+    }
+
+    @Test
     fun `codeActions keep only actions with edits for this document`() = withServer("val x = 1") {
         publish(URI, """[{"range":${range(0, 0, 0, 3)},"message":"prefer var","severity":3}]""")
         val server = async {

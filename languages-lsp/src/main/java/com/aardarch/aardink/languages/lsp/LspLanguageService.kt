@@ -51,16 +51,35 @@ import kotlinx.serialization.json.intOrNull
  * Many services can share one [LspClient]; each registers its own diagnostics listener and keeps
  * only the diagnostics published for its [documentUri].
  *
- * The `ServerCapabilities` returned by [LspClient.initialize] are not consulted — every request is
- * sent and an unsupported one degrades to the empty result. The single place the distinction
- * matters is [prepareRename], which reads the `MethodNotFound` code so a server offering `rename`
- * without `prepareRename` still gets a rename range.
+ * The `ServerCapabilities` returned by [LspClient.initialize] are otherwise not consulted — every
+ * request is sent and an unsupported one degrades to the empty result. Two places are exceptions:
+ * [prepareRename], which reads the `MethodNotFound` code so a server offering `rename` without
+ * `prepareRename` still gets a rename range, and [triggerCharacters], which a host fills from the
+ * capabilities with [triggerCharactersFrom].
  *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
  * @param languageId LSP language identifier (e.g. `"kotlin"`, `"xml"`, `"json"`, `"toml"`).
+ * @param serverTriggerCharacters The server's own `completionProvider.triggerCharacters`, read from
+ *   its capabilities with [triggerCharactersFrom]. Null falls back to the editor's generic set,
+ *   which is a poor fit for a language server — it omits `.`, so member completion after `list.`
+ *   would never open — but it is all an unconfigured adapter has to go on.
  */
-class LspLanguageService(val client: LspClient, val documentUri: String, val languageId: String) : LanguageService {
+class LspLanguageService(
+    val client: LspClient,
+    val documentUri: String,
+    val languageId: String,
+    serverTriggerCharacters: Set<Char>? = null,
+) : LanguageService {
+
+    /**
+     * The server's completion trigger characters when it declared any, else the editor's defaults.
+     *
+     * `CodeEditorLayout` only opens a fresh completion list for a character in this set, so a
+     * server that triggers on `.` or `::` is unreachable until it says so here.
+     */
+    override val triggerCharacters: Set<Char> =
+        serverTriggerCharacters?.takeIf { it.isNotEmpty() } ?: super.triggerCharacters
 
     @Volatile
     private var lspDiagnostics: List<LspDiagnostic> = emptyList()
@@ -212,8 +231,13 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
     }
 
     /**
-     * Code actions whose workspace edit touches this document. Bare `Command`s and actions that
-     * only edit other files are omitted, since the editor can only apply edits to [document].
+     * Code actions whose workspace edit touches this document, and whose whole effect is that edit.
+     *
+     * Three shapes are omitted, all for the same reason — the editor would perform only part of
+     * what the action promises. Bare `Command`s and actions that only edit other files have nothing
+     * this adapter can apply. An action carrying *both* an edit and a `command` has the command run
+     * after the edit, and `core` has no way to represent that half; offering it as a finished quick
+     * fix would apply the edit and silently drop the rest.
      */
     override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> {
         val context = LspCodeActionContext(
@@ -224,6 +248,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
             ?: return emptyList()
         val actions = decodeOrNull(ListSerializer(LspCodeAction.serializer()), result) ?: return emptyList()
         return actions.mapNotNull { action ->
+            if (action.command != null) return@mapNotNull null
             val edits = editsForThisDocument(action.edit)
             if (edits.isEmpty()) return@mapNotNull null
             CodeAction(
@@ -389,9 +414,16 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
     private fun applyLspEdits(document: CodeDocument, edits: List<LspTextEdit>): String {
         val builder = StringBuilder(document.text)
         edits
-            .map { offsetRangeOf(document, it.range) to it.newText }
-            .sortedWith(compareByDescending<Pair<IntRange, String>> { it.first.first }.thenByDescending { it.first.last })
-            .forEach { (range, newText) -> builder.replace(range.first, range.last + 1, newText) }
+            .withIndex()
+            .map { (index, edit) -> Triple(index, offsetRangeOf(document, edit.range), edit.newText) }
+            // High-to-low, and last-to-first among edits sharing an offset, so several inserts at
+            // one position come out in the order the server listed them, as the protocol requires.
+            .sortedWith(
+                compareByDescending<Triple<Int, IntRange, String>> { it.second.first }
+                    .thenByDescending { it.second.last }
+                    .thenByDescending { it.first },
+            )
+            .forEach { (_, range, newText) -> builder.replace(range.first, range.last + 1, newText) }
         return builder.toString()
     }
 
@@ -478,9 +510,24 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
         )
     }
 
-    private companion object {
-        val DEFAULT_FORMATTING_OPTIONS = LspFormattingOptions(tabSize = 4, insertSpaces = true)
-        const val INSERT_TEXT_FORMAT_SNIPPET = 2
+    companion object {
+        /**
+         * The `completionProvider.triggerCharacters` a server declared, for
+         * [LspLanguageService]'s `serverTriggerCharacters`, or null when it declared none.
+         *
+         * [capabilities] is the `ServerCapabilities` object [LspClient.initialize] returns. Only
+         * single-character triggers are usable: the editor asks for completions per typed
+         * character, so a multi-character trigger like `::` is represented by its last character.
+         */
+        fun triggerCharactersFrom(capabilities: JsonElement?): Set<Char>? {
+            val provider = (capabilities as? JsonObject)?.get("completionProvider") as? JsonObject ?: return null
+            val declared = provider["triggerCharacters"] as? JsonArray ?: return null
+            val chars = declared.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.lastOrNull() }
+            return chars.toSet().takeIf { it.isNotEmpty() }
+        }
+
+        private val DEFAULT_FORMATTING_OPTIONS = LspFormattingOptions(tabSize = 4, insertSpaces = true)
+        private const val INSERT_TEXT_FORMAT_SNIPPET = 2
 
         private val SNIPPET_CHOICE = Regex("""\$\{\d+\|([^,|}]*)[^}]*\}""")
         private val SNIPPET_PLACEHOLDER = Regex("""\$\{\d+:([^}]*)\}""")
@@ -488,14 +535,14 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
         private val SNIPPET_ESCAPE = Regex("""\\([$}\\])""")
 
         /** Reduces LSP snippet syntax to plain text: `${1|a,b|}` → `a`, `${1:x}` → `x`, `$0` → ``. */
-        fun stripSnippetSyntax(snippet: String): String = snippet
+        private fun stripSnippetSyntax(snippet: String): String = snippet
             .replace(SNIPPET_CHOICE) { it.groupValues[1] }
             .replace(SNIPPET_PLACEHOLDER) { it.groupValues[1] }
             .replace(SNIPPET_TABSTOP, "")
             .replace(SNIPPET_ESCAPE) { it.groupValues[1] }
 
         /** LSP `CompletionItemKind` → editor [CompletionKind]. */
-        fun mapCompletionKind(kind: Int?): CompletionKind = when (kind) {
+        private fun mapCompletionKind(kind: Int?): CompletionKind = when (kind) {
             5, 10 -> CompletionKind.Property
 
             // Field, Property
@@ -517,7 +564,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
          * Identifier around [offset], used as the rename target when the server says rename is
          * available but leaves the range to the client. Empty when [offset] touches no identifier.
          */
-        fun identifierRangeAt(text: String, offset: Int): IntRange {
+        private fun identifierRangeAt(text: String, offset: Int): IntRange {
             fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_'
             val cursor = offset.coerceIn(0, text.length)
             var start = cursor
@@ -528,7 +575,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
         }
 
         /** LSP `CodeActionKind` string → editor [CodeActionKind]. */
-        fun mapCodeActionKind(kind: String?): CodeActionKind = when {
+        private fun mapCodeActionKind(kind: String?): CodeActionKind = when {
             kind == null -> CodeActionKind.QuickFix
             kind.startsWith("source.organizeImports") -> CodeActionKind.SourceOrganizeImports
             kind.startsWith("refactor") -> CodeActionKind.Refactor
