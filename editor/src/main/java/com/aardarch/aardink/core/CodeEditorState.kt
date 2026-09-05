@@ -172,12 +172,22 @@ class CodeEditorState(
         // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent ranges
         val sorted = edits.sortedByDescending { it.range.first }
         val ops = mutableListOf<EditorUndoManager.EditOperation>()
+        // One snapshot for the whole batch: edits are applied high-to-low, so text below the lowest
+        // offset touched so far is unchanged and can be sliced from the snapshot — O(len) per edit
+        // instead of an O(n) document copy per edit.
+        val snapshot = document.text
+        var untouchedBelow = snapshot.length
 
         for (edit in sorted) {
             val start = edit.range.first.coerceIn(0, document.length)
             val end = (edit.range.last + 1).coerceIn(start, document.length)
             val deleteLen = end - start
-            val deletedText = if (deleteLen > 0) document.text.substring(start, end) else ""
+            val deletedText = when {
+                deleteLen == 0 -> ""
+                end <= untouchedBelow -> snapshot.substring(start, end)
+                else -> document.text.substring(start, end) // overlapping edits: fall back to live text
+            }
+            untouchedBelow = minOf(untouchedBelow, start)
 
             if (deleteLen > 0) {
                 document.delete(start, deleteLen)
