@@ -154,13 +154,32 @@ fun CodeEditorLayout(
     var showSignatureHelp by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTargetName by remember { mutableStateOf("") }
+    var renameTargetRange by remember { mutableStateOf(IntRange.EMPTY) }
+
+    // ── Rename: resolve the symbol the host asked to rename, then open the dialog ─
+    LaunchedEffect(state, languageService) {
+        snapshotFlow { state.pendingRename }.collect { request ->
+            if (request == null) return@collect
+            state.clearRename()
+            val text = state.document.text
+            val range = withContext(Dispatchers.Default) {
+                languageService?.prepareRename(state.document, request.offset)
+            } ?: wordRangeAt(text, request.offset)
+            if (range.isEmpty()) return@collect
+            renameTargetRange = range
+            renameTargetName = text.substring(range.first, (range.last + 1).coerceAtMost(text.length))
+            showRenameDialog = true
+        }
+    }
 
     if (languageService != null) {
         LaunchedEffect(languageService, state.selection, textVersion) {
             val offset = state.selection.start
             if (offset >= 0 && offset <= state.document.length) {
-                val charBefore = if (offset > 0) state.document.text.getOrNull(offset - 1) else null
-                if (charBefore == '(' || charBefore == ',') {
+                // Keep asking while the cursor sits inside the argument list, not just right after
+                // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
+                // The service decides when the context has stopped being valid by returning null.
+                if (isInsideCallArguments(state.document.text, offset)) {
                     val sig = withContext(Dispatchers.Default) {
                         languageService.signatureHelp(state.document, offset)
                     }
@@ -179,6 +198,21 @@ fun CodeEditorLayout(
 
     // Annotation tooltip: shown when user taps a gutter dot
     var tooltipDiagnostic by remember { mutableStateOf<Diagnostic?>(null) }
+
+    // Quick fixes for the tapped diagnostic. Tapping a gutter dot doesn't move the cursor, so the
+    // cursor's code actions belong to an unrelated location and must not be offered here.
+    var tooltipCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
+    LaunchedEffect(languageService, tooltipDiagnostic, textVersion) {
+        tooltipCodeActions = emptyList()
+        val tooltip = tooltipDiagnostic ?: return@LaunchedEffect
+        if (languageService == null) return@LaunchedEffect
+        tooltipCodeActions = withContext(Dispatchers.Default) {
+            languageService.codeActions(state.document, tooltip.range)
+        }
+    }
+
+    // The menu is opened either from the tooltip or from the cursor, and shows that source's fixes.
+    val menuCodeActions = if (tooltipDiagnostic != null) tooltipCodeActions else currentCodeActions
 
     // Diff lane: compute line diffs when savedText or document changes
     var diffAnnotations by remember { mutableStateOf<Map<Int, LineDiffKind>>(emptyMap()) }
@@ -462,7 +496,7 @@ fun CodeEditorLayout(
                 message = tooltip.message,
                 severity = tooltip.severity,
                 onDismiss = { tooltipDiagnostic = null },
-                onQuickFix = if (currentCodeActions.isNotEmpty()) {
+                onQuickFix = if (tooltipCodeActions.isNotEmpty()) {
                     { showCodeActionsMenu = true }
                 } else {
                     null
@@ -478,9 +512,9 @@ fun CodeEditorLayout(
             )
         }
 
-        if (showCodeActionsMenu && currentCodeActions.isNotEmpty()) {
+        if (showCodeActionsMenu && menuCodeActions.isNotEmpty()) {
             CodeActionMenu(
-                actions = currentCodeActions,
+                actions = menuCodeActions,
                 onSelectAction = { action ->
                     state.applyTextEdits(action.edits)
                     fieldValue = TextFieldValue(state.document.text, state.selection)
@@ -494,8 +528,9 @@ fun CodeEditorLayout(
             RenameDialog(
                 currentName = renameTargetName,
                 onConfirm = { newName ->
+                    val target = renameTargetRange.first
                     coroutineScope.launch {
-                        val edits = languageService?.rename(state.document, state.selection.start, newName) ?: emptyList()
+                        val edits = languageService?.rename(state.document, target, newName) ?: emptyList()
                         if (edits.isNotEmpty()) {
                             state.applyTextEdits(edits)
                             fieldValue = TextFieldValue(state.document.text, state.selection)
@@ -795,6 +830,84 @@ internal fun completionReplaceRange(text: String, cursorPos: Int, item: Completi
         start--
     }
     return start until cursor
+}
+
+// ── Rename target ──────────────────────────────────────────────────────────────
+
+/**
+ * Identifier around [offset], used as the rename target when the language service has no
+ * `prepareRename` answer. Empty when [offset] doesn't touch an identifier.
+ */
+internal fun wordRangeAt(text: String, offset: Int): IntRange {
+    fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_'
+    val cursor = offset.coerceIn(0, text.length)
+    var start = cursor
+    while (start > 0 && isWordChar(text[start - 1])) start--
+    var end = cursor
+    while (end < text.length && isWordChar(text[end])) end++
+    return start until end
+}
+
+// ── Signature help context ─────────────────────────────────────────────────────
+
+/** How far back the call scan looks — a call opened further above the cursor isn't worth chasing. */
+private const val CALL_SCAN_LIMIT = 2000
+
+/**
+ * Whether [offset] sits inside an unclosed `(` argument list, ignoring parentheses in comments and
+ * string or character literals.
+ *
+ * The scan is bounded to the last [CALL_SCAN_LIMIT] characters, so it can start inside a multi-line
+ * literal and misjudge; that only costs one extra signature-help request, which the language service
+ * answers with null.
+ */
+internal fun isInsideCallArguments(text: String, offset: Int): Boolean {
+    val cursor = offset.coerceIn(0, text.length)
+    var i = (cursor - CALL_SCAN_LIMIT).coerceAtLeast(0)
+    var depth = 0
+    while (i < cursor) {
+        when {
+            text.startsWith("//", i) -> {
+                val nl = text.indexOf('\n', i)
+                i = if (nl < 0 || nl >= cursor) cursor else nl + 1
+            }
+
+            text.startsWith("/*", i) -> {
+                val end = text.indexOf("*/", i + 2)
+                i = if (end < 0 || end + 2 >= cursor) cursor else end + 2
+            }
+
+            text[i] == '"' || text[i] == '\'' -> i = endOfLiteral(text, i, cursor)
+
+            text[i] == '(' -> {
+                depth++
+                i++
+            }
+
+            text[i] == ')' -> {
+                depth = (depth - 1).coerceAtLeast(0)
+                i++
+            }
+
+            else -> i++
+        }
+    }
+    return depth > 0
+}
+
+/** Index just past the literal opened by the quote at [start], bounded by [limit]. */
+private fun endOfLiteral(text: String, start: Int, limit: Int): Int {
+    val quote = text[start]
+    var i = start + 1
+    while (i < limit) {
+        when (text[i]) {
+            '\\' -> i += 2
+            quote -> return i + 1
+            '\n' -> return i + 1
+            else -> i++
+        }
+    }
+    return limit
 }
 
 // ── Edit delta computation ─────────────────────────────────────────────────────

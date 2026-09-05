@@ -15,10 +15,12 @@
  */
 package com.aardarch.aardink.core
 
+import androidx.compose.ui.text.TextRange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class CodeEditorStateTest {
@@ -75,5 +77,28 @@ class CodeEditorStateTest {
 
         state.redo()
         assertEquals("val y = 2", state.text)
+    }
+
+    @Test
+    fun `requestRename records the offset and clearRename consumes it`() {
+        val state = testState("val value = 1")
+
+        state.requestRename(6)
+        assertEquals(CodeEditorState.Rename(6), state.pendingRename)
+
+        state.clearRename()
+        assertNull(state.pendingRename)
+    }
+
+    @Test
+    fun `requestRename defaults to the cursor and clamps out of bounds offsets`() {
+        val state = testState("val value = 1")
+        state.selection = TextRange(4)
+
+        state.requestRename()
+        assertEquals(CodeEditorState.Rename(4), state.pendingRename)
+
+        state.requestRename(999)
+        assertEquals(CodeEditorState.Rename(13), state.pendingRename)
     }
 }

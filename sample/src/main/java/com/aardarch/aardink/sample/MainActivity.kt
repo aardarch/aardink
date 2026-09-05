@@ -270,6 +270,7 @@ private fun EditorScreen(language: LanguageDefinition, onBack: () -> Unit) {
                         onShowDiffMarkersChange = { showDiffMarkers = it },
                         softWrap = softWrap,
                         onSoftWrapChange = { softWrap = it },
+                        onRenameSymbol = { state.requestRename() },
                     )
                 },
             )
@@ -313,12 +314,21 @@ private fun SampleOptionsMenu(
     onShowDiffMarkersChange: (Boolean) -> Unit,
     softWrap: Boolean,
     onSoftWrapChange: (Boolean) -> Unit,
+    onRenameSymbol: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     IconButton(onClick = { expanded = true }) {
         Icon(imageVector = Icons.Filled.Menu, contentDescription = "Sample options")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SectionLabel("Refactor")
+        DropdownMenuItem(
+            text = { Text("Rename symbol at cursor") },
+            onClick = {
+                expanded = false
+                onRenameSymbol()
+            },
+        )
         SectionLabel("Keyboard toolbar")
         ToolbarPlacementItem(
             label = "Hover above keyboard",

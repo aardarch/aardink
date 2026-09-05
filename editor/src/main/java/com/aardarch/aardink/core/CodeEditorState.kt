@@ -106,6 +106,26 @@ class CodeEditorState(
         pendingNavigation = null
     }
 
+    /**
+     * One-shot rename request. Set by the host app (a menu item, a toolbar button); consumed by
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout], which resolves the symbol at the
+     * offset through the language service and opens the rename dialog.
+     */
+    var pendingRename by mutableStateOf<Rename?>(null)
+        private set
+
+    data class Rename(val offset: Int)
+
+    /** Requests the editor to rename the symbol at [offset], defaulting to the one at the cursor. */
+    fun requestRename(offset: Int = selection.start) {
+        pendingRename = Rename(offset.coerceIn(0, document.length))
+    }
+
+    /** Called by [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] after consuming [pendingRename]. */
+    fun clearRename() {
+        pendingRename = null
+    }
+
     // ── Convenience reads ─────────────────────────────────────────────────────
 
     /**
