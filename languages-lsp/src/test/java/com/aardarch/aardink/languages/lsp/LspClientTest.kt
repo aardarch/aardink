@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -297,6 +298,64 @@ class LspClientTest {
         assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
         assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
         assertFalse(uncaught.isCompleted, "the IOException must not reach the scope's handler")
+    }
+
+    @Test
+    fun `a receive failure that is not an IOException still closes the client`() = runBlocking {
+        // The transport contract promises no failure type on the read side either.
+        val uncaught = CompletableDeferred<Throwable>()
+        val scope = CoroutineScope(
+            Dispatchers.Default + CoroutineExceptionHandler { _, e -> uncaught.complete(e) },
+        )
+        val failing = object : LspTransport {
+            override suspend fun sendPayload(jsonPayload: String) = Unit
+            override suspend fun receivePayload(): String = throw IllegalStateException("closed underneath")
+            override fun close() = Unit
+        }
+        val failingClient = LspClient(failing, scope)
+
+        val outcome = CompletableDeferred<Result<JsonElement?>>()
+        launch { outcome.complete(runCatching { failingClient.sendRequest("textDocument/hover") }) }
+
+        val failure = awaitSoon(outcome).exceptionOrNull()
+        assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+        assertFalse(uncaught.isCompleted, "the failure must not reach the scope's handler")
+    }
+
+    @Test
+    fun `a client whose scope is cancelled fails requests instead of hanging`() = runBlocking {
+        // A host that ties the client to a ViewModel scope and outlives it: launching the receive
+        // loop into the cancelled scope does nothing, so without this a request would wait forever.
+        val scope = CoroutineScope(Dispatchers.Default)
+        scope.cancel()
+        val orphan = LspClient(transport, scope)
+
+        val failure = runCatching { orphan.sendRequest("textDocument/hover") }.exceptionOrNull()
+        assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+        assertTrue(transport.sendChannel.isClosedForSend, "the transport is released")
+    }
+
+    @Test
+    fun `the transport is closed once however many teardown paths run`() = runBlocking {
+        val closes = java.util.concurrent.atomic.AtomicInteger()
+        val counting = object : LspTransport {
+            override suspend fun sendPayload(jsonPayload: String) = Unit
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() {
+                closes.incrementAndGet()
+            }
+        }
+        val client = LspClient(counting, CoroutineScope(Dispatchers.Default))
+        client.start()
+
+        // stop() closes, then the cancelled receive loop's own teardown runs.
+        client.stop()
+        withTimeout(5_000) { while (closes.get() == 0) kotlinx.coroutines.yield() }
+        kotlinx.coroutines.delay(50)
+
+        assertEquals(1, closes.get())
     }
 
     @Test

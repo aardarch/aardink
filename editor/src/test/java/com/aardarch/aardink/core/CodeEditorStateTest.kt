@@ -133,6 +133,31 @@ class CodeEditorStateTest {
     }
 
     @Test
+    fun `applyTextEdits carries the caret past edits made above it`() {
+        val state = testState("foo(); foo(); bar")
+        state.selection = TextRange(14)
+
+        // Renaming both calls grows the text before the caret; the caret must still sit before "bar",
+        // not at offset 14 inside the second renamed identifier.
+        state.applyTextEdits(listOf(TextEdit(0..2, "foobarbaz"), TextEdit(7..9, "foobarbaz")))
+
+        assertEquals("foobarbaz(); foobarbaz(); bar", state.text)
+        assertEquals(TextRange(26), state.selection)
+    }
+
+    @Test
+    fun `applyTextEdits snaps a caret inside a replaced range to the end of the replacement`() {
+        val state = testState("import x\nfo")
+        state.selection = TextRange(11)
+
+        // An auto-import completion: the symbol replaces the token at the caret, the import goes above.
+        state.applyTextEdits(listOf(TextEdit(0 until 0, "import a.forEach\n"), TextEdit(9..10, "forEach")))
+
+        assertEquals("import a.forEach\nimport x\nforEach", state.text)
+        assertEquals(TextRange(state.text.length), state.selection)
+    }
+
+    @Test
     fun `requestRename records the offset and clearRename consumes it`() {
         val state = testState("val value = 1")
 

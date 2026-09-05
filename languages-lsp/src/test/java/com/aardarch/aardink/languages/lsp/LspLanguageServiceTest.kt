@@ -493,6 +493,18 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `format reaches the end of the document when the edit ends past the last line`() = withServer("a\nb\nc") {
+        // A whole-document edit ending at { line: lineCount, character: 0 } — a line that does not
+        // exist — means "end of file", not "start of the last line".
+        val server = async { respond("textDocument/formatting", """[{"range":${range(0, 0, 3, 0)},"newText":"x"}]""") }
+
+        val formatted = service.format(doc)
+        server.await()
+
+        assertEquals("x", formatted)
+    }
+
+    @Test
     fun `format keeps several inserts at one position in server order`() = withServer("foo()") {
         val server = async {
             respond(

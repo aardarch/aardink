@@ -57,4 +57,14 @@ class TomlTokenizerTest {
         val tokens = TomlTokenizer.tokenizeFull("# This is a TOML comment")
         assertTrue(tokens.any { it.type == TokenType.Comment })
     }
+
+    @Test
+    fun `an array value is not a table header`() {
+        // The header rule matched anywhere on a line, so a bracketed array value became one
+        // TypeName token and its strings were never highlighted.
+        val src = "compose = [\"androidx-compose-ui\", \"androidx-compose-material3\"]"
+        val tokens = TomlTokenizer.tokenizeFull(src)
+        assertTrue(tokens.none { it.type == TokenType.TypeName }, "no header on a key/value line")
+        assertEquals(2, tokens.count { it.type == TokenType.StringLiteral })
+    }
 }

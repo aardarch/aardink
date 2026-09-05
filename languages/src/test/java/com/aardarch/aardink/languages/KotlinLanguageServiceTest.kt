@@ -180,4 +180,13 @@ class KotlinLanguageServiceTest {
         assertTrue(formatted.contains("\n    val x = 1\n"), "code after the raw string stays indented: $formatted")
         assertTrue(formatted.endsWith("\n}"), "the closing brace returns to column 0: $formatted")
     }
+
+    @Test
+    fun `format does not read an apostrophe in a backtick name as a char literal`() = runBlocking {
+        // `it's` opens no literal; treating it as one swallowed the brace and left the body unindented.
+        val src = "fun `it's fine`() {\nval x = 1\n}"
+        assertEquals("fun `it's fine`() {\n    val x = 1\n}", KotlinLanguageService.format(CodeDocument(src)))
+        // A real char literal is still data: its brace is not structure.
+        assertEquals("fun f() {\n    val y = '{'\n}", KotlinLanguageService.format(CodeDocument("fun f() {\nval y = '{'\n}")))
+    }
 }

@@ -17,6 +17,7 @@ package com.aardarch.aardink.ui
 
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.TextEdit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -82,5 +83,42 @@ class CompletionApplyTest {
         assertEquals(4 until 6, completionReplaceRange("foo(ba", 6, item("bar")))
         assertEquals(7 until 9, completionReplaceRange("foo(a, ba", 9, item("bar")))
         assertEquals(5 until 7, completionReplaceRange("list[ba", 7, item("bar")))
+    }
+
+    // A list computed for "val v = fo" is still showing when the user types "r": the item's
+    // ranges are addressed to the older text and must follow the keystroke.
+
+    @Test
+    fun `a character typed at the end of the replaced token joins it`() {
+        val shifted = item("forEach", 8 until 10).shiftedForInsert(at = 10, length = 1, absorbing = true)
+        assertEquals(8 until 11, shifted.replaceRange)
+    }
+
+    @Test
+    fun `an auto-closed character after the cursor is not swallowed`() {
+        val shifted = item("forEach", 8 until 10).shiftedForInsert(at = 10, length = 1, absorbing = false)
+        assertEquals(8 until 10, shifted.replaceRange)
+        val atCursor = item("size", 10 until 10).shiftedForInsert(at = 10, length = 1, absorbing = false)
+        assertEquals(10 until 10, atCursor.replaceRange)
+    }
+
+    @Test
+    fun `an insertion before a range moves the whole range`() {
+        val shifted = item("forEach", 8 until 10).shiftedForInsert(at = 3, length = 2, absorbing = true)
+        assertEquals(10 until 12, shifted.replaceRange)
+    }
+
+    @Test
+    fun `additional edits above the keystroke stay put and never absorb it`() {
+        val importEdit = TextEdit(0 until 0, "import a.forEach\n")
+        val withImport = item("forEach", 8 until 10).copy(additionalEdits = listOf(importEdit))
+
+        val typedBelow = withImport.shiftedForInsert(at = 10, length = 1, absorbing = true)
+        assertEquals(listOf(importEdit), typedBelow.additionalEdits)
+
+        // Typing exactly at the import's insertion point must not fold the keystroke into it.
+        val typedAtImport = withImport.shiftedForInsert(at = 0, length = 1, absorbing = true)
+        assertEquals(listOf(importEdit), typedAtImport.additionalEdits)
+        assertEquals(9 until 11, typedAtImport.replaceRange)
     }
 }

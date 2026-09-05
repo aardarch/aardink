@@ -22,6 +22,7 @@ import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -77,6 +78,13 @@ class XmlLanguageServiceTest {
         val doc = CodeDocument("<LinearLayout>")
         val auto = XmlLanguageService.autoClose(doc, 13, '>')
         assertEquals("</LinearLayout>", auto)
+    }
+
+    @Test
+    fun `a closing angle bracket typed in text content closes nothing`() {
+        // `<p>1 >`: the last '<' opened a tag that its own '>' already closed, so this '>' is text.
+        assertNull(XmlLanguageService.autoClose(CodeDocument("<p>1 >"), 5, '>'))
+        assertNull(XmlLanguageService.autoClose(CodeDocument("<p>hello\na >"), 11, '>'))
     }
 
     @Test
@@ -237,6 +245,22 @@ class XmlLanguageServiceTest {
     @Test
     fun `every bare ampersand in an attribute value is flagged`() {
         assertEquals(2, xml("""<a b="1 & 2" c='3 & 4'>t</a>""").size)
-        assertEquals(1, html("""<img alt="A & B">""").size, "HTML mode flags attribute values like text")
+    }
+
+    @Test
+    fun `HTML tolerates a bare ampersand in an attribute value`() {
+        // HTML5 only objects to an ampersand that looks like a reference; a query string is fine.
+        assertTrue(html("""<a href="page?x=1&y=2">go</a>""").isEmpty())
+        assertTrue(html("""<img alt="A & B">""").isEmpty())
+    }
+
+    @Test
+    fun `HTML script and style contents are not markup`() {
+        // `&&` is an operator and `<` a comparison inside a raw-text element.
+        assertTrue(html("<script>if (a && b < c) { go(); }</script>").isEmpty())
+        assertTrue(html("<style>a > b { color: red; }</style><p>x</p>").isEmpty())
+        // The element itself is still tracked: an unclosed one is reported.
+        assertTrue(html("<div><script>var x = 1;</div>").isNotEmpty())
+        assertTrue(html("<div><script>var x = 1;</script></div>").isEmpty())
     }
 }
