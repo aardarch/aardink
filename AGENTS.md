@@ -8,14 +8,18 @@ Aardink is a standalone Jetpack Compose-native code editor library for Android p
 ```text
 editor/          # The library module — the published artifact (com.aardarch:aardink)
   src/main/java/com/aardarch/aardink/
-    core/        # Document model, tokenization, undo, find, folding
-    ui/          # Composables: CodeEditorLayout, EditorGutter, etc.
+    core/        # Document model, tokenization, undo, find, folding, LSP models (TextEdit, CodeAction, SignatureHelp)
+    ui/          # Composables: CodeEditorLayout, EditorGutter, SignatureHelpPopup, CodeActionMenu, RenameDialog, etc.
   src/test/      # JUnit 5 unit tests
 
 languages/       # Built-in language support — published as com.aardarch:aardink-languages
   src/main/java/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
-    internal/    # Per-language tokenizers + folding providers (regex-driven v1)
+    internal/    # Per-language tokenizers + folding providers + services (Kotlin, XML, JSON, TOML, etc.)
+
+languages-lsp/   # External Language Server Protocol bridge — published as com.aardarch:aardink-languages-lsp
+  src/main/java/com/aardarch/aardink/languages/lsp/
+    LspClient.kt / LspLanguageService.kt / LspTransport.kt / LspMessage.kt
 
 sample/          # Minimal Android app for local development and manual testing
   src/main/java/com/aardarch/aardink/sample/
@@ -35,13 +39,13 @@ sample/          # Minimal Android app for local development and manual testing
 All commands run from the repo root.
 
 ```pwsh
-./gradlew :editor:test :languages:test          # Unit tests
-./gradlew :editor:lint :languages:lint :sample:lintDebug     # Lint
-./gradlew :editor:spotlessCheck :languages:spotlessCheck :sample:spotlessCheck   # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply :sample:spotlessApply   # Auto-format
+./gradlew :editor:test :languages:test :languages-lsp:test          # Unit tests
+./gradlew :editor:lint :languages:lint :languages-lsp:lint :sample:lintDebug     # Lint
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
-./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal  # Publish to ~/.m2
-./gradlew dokkaAll                              # API docs (HTML) for both modules
+./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal  # Publish to ~/.m2
+./gradlew dokkaAll                              # API docs (HTML) for all modules
 ./gradlew dokkaAllGfm                           # API docs (GitHub-Flavored Markdown)
 ```
 
@@ -80,17 +84,20 @@ tests, sample build, and `publishToMavenLocal` sanity.
 The `editor` module is intentionally language-agnostic:
 
 - Generic highlighting, gutter, undo, find/replace, folding → belongs in `editor`
-- Language-specific logic (Kotlin, TS, JSON, XML, HTML, CSS, Markdown, plain text) → belongs in
+- Language-specific logic (Kotlin, TS, JSON, TOML, XML, HTML, CSS, Markdown, plain text) → belongs in
   `languages` (or in a consumer override) via `IncrementalTokenizer` + `FoldingProvider`,
   packaged as `LanguageDefinition` and resolved through `LanguageRegistry`
+- External LSP integration bridge → belongs in `languages-lsp` via `LspClient` + `LspLanguageService`
 
 ## Public API Surface (key entry points)
 
 | Symbol | Description |
 | --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
-| `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor |
-| `LanguageService` | Interface — implement for completions, diagnostics, hover, formatting; `triggerCharacters` has a default empty-set implementation |
+| `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor, including `applyTextEdits()` |
+| `LanguageService` | Interface — completions, diagnostics, hover, formatting, code actions, definition, signature help, rename |
+| `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`) |
+| `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
 | `FoldingProvider` | Interface — implement for code folding |
 | `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal |

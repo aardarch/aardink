@@ -147,11 +147,13 @@ fun CodeEditorLayout(
     var showCompletion by remember { mutableStateOf(false) }
     var completionJob by remember { mutableStateOf<Job?>(null) }
 
-    // Code actions & Signature help state
+    // Code actions, Signature help & Rename state
     var currentCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
     var showCodeActionsMenu by remember { mutableStateOf(false) }
     var currentSignatureHelp by remember { mutableStateOf<SignatureHelp?>(null) }
     var showSignatureHelp by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameTargetName by remember { mutableStateOf("") }
 
     if (languageService != null) {
         LaunchedEffect(languageService, state.selection, textVersion) {
@@ -468,7 +470,7 @@ fun CodeEditorLayout(
             )
         }
 
-        // ── Signature help & Code action popups ──────────────────────────────
+        // ── Signature help, Code action popups & Rename Dialog ────────────────
         if (showSignatureHelp && currentSignatureHelp != null) {
             SignatureHelpPopup(
                 help = currentSignatureHelp!!,
@@ -485,6 +487,23 @@ fun CodeEditorLayout(
                     showCodeActionsMenu = false
                 },
                 onDismiss = { showCodeActionsMenu = false },
+            )
+        }
+
+        if (showRenameDialog && renameTargetName.isNotEmpty()) {
+            RenameDialog(
+                currentName = renameTargetName,
+                onConfirm = { newName ->
+                    coroutineScope.launch {
+                        val edits = languageService?.rename(state.document, state.selection.start, newName) ?: emptyList()
+                        if (edits.isNotEmpty()) {
+                            state.applyTextEdits(edits)
+                            fieldValue = TextFieldValue(state.document.text, state.selection)
+                        }
+                    }
+                    showRenameDialog = false
+                },
+                onDismiss = { showRenameDialog = false },
             )
         }
 
