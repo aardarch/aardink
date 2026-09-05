@@ -11,13 +11,13 @@ plugins {
 tasks.register("dokkaAll") {
     group = "documentation"
     description = "Generates Dokka HTML documentation for all published modules."
-    dependsOn(":editor:dokkaGenerateHtml", ":languages:dokkaGenerateHtml")
+    dependsOn(":editor:dokkaGenerateHtml", ":languages:dokkaGenerateHtml", ":languages-lsp:dokkaGenerateHtml")
 }
 
 tasks.register("dokkaAllGfm") {
     group = "documentation"
     description = "Generates Dokka GFM (Markdown) documentation for all published modules."
-    dependsOn(":editor:dokkaGenerateMarkdown", ":languages:dokkaGenerateMarkdown")
+    dependsOn(":editor:dokkaGenerateMarkdown", ":languages:dokkaGenerateMarkdown", ":languages-lsp:dokkaGenerateMarkdown")
 }
 
 // NOTE: kotlinx.binary-compatibility-validator (BCV 0.18) is currently parked.

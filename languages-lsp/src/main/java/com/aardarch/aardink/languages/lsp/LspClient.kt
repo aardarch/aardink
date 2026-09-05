@@ -22,12 +22,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -88,6 +91,30 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     }
 
     /**
+     * Performs the mandatory LSP handshake: sends `initialize` with [rootUri] and [capabilities],
+     * waits for the server's response, then sends the `initialized` notification.
+     *
+     * Must be the first request/notification exchanged with the server — servers are entitled to
+     * reject anything sent beforehand with a `ServerNotInitialized` (-32002) error.
+     *
+     * @param rootUri Workspace root, or null for a server with no workspace context.
+     * @param capabilities Client capabilities object; an empty object is valid, since every LSP
+     *   capability is optional for the client to support.
+     * @return The server's reported `ServerCapabilities` (the `capabilities` member of the
+     *   `InitializeResult`), or null if the response carried none.
+     */
+    suspend fun initialize(rootUri: String?, capabilities: JsonElement = buildJsonObject { }): JsonElement? {
+        val params = buildJsonObject {
+            put("processId", JsonNull)
+            put("rootUri", rootUri?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("capabilities", capabilities)
+        }
+        val result = sendRequest("initialize", params)
+        sendNotification("initialized", buildJsonObject { })
+        return (result as? JsonObject)?.get("capabilities")
+    }
+
+    /**
      * Sends an LSP request and suspends until the matching response arrives.
      *
      * @return The `result` member of the response, or null when the server returned `null`.
@@ -142,7 +169,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         val id = message["id"]?.takeUnless { it is JsonNull }
         val method = (message["method"] as? JsonPrimitive)?.contentOrNull
         when {
-            method != null && id != null -> replyMethodNotFound(id, method)
+            method != null && id != null -> handleServerRequest(id, method, message["params"])
             method != null -> handleNotification(method, message["params"])
             id != null -> handleResponse(payload)
         }
@@ -181,9 +208,38 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     }
 
     /**
-     * Server→client requests (e.g. `client/registerCapability`, `workspace/configuration`) are not
-     * supported yet. Answer with `MethodNotFound` so the server does not block waiting on us.
+     * Answers server→client requests this bridge has a safe generic reply for; anything else gets
+     * a `MethodNotFound` error so the server does not block waiting on us.
+     *
+     * - `client/registerCapability` / `client/unregisterCapability`: acknowledged with a `null`
+     *   result. This bridge always sends its full capabilities up front and does not track dynamic
+     *   registrations, so there is nothing further to do.
+     * - `window/showMessageRequest` / `window/workDoneProgress/create`: acknowledged with a `null`
+     *   result (no action selected). Surfacing these to a human is a host UI concern, not this
+     *   bridge's.
+     * - `workspace/configuration`: answered with one `null` per requested item, per spec, meaning
+     *   "no configuration value for this scope".
      */
+    private suspend fun handleServerRequest(id: JsonElement, method: String, params: JsonElement?) {
+        val result: JsonElement = when (method) {
+            "client/registerCapability",
+            "client/unregisterCapability",
+            "window/showMessageRequest",
+            "window/workDoneProgress/create",
+            -> JsonNull
+
+            "workspace/configuration" -> workspaceConfigurationResult(params)
+
+            else -> return replyMethodNotFound(id, method)
+        }
+        transport.sendPayload(LspJson.encodeToString(LspMessage.Response.serializer(), LspMessage.Response(id = id, result = result)))
+    }
+
+    private fun workspaceConfigurationResult(params: JsonElement?): JsonElement {
+        val itemCount = ((params as? JsonObject)?.get("items") as? JsonArray)?.size ?: 0
+        return JsonArray(List(itemCount) { JsonNull })
+    }
+
     private suspend fun replyMethodNotFound(id: JsonElement, method: String) {
         val response = LspMessage.Response(
             id = id,

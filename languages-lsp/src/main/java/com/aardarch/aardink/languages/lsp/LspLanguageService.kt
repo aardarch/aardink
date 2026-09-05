@@ -330,10 +330,14 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
         return builder.toString()
     }
 
-    private fun LspLocation.toLocation(document: CodeDocument): Location = if (uri == documentUri) {
-        Location(uri, offsetRangeOf(document, range))
-    } else {
-        Location(uri, IntRange.EMPTY)
+    private fun LspLocation.toLocation(document: CodeDocument): Location {
+        val line = range.start.line
+        val column = range.start.character
+        return if (uri == documentUri) {
+            Location(uri, offsetRangeOf(document, range), line, column)
+        } else {
+            Location(uri, IntRange.EMPTY, line, column)
+        }
     }
 
     // ── Result-shape helpers ─────────────────────────────────────────────────

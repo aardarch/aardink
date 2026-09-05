@@ -383,7 +383,7 @@ class LspLanguageServiceTest {
         val sent = server.await()
 
         assertEquals(1 to 0, sent.params.position)
-        assertEquals(Location(URI, 4..4), location)
+        assertEquals(Location(URI, 4..4, line = 0, column = 4), location)
     }
 
     @Test
@@ -394,7 +394,7 @@ class LspLanguageServiceTest {
                 """[{"uri":"$URI","range":${range(0, 4, 0, 5)}},{"uri":"$URI","range":${range(0, 0, 0, 3)}}]""",
             )
         }
-        assertEquals(Location(URI, 4..4), service.definition(doc, 4))
+        assertEquals(Location(URI, 4..4, line = 0, column = 4), service.definition(doc, 4))
         arrayServer.await()
 
         val linkServer = async {
@@ -403,7 +403,7 @@ class LspLanguageServiceTest {
                 """[{"targetUri":"$URI","targetRange":${range(0, 0, 0, 9)},"targetSelectionRange":${range(0, 4, 0, 5)}}]""",
             )
         }
-        assertEquals(Location(URI, 4..4), service.definition(doc, 4))
+        assertEquals(Location(URI, 4..4, line = 0, column = 4), service.definition(doc, 4))
         linkServer.await()
     }
 
@@ -416,6 +416,8 @@ class LspLanguageServiceTest {
 
         assertEquals(OTHER_URI, location?.uri)
         assertTrue(location!!.range.isEmpty())
+        assertEquals(3, location.line, "line/column are still reported for a cross-file target")
+        assertEquals(0, location.column)
     }
 
     @Test
@@ -438,7 +440,10 @@ class LspLanguageServiceTest {
         val sent = server.await()
 
         assertTrue(sent.params["context"]!!.jsonObject["includeDeclaration"]!!.jsonPrimitive.boolean)
-        assertEquals(listOf(Location(URI, 4..4), Location(URI, 10..10)), references)
+        assertEquals(
+            listOf(Location(URI, 4..4, line = 0, column = 4), Location(URI, 10..10, line = 1, column = 0)),
+            references,
+        )
     }
 
     // ── Signature help ───────────────────────────────────────────────────────

@@ -16,9 +16,15 @@
 package com.aardarch.aardink.core
 
 /**
- * Points to a character range within a specific document or file URI.
+ * Points to a position or range within a specific document or file URI.
  *
  * @param uri Document or file URI (e.g. `"file:///src/Main.kt"`).
- * @param range Document-absolute character range.
+ * @param range Document-absolute character range within [uri]. Only meaningful when [uri] is the
+ *   caller's own document; for a target in a different, unopened file this is [IntRange.EMPTY]
+ *   since offsets cannot be computed without that file's text — use [line] and [column] instead.
+ * @param line 0-based line of the target's start position, when reported independent of [range]
+ *   (e.g. by an external language server that only speaks line/column coordinates).
+ * @param column 0-based UTF-16 column of the target's start position, when reported independent
+ *   of [range].
  */
-data class Location(val uri: String, val range: IntRange)
+data class Location(val uri: String, val range: IntRange, val line: Int? = null, val column: Int? = null)

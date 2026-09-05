@@ -23,10 +23,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -170,15 +172,74 @@ class LspClientTest {
     }
 
     @Test
-    fun `server-to-client request is answered with MethodNotFound`() = runBlocking {
+    fun `unsupported server-to-client request is answered with MethodNotFound`() = runBlocking {
         client.start()
-        serverSends("""{"jsonrpc":"2.0","id":"abc","method":"client/registerCapability","params":{"registrations":[]}}""")
+        serverSends("""{"jsonrpc":"2.0","id":"abc","method":"workspace/applyEdit","params":{"edit":{}}}""")
 
         val reply = nextSent()
         assertEquals("abc", reply["id"]!!.jsonPrimitive.content)
         assertTrue(reply["id"]!!.jsonPrimitive.isString)
         assertEquals(LspRequestException.METHOD_NOT_FOUND, reply["error"]!!.jsonObject["code"]!!.jsonPrimitive.int)
         assertFalse("result" in reply)
+        client.stop()
+    }
+
+    @Test
+    fun `registerCapability and showMessageRequest are acknowledged with a null result`() = runBlocking {
+        client.start()
+        serverSends("""{"jsonrpc":"2.0","id":1,"method":"client/registerCapability","params":{"registrations":[]}}""")
+
+        val registerReply = nextSent()
+        assertEquals(1L, registerReply["id"]!!.jsonPrimitive.long)
+        assertTrue(registerReply["result"]!!.jsonNull === JsonNull)
+        assertFalse("error" in registerReply)
+
+        serverSends("""{"jsonrpc":"2.0","id":2,"method":"window/showMessageRequest","params":{"type":1,"message":"hi","actions":[]}}""")
+        val messageReply = nextSent()
+        assertEquals(2L, messageReply["id"]!!.jsonPrimitive.long)
+        assertFalse("error" in messageReply)
+
+        client.stop()
+    }
+
+    @Test
+    fun `workspace configuration is answered with one null per requested item`() = runBlocking {
+        client.start()
+        serverSends(
+            """{"jsonrpc":"2.0","id":3,"method":"workspace/configuration",
+               |"params":{"items":[{"section":"aardink.lsp"},{"section":"aardink.format"}]}}
+            """.trimMargin().replace("\n", ""),
+        )
+
+        val reply = nextSent()
+        val result = reply["result"]!!.jsonArray
+        assertEquals(2, result.size)
+        assertTrue(result.all { it == JsonNull })
+
+        client.stop()
+    }
+
+    @Test
+    fun `initialize sends processId, rootUri and capabilities then initialized`() = runBlocking {
+        val server = async {
+            val init = nextSent()
+            assertEquals("initialize", init["method"]!!.jsonPrimitive.content)
+            val params = init["params"]!!.jsonObject
+            assertTrue(params["processId"]!!.jsonNull === JsonNull)
+            assertEquals("file:///workspace", params["rootUri"]!!.jsonPrimitive.content)
+            assertEquals(emptyMap<String, Nothing>(), params["capabilities"]!!.jsonObject.toMap())
+            val id = init["id"]!!.jsonPrimitive.long
+            serverSends("""{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"hoverProvider":true}}}""")
+
+            val initialized = nextSent()
+            assertEquals("initialized", initialized["method"]!!.jsonPrimitive.content)
+            assertFalse("id" in initialized)
+        }
+
+        val capabilities = client.initialize("file:///workspace")
+        server.await()
+
+        assertTrue(capabilities!!.jsonObject["hoverProvider"]!!.jsonPrimitive.content == "true")
         client.stop()
     }
 
