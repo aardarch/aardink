@@ -270,6 +270,7 @@ private fun EditorScreen(language: LanguageDefinition, onBack: () -> Unit) {
                         onShowDiffMarkersChange = { showDiffMarkers = it },
                         softWrap = softWrap,
                         onSoftWrapChange = { softWrap = it },
+                        canRenameSymbol = language.languageService?.supportsRename == true,
                         onRenameSymbol = { state.requestRename() },
                     )
                 },
@@ -314,6 +315,7 @@ private fun SampleOptionsMenu(
     onShowDiffMarkersChange: (Boolean) -> Unit,
     softWrap: Boolean,
     onSoftWrapChange: (Boolean) -> Unit,
+    canRenameSymbol: Boolean,
     onRenameSymbol: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -321,14 +323,18 @@ private fun SampleOptionsMenu(
         Icon(imageVector = Icons.Filled.Menu, contentDescription = "Sample options")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        SectionLabel("Refactor")
-        DropdownMenuItem(
-            text = { Text("Rename symbol at cursor") },
-            onClick = {
-                expanded = false
-                onRenameSymbol()
-            },
-        )
+        // Shown only when the active service can actually rename. Every built-in language
+        // declines rename, so offering it for them presented a command that did nothing.
+        if (canRenameSymbol) {
+            SectionLabel("Refactor")
+            DropdownMenuItem(
+                text = { Text("Rename symbol at cursor") },
+                onClick = {
+                    expanded = false
+                    onRenameSymbol()
+                },
+            )
+        }
         SectionLabel("Keyboard toolbar")
         ToolbarPlacementItem(
             label = "Hover above keyboard",
