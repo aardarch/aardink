@@ -252,4 +252,17 @@ class TomlLanguageServiceTest {
         assertEquals(1, diagnose("[a]\nb.c = 1\nb.\"c\" = 2").size, "same path, different spelling")
         assertTrue(diagnose("[a]\nb.c = 1\nb.d = 2").isEmpty(), "different paths")
     }
+
+    @Test
+    fun `a dotted key and a quoted key containing a dot are different keys`() {
+        // "a.b" is one key whose name contains a dot; a.b is the path a -> b. Flattening the
+        // normalized segments back into one string made them collide.
+        assertTrue(diagnose("[t]\n\"a.b\" = 1\na.b = 2").isEmpty(), "these are two different keys")
+        assertEquals(1, diagnose("[t]\n\"a.b\" = 1\n\"a.b\" = 2").size, "the same quoted key twice")
+    }
+
+    @Test
+    fun `table paths do not collide across dot boundaries`() {
+        assertTrue(diagnose("[\"a.b\"]\nx = 1\n\n[a.b]\nx = 2").isEmpty(), "two different tables")
+    }
 }

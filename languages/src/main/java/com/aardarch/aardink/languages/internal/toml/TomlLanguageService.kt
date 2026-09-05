@@ -62,9 +62,12 @@ object TomlLanguageService : BaseLanguageService() {
         // Keys seen per table, keyed by normalized header. Reopening [section] later in the file
         // continues the same table, so its keys must still be remembered; a [[array]] entry starts
         // a fresh instance and gets its own set, which `arrayInstance` counts off.
-        val keysByTable = mutableMapOf<String, MutableSet<String>>()
-        val arrayInstances = mutableMapOf<String, Int>()
-        var sectionKeys = keysByTable.getOrPut("") { mutableSetOf() }
+        // Key paths stay as segment lists rather than a joined string: `"a.b" = 1` is one segment
+        // containing a dot and `a.b = 1` is two, which are different TOML keys that a join would
+        // conflate. The table key pairs the path with an instance number, 0 for a plain table.
+        val keysByTable = mutableMapOf<Pair<List<String>, Int>, MutableSet<List<String>>>()
+        val arrayInstances = mutableMapOf<List<String>, Int>()
+        var sectionKeys = keysByTable.getOrPut(emptyList<String>() to 0) { mutableSetOf() }
         val lineStates = lineStates(document)
 
         for (i in 0 until lineCount) {
@@ -95,11 +98,10 @@ object TomlLanguageService : BaseLanguageService() {
                 } else {
                     currentSection = header
                     val isArrayEntry = header.startsWith("[[")
-                    val tableKey = normalizedTablePath(header).let { path ->
-                        // Each [[array]] element is its own table, so give it its own bucket.
-                        if (isArrayEntry) "$path#${arrayInstances.merge(path, 1, Int::plus)}" else path
-                    }
-                    sectionKeys = keysByTable.getOrPut(tableKey) { mutableSetOf() }
+                    val path = normalizedTablePath(header)
+                    // Each [[array]] element is its own table, so give it its own bucket.
+                    val instance = if (isArrayEntry) arrayInstances.merge(path, 1, Int::plus)!! else 0
+                    sectionKeys = keysByTable.getOrPut(path to instance) { mutableSetOf() }
                 }
                 continue
             }
@@ -366,11 +368,15 @@ object TomlLanguageService : BaseLanguageService() {
      * `a`, `"a"` and `'a'` all name the key `a`, and `a.b` is the same key path however its
      * segments are quoted. Escapes inside a basic-string segment are resolved; a literal segment
      * has none.
+     *
+     * The segments stay a list. Joining them back into one string would make `"a.b"` — a single
+     * key whose name contains a dot — indistinguishable from the two-segment path `a.b`, which
+     * TOML treats as a different key entirely.
      */
-    private fun normalizedKeyPath(rawKey: String): String = splitKeySegments(rawKey).joinToString(".") { unquoteKey(it) }
+    private fun normalizedKeyPath(rawKey: String): List<String> = splitKeySegments(rawKey).map { unquoteKey(it) }
 
     /** The header's key path, normalized like [normalizedKeyPath]: `[[a.b]]` and `[a.b]` agree. */
-    private fun normalizedTablePath(header: String): String = normalizedKeyPath(header.trim().trim('[', ']'))
+    private fun normalizedTablePath(header: String): List<String> = normalizedKeyPath(header.trim().trim('[', ']'))
 
     /** Splits a dotted key on the dots that separate segments, ignoring any inside quotes. */
     private fun splitKeySegments(rawKey: String): List<String> {

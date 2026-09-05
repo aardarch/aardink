@@ -143,4 +143,30 @@ class KotlinLanguageServiceTest {
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals("fun f() {\n    /* a /* b */ { */\n    val x = 1\n}", formatted)
     }
+
+    @Test
+    fun `format counts every delimiter on a line`() = runBlocking {
+        // `fun f() { if (x) {` opens two blocks; taking only the last character saw one, so the
+        // body was under-indented and the closing braces then outdented too far.
+        val src = "fun f() { if (x) {\nval y = 1\n}\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertEquals("fun f() { if (x) {\n        val y = 1\n    }\n}", formatted)
+    }
+
+    @Test
+    fun `format outdents a line that closes several blocks`() = runBlocking {
+        val src = "fun f() {\nrun {\nval y = 1\n} }"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertEquals("fun f() {\n    run {\n        val y = 1\n} }", formatted)
+    }
+
+    @Test
+    fun `format keeps a closing-then-opening line at one level`() = runBlocking {
+        val src = "fun f() {\nif (x) {\nval y = 1\n} else {\nval z = 2\n}\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertEquals(
+            "fun f() {\n    if (x) {\n        val y = 1\n    } else {\n        val z = 2\n    }\n}",
+            formatted,
+        )
+    }
 }

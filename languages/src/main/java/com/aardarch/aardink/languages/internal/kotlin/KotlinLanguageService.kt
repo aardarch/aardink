@@ -354,19 +354,46 @@ object KotlinLanguageService : BaseLanguageService() {
             }
 
             // Structure comes from the code on the line, so a brace in a comment or a string
-            // literal ("// {", "val s = \"{\"") no longer shifts everything below it.
-            if (state.code.startsWith("}") || state.code.startsWith(")")) {
-                depth = (depth - 1).coerceAtLeast(0)
-            }
-
-            formatted.add(" ".repeat(depth * 4) + trimmed)
-
-            if (state.code.endsWith("{") || state.code.endsWith("(")) {
-                depth++
-            }
+            // literal ("// {", "val s = \"{\"") no longer shifts everything below it. Every
+            // delimiter counts, not just the first and last: `fun f() { if (x) {` opens two
+            // blocks, and a line starting `})` closes two.
+            val (net, leadingCloses) = delimiterBalance(state.code)
+            val lineDepth = (depth - leadingCloses).coerceAtLeast(0)
+            formatted.add(" ".repeat(lineDepth * 4) + trimmed)
+            depth = (lineDepth + net + leadingCloses).coerceAtLeast(0)
         }
 
         return formatted.joinToString("\n")
+    }
+
+    /**
+     * The indentation effect of the delimiters in [code], which is a line with its comments and
+     * string contents already stripped.
+     *
+     * [net] is openers minus closers across the line; [leadingCloses] counts only the closers
+     * before the first opener, which is how far the line itself is outdented. Brackets count
+     * alongside braces and parentheses, so a multi-line list literal indents like a block.
+     */
+    private data class DelimiterBalance(val net: Int, val leadingCloses: Int)
+
+    private fun delimiterBalance(code: String): DelimiterBalance {
+        var net = 0
+        var leadingCloses = 0
+        var seenOpener = false
+        for (c in code) {
+            when (c) {
+                '{', '(', '[' -> {
+                    net++
+                    seenOpener = true
+                }
+
+                '}', ')', ']' -> {
+                    net--
+                    if (!seenOpener) leadingCloses++
+                }
+            }
+        }
+        return DelimiterBalance(net, leadingCloses)
     }
 
     /**
