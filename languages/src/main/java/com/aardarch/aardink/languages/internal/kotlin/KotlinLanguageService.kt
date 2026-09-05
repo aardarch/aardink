@@ -341,9 +341,15 @@ object KotlinLanguageService : BaseLanguageService() {
 
         for ((index, line) in lines.withIndex()) {
             val state = states[index]
-            // Whitespace inside a raw string is data — re-indenting it changes the program.
+            // Whitespace inside a raw string is data — re-indenting it changes the program. The
+            // line's own delimiters still count, though: `fun f() { val s = """` opens a block, and
+            // skipping the balance left everything after the closing quotes at column 0.
+            // `state.code` already excludes the string's contents, so it is safe to read here.
             if (state.touchesRawString) {
                 formatted.add(line)
+                val (rawNet, rawLeadingCloses) = delimiterBalance(state.code)
+                depth = (depth - rawLeadingCloses).coerceAtLeast(0) + rawNet + rawLeadingCloses
+                depth = depth.coerceAtLeast(0)
                 continue
             }
 

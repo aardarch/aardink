@@ -265,4 +265,15 @@ class TomlLanguageServiceTest {
     fun `table paths do not collide across dot boundaries`() {
         assertTrue(diagnose("[\"a.b\"]\nx = 1\n\n[a.b]\nx = 2").isEmpty(), "two different tables")
     }
+
+    @Test
+    fun `an out-of-range unicode escape in a key does not crash diagnostics`() {
+        // A U-escape past the last code point, and a lone surrogate half; both used to reach
+        // appendCodePoint, which throws on either.
+        val bs = '\\'
+        assertTrue(diagnose("[t]\n\"${bs}U00110000\" = 1").isEmpty())
+        assertTrue(diagnose("[t]\n\"${bs}uD800\" = 1").isEmpty())
+        // A valid escape still decodes, so these two spellings are one key.
+        assertEquals(1, diagnose("[t]\na = 1\n\"${bs}u0061\" = 2").size)
+    }
 }

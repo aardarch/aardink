@@ -169,4 +169,15 @@ class KotlinLanguageServiceTest {
             formatted,
         )
     }
+
+    @Test
+    fun `a raw string line still contributes its own delimiters`() = runBlocking {
+        // The line is emitted verbatim, but the brace it opens still counts - otherwise everything
+        // after the closing quotes was formatted at column 0.
+        val q = "\"\"\""
+        val src = "fun f() { val s = $q\ntext\n$q\nval x = 1\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("\n    val x = 1\n"), "code after the raw string stays indented: $formatted")
+        assertTrue(formatted.endsWith("\n}"), "the closing brace returns to column 0: $formatted")
+    }
 }

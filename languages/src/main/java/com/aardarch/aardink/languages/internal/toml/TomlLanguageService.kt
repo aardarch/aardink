@@ -419,6 +419,9 @@ object TomlLanguageService : BaseLanguageService() {
         }
     }
 
+    /** A value Unicode can actually encode: within range, and not half of a surrogate pair. */
+    private fun isUnicodeScalar(code: Int): Boolean = code in 0..0x10FFFF && code !in 0xD800..0xDFFF
+
     /** Resolves the escapes TOML allows in a basic string; an unknown one is left as written. */
     private fun unescapeBasic(body: String): String {
         if ('\\' !in body) return body
@@ -471,7 +474,11 @@ object TomlLanguageService : BaseLanguageService() {
                     val digits = if (esc == 'u') 4 else 8
                     val hex = body.drop(i + 2).take(digits)
                     val code = hex.takeIf { it.length == digits }?.toIntOrNull(16)
-                    if (code == null) {
+                    // `\U` takes eight hex digits, so this parses values far outside Unicode, and
+                    // surrogate halves are not scalars either. `appendCodePoint` throws on both,
+                    // which would crash diagnostics over a malformed key; leave the escape as
+                    // written instead, and it simply compares as the text it is.
+                    if (code == null || !isUnicodeScalar(code)) {
                         out.append(c)
                         i++
                     } else {
