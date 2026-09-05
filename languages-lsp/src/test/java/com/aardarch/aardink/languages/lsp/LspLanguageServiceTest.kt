@@ -72,6 +72,15 @@ private class Harness(val doc: CodeDocument, scope: CoroutineScope) : CoroutineS
         transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"boom"}}""")
     }
 
+    /** Answers the next request the way a server that doesn't implement the method would. */
+    suspend fun respondWithMethodNotFound(expectedMethod: String) {
+        val sent = nextSent()
+        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
+        val id = sent["id"]!!.jsonPrimitive.content
+        val code = LspRequestException.METHOD_NOT_FOUND
+        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"unsupported"}}""")
+    }
+
     /** Pushes `publishDiagnostics` for [uri] and returns once every registered listener has run. */
     suspend fun publish(uri: String, diagnosticsJson: String, version: Int? = null) {
         val done = CompletableDeferred<Unit>()
@@ -549,7 +558,7 @@ class LspLanguageServiceTest {
     // ── Rename ───────────────────────────────────────────────────────────────
 
     @Test
-    fun `prepareRename accepts Range, placeholder and defaultBehavior results`() = withServer("val x = 1") {
+    fun `prepareRename accepts Range and placeholder results`() = withServer("val x = 1") {
         val rangeServer = async { respond("textDocument/prepareRename", range(0, 4, 0, 5)) }
         assertEquals(4..4, service.prepareRename(doc, 4))
         rangeServer.await()
@@ -557,10 +566,37 @@ class LspLanguageServiceTest {
         val placeholderServer = async { respond("textDocument/prepareRename", """{"range":${range(0, 4, 0, 5)},"placeholder":"x"}""") }
         assertEquals(4..4, service.prepareRename(doc, 4))
         placeholderServer.await()
+    }
 
-        val defaultServer = async { respond("textDocument/prepareRename", """{"defaultBehavior":true}""") }
-        assertNull(service.prepareRename(doc, 4))
-        defaultServer.await()
+    @Test
+    fun `defaultBehavior resolves to the identifier at the offset`() = withServer("val value = 1") {
+        // The editor reads null as "cannot rename" and skips the dialog, but defaultBehavior means
+        // rename is available and the client picks the range.
+        val server = async { respond("textDocument/prepareRename", """{"defaultBehavior":true}""") }
+        assertEquals(4..8, service.prepareRename(doc, 6))
+        server.await()
+    }
+
+    @Test
+    fun `a server without prepareRename support still yields a rename range`() = withServer("val value = 1") {
+        val server = async { respondWithMethodNotFound("textDocument/prepareRename") }
+        assertEquals(4..8, service.prepareRename(doc, 6))
+        server.await()
+    }
+
+    @Test
+    fun `a declined or failed prepareRename is null`() = withServer("val value = 1") {
+        val declined = async { respond("textDocument/prepareRename", "null") }
+        assertNull(service.prepareRename(doc, 6), "the server said no")
+        declined.await()
+
+        val failed = async { respondWithError("textDocument/prepareRename") }
+        assertNull(service.prepareRename(doc, 6), "a server error is not a licence to rename")
+        failed.await()
+
+        val unsupportedAwayFromAWord = async { respondWithMethodNotFound("textDocument/prepareRename") }
+        assertNull(service.prepareRename(doc, 10), "no identifier at the offset")
+        unsupportedAwayFromAWord.await()
     }
 
     @Test

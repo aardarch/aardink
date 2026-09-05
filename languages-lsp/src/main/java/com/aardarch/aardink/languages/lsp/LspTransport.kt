@@ -59,7 +59,7 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
 
     override suspend fun sendPayload(jsonPayload: String): Unit = withContext(Dispatchers.IO) {
         val bytes = jsonPayload.toByteArray(StandardCharsets.UTF_8)
-        val header = "Content-Length: ${bytes.size}\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
+        val header = "$CONTENT_LENGTH_HEADER ${bytes.size}\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
         val frame = ByteArrayOutputStream(header.size + bytes.size).apply {
             write(header)
             write(bytes)
@@ -70,40 +70,54 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
         }
     }
 
-    override suspend fun receivePayload(): String? = withContext(Dispatchers.IO) {
+    override suspend fun receivePayload(): String? = withContext(Dispatchers.IO) { readFrame() }
+
+    /**
+     * Reads the next complete frame, or null at end of stream.
+     *
+     * Only a real end-of-stream returns null: the client reads null as "the server is gone" and
+     * shuts down for good, so a header block we could not make sense of must not look like one —
+     * it skips ahead to the next frame instead.
+     */
+    private fun readFrame(): String? {
+        while (true) {
+            val contentLength = readContentLength() ?: return null
+            if (contentLength < 0) continue
+            if (contentLength == 0) return ""
+
+            val buffer = ByteArray(contentLength)
+            var totalRead = 0
+            while (totalRead < contentLength) {
+                val read = inputStream.read(buffer, totalRead, contentLength - totalRead)
+                if (read == -1) return null
+                totalRead += read
+            }
+            return String(buffer, 0, totalRead, StandardCharsets.UTF_8)
+        }
+    }
+
+    /**
+     * Reads one header block. Returns the payload length, -1 when the block carried no usable
+     * `Content-Length`, or null at end of stream.
+     */
+    private fun readContentLength(): Int? {
         var contentLength = -1
         val headerLine = StringBuilder()
-
         while (true) {
             val c = inputStream.read()
-            if (c == -1) return@withContext null
+            if (c == -1) return null
             val ch = c.toChar()
             if (ch == '\n') {
                 val line = headerLine.toString().trim()
-                if (line.isEmpty()) {
-                    // Blank line signifies end of headers
-                    break
-                }
-                if (line.startsWith("Content-Length:", ignoreCase = true)) {
-                    contentLength = line.substring(15).trim().toIntOrNull() ?: -1
+                if (line.isEmpty()) return contentLength // Blank line signifies end of headers
+                if (line.startsWith(CONTENT_LENGTH_HEADER, ignoreCase = true)) {
+                    contentLength = line.substring(CONTENT_LENGTH_HEADER.length).trim().toIntOrNull() ?: -1
                 }
                 headerLine.clear()
             } else if (ch != '\r') {
                 headerLine.append(ch)
             }
         }
-
-        if (contentLength <= 0) return@withContext null
-
-        val buffer = ByteArray(contentLength)
-        var totalRead = 0
-        while (totalRead < contentLength) {
-            val read = inputStream.read(buffer, totalRead, contentLength - totalRead)
-            if (read == -1) break
-            totalRead += read
-        }
-
-        String(buffer, 0, totalRead, StandardCharsets.UTF_8)
     }
 
     override fun close() {
@@ -113,6 +127,10 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
         } catch (_: Exception) {
             // Ignore close failures
         }
+    }
+
+    private companion object {
+        const val CONTENT_LENGTH_HEADER = "Content-Length:"
     }
 }
 

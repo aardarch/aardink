@@ -3,7 +3,6 @@ val jvmVersionInt = jvmVersion.toInt()
 
 plugins {
     alias(libs.plugins.plugin.android.library)
-    alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.kotlin.serialization)
     id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
@@ -36,10 +35,6 @@ android {
         targetCompatibility = JavaVersion.toVersion(jvmVersion)
     }
 
-    buildFeatures {
-        compose = true
-    }
-
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -53,10 +48,6 @@ android {
 
 kotlin {
     jvmToolchain(jvmVersionInt)
-}
-
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_compiler")
 }
 
 spotless {
@@ -82,11 +73,9 @@ dependencies {
     api(project(":editor"))
     // JsonElement is part of LspClient's public API, hence `api` rather than `implementation`.
     api(libs.kotlinx.serialization.json)
-
-    val composeBom = platform(libs.androidx.compose.bom)
-    implementation(composeBom)
-
-    implementation(libs.bundles.compose.core)
+    // CoroutineScope is in LspClient's constructor signature — likewise `api`. This module needs
+    // no Compose of its own: every editor `core` type it bridges to is plain Kotlin.
+    api(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)

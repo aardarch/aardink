@@ -36,6 +36,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 
@@ -49,6 +50,11 @@ import kotlinx.serialization.json.intOrNull
  *
  * Many services can share one [LspClient]; each registers its own diagnostics listener and keeps
  * only the diagnostics published for its [documentUri].
+ *
+ * The `ServerCapabilities` returned by [LspClient.initialize] are not consulted — every request is
+ * sent and an unsupported one degrades to the empty result. The single place the distinction
+ * matters is [prepareRename], which reads the `MethodNotFound` code so a server offering `rename`
+ * without `prepareRename` still gets a rename range.
  *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
@@ -272,13 +278,29 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
     }
 
     /**
-     * Range of the renameable symbol at [offset], or null if the server declines or answers with
-     * `defaultBehavior` (in which case the editor falls back to its own word selection).
+     * Range of the renameable symbol at [offset], or null when the symbol cannot be renamed.
+     *
+     * The editor treats null as "rename is unavailable here" and does not open its dialog, so the
+     * two cases where the protocol says rename *is* available but names no range — an answer of
+     * `{ defaultBehavior: true }`, and a server that supports `textDocument/rename` without
+     * `textDocument/prepareRename` (answered `MethodNotFound`) — resolve to the identifier around
+     * [offset] here rather than being reported as "cannot rename".
      */
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? {
-        val result = request("textDocument/prepareRename", positionParams(document, offset)) as? JsonObject ?: return null
+        val result = when (val outcome = requestOrFailure("textDocument/prepareRename", positionParams(document, offset))) {
+            // No prepareRename support says nothing about rename support — fall back to the word.
+            is LspResult.Unsupported -> return identifierRangeAt(document.text, offset).takeUnless { it.isEmpty() }
+
+            is LspResult.Failed -> return null
+
+            is LspResult.Value -> outcome.element as? JsonObject ?: return null
+        }
         // Either a bare Range, or { range, placeholder }, or { defaultBehavior }.
-        val rangeElement = result["range"] ?: result.takeIf { "start" in it } ?: return null
+        val rangeElement = result["range"] ?: result.takeIf { "start" in it }
+        if (rangeElement == null) {
+            val defaultBehavior = (result["defaultBehavior"] as? JsonPrimitive)?.booleanOrNull ?: false
+            return if (defaultBehavior) identifierRangeAt(document.text, offset).takeUnless { it.isEmpty() } else null
+        }
         val range = decodeOrNull(LspRange.serializer(), rangeElement) ?: return null
         return offsetRangeOf(document, range)
     }
@@ -293,12 +315,30 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
 
     // ── Transport helpers ────────────────────────────────────────────────────
 
-    private suspend fun request(method: String, params: JsonElement): JsonElement? = try {
-        client.sendRequest(method, params)
-    } catch (_: LspRequestException) {
-        null
+    private suspend fun request(method: String, params: JsonElement): JsonElement? =
+        (requestOrFailure(method, params) as? LspResult.Value)?.element
+
+    /**
+     * [request] keeping the reason a call produced nothing, for the one caller that must tell
+     * "the server does not implement this method" apart from "the server had no answer".
+     */
+    private suspend fun requestOrFailure(method: String, params: JsonElement): LspResult = try {
+        LspResult.Value(client.sendRequest(method, params))
+    } catch (e: LspRequestException) {
+        if (e.code == LspRequestException.METHOD_NOT_FOUND) LspResult.Unsupported else LspResult.Failed
     } catch (_: SerializationException) {
-        null
+        LspResult.Failed
+    }
+
+    private sealed interface LspResult {
+        /** The server answered; [element] is null when that answer was JSON `null`. */
+        data class Value(val element: JsonElement?) : LspResult
+
+        /** The server does not implement the method. */
+        data object Unsupported : LspResult
+
+        /** The server errored, or the connection is gone. */
+        data object Failed : LspResult
     }
 
     private fun <T> encode(serializer: KSerializer<T>, value: T): JsonElement = LspJson.encodeToJsonElement(serializer, value)
@@ -471,6 +511,20 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
 
             // Color
             else -> CompletionKind.Element
+        }
+
+        /**
+         * Identifier around [offset], used as the rename target when the server says rename is
+         * available but leaves the range to the client. Empty when [offset] touches no identifier.
+         */
+        fun identifierRangeAt(text: String, offset: Int): IntRange {
+            fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_'
+            val cursor = offset.coerceIn(0, text.length)
+            var start = cursor
+            while (start > 0 && isWordChar(text[start - 1])) start--
+            var end = cursor
+            while (end < text.length && isWordChar(text[end])) end++
+            return start until end
         }
 
         /** LSP `CodeActionKind` string → editor [CodeActionKind]. */

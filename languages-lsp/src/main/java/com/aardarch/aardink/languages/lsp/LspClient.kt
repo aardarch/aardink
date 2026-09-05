@@ -70,6 +70,14 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     private val diagnosticsListeners = CopyOnWriteArrayList<DiagnosticsListener>()
     private var listeningJob: Job? = null
 
+    /**
+     * Set once the connection is gone — the server closed the stream, or [stop] was called. A
+     * closed client never starts another receive loop, because nothing could complete the requests
+     * it would accept.
+     */
+    @Volatile
+    private var closed = false
+
     /** Registers [listener]; it stays registered until [removeDiagnosticsListener] is called. */
     fun addDiagnosticsListener(listener: DiagnosticsListener) {
         diagnosticsListeners.addIfAbsent(listener)
@@ -79,10 +87,15 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         diagnosticsListeners.remove(listener)
     }
 
-    /** Starts the receive loop. Idempotent; also called implicitly by the send functions. */
+    /**
+     * Starts the receive loop. Idempotent; also called implicitly by the send functions.
+     *
+     * Does nothing once the client is closed: without a loop to complete them, any request accepted
+     * afterwards would wait forever.
+     */
     @Synchronized
     fun start() {
-        if (listeningJob != null) return
+        if (closed || listeningJob != null) return
         listeningJob = scope.launch {
             try {
                 while (true) {
@@ -90,9 +103,22 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                     handleIncomingPayload(payload)
                 }
             } finally {
-                failPendingRequests("Language server connection closed")
+                onReceiveLoopEnded()
             }
         }
+    }
+
+    /**
+     * The receive loop is over — because the server closed the stream, or because [stop] cancelled
+     * it. Either way the connection is finished: mark the client closed so no later send can
+     * register a request nothing will answer, release the transport, and fail what is in flight.
+     */
+    @Synchronized
+    private fun onReceiveLoopEnded() {
+        closed = true
+        listeningJob = null
+        failPendingRequests("Language server connection closed")
+        transport.close()
     }
 
     /**
@@ -123,11 +149,15 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      * Sends an LSP request and suspends until the matching response arrives.
      *
      * @return The `result` member of the response, or null when the server returned `null`.
-     * @throws LspRequestException when the server answers with an `error`, or the connection
-     *   closes before a response is received.
+     * @throws LspRequestException with [LspRequestException.CONNECTION_CLOSED] when the connection
+     *   is already closed or closes before a response is received, or with the server's code when
+     *   it answers with an `error`.
      */
     suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? {
         start()
+        if (closed) {
+            throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed")
+        }
         val id = nextRequestId.getAndIncrement()
         val deferred = CompletableDeferred<LspMessage.Response>()
         pendingRequests[id] = deferred
@@ -144,16 +174,26 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
 
     /**
      * Sends a one-way notification without expecting a response.
+     *
+     * Notifications are fire-and-forget, so one sent after the connection closed is dropped rather
+     * than reported — unlike [sendRequest], there is no caller waiting on an answer.
      */
     suspend fun sendNotification(method: String, params: JsonElement? = null) {
         start()
+        if (closed) return
         val notification = LspMessage.Notification(method = method, params = params)
         transport.sendPayload(LspJson.encodeToString(LspMessage.Notification.serializer(), notification))
     }
 
-    /** Stops the receive loop, fails any pending requests and closes the transport. */
+    /**
+     * Stops the receive loop, fails any pending requests and closes the transport. The client
+     * cannot be restarted afterwards; construct a new one for a new connection.
+     */
     @Synchronized
     fun stop() {
+        // Set before cancelling: the loop's own teardown runs later, on the transport's thread, and
+        // a send in between must not see an idle-but-open client and relaunch the loop.
+        closed = true
         listeningJob?.cancel()
         listeningJob = null
         failPendingRequests("Language server client stopped")

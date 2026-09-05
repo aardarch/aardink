@@ -256,4 +256,37 @@ class LspClientTest {
         assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
         assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
     }
+
+    @Test
+    fun `a request after the server closed the stream fails instead of hanging`() = runBlocking {
+        client.start()
+        // The server exits: the receive loop ends on its own, without anyone calling stop().
+        transport.receiveChannel.close()
+
+        val outcome = CompletableDeferred<Result<JsonElement?>>()
+        launch { outcome.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+
+        val failure = awaitSoon(outcome).exceptionOrNull()
+        assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+    }
+
+    @Test
+    fun `a notification after the connection closed is dropped rather than thrown`() = runBlocking {
+        client.stop()
+        // Fire-and-forget: there is no caller to report the closed connection to.
+        client.sendNotification("textDocument/didChange")
+    }
+
+    @Test
+    fun `stop is final - a later request does not restart the receive loop`() = runBlocking {
+        client.stop()
+
+        val outcome = CompletableDeferred<Result<JsonElement?>>()
+        launch { outcome.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+
+        val failure = awaitSoon(outcome).exceptionOrNull()
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+        assertTrue(transport.sendChannel.isClosedForSend, "nothing may be written to a stopped transport")
+    }
 }

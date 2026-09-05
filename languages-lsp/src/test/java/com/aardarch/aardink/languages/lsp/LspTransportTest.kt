@@ -59,6 +59,25 @@ class LspTransportTest {
         assertEquals(payloads.toSet(), received.toSet())
     }
 
+    @Test
+    fun `a header block without a usable Content-Length is skipped, not read as end of stream`() = runBlocking {
+        // Null means "the server is gone" and shuts the client down for good, so only a real EOF
+        // may produce it.
+        val stream = "X-Note: hello\r\n\r\nContent-Length: 2\r\n\r\n{}"
+        assertEquals(listOf("{}"), framesOf(stream.toByteArray()))
+    }
+
+    @Test
+    fun `a zero-length frame is an empty payload, not end of stream`() = runBlocking {
+        val stream = "Content-Length: 0\r\n\r\nContent-Length: 2\r\n\r\n{}"
+        assertEquals(listOf("", "{}"), framesOf(stream.toByteArray()))
+    }
+
+    @Test
+    fun `a truncated body ends the stream`() = runBlocking {
+        assertEquals(emptyList<String>(), framesOf("Content-Length: 99\r\n\r\n{}".toByteArray()))
+    }
+
     /** Reads [bytes] back as a list of `Content-Length`-framed payloads. */
     private suspend fun framesOf(bytes: ByteArray): List<String> {
         val reader = StreamLspTransport(ByteArrayInputStream(bytes), ByteArrayOutputStream())
