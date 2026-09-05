@@ -20,9 +20,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.OutputStream
 
 /**
@@ -76,6 +79,26 @@ class LspTransportTest {
     @Test
     fun `a truncated body ends the stream`() = runBlocking {
         assertEquals(emptyList<String>(), framesOf("Content-Length: 99\r\n\r\n{}".toByteArray()))
+    }
+
+    @Test
+    fun `an absurd Content-Length is refused rather than allocated`() = runBlocking {
+        // The header is believed before a byte of body is read, so obeying this one would try for
+        // ~2 GiB on an Android heap. The read fails instead, and LspClient treats that as the
+        // connection ending.
+        val stream = "Content-Length: 2147483647\r\n\r\n"
+        val failure = assertThrows(IOException::class.java) {
+            runBlocking { framesOf(stream.toByteArray()) }
+        }
+        assertTrue(failure.message!!.contains("2147483647"), failure.message)
+    }
+
+    @Test
+    fun `a frame at the size limit is still read`() = runBlocking {
+        // The bound rejects only what is over it; ordinary large payloads must still arrive.
+        val payload = "{\"x\":\"${"y".repeat(200_000)}\"}"
+        val framed = "Content-Length: ${payload.toByteArray().size}\r\n\r\n$payload"
+        assertEquals(listOf(payload), framesOf(framed.toByteArray()))
     }
 
     /** Reads [bytes] back as a list of `Content-Length`-framed payloads. */

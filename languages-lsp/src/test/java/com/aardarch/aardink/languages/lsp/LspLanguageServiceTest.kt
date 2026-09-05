@@ -671,7 +671,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `rename escapes the new name and collects edits for this document only`() = withServer("val x = 1\nx.foo()") {
+    fun `rename escapes the new name and collects edits from both workspace edit forms`() = withServer("val x = 1\nx.foo()") {
         val server = async {
             respond(
                 "textDocument/rename",
@@ -680,7 +680,7 @@ class LspLanguageServiceTest {
                     4,
                     0,
                     5,
-                )},"newText":"y"}],"$OTHER_URI":[{"range":${range(0, 0, 0, 1)},"newText":"y"}]},
+                )},"newText":"y"}]},
                    "documentChanges":[{"textDocument":{"uri":"$URI","version":2},"edits":[{"range":${range(
                     1,
                     0,
@@ -695,6 +695,125 @@ class LspLanguageServiceTest {
 
         assertEquals("new\"Name", sent.params["newName"]!!.jsonPrimitive.content)
         assertEquals(listOf(TextEdit(4..4, "y"), TextEdit(10..10, "y")), edits)
+    }
+
+    @Test
+    fun `rename refuses a workspace edit that reaches another file`() = withServer("val x = 1\nx.foo()") {
+        val server = async {
+            respond(
+                "textDocument/rename",
+                """{"changes":{"$URI":[{"range":${range(
+                    0,
+                    4,
+                    0,
+                    5,
+                )},"newText":"y"}],"$OTHER_URI":[{"range":${range(0, 0, 0, 1)},"newText":"y"}]}}""",
+            )
+        }
+
+        val edits = service.rename(doc, 4, "y")
+        server.await()
+
+        // Renaming the declaration here and leaving the references in Other.kt alone would break
+        // the project; the editor cannot edit that file, so the whole rename is declined.
+        assertTrue(edits.isEmpty(), "a cross-file rename must not half-apply: was $edits")
+    }
+
+    @Test
+    fun `rename refuses a workspace edit carrying a file operation`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/rename",
+                """{"documentChanges":[
+                  {"textDocument":{"uri":"$URI","version":2},"edits":[{"range":${range(0, 4, 0, 5)},"newText":"y"}]},
+                  {"kind":"rename","oldUri":"$URI","newUri":"$OTHER_URI"}
+                ]}""",
+            )
+        }
+
+        val edits = service.rename(doc, 4, "y")
+        server.await()
+
+        assertTrue(edits.isEmpty(), "a rename that also renames the file is not ours to apply: was $edits")
+    }
+
+    @Test
+    fun `codeActions refuse an action whose edit reaches another file`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/codeAction",
+                """[
+                  {"title":"Move to Other.kt","kind":"refactor",
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":""}],
+                                      "$OTHER_URI":[{"range":${range(0, 0, 0, 0)},"newText":"val x = 1"}]}}},
+                  {"title":"Local only","kind":"quickfix",
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":"import foo\n"}]}}}
+                ]""",
+            )
+        }
+
+        val actions = service.codeActions(doc, 1..1)
+        server.await()
+
+        assertEquals(listOf("Local only"), actions.map { it.title })
+    }
+
+    @Test
+    fun `codeActions omit an action the server marked disabled`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/codeAction",
+                """[
+                  {"title":"Cannot apply here","kind":"quickfix","disabled":{"reason":"not in scope"},
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":"nope"}]}}},
+                  {"title":"Enabled","kind":"quickfix",
+                   "edit":{"changes":{"$URI":[{"range":${range(0, 0, 0, 0)},"newText":"import foo\n"}]}}}
+                ]""",
+            )
+        }
+
+        val actions = service.codeActions(doc, 1..1)
+        server.await()
+
+        assertEquals(listOf("Enabled"), actions.map { it.title })
+    }
+
+    @Test
+    fun `signature help keeps the server's parameter range for a repeated type`() = withServer("foo(1, 2)") {
+        val server = async {
+            respond(
+                "textDocument/signatureHelp",
+                """{"signatures":[{"label":"foo(Int, Int)",
+                   "parameters":[{"label":[4,7]},{"label":[9,12]}]}],
+                   "activeSignature":0,"activeParameter":1}""",
+            )
+        }
+
+        val help = service.signatureHelp(doc, 7)
+        server.await()
+
+        val params = help!!.signatures[0].parameters
+        assertEquals(listOf("Int", "Int"), params.map { it.label })
+        // Both parameters read "Int"; only the range says which occurrence is the second one.
+        assertEquals(4..6, params[0].labelRange)
+        assertEquals(9..11, params[1].labelRange)
+    }
+
+    @Test
+    fun `a string parameter label has no range`() = withServer("foo(1)") {
+        val server = async {
+            respond(
+                "textDocument/signatureHelp",
+                """{"signatures":[{"label":"foo(count: Int)","parameters":[{"label":"count: Int"}]}]}""",
+            )
+        }
+
+        val help = service.signatureHelp(doc, 4)
+        server.await()
+
+        val param = help!!.signatures[0].parameters[0]
+        assertEquals("count: Int", param.label)
+        assertNull(param.labelRange, "a string label leaves the popup to match on text")
     }
 
     // ── Local behaviour ──────────────────────────────────────────────────────

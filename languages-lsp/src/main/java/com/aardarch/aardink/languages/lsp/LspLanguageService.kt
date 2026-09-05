@@ -233,11 +233,12 @@ class LspLanguageService(
     /**
      * Code actions whose workspace edit touches this document, and whose whole effect is that edit.
      *
-     * Three shapes are omitted, all for the same reason — the editor would perform only part of
-     * what the action promises. Bare `Command`s and actions that only edit other files have nothing
-     * this adapter can apply. An action carrying *both* an edit and a `command` has the command run
-     * after the edit, and `core` has no way to represent that half; offering it as a finished quick
-     * fix would apply the edit and silently drop the rest.
+     * Four shapes are omitted, all for the same reason — the editor would perform only part of what
+     * the action promises. Bare `Command`s have nothing this adapter can apply. An action carrying
+     * *both* an edit and a `command` has the command run after the edit, and `core` has no way to
+     * represent that half. An action whose edit reaches another file, or creates, renames or
+     * deletes one, cannot be applied whole through a single-document API. And an action the server
+     * marked `disabled` is one it has told us not to run at all.
      */
     override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> {
         val context = LspCodeActionContext(
@@ -249,6 +250,8 @@ class LspLanguageService(
         val actions = decodeOrNull(ListSerializer(LspCodeAction.serializer()), result) ?: return emptyList()
         return actions.mapNotNull { action ->
             if (action.command != null) return@mapNotNull null
+            if (action.disabled != null) return@mapNotNull null
+            if (reachesBeyondThisDocument(action.edit)) return@mapNotNull null
             val edits = editsForThisDocument(action.edit)
             if (edits.isEmpty()) return@mapNotNull null
             CodeAction(
@@ -290,9 +293,14 @@ class LspLanguageService(
                     label = sig.label,
                     documentation = markupText(sig.documentation),
                     parameters = sig.parameters.orEmpty().map { param ->
+                        val labelRange = parameterLabelRange(sig.label, param.label)
                         ParameterInformation(
-                            label = parameterLabel(sig.label, param.label),
+                            // The server's [start, end] form says which occurrence it means, which
+                            // matters for a signature that repeats a parameter type.
+                            label = labelRange?.let { sig.label.substring(it.first, it.last + 1) }
+                                ?: (param.label as? JsonPrimitive)?.contentOrNull.orEmpty(),
                             documentation = markupText(param.documentation),
+                            labelRange = labelRange,
                         )
                     },
                 )
@@ -330,11 +338,19 @@ class LspLanguageService(
         return offsetRangeOf(document, range)
     }
 
-    /** Text edits for this document from the server's `WorkspaceEdit`; edits to other files are dropped. */
+    /**
+     * Text edits renaming the symbol at [offset], when the whole rename fits in this document.
+     *
+     * A rename that also touches another file, or creates, renames or deletes one, returns empty:
+     * the editor can only edit the open document, and applying the local half of a cross-file
+     * rename leaves every reference elsewhere pointing at a name that no longer exists. Refusing
+     * is the honest answer until the editor gains a workspace-level edit API.
+     */
     override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> {
         val params = LspRenameParams(textDocument, positionOf(document, offset), newName)
         val result = request("textDocument/rename", encode(LspRenameParams.serializer(), params)) ?: return emptyList()
         val edit = decodeOrNull(LspWorkspaceEdit.serializer(), result) ?: return emptyList()
+        if (reachesBeyondThisDocument(edit)) return emptyList()
         return toTextEdits(document, editsForThisDocument(edit))
     }
 
@@ -471,6 +487,28 @@ class LspLanguageService(
         return result
     }
 
+    /**
+     * Whether [edit] does anything this adapter cannot carry out: touch another file, or create,
+     * rename or delete one.
+     *
+     * The editor applies text edits to one open document, so there is no honest way to perform
+     * half of a workspace edit. A rename that updates the declaration here and leaves every
+     * reference elsewhere untouched does not leave the project better off than not renaming at
+     * all — it leaves it broken — so callers reject the whole result instead of applying a part.
+     */
+    private fun reachesBeyondThisDocument(edit: LspWorkspaceEdit?): Boolean {
+        if (edit == null) return false
+        if (edit.changes?.keys?.any { it != documentUri } == true) return true
+        val changes = edit.documentChanges as? JsonArray ?: return false
+        return changes.any { entry ->
+            val obj = entry as? JsonObject ?: return@any true
+            val textDocument = obj["textDocument"] as? JsonObject
+                // No `textDocument` member means a CreateFile / RenameFile / DeleteFile operation.
+                ?: return@any true
+            (textDocument["uri"] as? JsonPrimitive)?.contentOrNull != documentUri
+        }
+    }
+
     /** `string | MarkedString | MarkupContent | (string | MarkedString)[]` → plain text, or null. */
     private fun markupText(element: JsonElement?): String? = when (element) {
         null -> null
@@ -479,17 +517,20 @@ class LspLanguageService(
         is JsonArray -> element.mapNotNull { markupText(it) }.filter { it.isNotBlank() }.joinToString("\n\n").takeIf { it.isNotEmpty() }
     }
 
-    /** `string | [start, end]` parameter label → the label text. */
-    private fun parameterLabel(signatureLabel: String, label: JsonElement): String {
-        if (label is JsonArray && label.size == 2) {
-            val start = (label[0] as? JsonPrimitive)?.intOrNull
-            val end = (label[1] as? JsonPrimitive)?.intOrNull
-            if (start != null && end != null) {
-                val s = start.coerceIn(0, signatureLabel.length)
-                return signatureLabel.substring(s, end.coerceIn(s, signatureLabel.length))
-            }
-        }
-        return (label as? JsonPrimitive)?.contentOrNull ?: ""
+    /**
+     * The `[start, end]` form of an LSP parameter label as an inclusive offset range into
+     * [signatureLabel], or null when the server gave the parameter as a bare string instead.
+     *
+     * A null answer leaves the popup matching on text, which is all a string label supports.
+     */
+    private fun parameterLabelRange(signatureLabel: String, label: JsonElement): IntRange? {
+        if (label !is JsonArray || label.size != 2) return null
+        val start = (label[0] as? JsonPrimitive)?.intOrNull ?: return null
+        val end = (label[1] as? JsonPrimitive)?.intOrNull ?: return null
+        val s = start.coerceIn(0, signatureLabel.length)
+        val e = end.coerceIn(s, signatureLabel.length)
+        // LSP's end is exclusive; IntRange is inclusive. An empty span names no parameter text.
+        return if (e > s) s..(e - 1) else null
     }
 
     /**

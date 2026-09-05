@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages.lsp
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.IOException
 
 class LspClientTest {
 
@@ -269,6 +271,31 @@ class LspClientTest {
         val failure = awaitSoon(outcome).exceptionOrNull()
         assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
         assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+    }
+
+    @Test
+    fun `a transport failure closes the client instead of escaping the coroutine`() = runBlocking {
+        // A broken pipe is how a language server ordinarily goes away. Letting the IOException out
+        // of the receive loop's root coroutine reaches the scope's uncaught handler, which on
+        // Android takes the host process down.
+        val uncaught = CompletableDeferred<Throwable>()
+        val scope = CoroutineScope(
+            Dispatchers.Default + CoroutineExceptionHandler { _, e -> uncaught.complete(e) },
+        )
+        val failing = object : LspTransport {
+            override suspend fun sendPayload(jsonPayload: String) = Unit
+            override suspend fun receivePayload(): String = throw IOException("broken pipe")
+            override fun close() = Unit
+        }
+        val failingClient = LspClient(failing, scope)
+
+        val outcome = CompletableDeferred<Result<JsonElement?>>()
+        launch { outcome.complete(runCatching { failingClient.sendRequest("textDocument/hover") }) }
+
+        val failure = awaitSoon(outcome).exceptionOrNull()
+        assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+        assertFalse(uncaught.isCompleted, "the IOException must not reach the scope's handler")
     }
 
     @Test

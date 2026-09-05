@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
@@ -83,6 +84,11 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
         while (true) {
             val contentLength = readContentLength() ?: return null
             if (contentLength < 0) continue
+            if (contentLength > MAX_FRAME_BYTES) {
+                // Allocating what this header asks for would take the host down before a single
+                // byte of body is read, so treat it as a broken connection rather than obeying it.
+                throw IOException("Language server declared a $contentLength byte frame, over the $MAX_FRAME_BYTES limit")
+            }
             if (contentLength == 0) return ""
 
             val buffer = ByteArray(contentLength)
@@ -131,6 +137,16 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
 
     private companion object {
         const val CONTENT_LENGTH_HEADER = "Content-Length:"
+
+        /**
+         * Largest payload this transport will allocate for, in bytes.
+         *
+         * `Content-Length` arrives from the far end and is believed before any body is read, so an
+         * unbounded one is an allocation a malformed or hostile server chooses for us. 32 MiB is
+         * far above any real LSP message — the largest are whole-document syncs and completion
+         * lists — and far below what would trouble an Android heap.
+         */
+        const val MAX_FRAME_BYTES = 32 * 1024 * 1024
     }
 }
 

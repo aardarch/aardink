@@ -31,6 +31,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -102,6 +103,12 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                     val payload = transport.receivePayload() ?: break
                     handleIncomingPayload(payload)
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: IOException) {
+                // A broken pipe or a killed server process is how a connection ordinarily ends.
+                // Letting it out of this root coroutine would reach the scope's uncaught handler
+                // and take the host process down over a language server going away.
             } finally {
                 onReceiveLoopEnded()
             }

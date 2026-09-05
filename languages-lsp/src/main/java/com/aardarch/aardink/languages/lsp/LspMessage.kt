@@ -211,6 +211,10 @@ data class LspWorkspaceEdit(val changes: Map<String, List<LspTextEdit>>? = null,
 /**
  * LSP `CodeAction`. Also decodes a bare `Command` (`title` + `command` + `arguments`), in which
  * case [edit] is null and the entry carries no applicable text edits.
+ *
+ * @param disabled Present when the server offers the action only to explain why it cannot be run
+ *   (`{ reason }`). Unknown members decode to nothing, so without this field a disabled action
+ *   carrying an edit would look ordinary and be applied.
  */
 @Serializable
 data class LspCodeAction(
@@ -219,6 +223,7 @@ data class LspCodeAction(
     val isPreferred: Boolean? = null,
     val edit: LspWorkspaceEdit? = null,
     val command: JsonElement? = null,
+    val disabled: JsonElement? = null,
     val diagnostics: List<LspDiagnostic>? = null,
 )
 
