@@ -299,6 +299,39 @@ class LspClientTest {
     }
 
     @Test
+    fun `a failed send closes the connection and frees other pending requests`() = runBlocking {
+        // The write half breaks while the read half is still blocked on a server that will never
+        // answer. Reporting a raw IOException to this caller and leaving the rest waiting on a
+        // dead connection is the failure mode; every pending request must be released.
+        val writesFail = object : LspTransport {
+            /** Completes once the first request is on the wire; every later write fails. */
+            val firstSent = CompletableDeferred<Unit>()
+
+            override suspend fun sendPayload(jsonPayload: String) {
+                if (firstSent.complete(Unit)) return
+                throw IOException("broken pipe")
+            }
+
+            // Never returns: the receive loop is stuck, as it would be on a hung server.
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() = Unit
+        }
+        val client = LspClient(writesFail, CoroutineScope(Dispatchers.Default))
+
+        val stranded = CompletableDeferred<Result<JsonElement?>>()
+        launch { stranded.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+        awaitSoon(writesFail.firstSent)
+
+        val failed = runCatching { client.sendRequest("textDocument/definition") }.exceptionOrNull()
+        assertTrue(failed is LspRequestException, "expected LspRequestException, got $failed")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failed as LspRequestException).code)
+
+        val strandedFailure = awaitSoon(stranded).exceptionOrNull()
+        assertTrue(strandedFailure is LspRequestException, "the earlier request must not hang: got $strandedFailure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (strandedFailure as LspRequestException).code)
+    }
+
+    @Test
     fun `a notification after the connection closed is dropped rather than thrown`() = runBlocking {
         client.stop()
         // Fire-and-forget: there is no caller to report the closed connection to.

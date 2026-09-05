@@ -170,13 +170,37 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         pendingRequests[id] = deferred
         try {
             val request = LspMessage.Request(id = id, method = method, params = params)
-            transport.sendPayload(LspJson.encodeToString(LspMessage.Request.serializer(), request))
+            try {
+                transport.sendPayload(LspJson.encodeToString(LspMessage.Request.serializer(), request))
+            } catch (e: IOException) {
+                // The write half is gone. The receive loop may still be blocked on a read that will
+                // never return, so every other pending request would wait forever; tear the
+                // connection down rather than reporting a raw IOException to this one caller.
+                onConnectionLost()
+                throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed: ${e.message}")
+            }
             val response = deferred.await()
             response.error?.let { throw LspRequestException(it.code, it.message) }
             return response.result?.takeUnless { it is JsonNull }
         } finally {
             pendingRequests.remove(id)
         }
+    }
+
+    /**
+     * Marks the connection finished after a send failed, cancelling the receive loop.
+     *
+     * [onReceiveLoopEnded] covers the read side; this is the write side, where nothing has ended
+     * on its own yet. Cancelling the loop makes it run its own teardown, which fails whatever is
+     * still pending and closes the transport.
+     */
+    @Synchronized
+    private fun onConnectionLost() {
+        closed = true
+        listeningJob?.cancel()
+        listeningJob = null
+        failPendingRequests("Language server connection closed")
+        transport.close()
     }
 
     /**
@@ -189,7 +213,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         start()
         if (closed) return
         val notification = LspMessage.Notification(method = method, params = params)
-        transport.sendPayload(LspJson.encodeToString(LspMessage.Notification.serializer(), notification))
+        try {
+            transport.sendPayload(LspJson.encodeToString(LspMessage.Notification.serializer(), notification))
+        } catch (_: IOException) {
+            // Nobody is waiting on a notification, but a failed write still means the connection is
+            // gone — close it so pending requests are not left waiting on a dead server.
+            onConnectionLost()
+        }
     }
 
     /**

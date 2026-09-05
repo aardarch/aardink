@@ -94,6 +94,21 @@ class LspTransportTest {
     }
 
     @Test
+    fun `an endless header line is refused before it exhausts memory`() = runBlocking {
+        // The body limit is only consulted once a header block has been read, so a peer that never
+        // sends a newline declares nothing and would grow the header buffer without bound.
+        val stream = "Content-Length: 2".toByteArray() + ByteArray(64 * 1024) { 'x'.code.toByte() }
+        val failure = assertThrows(IOException::class.java) { runBlocking { framesOf(stream) } }
+        assertTrue(failure.message!!.contains("header"), failure.message)
+    }
+
+    @Test
+    fun `an ordinary header block is well within the limit`() = runBlocking {
+        val stream = "Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 2\r\n\r\n{}"
+        assertEquals(listOf("{}"), framesOf(stream.toByteArray()))
+    }
+
+    @Test
     fun `a frame at the size limit is still read`() = runBlocking {
         // The bound rejects only what is over it; ordinary large payloads must still arrive.
         val payload = "{\"x\":\"${"y".repeat(200_000)}\"}"

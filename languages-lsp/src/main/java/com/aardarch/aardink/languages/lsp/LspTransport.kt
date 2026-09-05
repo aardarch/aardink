@@ -108,10 +108,17 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
      */
     private fun readContentLength(): Int? {
         var contentLength = -1
+        var headerBlockBytes = 0
         val headerLine = StringBuilder()
         while (true) {
             val c = inputStream.read()
             if (c == -1) return null
+            // The body limit is checked only once a header block has been read, so the block needs
+            // a bound of its own: a peer that never sends a newline would otherwise grow this
+            // builder until the process runs out of memory, having declared nothing at all.
+            if (++headerBlockBytes > MAX_HEADER_BYTES) {
+                throw IOException("Language server sent over $MAX_HEADER_BYTES bytes of header without ending the block")
+            }
             val ch = c.toChar()
             if (ch == '\n') {
                 val line = headerLine.toString().trim()
@@ -147,6 +154,15 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
          * lists — and far below what would trouble an Android heap.
          */
         const val MAX_FRAME_BYTES = 32 * 1024 * 1024
+
+        /**
+         * Largest header block, in bytes, before the blank line that ends it.
+         *
+         * LSP defines two headers and real ones run to tens of bytes; 8 KiB leaves room for
+         * anything reasonable while keeping a peer that never sends a newline from growing the
+         * buffer without limit.
+         */
+        const val MAX_HEADER_BYTES = 8 * 1024
     }
 }
 
