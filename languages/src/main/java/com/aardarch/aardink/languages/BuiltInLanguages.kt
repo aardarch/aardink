@@ -25,6 +25,7 @@ import com.aardarch.aardink.languages.internal.folding.TomlFoldingProvider
 import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
+import com.aardarch.aardink.languages.internal.kotlin.KotlinLanguageService
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import com.aardarch.aardink.languages.internal.markdown.MarkdownTokenizer
 import com.aardarch.aardink.languages.internal.toml.TomlLanguageService
@@ -48,6 +49,7 @@ object BuiltInLanguages {
         fileExtensions = listOf("kt", "kts"),
         tokenizer = KotlinTokenizer,
         foldingProvider = BraceFoldingProvider(supportsTripleQuoted = true),
+        languageService = KotlinLanguageService,
     )
 
     val TypeScript: LanguageDefinition = LanguageDefinition(

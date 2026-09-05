@@ -46,6 +46,13 @@ class JsonLanguageServiceTest {
     }
 
     @Test
+    fun `duplicate key flagged`() {
+        val diags = diagnose("""{"a": 1, "a": 2}""")
+        assertEquals(1, diags.size)
+        assertTrue(diags[0].message.contains("Duplicate key", ignoreCase = true))
+    }
+
+    @Test
     fun `trailing comma flagged`() {
         val diags = diagnose("""{"a": 1, "b": 2,}""")
         assertEquals(1, diags.size)
@@ -75,5 +82,28 @@ class JsonLanguageServiceTest {
     fun `empty document yields no diagnostics`() {
         assertTrue(diagnose("").isEmpty())
         assertTrue(diagnose("   \n  ").isEmpty())
+    }
+
+    @Test
+    fun `auto close quotes and braces`() {
+        val doc = CodeDocument("")
+        assertEquals("}", JsonLanguageService.autoClose(doc, 0, '{'))
+        assertEquals("]", JsonLanguageService.autoClose(doc, 0, '['))
+        assertEquals("\"", JsonLanguageService.autoClose(doc, 0, '"'))
+    }
+
+    @Test
+    fun `completions after colon`() = runBlocking {
+        val doc = CodeDocument("{\"key\":")
+        val items = JsonLanguageService.completions(doc, 7)
+        assertTrue(items.any { it.label == "true" })
+        assertTrue(items.any { it.label == "false" })
+    }
+
+    @Test
+    fun `format indents JSON objects`() = runBlocking {
+        val doc = CodeDocument("{\"a\":1,\"b\":[true]}")
+        val formatted = JsonLanguageService.format(doc)
+        assertEquals("{\n    \"a\": 1,\n    \"b\": [\n        true\n    ]\n}", formatted)
     }
 }

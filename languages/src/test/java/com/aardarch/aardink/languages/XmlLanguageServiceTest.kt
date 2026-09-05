@@ -34,6 +34,7 @@ class XmlLanguageServiceTest {
         assertTrue(xml("<a attr=\"v\"><b/></a>").isEmpty())
         assertTrue(xml("<!-- comment --><a/>").isEmpty())
         assertTrue(xml("<?xml version=\"1.0\"?><a/>").isEmpty())
+        assertTrue(xml("<a>Text &amp; more</a>").isEmpty())
     }
 
     @Test
@@ -53,6 +54,52 @@ class XmlLanguageServiceTest {
         val diags = xml("<a><!-- never ends</a>")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("comment", ignoreCase = true))
+    }
+
+    @Test
+    fun `duplicate attribute flagged`() {
+        val diags = xml("<item android:name=\"a\" android:name=\"b\"/>")
+        assertEquals(1, diags.size)
+        assertTrue(diags[0].message.contains("Duplicate attribute", ignoreCase = true))
+    }
+
+    @Test
+    fun `unescaped ampersand flagged`() {
+        val diags = xml("<a>Rock & Roll</a>")
+        assertEquals(1, diags.size)
+        assertTrue(diags[0].message.contains("Unescaped '&'", ignoreCase = true))
+    }
+
+    @Test
+    fun `auto close closing tag on angle bracket`() {
+        val doc = CodeDocument("<LinearLayout>")
+        val auto = XmlLanguageService.autoClose(doc, 13, '>')
+        assertEquals("</LinearLayout>", auto)
+    }
+
+    @Test
+    fun `auto close tag name on slash`() {
+        val doc = CodeDocument("<a><b></")
+        val auto = XmlLanguageService.autoClose(doc, 7, '/')
+        assertEquals("b>", auto)
+    }
+
+    @Test
+    fun `completions for elements and attributes`() {
+        val doc1 = CodeDocument("<")
+        val elems = runBlocking { XmlLanguageService.completions(doc1, 1) }
+        assertTrue(elems.any { it.label == "activity" })
+
+        val doc2 = CodeDocument("<activity ")
+        val attrs = runBlocking { XmlLanguageService.completions(doc2, 10) }
+        assertTrue(attrs.any { it.label == "android:name" })
+    }
+
+    @Test
+    fun `format indents nested tags`() = runBlocking {
+        val doc = CodeDocument("<a>\n<b>\n</b>\n</a>")
+        val formatted = XmlLanguageService.format(doc)
+        assertEquals("<a>\n    <b>\n    </b>\n</a>", formatted)
     }
 
     @Test
