@@ -149,8 +149,10 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 continue
             }
 
-            // Check duplicate attributes in raw
+            // Check duplicate attributes in raw, and entity references inside attribute values —
+            // the loop jumps past the whole tag, so the top-level '&' check never sees them.
             checkDuplicateAttributes(document, i + 1, raw, diags)
+            checkAttributeValueEntities(document, i + 1, raw, diags)
 
             val isVoid = htmlMode && name in HTML_VOID_ELEMENTS
             if (!selfClosing && !isVoid) {
@@ -569,6 +571,53 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                     ),
                 )
             }
+        }
+    }
+
+    /**
+     * Flags a bare `&` inside a quoted attribute value of [rawTagContent], the same way the
+     * document scan flags one in a text node. An `&` must start an entity or character reference
+     * in an attribute value just as it must in text.
+     */
+    private fun checkAttributeValueEntities(
+        document: CodeDocument,
+        rawStartOffset: Int,
+        rawTagContent: String,
+        diags: MutableList<Diagnostic>,
+    ) {
+        var i = 0
+        while (i < rawTagContent.length) {
+            val c = rawTagContent[i]
+            if (c != '"' && c != '\'') {
+                i++
+                continue
+            }
+            val close = rawTagContent.indexOf(c, i + 1).let { if (it < 0) rawTagContent.length else it }
+            var j = i + 1
+            while (j < close) {
+                if (rawTagContent[j] != '&') {
+                    j++
+                    continue
+                }
+                val entity = ENTITY_REGEX.matchAt(rawTagContent, j)
+                if (entity != null) {
+                    j += entity.value.length
+                    continue
+                }
+                val offset = rawStartOffset + j
+                val (line, _) = document.offsetToLineCol(offset)
+                diags.add(
+                    Diagnostic(
+                        range = offset..(offset + 1),
+                        lineNumber = line,
+                        message = "Unescaped '&' character; use '&amp;' instead",
+                        severity = DiagnosticSeverity.Warning,
+                        source = sourceLabel,
+                    ),
+                )
+                j++
+            }
+            i = close + 1
         }
     }
 

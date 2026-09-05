@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import kotlinx.coroutines.runBlocking
@@ -128,5 +129,47 @@ class JsonLanguageServiceTest {
         assertEquals(1, diagnose("""{"${bs}n": 1, "${bs}u000A": 2}""").size)
         assertTrue(diagnose("""{"${bs}n": 1, "n": 2}""").isEmpty())
         assertTrue(diagnose("""{"a": 1, "b": 2}""").isEmpty())
+    }
+
+    private fun complete(text: String) = runBlocking {
+        JsonLanguageService.completions(CodeDocument(text), text.length)
+    }
+
+    private fun List<CompletionItem>.labels() = map { it.label }
+
+    @Test
+    fun `a comma inside an array offers values, not properties`() {
+        // Accepting `"id": ""` after `[1,` would leave invalid JSON inside the array.
+        val labels = complete("[1,").labels()
+        assertTrue("true" in labels, labels.toString())
+        assertTrue("{}" in labels, labels.toString())
+        assertTrue("\"id\"" !in labels, labels.toString())
+    }
+
+    @Test
+    fun `an opening bracket offers values`() {
+        assertTrue("null" in complete("[").labels())
+        assertTrue("\"id\"" in complete("{").labels())
+    }
+
+    @Test
+    fun `a comma continues the innermost container`() {
+        assertTrue("true" in complete("""{"a": [1,""").labels(), "inside an array nested in an object")
+        assertTrue("\"id\"" in complete("""[{"a": 1,""").labels(), "inside an object nested in an array")
+        assertTrue("true" in complete("""[{"a": 1},""").labels(), "back in the array once the object closes")
+        assertTrue("\"id\"" in complete("""{"a": 1,""").labels(), "a plain object member list")
+    }
+
+    @Test
+    fun `brackets and commas inside strings are not structure`() {
+        val labels = complete("""{"a": "[,",""").labels()
+        assertTrue("\"id\"" in labels, labels.toString())
+        assertTrue("true" !in labels, labels.toString())
+    }
+
+    @Test
+    fun `array values leave a space only after a comma`() {
+        assertEquals(" true", complete("[1,").first { it.label == "true" }.insertText)
+        assertEquals("true", complete("[").first { it.label == "true" }.insertText)
     }
 }

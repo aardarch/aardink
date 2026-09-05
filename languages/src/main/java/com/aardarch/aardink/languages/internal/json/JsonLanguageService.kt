@@ -78,17 +78,59 @@ object JsonLanguageService : BaseLanguageService() {
             )
         }
 
-        if (textBefore.endsWith("{") || textBefore.endsWith(",")) {
-            return listOf(
+        // A comma continues whatever container it sits in, so `[1,` wants another element, not a
+        // property that would leave the array invalid.
+        val afterComma = textBefore.endsWith(",")
+        val container = if (afterComma) enclosingContainer(textBefore) else textBefore.lastOrNull()
+        return when (container) {
+            '{' -> listOf(
                 CompletionItem("\"id\"", CompletionKind.Property, "\"id\": \"\""),
                 CompletionItem("\"name\"", CompletionKind.Property, "\"name\": \"\""),
                 CompletionItem("\"type\"", CompletionKind.Property, "\"type\": \"\""),
                 CompletionItem("\"version\"", CompletionKind.Property, "\"version\": \"\""),
                 CompletionItem("\"enabled\"", CompletionKind.Property, "\"enabled\": true"),
             )
-        }
 
-        return emptyList()
+            '[' -> {
+                val gap = if (afterComma) " " else ""
+                listOf(
+                    CompletionItem("true", CompletionKind.Value, "${gap}true"),
+                    CompletionItem("false", CompletionKind.Value, "${gap}false"),
+                    CompletionItem("null", CompletionKind.Value, "${gap}null"),
+                    CompletionItem("\"\"", CompletionKind.Value, "$gap\"\""),
+                    CompletionItem("{}", CompletionKind.Snippet, "$gap{\n    \n}"),
+                    CompletionItem("[]", CompletionKind.Snippet, "$gap[\n    \n]"),
+                )
+            }
+
+            else -> emptyList()
+        }
+    }
+
+    /**
+     * The innermost unclosed `{` or `[` before the end of [text], or null at the top level.
+     * Strings are skipped, escapes included, so a bracket or comma inside one is data, not structure.
+     */
+    private fun enclosingContainer(text: String): Char? {
+        val open = ArrayDeque<Char>()
+        var inString = false
+        var escape = false
+        for (c in text) {
+            if (inString) {
+                when {
+                    escape -> escape = false
+                    c == '\\' -> escape = true
+                    c == '"' -> inString = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> inString = true
+                '{', '[' -> open.addLast(c)
+                '}', ']' -> open.removeLastOrNull()
+            }
+        }
+        return open.lastOrNull()
     }
 
     override suspend fun format(document: CodeDocument): String {

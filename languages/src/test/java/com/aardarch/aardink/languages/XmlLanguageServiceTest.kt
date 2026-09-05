@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
 import kotlinx.coroutines.runBlocking
@@ -215,5 +216,27 @@ class XmlLanguageServiceTest {
     fun `format outdents a line that closes several tags`() = runBlocking {
         val src = "<a>\n<b>\n<c/>\n</b></a>"
         assertEquals("<a>\n    <b>\n        <c/>\n</b></a>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
+    fun `unescaped ampersand in an attribute value flagged`() {
+        // The scan jumps past a whole tag, so the text-node check never saw attribute values.
+        val diags = xml("""<a label="A & B"/>""")
+        assertEquals(1, diags.size)
+        assertTrue(diags[0].message.contains("Unescaped '&'", ignoreCase = true))
+        assertEquals(DiagnosticSeverity.Warning, diags[0].severity)
+        assertEquals(12, diags[0].range.first, "the diagnostic sits on the '&' itself")
+    }
+
+    @Test
+    fun `entity references in attribute values are not flagged`() {
+        assertTrue(xml("""<a label="A &amp; B"/>""").isEmpty())
+        assertTrue(xml("""<a label="x &#38; y" alt='&#x26;'/>""").isEmpty())
+    }
+
+    @Test
+    fun `every bare ampersand in an attribute value is flagged`() {
+        assertEquals(2, xml("""<a b="1 & 2" c='3 & 4'>t</a>""").size)
+        assertEquals(1, html("""<img alt="A & B">""").size, "HTML mode flags attribute values like text")
     }
 }
