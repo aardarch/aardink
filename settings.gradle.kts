@@ -1,7 +1,9 @@
+import java.util.Properties
+
 // When included as a composite build, this project needs its own local.properties with sdk.dir.
 // Auto-populate it from ANDROID_HOME so developers don't need a separate setup step.
 val localPropsFile = file("local.properties")
-val localProps = java.util.Properties().apply {
+val localProps = Properties().apply {
     if (localPropsFile.exists()) load(localPropsFile.inputStream())
 }
 if (!localProps.containsKey("sdk.dir")) {
@@ -30,4 +32,5 @@ dependencyResolutionManagement {
 rootProject.name = "Aardink"
 include(":editor")
 include(":languages")
+include(":languages-lsp")
 include(":sample")
