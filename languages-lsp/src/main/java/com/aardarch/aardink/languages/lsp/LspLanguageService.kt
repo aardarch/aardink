@@ -41,6 +41,21 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 
 /**
+ * A server's declared rename support, as read from its `renameProvider` capability by
+ * [LspLanguageService.renameSupportFrom].
+ */
+enum class LspRenameSupport {
+    /** `renameProvider` absent or `false`: the server cannot rename, so no rename command is offered. */
+    Unsupported,
+
+    /** `renameProvider: true`: the server renames but has no `prepareRename`; the client picks the range. */
+    Rename,
+
+    /** `renameProvider: { prepareProvider: true }`: the server also answers `prepareRename`. */
+    RenameWithPrepare,
+}
+
+/**
  * [LanguageService] adapter that bridges Aardink editor documents to an external Language Server
  * via [LspClient].
  *
@@ -52,10 +67,9 @@ import kotlinx.serialization.json.intOrNull
  * only the diagnostics published for its [documentUri].
  *
  * The `ServerCapabilities` returned by [LspClient.initialize] are otherwise not consulted — every
- * request is sent and an unsupported one degrades to the empty result. Two places are exceptions:
- * [prepareRename], which reads the `MethodNotFound` code so a server offering `rename` without
- * `prepareRename` still gets a rename range, and [triggerCharacters], which a host fills from the
- * capabilities with [triggerCharactersFrom].
+ * request is sent and an unsupported one degrades to the empty result. Two capabilities are the
+ * exception, and a host reads both from the capabilities object and passes them in: the completion
+ * trigger characters ([triggerCharactersFrom]) and rename support ([renameSupportFrom]).
  *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
@@ -64,12 +78,18 @@ import kotlinx.serialization.json.intOrNull
  *   its capabilities with [triggerCharactersFrom]. Null falls back to the editor's generic set,
  *   which is a poor fit for a language server — it omits `.`, so member completion after `list.`
  *   would never open — but it is all an unconfigured adapter has to go on.
+ * @param serverRenameSupport What the server's `renameProvider` capability declared, read with
+ *   [renameSupportFrom]. Null means the host did not say, and the adapter assumes rename is
+ *   available and probes `prepareRename` for each symbol — the only option when nothing is known,
+ *   but a host that has the capabilities should pass them so a server without rename support does
+ *   not get a rename command that can only fail.
  */
 class LspLanguageService(
     val client: LspClient,
     val documentUri: String,
     val languageId: String,
     serverTriggerCharacters: Set<Char>? = null,
+    private val serverRenameSupport: LspRenameSupport? = null,
 ) : LanguageService {
 
     /**
@@ -82,12 +102,13 @@ class LspLanguageService(
         serverTriggerCharacters?.takeIf { it.isNotEmpty() } ?: super.triggerCharacters
 
     /**
-     * True: this adapter implements rename by asking the server.
+     * True unless the server's capabilities said it cannot rename.
      *
-     * Whether a *particular* symbol can be renamed is still [prepareRename]'s answer — and a server
-     * with no rename support at all answers `MethodNotFound` there.
+     * Whether a *particular* symbol can be renamed is still [prepareRename]'s answer; this only
+     * tells a host whether a rename command is worth showing at all.
      */
-    override val supportsRename: Boolean = true
+    override val supportsRename: Boolean
+        get() = serverRenameSupport != LspRenameSupport.Unsupported
 
     @Volatile
     private var lspDiagnostics: List<LspDiagnostic> = emptyList()
@@ -324,12 +345,21 @@ class LspLanguageService(
      * The editor treats null as "rename is unavailable here" and does not open its dialog, so the
      * two cases where the protocol says rename *is* available but names no range — an answer of
      * `{ defaultBehavior: true }`, and a server that supports `textDocument/rename` without
-     * `textDocument/prepareRename` (answered `MethodNotFound`) — resolve to the identifier around
-     * [offset] here rather than being reported as "cannot rename".
+     * `textDocument/prepareRename` — resolve to the identifier around [offset] here rather than
+     * being reported as "cannot rename". The second case is known up front when the host passed
+     * the capabilities (no request is sent), and otherwise recognised by a `MethodNotFound` answer.
+     * A server whose capabilities declare no rename support at all gets null without a request:
+     * a `MethodNotFound` from it would mean "no rename", not "no prepareRename".
      */
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? {
+        when (serverRenameSupport) {
+            LspRenameSupport.Unsupported -> return null
+            LspRenameSupport.Rename -> return identifierRangeAt(document.text, offset).takeUnless { it.isEmpty() }
+            LspRenameSupport.RenameWithPrepare, null -> Unit
+        }
         val result = when (val outcome = requestOrFailure("textDocument/prepareRename", positionParams(document, offset))) {
-            // No prepareRename support says nothing about rename support — fall back to the word.
+            // Rename is declared or assumed supported, so a missing prepareRename says nothing
+            // about it — fall back to the word.
             is LspResult.Unsupported -> return identifierRangeAt(document.text, offset).takeUnless { it.isEmpty() }
 
             is LspResult.Failed -> return null
@@ -355,6 +385,7 @@ class LspLanguageService(
      * is the honest answer until the editor gains a workspace-level edit API.
      */
     override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> {
+        if (serverRenameSupport == LspRenameSupport.Unsupported) return emptyList()
         val params = LspRenameParams(textDocument, positionOf(document, offset), newName)
         val result = request("textDocument/rename", encode(LspRenameParams.serializer(), params)) ?: return emptyList()
         val edit = decodeOrNull(LspWorkspaceEdit.serializer(), result) ?: return emptyList()
@@ -428,7 +459,17 @@ class LspLanguageService(
         return start until end
     }
 
-    private fun overlaps(a: IntRange, b: IntRange): Boolean = a.first <= b.last + 1 && b.first <= a.last + 1
+    /**
+     * Whether two inclusive editor ranges share a character. An empty range is an insertion point
+     * (`n..n-1`, see [offsetRangeOf]) and counts as overlapping when it sits inside the other range
+     * or at either of its edges; two non-empty ranges that merely abut do not overlap, so a
+     * quick-fix request for one diagnostic does not carry its neighbour's diagnostic along.
+     */
+    private fun overlaps(a: IntRange, b: IntRange): Boolean = when {
+        a.isEmpty() -> a.first in b.first..b.last + 1
+        b.isEmpty() -> b.first in a.first..a.last + 1
+        else -> a.first <= b.last && b.first <= a.last
+    }
 
     private fun toTextEdits(document: CodeDocument, edits: List<LspTextEdit>): List<TextEdit> = edits.map {
         TextEdit(offsetRangeOf(document, it.range), it.newText)
@@ -575,6 +616,32 @@ class LspLanguageService(
             val declared = provider["triggerCharacters"] as? JsonArray ?: return null
             val chars = declared.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.lastOrNull() }
             return chars.toSet().takeIf { it.isNotEmpty() }
+        }
+
+        /**
+         * What a server's `renameProvider` capability declared, for [LspLanguageService]'s
+         * `serverRenameSupport`, or null when [capabilities] is not a capabilities object at all.
+         *
+         * [capabilities] is the `ServerCapabilities` object [LspClient.initialize] returns. Per the
+         * protocol, `renameProvider` is absent or `false` for no support, `true` for rename alone,
+         * and an object — `{ "prepareProvider": true }` — when the server also answers
+         * `textDocument/prepareRename`.
+         */
+        fun renameSupportFrom(capabilities: JsonElement?): LspRenameSupport? {
+            val declaredCapabilities = capabilities as? JsonObject ?: return null
+            return when (val provider = declaredCapabilities["renameProvider"]) {
+                is JsonObject ->
+                    if ((provider["prepareProvider"] as? JsonPrimitive)?.booleanOrNull == true) {
+                        LspRenameSupport.RenameWithPrepare
+                    } else {
+                        LspRenameSupport.Rename
+                    }
+
+                is JsonPrimitive -> if (provider.booleanOrNull == true) LspRenameSupport.Rename else LspRenameSupport.Unsupported
+
+                // Absent, or a shape the protocol does not define.
+                else -> LspRenameSupport.Unsupported
+            }
         }
 
         private val DEFAULT_FORMATTING_OPTIONS = LspFormattingOptions(tabSize = 4, insertSpaces = true)

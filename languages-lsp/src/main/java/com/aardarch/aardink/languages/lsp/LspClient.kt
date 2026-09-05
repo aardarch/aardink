@@ -172,14 +172,8 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         }
         try {
             val request = LspMessage.Request(id = id, method = method, params = params)
-            try {
-                transport.sendPayload(LspJson.encodeToString(LspMessage.Request.serializer(), request))
-            } catch (e: IOException) {
-                // The write half is gone. The receive loop may still be blocked on a read that will
-                // never return, so every other pending request would wait forever; tear the
-                // connection down rather than reporting a raw IOException to this one caller.
-                onConnectionLost()
-                throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed: ${e.message}")
+            sendOrLoseConnection(LspJson.encodeToString(LspMessage.Request.serializer(), request))?.let { failure ->
+                throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed: ${failure.message}")
             }
             val response = deferred.await()
             response.error?.let { throw LspRequestException(it.code, it.message) }
@@ -230,13 +224,31 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         start()
         if (closed) return
         val notification = LspMessage.Notification(method = method, params = params)
-        try {
-            transport.sendPayload(LspJson.encodeToString(LspMessage.Notification.serializer(), notification))
-        } catch (_: IOException) {
-            // Nobody is waiting on a notification, but a failed write still means the connection is
-            // gone — close it so pending requests are not left waiting on a dead server.
-            onConnectionLost()
-        }
+        // Nobody is waiting on a notification, so the failure itself is dropped; the connection
+        // teardown it triggers is what matters, so pending requests do not wait on a dead server.
+        sendOrLoseConnection(LspJson.encodeToString(LspMessage.Notification.serializer(), notification))
+    }
+
+    /**
+     * Writes [payload], treating any failure as the connection ending.
+     *
+     * [LspTransport.sendPayload] promises nothing about *how* a write fails: a stream throws
+     * [IOException], a channel closed by [stop] racing this send throws
+     * `ClosedSendChannelException`, and a custom transport may throw anything. Whatever it was, the
+     * write half is gone while the receive loop may still be blocked on a read that will never
+     * return, so every pending request would wait forever; tear the connection down here rather
+     * than let the raw exception escape to one caller. Cancellation is not a failure and passes.
+     *
+     * @return the failure, or null when the write succeeded.
+     */
+    private suspend fun sendOrLoseConnection(payload: String): Throwable? = try {
+        transport.sendPayload(payload)
+        null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        onConnectionLost()
+        e
     }
 
     /**
@@ -331,7 +343,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
 
             else -> return replyMethodNotFound(id, method)
         }
-        transport.sendPayload(LspJson.encodeToString(LspMessage.Response.serializer(), LspMessage.Response(id = id, result = result)))
+        sendOrLoseConnection(LspJson.encodeToString(LspMessage.Response.serializer(), LspMessage.Response(id = id, result = result)))
     }
 
     private fun workspaceConfigurationResult(params: JsonElement?): JsonElement {
@@ -344,7 +356,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
             id = id,
             error = LspError(LspRequestException.METHOD_NOT_FOUND, "Method not found: $method"),
         )
-        transport.sendPayload(LspJson.encodeToString(LspMessage.Response.serializer(), response))
+        sendOrLoseConnection(LspJson.encodeToString(LspMessage.Response.serializer(), response))
     }
 
     private fun parseObjectOrNull(payload: String): JsonObject? = try {

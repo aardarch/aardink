@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -336,6 +337,71 @@ class LspClientTest {
         client.stop()
         // Fire-and-forget: there is no caller to report the closed connection to.
         client.sendNotification("textDocument/didChange")
+    }
+
+    @Test
+    fun `a send failing with something other than an IOException still closes the connection`() = runBlocking {
+        // The transport contract does not restrict failures to IOException: a channel transport
+        // closed by stop() between registration and the write throws ClosedSendChannelException.
+        // That must be reported as CONNECTION_CLOSED and tear the connection down like any other
+        // failed write, not leak out as an undocumented exception.
+        val writesFail = object : LspTransport {
+            val firstSent = CompletableDeferred<Unit>()
+
+            override suspend fun sendPayload(jsonPayload: String) {
+                if (firstSent.complete(Unit)) return
+                throw ClosedSendChannelException("Channel was closed")
+            }
+
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() = Unit
+        }
+        val client = LspClient(writesFail, CoroutineScope(Dispatchers.Default))
+
+        val stranded = CompletableDeferred<Result<JsonElement?>>()
+        launch { stranded.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+        awaitSoon(writesFail.firstSent)
+
+        val failed = runCatching { client.sendRequest("textDocument/definition") }.exceptionOrNull()
+        assertTrue(failed is LspRequestException, "expected LspRequestException, got $failed")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failed as LspRequestException).code)
+
+        val strandedFailure = awaitSoon(stranded).exceptionOrNull()
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (strandedFailure as LspRequestException).code)
+    }
+
+    @Test
+    fun `a notification whose send fails tears the connection down without escaping`() = runBlocking {
+        val uncaught = CompletableDeferred<Throwable>()
+        val scope = CoroutineScope(
+            Dispatchers.Default + CoroutineExceptionHandler { _, e -> uncaught.complete(e) },
+        )
+        val writesFail = object : LspTransport {
+            val firstSent = CompletableDeferred<Unit>()
+
+            override suspend fun sendPayload(jsonPayload: String) {
+                if (firstSent.complete(Unit)) return
+                throw IllegalStateException("closed underneath")
+            }
+
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() = Unit
+        }
+        val client = LspClient(writesFail, scope)
+
+        val stranded = CompletableDeferred<Result<JsonElement?>>()
+        scope.launch { stranded.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+        awaitSoon(writesFail.firstSent)
+
+        // Fire-and-forget: the failure is swallowed, but the connection it revealed as dead must
+        // still be closed so the request above does not wait forever.
+        val notified = scope.launch { client.sendNotification("textDocument/didChange") }
+        withTimeout(5_000) { notified.join() }
+
+        val strandedFailure = awaitSoon(stranded).exceptionOrNull()
+        assertTrue(strandedFailure is LspRequestException, "the pending request must be released: got $strandedFailure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (strandedFailure as LspRequestException).code)
+        assertFalse(uncaught.isCompleted, "the failure must not reach the scope's handler")
     }
 
     @Test

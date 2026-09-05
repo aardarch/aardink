@@ -34,6 +34,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -52,8 +53,14 @@ private class Harness(val doc: CodeDocument, scope: CoroutineScope) : CoroutineS
     val client = LspClient(transport, CoroutineScope(Dispatchers.Default))
     val service = LspLanguageService(client, URI, "kotlin")
 
+    /** A second adapter over the same connection, configured with what the server declared about rename. */
+    fun serviceWithRenameSupport(support: LspRenameSupport?) = LspLanguageService(client, URI, "kotlin", serverRenameSupport = support)
+
     /** Next message the client put on the wire. */
     suspend fun nextSent(): JsonObject = LspJson.parseToJsonElement(transport.sendChannel.receive()).jsonObject
+
+    /** Asserts the client has written nothing. */
+    fun assertNothingSent(message: String) = assertTrue(transport.sendChannel.tryReceive().isFailure, message)
 
     /** Answers the next request with raw [resultJson] after asserting its method; returns the request. */
     suspend fun respond(expectedMethod: String, resultJson: String): JsonObject {
@@ -454,6 +461,28 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `renameSupportFrom reads the server's rename provider`() {
+        fun from(json: String) = LspLanguageService.renameSupportFrom(LspJson.parseToJsonElement(json))
+
+        assertEquals(LspRenameSupport.RenameWithPrepare, from("""{"renameProvider":{"prepareProvider":true}}"""))
+        assertEquals(
+            LspRenameSupport.Rename,
+            from("""{"renameProvider":{}}"""),
+            "an options object without prepareProvider is rename alone",
+        )
+        assertEquals(LspRenameSupport.Rename, from("""{"renameProvider":true}"""))
+        assertEquals(LspRenameSupport.Unsupported, from("""{"renameProvider":false}"""))
+        assertEquals(LspRenameSupport.Unsupported, from("""{"hoverProvider":true}"""), "absent means unsupported")
+    }
+
+    @Test
+    fun `renameSupportFrom is null when there are no capabilities to read`() {
+        // Nothing declared is not the same as declared unsupported: the adapter keeps probing.
+        assertNull(LspLanguageService.renameSupportFrom(null))
+        assertNull(LspLanguageService.renameSupportFrom(LspJson.parseToJsonElement("[]")))
+    }
+
+    @Test
     fun `a service without server trigger characters keeps the editor defaults`() {
         val client = LspClient(ChannelLspTransport(), CoroutineScope(Dispatchers.Default))
         val plain = LspLanguageService(client, URI, "kotlin")
@@ -650,8 +679,36 @@ class LspLanguageServiceTest {
 
     @Test
     fun `a server without prepareRename support still yields a rename range`() = withServer("val value = 1") {
+        // Unknown capabilities: rename is assumed, and MethodNotFound is read as "no prepareRename".
         val server = async { respondWithMethodNotFound("textDocument/prepareRename") }
         assertEquals(4..8, service.prepareRename(doc, 6))
+        server.await()
+    }
+
+    @Test
+    fun `a server that declared rename without prepareRename is not asked`() = withServer("val value = 1") {
+        val renameOnly = serviceWithRenameSupport(LspRenameSupport.Rename)
+
+        assertEquals(4..8, renameOnly.prepareRename(doc, 6))
+        assertNull(renameOnly.prepareRename(doc, 10), "no identifier at the offset")
+        assertNothingSent("the capabilities already said prepareRename is not implemented")
+    }
+
+    @Test
+    fun `a server that declared no rename support gets no rename requests`() = withServer("val value = 1") {
+        val unsupported = serviceWithRenameSupport(LspRenameSupport.Unsupported)
+
+        assertNull(unsupported.prepareRename(doc, 6), "a MethodNotFound here would mean no rename, not no prepareRename")
+        assertTrue(unsupported.rename(doc, 6, "renamed").isEmpty())
+        assertNothingSent("neither request can succeed")
+    }
+
+    @Test
+    fun `a server that declared prepareRename is asked`() = withServer("val value = 1") {
+        val full = serviceWithRenameSupport(LspRenameSupport.RenameWithPrepare)
+        val server = async { respond("textDocument/prepareRename", range(0, 4, 0, 9)) }
+
+        assertEquals(4..8, full.prepareRename(doc, 6))
         server.await()
     }
 
@@ -794,9 +851,46 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `the adapter declares rename support`() {
+    fun `the adapter declares rename support unless the server ruled it out`() {
         val client = LspClient(ChannelLspTransport(), CoroutineScope(Dispatchers.Default))
-        assertTrue(LspLanguageService(client, URI, "kotlin").supportsRename)
+        fun service(support: LspRenameSupport?) = LspLanguageService(client, URI, "kotlin", serverRenameSupport = support)
+
+        assertTrue(service(null).supportsRename, "unknown capabilities: assume the server can rename")
+        assertTrue(service(LspRenameSupport.Rename).supportsRename)
+        assertTrue(service(LspRenameSupport.RenameWithPrepare).supportsRename)
+        // The host hides its rename command on this, so a server without rename never shows one.
+        assertFalse(service(LspRenameSupport.Unsupported).supportsRename)
+    }
+
+    @Test
+    fun `codeActions do not forward a diagnostic that merely abuts the range`() = withServer("ab") {
+        publish(
+            URI,
+            """[{"range":${range(0, 0, 0, 1)},"message":"first","severity":1},
+                {"range":${range(0, 1, 0, 2)},"message":"second","severity":1}]""",
+        )
+        val server = async { respond("textDocument/codeAction", "[]") }
+
+        service.codeActions(doc, 0..0)
+        val sent = server.await()
+
+        // The request covers only the first character; the second diagnostic starts on the next
+        // one and shares nothing with it, so its quick fixes do not belong in this menu.
+        val forwarded = sent.params["context"]!!.jsonObject["diagnostics"]!!.jsonArray
+        assertEquals(listOf("first"), forwarded.map { it.jsonObject["message"]!!.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `an insertion-point diagnostic at the edge of the range is forwarded`() = withServer("abc") {
+        // A zero-width diagnostic sits between characters; one at the end of the requested range
+        // is where a "missing semicolon" style fix belongs.
+        publish(URI, """[{"range":${range(0, 3, 0, 3)},"message":"missing","severity":1}]""")
+        val server = async { respond("textDocument/codeAction", "[]") }
+
+        service.codeActions(doc, 2..2)
+        val sent = server.await()
+
+        assertEquals(1, sent.params["context"]!!.jsonObject["diagnostics"]!!.jsonArray.size)
     }
 
     @Test

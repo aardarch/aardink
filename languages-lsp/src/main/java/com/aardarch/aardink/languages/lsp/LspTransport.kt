@@ -33,6 +33,11 @@ interface LspTransport {
 
     /**
      * Sends a raw JSON payload framed with HTTP Content-Length headers.
+     *
+     * A write that can no longer reach the server may fail with any exception — an [IOException]
+     * from a stream, a `ClosedSendChannelException` from a channel closed underneath it, or
+     * whatever a custom transport throws. [LspClient] treats every non-cancellation failure as the
+     * connection ending, so implementations need not normalise their errors.
      */
     suspend fun sendPayload(jsonPayload: String)
 
