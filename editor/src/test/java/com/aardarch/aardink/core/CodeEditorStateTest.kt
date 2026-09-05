@@ -80,6 +80,36 @@ class CodeEditorStateTest {
     }
 
     @Test
+    fun `applyTextEdits keeps inserts at one offset in array order`() {
+        val state = testState("ac")
+
+        // LSP: when several inserts share a position, the array order is the order they appear in.
+        state.applyTextEdits(
+            listOf(
+                TextEdit(range = 1 until 1, newText = "b1"),
+                TextEdit(range = 1 until 1, newText = "b2"),
+                TextEdit(range = 1 until 1, newText = "b3"),
+            ),
+        )
+
+        assertEquals("ab1b2b3c", state.text)
+    }
+
+    @Test
+    fun `applyTextEdits undoes a same-offset insert batch in one step`() {
+        val state = testState("ac")
+        state.applyTextEdits(
+            listOf(
+                TextEdit(range = 1 until 1, newText = "b1"),
+                TextEdit(range = 1 until 1, newText = "b2"),
+            ),
+        )
+
+        assertEquals("ab1b2c", state.text)
+        assertEquals("ac", state.undo())
+    }
+
+    @Test
     fun `applyTextEdits clamps a selection the batch left out of bounds`() {
         val state = testState("value = someLongIdentifier")
         state.selection = TextRange(26)

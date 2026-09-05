@@ -193,9 +193,16 @@ class CodeEditorState(
         undoManager.flushPendingInsert()
 
         // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent
-        // ranges; the secondary key keeps an insertion and a replacement at one offset in a defined
-        // order, matching how the LSP bridge sorts the same edits.
-        val sorted = edits.sortedWith(compareByDescending<TextEdit> { it.range.first }.thenByDescending { it.range.last })
+        // ranges. Edits sharing an offset are applied last-to-first, which lands them in the order
+        // they were given: LSP says several inserts at one position appear in array order, so
+        // inserting "a" then "b" must read "ab" and not "ba".
+        val sorted = edits.withIndex()
+            .sortedWith(
+                compareByDescending<IndexedValue<TextEdit>> { it.value.range.first }
+                    .thenByDescending { it.value.range.last }
+                    .thenByDescending { it.index },
+            )
+            .map { it.value }
         val ops = mutableListOf<EditorUndoManager.EditOperation>()
         // One snapshot for the whole batch: edits are applied high-to-low, so text below the lowest
         // offset touched so far is unchanged and can be sliced from the snapshot — O(len) per edit

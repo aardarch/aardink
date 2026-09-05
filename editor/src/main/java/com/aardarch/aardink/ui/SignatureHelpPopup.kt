@@ -36,7 +36,11 @@ import androidx.compose.ui.window.PopupProperties
 import com.aardarch.aardink.core.SignatureHelp
 
 /**
- * Parameter hint popover shown above the cursor when typing function calls.
+ * Parameter hint popover shown while the cursor sits inside a call's argument list.
+ *
+ * Placed by the default [Popup] rules — at the top-start of the composable that hosts it — rather
+ * than tracked to the caret, as [HoverDocPopup] and [CodeActionMenu] are. The editor has no
+ * caret-following popup layer; adding one is a change all three should get together.
  */
 @Composable
 fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
