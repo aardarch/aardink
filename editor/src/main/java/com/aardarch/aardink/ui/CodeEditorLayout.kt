@@ -67,6 +67,7 @@ import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -164,12 +165,16 @@ fun CodeEditorLayout(
             if (request == null) return@collect
             state.clearRename()
             val text = state.document.text
+            // Same guard the rename itself has: the server answers later, and a range measured
+            // against the older text would be sliced from a document that has since changed.
+            val requestedVersion = state.textVersion
             val range = withContext(Dispatchers.Default) {
                 languageService?.prepareRename(state.document, request.offset)
             } ?: return@collect
-            if (range.isEmpty()) return@collect
+            if (range.isEmpty() || state.textVersion != requestedVersion) return@collect
+            if (range.first < 0 || range.last >= text.length) return@collect
             renameTargetRange = range
-            renameTargetName = text.substring(range.first, (range.last + 1).coerceAtMost(text.length))
+            renameTargetName = text.substring(range.first, range.last + 1)
             showRenameDialog = true
         }
     }
@@ -808,8 +813,24 @@ private fun applyCompletion(
     onFieldValue: (TextFieldValue) -> Unit,
 ) {
     val target = completionReplaceRange(fieldValue.text, fieldValue.selection.start, item)
-    val newSelection = TextRange(target.first + item.insertText.length)
-    state.applyEdit(target.first, target.last - target.first + 1, item.insertText, newSelection)
+
+    if (item.additionalEdits.isEmpty()) {
+        val newSelection = TextRange(target.first + item.insertText.length)
+        state.applyEdit(target.first, target.last - target.first + 1, item.insertText, newSelection)
+        onFieldValue(TextFieldValue(state.document.text, newSelection))
+        return
+    }
+
+    // An auto-import completion inserts the symbol and its import together, so the two go in as one
+    // batch: applyTextEdits orders them and records a single undo step, and the caret is placed
+    // afterwards accounting for any edit that shifted text ahead of it.
+    state.applyTextEdits(item.additionalEdits + TextEdit(target, item.insertText))
+    val shiftBefore = item.additionalEdits
+        .filter { it.range.first <= target.first }
+        .sumOf { it.newText.length - (it.range.last - it.range.first + 1) }
+    val caret = (target.first + shiftBefore + item.insertText.length).coerceIn(0, state.document.length)
+    val newSelection = TextRange(caret)
+    state.selection = newSelection
     onFieldValue(TextFieldValue(state.document.text, newSelection))
 }
 

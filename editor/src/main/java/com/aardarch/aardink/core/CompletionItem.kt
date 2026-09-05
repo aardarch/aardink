@@ -28,6 +28,11 @@ package com.aardarch.aardink.core
  * @param replaceRange Exact document range [insertText] replaces when the item is accepted, for
  *   providers that know it (a language server's `textEdit`). When null the editor falls back to
  *   replacing the token before the cursor.
+ * @param additionalEdits Further edits elsewhere in the same document that belong to this
+ *   completion and are applied with it, in one undo batch — a language server's
+ *   `additionalTextEdits`. Accepting an auto-import completion inserts the symbol *and* its import;
+ *   applying only the first would leave the symbol unresolved. Offsets are into the document as it
+ *   stands before the completion is accepted.
  */
 data class CompletionItem(
     val label: String,
@@ -37,6 +42,7 @@ data class CompletionItem(
     val filterText: String = label,
     val sortPriority: Int = 0,
     val replaceRange: IntRange? = null,
+    val additionalEdits: List<TextEdit> = emptyList(),
 )
 
 enum class CompletionKind {

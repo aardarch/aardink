@@ -103,6 +103,17 @@ interface LanguageService {
     suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = null
 
     /**
+     * Whether this service can actually rename a symbol.
+     *
+     * Both [prepareRename] and [rename] default to "no", so a service that does not override them
+     * declines every rename. A host offering a rename command has no other way to tell that in
+     * advance, and would otherwise present an action that silently does nothing; check this before
+     * showing the affordance.
+     */
+    val supportsRename: Boolean
+        get() = false
+
+    /**
      * Performs a symbol rename at [offset] to [newName]. Returns text edits to apply.
      */
     suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> = emptyList()
