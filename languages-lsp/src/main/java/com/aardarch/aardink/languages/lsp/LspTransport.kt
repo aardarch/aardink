@@ -17,7 +17,10 @@ package com.aardarch.aardink.languages.lsp
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
@@ -49,12 +52,22 @@ interface LspTransport {
  */
 class StreamLspTransport(private val inputStream: InputStream, private val outputStream: OutputStream) : LspTransport {
 
+    // One client serves many coroutines (requests, notifications and replies from the receive loop).
+    // Frames must reach the server whole: a half-written header interleaved with another payload
+    // desynchronises JSON-RPC framing for the rest of the connection.
+    private val writeMutex = Mutex()
+
     override suspend fun sendPayload(jsonPayload: String): Unit = withContext(Dispatchers.IO) {
         val bytes = jsonPayload.toByteArray(StandardCharsets.UTF_8)
-        val header = "Content-Length: ${bytes.size}\r\n\r\n"
-        outputStream.write(header.toByteArray(StandardCharsets.US_ASCII))
-        outputStream.write(bytes)
-        outputStream.flush()
+        val header = "Content-Length: ${bytes.size}\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
+        val frame = ByteArrayOutputStream(header.size + bytes.size).apply {
+            write(header)
+            write(bytes)
+        }.toByteArray()
+        writeMutex.withLock {
+            outputStream.write(frame)
+            outputStream.flush()
+        }
     }
 
     override suspend fun receivePayload(): String? = withContext(Dispatchers.IO) {

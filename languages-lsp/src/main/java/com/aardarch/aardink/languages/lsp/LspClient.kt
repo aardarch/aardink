@@ -35,8 +35,13 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 
-/** Callback invoked when the server pushes `textDocument/publishDiagnostics` for [uri]. */
-typealias DiagnosticsListener = (uri: String, diagnostics: List<LspDiagnostic>) -> Unit
+/**
+ * Callback invoked when the server pushes `textDocument/publishDiagnostics` for [uri].
+ *
+ * [version] is the document version the diagnostics were computed against, or null when the server
+ * did not report one; listeners should drop a notification older than the last version they sent.
+ */
+typealias DiagnosticsListener = (uri: String, version: Int?, diagnostics: List<LspDiagnostic>) -> Unit
 
 /**
  * Thrown by [LspClient.sendRequest] when the server answers with a JSON-RPC error, or when the
@@ -198,7 +203,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         }
         for (listener in diagnosticsListeners) {
             try {
-                listener(published.uri, published.diagnostics)
+                listener(published.uri, published.version, published.diagnostics)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

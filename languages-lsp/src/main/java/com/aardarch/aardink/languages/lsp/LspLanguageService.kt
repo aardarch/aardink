@@ -59,8 +59,28 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
     @Volatile
     private var lspDiagnostics: List<LspDiagnostic> = emptyList()
 
-    private val diagnosticsListener: DiagnosticsListener = { uri, diagnostics ->
-        if (uri == documentUri) lspDiagnostics = diagnostics
+    /** Version last sent to the server; diagnostics computed against an older one are stale. */
+    @Volatile
+    private var sentVersion: Int = 0
+
+    @Volatile
+    private var diagnosticsVersion: Int? = null
+
+    private val diagnosticsListener: DiagnosticsListener = { uri, version, diagnostics ->
+        if (uri == documentUri && !isStale(version)) {
+            lspDiagnostics = diagnostics
+            diagnosticsVersion = version
+        }
+    }
+
+    /**
+     * A versioned notification is stale when it predates the last version sent, or when a newer
+     * versioned batch has already been accepted. Unversioned notifications are always applied —
+     * `version` is optional in the protocol, so its absence says nothing about ordering.
+     */
+    private fun isStale(version: Int?): Boolean {
+        if (version == null) return false
+        return version < sentVersion || version < (diagnosticsVersion ?: Int.MIN_VALUE)
     }
 
     private val textDocument: LspTextDocumentIdentifier
@@ -78,6 +98,8 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
      */
     suspend fun didOpen(document: CodeDocument) {
         client.addDiagnosticsListener(diagnosticsListener)
+        sentVersion = 1
+        diagnosticsVersion = null
         val params = LspDidOpenTextDocumentParams(
             LspTextDocumentItem(uri = documentUri, languageId = languageId, version = 1, text = document.text),
         )
@@ -88,6 +110,7 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
      * Sends a full-content `textDocument/didChange` notification to the server.
      */
     suspend fun didChange(document: CodeDocument, version: Int) {
+        sentVersion = version
         val params = LspDidChangeTextDocumentParams(
             textDocument = LspVersionedTextDocumentIdentifier(documentUri, version),
             contentChanges = listOf(LspTextDocumentContentChangeEvent(text = document.text)),
@@ -102,6 +125,8 @@ class LspLanguageService(val client: LspClient, val documentUri: String, val lan
     suspend fun didClose() {
         client.removeDiagnosticsListener(diagnosticsListener)
         lspDiagnostics = emptyList()
+        sentVersion = 0
+        diagnosticsVersion = null
         val params = LspDidCloseTextDocumentParams(textDocument)
         client.sendNotification("textDocument/didClose", encode(LspDidCloseTextDocumentParams.serializer(), params))
     }

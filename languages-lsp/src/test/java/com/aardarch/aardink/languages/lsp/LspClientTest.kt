@@ -111,10 +111,10 @@ class LspClientTest {
 
     @Test
     fun `publishDiagnostics decodes diagnostics and reaches every listener`() = runBlocking {
-        val first = CompletableDeferred<Pair<String, List<LspDiagnostic>>>()
-        val second = CompletableDeferred<Pair<String, List<LspDiagnostic>>>()
-        client.addDiagnosticsListener { uri, diagnostics -> first.complete(uri to diagnostics) }
-        client.addDiagnosticsListener { uri, diagnostics -> second.complete(uri to diagnostics) }
+        val first = CompletableDeferred<Triple<String, Int?, List<LspDiagnostic>>>()
+        val second = CompletableDeferred<Triple<String, Int?, List<LspDiagnostic>>>()
+        client.addDiagnosticsListener { uri, version, diagnostics -> first.complete(Triple(uri, version, diagnostics)) }
+        client.addDiagnosticsListener { uri, version, diagnostics -> second.complete(Triple(uri, version, diagnostics)) }
         client.start()
 
         // "data":{"id":42} guards against treating any payload containing "id" as a response.
@@ -125,14 +125,15 @@ class LspClientTest {
             """.trimMargin().replace("\n", ""),
         )
 
-        val (uri, diagnostics) = awaitSoon(first)
+        val (uri, version, diagnostics) = awaitSoon(first)
         assertEquals("file:///Main.kt", uri)
+        assertEquals(3, version)
         assertEquals(1, diagnostics.size)
         assertEquals(LspRange(LspPosition(2, 4), LspPosition(2, 9)), diagnostics[0].range)
         assertEquals("Unresolved reference", diagnostics[0].message)
         assertEquals(1, diagnostics[0].severity)
         assertEquals("kotlin", diagnostics[0].source)
-        assertEquals(uri to diagnostics, awaitSoon(second))
+        assertEquals(Triple(uri, version, diagnostics), awaitSoon(second))
         client.stop()
     }
 
@@ -140,9 +141,9 @@ class LspClientTest {
     fun `removed listener no longer receives diagnostics`() = runBlocking {
         val kept = CompletableDeferred<String>()
         var removedWasCalled = false
-        val removed: DiagnosticsListener = { _, _ -> removedWasCalled = true }
+        val removed: DiagnosticsListener = { _, _, _ -> removedWasCalled = true }
         client.addDiagnosticsListener(removed)
-        client.addDiagnosticsListener { uri, _ -> kept.complete(uri) }
+        client.addDiagnosticsListener { uri, _, _ -> kept.complete(uri) }
         client.removeDiagnosticsListener(removed)
         client.start()
 

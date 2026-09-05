@@ -73,13 +73,14 @@ private class Harness(val doc: CodeDocument, scope: CoroutineScope) : CoroutineS
     }
 
     /** Pushes `publishDiagnostics` for [uri] and returns once every registered listener has run. */
-    suspend fun publish(uri: String, diagnosticsJson: String) {
+    suspend fun publish(uri: String, diagnosticsJson: String, version: Int? = null) {
         val done = CompletableDeferred<Unit>()
-        val probe: DiagnosticsListener = { _, _ -> done.complete(Unit) }
+        val probe: DiagnosticsListener = { _, _, _ -> done.complete(Unit) }
         client.addDiagnosticsListener(probe)
         client.start()
+        val versionMember = version?.let { """"version":$it,""" }.orEmpty()
         transport.receiveChannel.send(
-            """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"$uri","diagnostics":$diagnosticsJson}}""",
+            """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"$uri",$versionMember"diagnostics":$diagnosticsJson}}""",
         )
         withTimeout(5_000) { done.await() }
         client.removeDiagnosticsListener(probe)
@@ -175,6 +176,28 @@ class LspLanguageServiceTest {
     fun `diagnostics for other documents are ignored`() = withServer("val a = 1") {
         publish(OTHER_URI, """[{"range":${range(0, 0, 0, 1)},"message":"elsewhere"}]""")
         assertTrue(service.diagnostics(doc).isEmpty())
+    }
+
+    @Test
+    fun `diagnostics for an older version are ignored`() = withServer("val a = 1") {
+        service.didChange(doc, 4)
+        nextSent()
+
+        publish(URI, """[{"range":${range(0, 0, 0, 1)},"message":"current"}]""", version = 4)
+        publish(URI, """[{"range":${range(0, 0, 0, 1)},"message":"stale"}]""", version = 2)
+
+        assertEquals("current", service.diagnostics(doc).single().message)
+    }
+
+    @Test
+    fun `unversioned diagnostics are always applied`() = withServer("val a = 1") {
+        service.didChange(doc, 4)
+        nextSent()
+
+        publish(URI, """[{"range":${range(0, 0, 0, 1)},"message":"versioned"}]""", version = 4)
+        publish(URI, """[{"range":${range(0, 0, 0, 1)},"message":"unversioned"}]""")
+
+        assertEquals("unversioned", service.diagnostics(doc).single().message)
     }
 
     @Test
