@@ -83,6 +83,7 @@ spotless {
 dependencies {
     implementation(project(":editor"))
     implementation(project(":languages"))
+    implementation(project(":languages-lsp"))
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

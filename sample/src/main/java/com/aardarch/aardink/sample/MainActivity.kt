@@ -48,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -59,6 +60,9 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.rememberCodeEditorState
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.lsp.LspLanguageService
+import com.aardarch.aardink.sample.lsp.DEMO_CSS_DOCUMENT_URI
+import com.aardarch.aardink.sample.lsp.createDemoCssLspConnection
 import com.aardarch.aardink.sample.samples.SampleAssets
 import com.aardarch.aardink.sample.theme.AardinkSampleTheme
 import com.aardarch.aardink.sample.ui.LanguageCard
@@ -93,7 +97,26 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SampleApp() {
-    val registry = remember { LanguageRegistry.withBuiltIns() }
+    // CSS ships with no built-in service; the demo server behind this connection shows the sample
+    // app talking to a real (if in-process) language server via `:languages-lsp` instead.
+    val lspScope = rememberCoroutineScope()
+    val cssLspClient = remember { createDemoCssLspConnection(lspScope) }
+    var cssLanguageService by remember { mutableStateOf<LspLanguageService?>(null) }
+    LaunchedEffect(cssLspClient) {
+        val capabilities = cssLspClient.initialize(rootUri = null)
+        cssLanguageService = LspLanguageService(
+            client = cssLspClient,
+            documentUri = DEMO_CSS_DOCUMENT_URI,
+            languageId = "css",
+            serverTriggerCharacters = LspLanguageService.triggerCharactersFrom(capabilities),
+            serverRenameSupport = LspLanguageService.renameSupportFrom(capabilities),
+        )
+    }
+    val registry = remember(cssLanguageService) {
+        LanguageRegistry.withBuiltIns().apply {
+            cssLanguageService?.let { service -> override("css") { it.copy(languageService = service) } }
+        }
+    }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var themeId by rememberSaveable { mutableStateOf(defaultThemeId) }
     val active = themeChoices.firstOrNull { it.id == themeId } ?: themeChoices.first()
@@ -152,7 +175,9 @@ private fun StartScreen(
                 )
             }
 
-            val (advanced, basic) = languages.partition { it.languageService != null }
+            val (lspBacked, notLspBacked) = languages.partition { it.languageService is LspLanguageService }
+            val (advanced, notAdvanced) = notLspBacked.partition { it.languageService != null }
+            val (textEditor, basic) = notAdvanced.partition { it.id == "plaintext" }
 
             if (advanced.isNotEmpty()) {
                 item("section-advanced") {
@@ -166,6 +191,18 @@ private fun StartScreen(
                 }
             }
 
+            if (lspBacked.isNotEmpty()) {
+                item("section-lsp") {
+                    SectionHeader(
+                        title = "Language Server (LSP)",
+                        subtitle = "Backed by an external language server over JSON-RPC",
+                    )
+                }
+                items(items = lspBacked, key = { it.id }) { def ->
+                    LanguageCard(language = def, onClick = { onSelect(def) })
+                }
+            }
+
             if (basic.isNotEmpty()) {
                 item("section-basic") {
                     SectionHeader(
@@ -174,6 +211,18 @@ private fun StartScreen(
                     )
                 }
                 items(items = basic, key = { it.id }) { def ->
+                    LanguageCard(language = def, onClick = { onSelect(def) })
+                }
+            }
+
+            if (textEditor.isNotEmpty()) {
+                item("section-text-editor") {
+                    SectionHeader(
+                        title = "Text editor",
+                        subtitle = "No language service — just an editable buffer",
+                    )
+                }
+                items(items = textEditor, key = { it.id }) { def ->
                     LanguageCard(language = def, onClick = { onSelect(def) })
                 }
             }
@@ -209,9 +258,17 @@ private fun EditorScreen(language: LanguageDefinition, onBack: () -> Unit) {
     val service = language.languageService
     if (service != null) {
         LaunchedEffect(state, service) {
-            snapshotFlow { state.textVersion }.collect {
-                delay(400)
-                diagnostics = withContext(Dispatchers.Default) { service.diagnostics(state.document) }
+            // A language server computes diagnostics itself; it must be told about the document
+            // and each edit so what it pushes back actually reflects what's on screen.
+            if (service is LspLanguageService) service.didOpen(state.document)
+            try {
+                snapshotFlow { state.textVersion }.collect { version ->
+                    delay(400)
+                    if (service is LspLanguageService) service.didChange(state.document, version)
+                    diagnostics = withContext(Dispatchers.Default) { service.diagnostics(state.document) }
+                }
+            } finally {
+                if (service is LspLanguageService) service.didClose()
             }
         }
     }
