@@ -70,9 +70,10 @@ jobs:
         id: docs
         run: |
           staging="$(mktemp -d)"
-          mkdir -p "$staging/aardink-docs/editor" "$staging/aardink-docs/languages"
+          mkdir -p "$staging/aardink-docs/editor" "$staging/aardink-docs/languages" "$staging/aardink-docs/languages-lsp"
           cp -R editor/build/dokka/markdown/. "$staging/aardink-docs/editor/"
           cp -R languages/build/dokka/markdown/. "$staging/aardink-docs/languages/"
+          cp -R languages-lsp/build/dokka/markdown/. "$staging/aardink-docs/languages-lsp/"
           archive="aardink-docs-${GITHUB_REF_NAME}.tgz"
           tar -czf "$archive" -C "$staging" aardink-docs
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
