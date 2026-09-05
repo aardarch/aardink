@@ -109,4 +109,63 @@ class TomlLanguageServiceTest {
         val formatted = TomlLanguageService.format(doc)
         assertEquals("a = 1\nb = 2", formatted)
     }
+
+    // ── Multiline values ─────────────────────────────────────────────────────
+
+    @Test
+    fun `multiline array produces no diagnostics`() {
+        val src = """
+            [libraries]
+            targets = [
+              "android",
+              "jvm",
+            ]
+            other = 1
+        """.trimIndent()
+        assertTrue(diagnose(src).isEmpty(), "got ${diagnose(src).map { it.message }}")
+    }
+
+    @Test
+    fun `multiline string content is not parsed as declarations`() {
+        val src = """
+            [tool]
+            description = ${"\"\"\""}
+            not a key = value
+            [not a header]
+            ${"\"\"\""}
+            after = 1
+        """.trimIndent()
+        assertTrue(diagnose(src).isEmpty(), "got ${diagnose(src).map { it.message }}")
+    }
+
+    @Test
+    fun `a key repeated after a multiline value is still a duplicate`() {
+        val src = """
+            [versions]
+            list = [
+              "a",
+            ]
+            list = 2
+        """.trimIndent()
+        val diags = diagnose(src)
+        assertEquals(1, diags.size)
+        assertEquals(DiagnosticSeverity.Warning, diags[0].severity)
+        assertTrue(diags[0].message.contains("Duplicate key"))
+    }
+
+    @Test
+    fun `format preserves whitespace inside a multiline string`() = runBlocking {
+        val quotes = "\"\"\""
+        val src = "text = $quotes\n    indented line   \n$quotes\nb=2"
+        val formatted = TomlLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("    indented line   "), "string content must survive verbatim: $formatted")
+        assertTrue(formatted.endsWith("b = 2"), "declarations outside the string are still normalized: $formatted")
+    }
+
+    @Test
+    fun `format keeps array elements on their own lines without splitting on equals`() = runBlocking {
+        val src = "arr = [\n  \"a=1\",\n]"
+        val formatted = TomlLanguageService.format(CodeDocument(src))
+        assertEquals("arr = [\n\"a=1\",\n]", formatted)
+    }
 }

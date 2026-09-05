@@ -112,4 +112,21 @@ class XmlLanguageServiceTest {
         val diags = html("<div><span></div>")
         assertTrue(diags.isNotEmpty())
     }
+
+    @Test
+    fun `a custom element only prefixed by a void name is not void`() = runBlocking {
+        val doc = CodeDocument("<input-group>\n<span>\n</span>\n</input-group>")
+        val formatted = HtmlLanguageService.format(doc)
+        assertEquals("<input-group>\n    <span>\n    </span>\n</input-group>", formatted)
+
+        assertTrue(html("<input-group><span></span></input-group>").isEmpty())
+        assertTrue(html("<input-group>").isNotEmpty(), "it still needs a closing tag")
+    }
+
+    @Test
+    fun `duplicate attributes fold case only in html`() {
+        assertTrue(xml("""<a foo="1" FOO="2"/>""").isEmpty(), "XML attribute names are case-sensitive")
+        assertTrue(xml("""<a foo="1" foo="2"/>""").any { it.message.contains("Duplicate attribute") })
+        assertTrue(html("""<a foo="1" FOO="2"/>""").any { it.message.contains("Duplicate attribute") })
+    }
 }

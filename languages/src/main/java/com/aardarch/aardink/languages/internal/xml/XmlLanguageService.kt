@@ -318,8 +318,8 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
             if (trimmed.startsWith("<")) {
                 result.add(" ".repeat(depth * 4) + trimmed)
-                val isVoid = htmlMode && HTML_VOID_ELEMENTS.any { trimmed.lowercase().startsWith("<$it") }
-                if (!isVoid) depth++
+                // Whole-name match: <input-group> is not the void element <input>.
+                if (!isVoidElement(tagNameOf(trimmed.removePrefix("<")))) depth++
                 continue
             }
 
@@ -328,6 +328,13 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
         return result.joinToString("\n")
     }
+
+    /** Element name at the start of [tagContent] (the text just inside `<`), without attributes. */
+    private fun tagNameOf(tagContent: String): String =
+        tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
+
+    /** Whether [name] is an HTML element that never has children — only meaningful in HTML mode. */
+    private fun isVoidElement(name: String): Boolean = htmlMode && name.lowercase() in HTML_VOID_ELEMENTS
 
     private fun findLastUnclosedTag(text: String, beforeOffset: Int): String? {
         val stack = ArrayDeque<String>()
@@ -353,11 +360,8 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             if (end in (i + 1)..<beforeOffset) {
                 val raw = text.substring(i + 1, end).trim()
                 if (!raw.startsWith("!") && !raw.startsWith("?") && !raw.endsWith("/")) {
-                    val name = raw.takeWhile { !it.isWhitespace() && it != '/' }
-                    if (name.isNotEmpty()) {
-                        val isVoid = htmlMode && name.lowercase() in HTML_VOID_ELEMENTS
-                        if (!isVoid) stack.addLast(name)
-                    }
+                    val name = tagNameOf(raw)
+                    if (name.isNotEmpty() && !isVoidElement(name)) stack.addLast(name)
                 }
                 i = end + 1
                 continue
@@ -376,8 +380,9 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val seen = mutableSetOf<String>()
         val matches = ATTR_NAME_REGEX.findAll(rawTagContent)
         for (m in matches) {
-            val attrName = m.value.lowercase()
-            if (!seen.add(attrName)) {
+            val attrName = m.value
+            // XML attribute names are case-sensitive; only HTML folds case.
+            if (!seen.add(if (htmlMode) attrName.lowercase() else attrName)) {
                 val attrOffset = rawStartOffset + m.range.first
                 val (line, _) = document.offsetToLineCol(attrOffset)
                 diags.add(

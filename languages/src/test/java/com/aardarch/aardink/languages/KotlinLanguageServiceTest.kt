@@ -51,6 +51,22 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
+    fun `delimiters inside character literals are data`() {
+        assertTrue(diagnose("val closing = '}'").isEmpty())
+        assertTrue(diagnose("val opening = '{'").isEmpty())
+        assertTrue(diagnose("fun f() { val p = '(' }").isEmpty())
+        assertTrue(diagnose("""val escaped = '\''""").isEmpty())
+        assertTrue(diagnose("""val backslash = '\\'""").isEmpty())
+    }
+
+    @Test
+    fun `a lone quote does not hide a real unmatched delimiter`() {
+        // Not a character literal, so the brace after it is still checked.
+        val diags = diagnose("val s = \"it's\"\n}")
+        assertTrue(diags.any { it.message.contains("Unmatched closing delimiter", ignoreCase = true) })
+    }
+
+    @Test
     fun `unmatched delimiter flagged`() {
         val diags = diagnose("fun foo() { val x = 1 } }")
         assertEquals(1, diags.size)

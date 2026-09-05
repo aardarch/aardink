@@ -177,6 +177,17 @@ object KotlinLanguageService : BaseLanguageService() {
                 continue
             }
 
+            // Character literal '.' — delimiters inside one are data, not brackets ('}' is valid Kotlin).
+            if (c == '\'') {
+                val end = endOfCharLiteral(text, i)
+                if (end > i) {
+                    i = end
+                    continue
+                }
+                // Not a literal (an unterminated quote): treat it as an ordinary character rather
+                // than reporting an error the delimiter checker has no business reporting.
+            }
+
             // Brackets / Parentheses / Braces matching
             if (c == '{' || c == '(' || c == '[') {
                 stack.addLast(c to i)
@@ -220,6 +231,22 @@ object KotlinLanguageService : BaseLanguageService() {
         }
 
         return diags
+    }
+
+    /**
+     * Index just past the character literal opening at [start], or [start] itself when the quote
+     * doesn't open one (an unterminated or empty pair, or a literal running past the line).
+     */
+    private fun endOfCharLiteral(text: String, start: Int): Int {
+        var i = start + 1
+        while (i < text.length && text[i] != '\n') {
+            when (text[i]) {
+                '\\' -> i += 2
+                '\'' -> return if (i > start + 1) i + 1 else start
+                else -> i++
+            }
+        }
+        return start
     }
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {

@@ -31,6 +31,9 @@ object TomlLanguageService : BaseLanguageService() {
 
     override val triggerCharacters: Set<Char> = setOf('[', '=', '"', '\'', '{', '.')
 
+    private const val MULTILINE_BASIC = "\"\"\""
+    private const val MULTILINE_LITERAL = "'''"
+
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val lineCount = document.lineCount
         if (lineCount == 0 || document.text.isBlank()) return emptyList()
@@ -38,11 +41,15 @@ object TomlLanguageService : BaseLanguageService() {
         val diags = mutableListOf<Diagnostic>()
         var currentSection = ""
         val sectionKeys = mutableSetOf<String>()
+        val lineStates = lineStates(document)
 
         for (i in 0 until lineCount) {
             val lineText = document.lineText(i)
             val trimmed = lineText.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
+            // Part of a value opened on an earlier line (a multiline string or array), not a
+            // declaration of its own.
+            if (lineStates[i].isContinuation) continue
 
             val lineStartOffset = document.lineStart(i)
 
@@ -220,10 +227,22 @@ object TomlLanguageService : BaseLanguageService() {
         if (lineCount == 0) return ""
 
         val formattedLines = mutableListOf<String>()
+        val lineStates = lineStates(document)
         for (i in 0 until lineCount) {
             val line = document.lineText(i)
+            // Whitespace inside a multiline string is data — reformatting it changes the document.
+            if (lineStates[i].touchesMultilineString) {
+                formattedLines.add(line)
+                continue
+            }
             val trimmed = line.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("[")) {
+                formattedLines.add(trimmed)
+                continue
+            }
+            // An array element or inline-table member — an '=' here belongs to the value, not to a
+            // key/value declaration this line could be split on.
+            if (lineStates[i].isContinuation) {
                 formattedLines.add(trimmed)
                 continue
             }
@@ -237,6 +256,93 @@ object TomlLanguageService : BaseLanguageService() {
             }
         }
         return formattedLines.joinToString("\n")
+    }
+
+    /**
+     * How a line relates to the values around it.
+     *
+     * @param isContinuation The line continues a value opened earlier — a multiline string, array
+     *   or inline table — so it is not a declaration in its own right.
+     * @param touchesMultilineString Any part of the line lies inside a `"""` / `'''` string, whose
+     *   leading and trailing whitespace is data and must survive formatting verbatim.
+     */
+    private data class TomlLineState(val isContinuation: Boolean, val touchesMultilineString: Boolean)
+
+    /**
+     * Classifies every line of [document]. TOML values span lines — `"""` / `'''` strings and
+     * bracketed arrays or inline tables — so a line is only its own declaration once the lines
+     * above it have closed everything they opened.
+     */
+    private fun lineStates(document: CodeDocument): List<TomlLineState> {
+        val states = ArrayList<TomlLineState>(document.lineCount)
+        var openDelimiter: String? = null
+        var depth = 0
+
+        for (i in 0 until document.lineCount) {
+            val line = document.lineText(i)
+            val startedInsideString = openDelimiter != null
+            val startedInsideValue = startedInsideString || depth > 0
+            val isHeader = !startedInsideValue && line.trimStart().startsWith("[")
+            var openedString = false
+            var j = 0
+
+            while (j < line.length) {
+                val delimiter = openDelimiter
+                if (delimiter != null) {
+                    val close = line.indexOf(delimiter, j)
+                    if (close < 0) {
+                        j = line.length
+                    } else {
+                        openDelimiter = null
+                        j = close + delimiter.length
+                    }
+                    continue
+                }
+                when {
+                    line[j] == '#' -> j = line.length
+
+                    line.startsWith(MULTILINE_BASIC, j) || line.startsWith(MULTILINE_LITERAL, j) -> {
+                        openDelimiter = line.substring(j, j + 3)
+                        openedString = true
+                        j += 3
+                    }
+
+                    line[j] == '"' || line[j] == '\'' -> j = endOfBasicString(line, j)
+
+                    line[j] == '[' || line[j] == '{' -> {
+                        depth++
+                        j++
+                    }
+
+                    line[j] == ']' || line[j] == '}' -> {
+                        depth = (depth - 1).coerceAtLeast(0)
+                        j++
+                    }
+
+                    else -> j++
+                }
+            }
+
+            // An unclosed table header is reported on its own line; don't let it swallow the rest
+            // of the document as one long continuation.
+            if (isHeader) depth = 0
+            states.add(TomlLineState(startedInsideValue, startedInsideString || openedString))
+        }
+        return states
+    }
+
+    /** Index just past the single-line string opening at [start], or the line end if unterminated. */
+    private fun endOfBasicString(line: String, start: Int): Int {
+        val quote = line[start]
+        var i = start + 1
+        while (i < line.length) {
+            when {
+                quote == '"' && line[i] == '\\' -> i += 2
+                line[i] == quote -> return i + 1
+                else -> i++
+            }
+        }
+        return line.length
     }
 
     private fun findActiveSection(document: CodeDocument, currentLine: Int): String {
