@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -155,6 +156,7 @@ fun CodeEditorLayout(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTargetName by remember { mutableStateOf("") }
     var renameTargetRange by remember { mutableStateOf(IntRange.EMPTY) }
+    var renameTargetVersion by remember { mutableIntStateOf(0) }
 
     // ── Rename: resolve the symbol the host asked to rename, then open the dialog ─
     // A null `prepareRename` means "this symbol cannot be renamed" — including the default
@@ -175,6 +177,7 @@ fun CodeEditorLayout(
             if (range.first < 0 || range.last >= text.length) return@collect
             renameTargetRange = range
             renameTargetName = text.substring(range.first, range.last + 1)
+            renameTargetVersion = requestedVersion
             showRenameDialog = true
         }
     }
@@ -214,8 +217,10 @@ fun CodeEditorLayout(
     // Quick fixes for the tapped diagnostic — the only way the action menu is opened. Tapping a
     // gutter dot doesn't move the cursor, so actions are fetched for the diagnostic's own range,
     // lazily, rather than for every cursor position the user passes through.
+    // Not keyed on the text version: the tooltip is dismissed by any edit (see the sync effect
+    // below), because its diagnostic's range describes text that no longer exists.
     var tooltipCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
-    LaunchedEffect(languageService, tooltipDiagnostic, textVersion) {
+    LaunchedEffect(languageService, tooltipDiagnostic) {
         tooltipCodeActions = emptyList()
         val tooltip = tooltipDiagnostic ?: return@LaunchedEffect
         if (languageService == null) return@LaunchedEffect
@@ -264,6 +269,12 @@ fun CodeEditorLayout(
     LaunchedEffect(state) {
         snapshotFlow { state.textVersion }
             .collect { _ ->
+                // Any edit — typed, applied from a quick fix, or made by the host — leaves the
+                // tapped diagnostic's range pointing at text that has moved. Take the banner and
+                // its menu down rather than keep offering a fix for a range that no longer means
+                // what it did (or for a problem the fix just removed).
+                tooltipDiagnostic = null
+                showCodeActionsMenu = false
                 val currentText = state.document.text
                 if (fieldValue.text != currentText) {
                     fieldValue = TextFieldValue(
@@ -271,7 +282,6 @@ fun CodeEditorLayout(
                         selection = state.selection,
                     )
                     showCompletion = false
-                    tooltipDiagnostic = null
                 }
             }
     }
@@ -539,19 +549,24 @@ fun CodeEditorLayout(
                 currentName = renameTargetName,
                 onConfirm = { newName ->
                     val target = renameTargetRange.first
-                    // The dialog closes now and the server answers later, so the user can type in
-                    // between. Those edits are offsets into the text as it was when we asked; once
-                    // it has changed they point at whatever happens to sit there now, so the rename
-                    // is dropped rather than applied to the wrong characters.
-                    val requestedVersion = state.textVersion
+                    // The target offset was measured when the dialog opened, and the server's
+                    // edits are offsets into the text as it is when we ask. The host may have
+                    // replaced the document while the dialog was up, and the user can type while
+                    // the server works; in either case the offsets point at whatever happens to
+                    // sit there now, so the rename is dropped rather than applied to the wrong
+                    // characters.
+                    val requestedVersion = renameTargetVersion
+                    showRenameDialog = false
+                    if (state.textVersion != requestedVersion) return@RenameDialog
                     coroutineScope.launch {
-                        val edits = languageService?.rename(state.document, target, newName) ?: emptyList()
+                        val edits = withContext(Dispatchers.Default) {
+                            languageService?.rename(state.document, target, newName)
+                        } ?: emptyList()
                         if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
                             state.applyTextEdits(edits)
                             fieldValue = TextFieldValue(state.document.text, state.selection)
                         }
                     }
-                    showRenameDialog = false
                 },
                 onDismiss = { showRenameDialog = false },
             )
@@ -680,6 +695,7 @@ fun CodeEditorLayout(
                                     languageService = languageService,
                                     triggerChars = triggerChars,
                                     onFieldValue = { fieldValue = it },
+                                    currentCompletionItems = completionItems,
                                     onCompletionItems = { completionItems = it },
                                     onShowCompletion = { showCompletion = it },
                                     completionJobRef = { completionJob = it },
@@ -742,6 +758,7 @@ private fun handleTextChange(
     languageService: LanguageService?,
     triggerChars: Set<Char>,
     onFieldValue: (TextFieldValue) -> Unit,
+    currentCompletionItems: List<CompletionItem>,
     onCompletionItems: (List<CompletionItem>) -> Unit,
     onShowCompletion: (Boolean) -> Unit,
     completionJobRef: (Job?) -> Unit,
@@ -759,6 +776,11 @@ private fun handleTextChange(
     if (isSingleInsert && languageService != null) {
         val typedChar = delta.insertText[0]
         val insertedAt = delta.deleteOffset
+        // The list stays up while a fresh request is in flight, so an item accepted in between
+        // comes from a list addressed to the text before this keystroke. Re-address the ranges a
+        // provider gave: the typed character joins the token being completed, and anything after
+        // the insertion moves along by one.
+        var carried = currentCompletionItems.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
 
         if (typedChar == '\n') {
             val (newLine, _) = state.document.offsetToLineCol(insertedAt + 1)
@@ -776,11 +798,14 @@ private fun handleTextChange(
             val closing = languageService.autoClose(state.document, insertedAt, typedChar)
             if (closing != null) {
                 state.applyEdit(finalSelection.start, 0, closing, finalSelection)
+                // Inserted after the cursor: a range ending at the cursor must not swallow it.
+                carried = carried.map { it.shiftedForInsert(finalSelection.start, closing.length, absorbing = false) }
             }
         }
 
         when {
             typedChar in triggerChars -> {
+                onCompletionItems(carried)
                 currentCompletionJob?.cancel()
                 completionJobRef(
                     coroutineScope.launch {
@@ -792,6 +817,7 @@ private fun handleTextChange(
             }
 
             typedChar.isLetterOrDigit() || typedChar == '_' -> {
+                onCompletionItems(carried)
                 currentCompletionJob?.cancel()
                 completionJobRef(
                     coroutineScope.launch {
@@ -856,6 +882,27 @@ private val COMPLETION_BOUNDARY_CHARS =
  * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
  * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
  */
+/**
+ * [CompletionItem] re-addressed after [length] characters were inserted at [at], for a list that
+ * outlives the text it was computed for. A provider's [CompletionItem.replaceRange] and
+ * [CompletionItem.additionalEdits] are offsets into that older text; applying them verbatim after
+ * a keystroke replaces the wrong span. Ranges after the insertion move along; a range the
+ * insertion lands inside grows to keep covering the same text; and when [absorbing] a range ending
+ * exactly at the insertion grows too, so the character just typed becomes part of the token the
+ * completion replaces rather than a leftover after it.
+ */
+internal fun CompletionItem.shiftedForInsert(at: Int, length: Int, absorbing: Boolean): CompletionItem {
+    val range = replaceRange?.let { shiftRangeForInsert(it, at, length, absorbing) }
+    val extra = additionalEdits.map { TextEdit(shiftRangeForInsert(it.range, at, length, absorbing = false), it.newText) }
+    return if (range == replaceRange && extra == additionalEdits) this else copy(replaceRange = range, additionalEdits = extra)
+}
+
+private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing: Boolean): IntRange = when {
+    at < range.first -> range.first + length..range.last + length
+    at <= range.last || (absorbing && at == range.last + 1) -> range.first..range.last + length
+    else -> range
+}
+
 internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
     val cursor = cursorPos.coerceIn(0, text.length)
     item.replaceRange?.let { provided ->

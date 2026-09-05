@@ -20,6 +20,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
@@ -79,6 +80,9 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     @Volatile
     private var closed = false
 
+    /** Guarded by this client's monitor; see [closeTransport]. */
+    private var transportClosed = false
+
     /** Registers [listener]; it stays registered until [removeDiagnosticsListener] is called. */
     fun addDiagnosticsListener(listener: DiagnosticsListener) {
         diagnosticsListeners.addIfAbsent(listener)
@@ -97,6 +101,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     @Synchronized
     fun start() {
         if (closed || listeningJob != null) return
+        if (!scope.isActive) {
+            // A coroutine launched into a cancelled scope never runs, so no loop would ever answer
+            // a request registered afterwards; the client is as good as closed.
+            closed = true
+            closeTransport()
+            return
+        }
         listeningJob = scope.launch {
             try {
                 while (true) {
@@ -105,14 +116,23 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: IOException) {
-                // A broken pipe or a killed server process is how a connection ordinarily ends.
-                // Letting it out of this root coroutine would reach the scope's uncaught handler
-                // and take the host process down over a language server going away.
+            } catch (_: Exception) {
+                // A broken pipe or a killed server process is how a connection ordinarily ends,
+                // and a transport closed underneath the read may fail with anything — the
+                // contract promises no particular type. Letting it out of this root coroutine
+                // would reach the scope's uncaught handler and take the host process down over a
+                // language server going away.
             } finally {
                 onReceiveLoopEnded()
             }
         }
+    }
+
+    /** Closes the transport once; every teardown path may reach here, and only the first should close. */
+    private fun closeTransport() {
+        if (transportClosed) return
+        transportClosed = true
+        transport.close()
     }
 
     /**
@@ -125,7 +145,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         closed = true
         listeningJob = null
         failPendingRequests("Language server connection closed")
-        transport.close()
+        closeTransport()
     }
 
     /**
@@ -211,7 +231,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         listeningJob?.cancel()
         listeningJob = null
         failPendingRequests("Language server connection closed")
-        transport.close()
+        closeTransport()
     }
 
     /**
@@ -263,7 +283,7 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         listeningJob?.cancel()
         listeningJob = null
         failPendingRequests("Language server client stopped")
-        transport.close()
+        closeTransport()
     }
 
     private fun failPendingRequests(reason: String) {

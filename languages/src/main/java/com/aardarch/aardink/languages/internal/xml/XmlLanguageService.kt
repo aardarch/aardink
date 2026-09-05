@@ -149,16 +149,24 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 continue
             }
 
-            // Check duplicate attributes in raw, and entity references inside attribute values —
-            // the loop jumps past the whole tag, so the top-level '&' check never sees them.
+            // Check duplicate attributes in raw, and — in XML, where a bare '&' is as invalid in a
+            // value as in text — entity references inside attribute values, which the top-level
+            // '&' check never sees because the loop jumps past the whole tag. HTML permits an
+            // ampersand that does not look like a reference (`href="?a=1&b=2"`), so it is left be.
             checkDuplicateAttributes(document, i + 1, raw, diags)
-            checkAttributeValueEntities(document, i + 1, raw, diags)
+            if (!htmlMode) checkAttributeValueEntities(document, i + 1, raw, diags)
 
             val isVoid = htmlMode && name in HTML_VOID_ELEMENTS
             if (!selfClosing && !isVoid) {
                 stack.addLast(OpenTag(name, i, tagEnd + 1))
             }
             i = tagEnd + 1
+            // The contents of an HTML raw-text element are script or style source, not markup: a
+            // '&&' there is an operator, and no '<' in it opens a tag. Skip to its closing tag.
+            if (htmlMode && !selfClosing && name in HTML_RAW_TEXT_ELEMENTS) {
+                val close = text.indexOf("</$name", i, ignoreCase = true)
+                if (close >= 0) i = close
+            }
         }
 
         // Anything still on the stack is unclosed
@@ -177,7 +185,9 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
         if (charTyped == '>') {
             val tagStart = text.lastIndexOf('<', offset - 1)
-            if (tagStart >= 0) {
+            // A '>' typed in text content — `<p>1 > 0` — closes nothing: the tag that the last
+            // '<' opened was already closed by an earlier '>'.
+            if (tagStart >= 0 && text.indexOf('>', tagStart) == offset) {
                 val tagText = text.substring(tagStart, offset + 1)
                 if (!tagText.startsWith("<!--") &&
                     !tagText.startsWith("<?") &&
@@ -699,6 +709,9 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             "area", "base", "br", "col", "embed", "hr", "img", "input",
             "link", "meta", "param", "source", "track", "wbr",
         )
+
+        /** HTML elements whose content is raw text: no tags, no entity references. */
+        val HTML_RAW_TEXT_ELEMENTS = setOf("script", "style")
 
         val COMMON_XML_ELEMENTS = listOf(
             "manifest", "application", "activity", "service", "receiver", "provider",

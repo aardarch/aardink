@@ -235,9 +235,33 @@ class CodeEditorState(
             undoManager.recordBatch(ops)
         }
 
-        selection = clampToDocument(selection)
+        // Carry the caret through the batch: a rename or import inserted above it must not leave
+        // it at a number that now points into unrelated text.
+        val before = selection
+        selection = clampToDocument(
+            TextRange(mapThroughEdits(before.start, sorted), mapThroughEdits(before.end, sorted)),
+        )
         textVersion++
         scheduleTokenization()
+    }
+
+    /**
+     * Where [offset] (into the text before a batch) sits after [edits] are applied. An edit ending
+     * at or before the offset shifts it by the size difference; one the offset falls inside snaps
+     * it to the end of the replacement, the same place a single [applyEdit] leaves the caret.
+     */
+    private fun mapThroughEdits(offset: Int, edits: List<TextEdit>): Int {
+        var shift = 0
+        var snapped: Int? = null
+        for (edit in edits) {
+            val start = edit.range.first.coerceAtLeast(0)
+            val end = (edit.range.last + 1).coerceAtLeast(start)
+            when {
+                end <= offset -> shift += edit.newText.length - (end - start)
+                start < offset -> snapped = start + edit.newText.length
+            }
+        }
+        return (snapped ?: offset) + shift
     }
 
     private fun clampToDocument(range: TextRange): TextRange {

@@ -48,7 +48,7 @@ interface LspTransport {
     suspend fun receivePayload(): String?
 
     /**
-     * Closes the transport.
+     * Closes the transport. [LspClient] calls this exactly once per connection.
      */
     fun close()
 }

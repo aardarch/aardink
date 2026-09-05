@@ -468,13 +468,26 @@ object KotlinLanguageService : BaseLanguageService() {
                         i += RAW_STRING_QUOTE.length
                     }
 
-                    line[i] == '"' || line[i] == '\'' -> {
+                    line[i] == '\'' -> {
+                        // The same rule as diagnostics(): a lone apostrophe — `it's` in a
+                        // backtick-quoted name — opens no literal, so it must not swallow the
+                        // braces on the rest of the line.
+                        val end = endOfCharLiteral(line, i)
+                        if (end == i) {
+                            code.append('\'')
+                            i++
+                        } else {
+                            code.append("''")
+                            i = end
+                        }
+                    }
+
+                    line[i] == '"' -> {
                         // Keep the quotes, drop the contents: the literal is a token to the
                         // indenter but its braces are not structure.
-                        val quote = line[i]
-                        code.append(quote)
+                        code.append('"')
                         val end = endOfSingleLineLiteral(line, i)
-                        if (end > i + 1) code.append(quote)
+                        if (end > i + 1) code.append('"')
                         i = end
                     }
 

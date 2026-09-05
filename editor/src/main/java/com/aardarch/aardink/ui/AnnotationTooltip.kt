@@ -61,7 +61,8 @@ fun AnnotationTooltip(
         modifier = modifier
             .fillMaxWidth()
             .background(bg)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            // The buttons bring their own 48 dp minimum height; keep the strip to that.
+            .padding(horizontal = 12.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Tapping the message itself also dismisses; say so rather than leaving an unnamed target.

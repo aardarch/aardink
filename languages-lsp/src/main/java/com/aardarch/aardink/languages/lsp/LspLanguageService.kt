@@ -454,10 +454,18 @@ class LspLanguageService(
 
     /** Half-open LSP [range] → inclusive editor range. An insertion point becomes the empty range `n..n-1`. */
     private fun offsetRangeOf(document: CodeDocument, range: LspRange): IntRange {
-        val start = document.lineColToOffset(range.start.line, range.start.character)
-        val end = document.lineColToOffset(range.end.line, range.end.character).coerceAtLeast(start)
+        val start = offsetOf(document, range.start)
+        val end = offsetOf(document, range.end).coerceAtLeast(start)
         return start until end
     }
+
+    /**
+     * Editor offset of [position]. A line past the last one is the end of the document — the
+     * `{ line: lineCount, character: 0 }` idiom servers use for "end of file" in a whole-document
+     * edit — where [CodeDocument.lineColToOffset] would clamp it to the *start* of the last line.
+     */
+    private fun offsetOf(document: CodeDocument, position: LspPosition): Int =
+        if (position.line >= document.lineCount) document.length else document.lineColToOffset(position.line, position.character)
 
     /**
      * Whether two inclusive editor ranges share a character. An empty range is an insertion point

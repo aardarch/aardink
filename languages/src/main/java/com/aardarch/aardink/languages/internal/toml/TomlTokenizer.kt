@@ -35,11 +35,12 @@ object TomlTokenizer : RegexTokenizer() {
         Regex("\"(?:\\\\.|[^\"\\\\\\n])*\"") to TokenType.StringLiteral,
         Regex("'[^'\\n]*'") to TokenType.StringLiteral,
 
-        // Array of tables header [[array.table]]
-        Regex("\\[\\[[^\\]\n]+\\]\\]") to TokenType.TypeName,
+        // Array of tables header [[array.table]] — only at the start of a line, so an array value
+        // such as `deps = ["a", "b"]` is tokenized as strings and punctuation, not as a header.
+        Regex("(?m)^[ \\t]*\\[\\[[^\\]\n]+\\]\\]") to TokenType.TypeName,
 
         // Table header [table]
-        Regex("\\[[^\\]\n]+\\]") to TokenType.TypeName,
+        Regex("(?m)^[ \\t]*\\[[^\\]\n]+\\]") to TokenType.TypeName,
 
         // Keys before '=' (bare keys, dotted keys, or quoted keys)
         Regex("(?:\"[^\"]+\"|'[^']+'|[A-Za-z0-9_.-]+)(?=\\s*=)") to TokenType.Annotation,
