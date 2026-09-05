@@ -53,4 +53,40 @@ class TomlFoldingProviderTest {
         val ranges = TomlFoldingProvider.foldableRanges(doc)
         assertTrue(ranges.any { it.startLine == 0 && it.endLine == 4 })
     }
+
+    @Test
+    fun `brackets inside ordinary strings are data, not folds`() {
+        val src = """
+            open = "["
+            middle = "plain"
+            close = "]"
+        """.trimIndent()
+        val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
+        assertTrue(ranges.isEmpty(), "a bracket in a quoted value opens nothing: was $ranges")
+    }
+
+    @Test
+    fun `a hash inside a string does not comment out the rest of its line`() {
+        // If the '#' were read as a comment marker the '[' after it would be skipped, and the
+        // array below would never be seen as opening a fold.
+        val src = """
+            note = "#" # real comment
+            list = [
+                1,
+            ]
+        """.trimIndent()
+        val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
+        assertTrue(ranges.any { it.startLine == 1 && it.endLine == 3 }, "was $ranges")
+    }
+
+    @Test
+    fun `a literal string keeps its backslashes`() {
+        // No escapes in '...', so the closing quote is the very next one and the '[' stays data.
+        val src = """
+            path = 'C:\'
+            other = "["
+        """.trimIndent()
+        val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
+        assertTrue(ranges.isEmpty(), "was $ranges")
+    }
 }

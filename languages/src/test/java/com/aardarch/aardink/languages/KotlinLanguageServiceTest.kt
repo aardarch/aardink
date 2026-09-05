@@ -119,4 +119,28 @@ class KotlinLanguageServiceTest {
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals("fun foo() {\n    // {\n    val s = \"{\"\n    val x = 1\n}", formatted)
     }
+
+    @Test
+    fun `nested block comments are comment all the way to the outer terminator`() {
+        // The inner terminator closes only the inner comment; the brace after it is still comment,
+        // so nothing here is an unmatched delimiter.
+        val src = "fun f() {\n    /* outer /* inner */ } still comment */\n}"
+        assertTrue(diagnose(src).isEmpty(), "was ${diagnose(src).map { it.message }}")
+    }
+
+    @Test
+    fun `an unterminated nested block comment is still reported`() {
+        val src = "fun f() {\n    /* outer /* inner */\n}"
+        val diags = diagnose(src)
+        assertEquals(1, diags.size)
+        assertEquals(DiagnosticSeverity.Error, diags[0].severity)
+        assertTrue(diags[0].message.startsWith("Unterminated block comment"), diags[0].message)
+    }
+
+    @Test
+    fun `format takes no structure from braces inside a nested comment`() = runBlocking {
+        val src = "fun f() {\n/* a /* b */ { */\nval x = 1\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertEquals("fun f() {\n    /* a /* b */ { */\n    val x = 1\n}", formatted)
+    }
 }

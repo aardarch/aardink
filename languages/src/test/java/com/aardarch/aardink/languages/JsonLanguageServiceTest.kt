@@ -106,4 +106,27 @@ class JsonLanguageServiceTest {
         val formatted = JsonLanguageService.format(doc)
         assertEquals("{\n    \"a\": 1,\n    \"b\": [\n        true\n    ]\n}", formatted)
     }
+
+    /**
+     * A single backslash, for spelling JSON escapes as the document actually contains them —
+     * `"${'$'}{bs}u0061"` is the six source characters, not the letter they denote.
+     */
+    private val bs = '\\'
+
+    @Test
+    fun `keys spelled differently but naming one member are duplicates`() {
+        // The unicode escape spells "a", so the two members are one and the second is a duplicate.
+        val diags = diagnose("""{"a": 1, "${bs}u0061": 2}""")
+        assertEquals(1, diags.size)
+        assertEquals(DiagnosticSeverity.Error, diags[0].severity)
+        assertTrue(diags[0].message.contains("Duplicate key 'a'"), diags[0].message)
+    }
+
+    @Test
+    fun `escapes decode rather than comparing as source text`() {
+        // Two spellings of a newline name one key; a newline and the letter n name two.
+        assertEquals(1, diagnose("""{"${bs}n": 1, "${bs}u000A": 2}""").size)
+        assertTrue(diagnose("""{"${bs}n": 1, "n": 2}""").isEmpty())
+        assertTrue(diagnose("""{"a": 1, "b": 2}""").isEmpty())
+    }
 }

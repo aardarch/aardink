@@ -102,6 +102,12 @@ object TomlFoldingProvider : FoldingProvider {
                 }
                 continue
             }
+            // An ordinary quoted value is data, not syntax: `x = "["` opens no bracket and `"#"`
+            // starts no comment. Skipped after the triple-quote branches, which claim theirs first.
+            if (c == '"' || c == '\'') {
+                i = endOfSingleLineString(text, i)
+                continue
+            }
             if (c == '{' || c == '[') {
                 stack.addLast(c to i)
             } else if (c == '}' || c == ']') {
@@ -118,5 +124,26 @@ object TomlFoldingProvider : FoldingProvider {
             i++
         }
         return ranges
+    }
+
+    /**
+     * Index just past the single-line string opening at [start] in [text].
+     *
+     * A basic string (`"`) honours backslash escapes; a literal string (`'`) has none, so a
+     * backslash in it is an ordinary character. Neither may span a line, so an unterminated one
+     * ends at the newline and the scan carries on from there rather than swallowing the file.
+     */
+    private fun endOfSingleLineString(text: String, start: Int): Int {
+        val quote = text[start]
+        var i = start + 1
+        while (i < text.length) {
+            when {
+                text[i] == '\n' -> return i
+                quote == '"' && text[i] == '\\' -> i += 2
+                text[i] == quote -> return i + 1
+                else -> i++
+            }
+        }
+        return text.length
     }
 }

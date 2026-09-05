@@ -105,9 +105,9 @@ object KotlinLanguageService : BaseLanguageService() {
                 continue
             }
 
-            // Block comment /* */
+            // Block comment /* */ — Kotlin's nest, so the first "*/" need not be the end of one.
             if (c == '/' && i + 1 < n && text[i + 1] == '*') {
-                val end = text.indexOf("*/", i + 2)
+                val end = endOfBlockComment(text, i)
                 if (end < 0) {
                     val (line, _) = document.offsetToLineCol(i)
                     diags.add(
@@ -121,7 +121,7 @@ object KotlinLanguageService : BaseLanguageService() {
                     )
                     return diags
                 }
-                i = end + 2
+                i = end
                 continue
             }
 
@@ -386,7 +386,7 @@ object KotlinLanguageService : BaseLanguageService() {
     private fun lineStates(lines: List<String>): List<KotlinLineState> {
         val states = ArrayList<KotlinLineState>(lines.size)
         var inRawString = false
-        var inBlockComment = false
+        var blockCommentDepth = 0
 
         for (line in lines) {
             val startedInRawString = inRawString
@@ -406,20 +406,26 @@ object KotlinLanguageService : BaseLanguageService() {
                         }
                     }
 
-                    inBlockComment -> {
-                        val close = line.indexOf("*/", i)
-                        if (close < 0) {
-                            i = line.length
-                        } else {
-                            inBlockComment = false
-                            i = close + 2
+                    // Depth, not a flag: Kotlin block comments nest, so an inner "*/" closes only
+                    // the comment it opened and the text after it is still comment.
+                    blockCommentDepth > 0 -> when {
+                        line.startsWith("/*", i) -> {
+                            blockCommentDepth++
+                            i += 2
                         }
+
+                        line.startsWith("*/", i) -> {
+                            blockCommentDepth--
+                            i += 2
+                        }
+
+                        else -> i++
                     }
 
                     line.startsWith("//", i) -> i = line.length
 
                     line.startsWith("/*", i) -> {
-                        inBlockComment = true
+                        blockCommentDepth++
                         i += 2
                     }
 
@@ -449,6 +455,36 @@ object KotlinLanguageService : BaseLanguageService() {
             states.add(KotlinLineState(startedInRawString || openedRawString, code.toString().trim()))
         }
         return states
+    }
+
+    /**
+     * Index just past the block comment opening at [start] in [text], or -1 when it never closes.
+     *
+     * Kotlin block comments nest: an opener inside one starts a second comment that the next
+     * terminator closes, leaving the outer one still open. The scan therefore counts depth
+     * rather than stopping at the first terminator, which would hand the rest of the outer
+     * comment to the delimiter checker as if it were code.
+     */
+    private fun endOfBlockComment(text: String, start: Int): Int {
+        var depth = 0
+        var i = start
+        while (i < text.length) {
+            when {
+                text.startsWith("/*", i) -> {
+                    depth++
+                    i += 2
+                }
+
+                text.startsWith("*/", i) -> {
+                    depth--
+                    i += 2
+                    if (depth == 0) return i
+                }
+
+                else -> i++
+            }
+        }
+        return -1
     }
 
     /** Index just past the single-line string or char literal opening at [start], or the line end. */

@@ -219,8 +219,8 @@ object JsonLanguageService : BaseLanguageService() {
                 skipWs()
                 if (peek() != '"') fail("Expected a string key")
                 val keyStart = pos
-                parseString()
-                val keyName = text.substring(keyStart + 1, pos - 1)
+                // The decoded key, not its spelling: "a" and "\u0061" name one member.
+                val keyName = parseString()
                 if (!keys.add(keyName)) {
                     fail("Duplicate key '$keyName' in object", keyStart, pos)
                 }
@@ -277,14 +277,21 @@ object JsonLanguageService : BaseLanguageService() {
             }
         }
 
-        private fun parseString() {
+        /**
+         * Consumes a string literal and returns the string it denotes, escapes resolved.
+         *
+         * Callers reading a value discard it; the object parser keeps it, because two members
+         * spelled differently can still name the same key — `"a"` and `"a"` are one member.
+         */
+        private fun parseString(): String {
             val start = pos
+            val decoded = StringBuilder()
             expect('"')
             while (pos < text.length) {
                 when (val c = text[pos]) {
                     '"' -> {
                         pos++
-                        return
+                        return decoded.toString()
                     }
 
                     '\\' -> {
@@ -296,9 +303,11 @@ object JsonLanguageService : BaseLanguageService() {
                             for (k in 1..4) {
                                 if (!isHex(text[pos + k])) fail("Invalid \\u escape", start)
                             }
+                            decoded.append(text.substring(pos + 1, pos + 5).toInt(16).toChar())
                             pos += 5
                         } else {
                             if (esc !in "\"\\/bfnrt") fail("Invalid escape \\$esc", pos - 1)
+                            decoded.append(unescape(esc))
                             pos++
                         }
                     }
@@ -308,11 +317,22 @@ object JsonLanguageService : BaseLanguageService() {
                     else -> if (c.code < 0x20) {
                         fail("Unescaped control character in string", pos)
                     } else {
+                        decoded.append(c)
                         pos++
                     }
                 }
             }
             fail("Unterminated string", start)
+        }
+
+        /** The character a single-letter escape stands for; the escape set is checked by the caller. */
+        private fun unescape(esc: Char): Char = when (esc) {
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            else -> esc // '"', '\\' and '/' stand for themselves
         }
 
         private fun parseNumber() {
