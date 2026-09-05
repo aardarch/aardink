@@ -67,4 +67,20 @@ class CompletionApplyTest {
         val text = "value = "
         assertEquals(8 until 8, completionReplaceRange(text, 8, item("true")))
     }
+
+    @Test
+    fun `a member access dot is a boundary so the receiver survives`() {
+        val text = "val v = list."
+        assertEquals(13 until 13, completionReplaceRange(text, 13, item("map { }")), "nothing to replace after the dot")
+
+        val partial = "val v = list.ma"
+        assertEquals(13 until 15, completionReplaceRange(partial, 15, item("map { }")), "only the partial member name")
+    }
+
+    @Test
+    fun `structural characters are boundaries`() {
+        assertEquals(4 until 6, completionReplaceRange("foo(ba", 6, item("bar")))
+        assertEquals(7 until 9, completionReplaceRange("foo(a, ba", 9, item("bar")))
+        assertEquals(5 until 7, completionReplaceRange("list[ba", 7, item("bar")))
+    }
 }

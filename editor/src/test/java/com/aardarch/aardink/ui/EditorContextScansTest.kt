@@ -15,7 +15,6 @@
  */
 package com.aardarch.aardink.ui
 
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -59,33 +58,5 @@ class EditorContextScansTest {
         assertFalse(isInsideCallArguments(text, 6))
         assertTrue(isInsideCallArguments(text, 14))
         assertFalse(isInsideCallArguments(text, 0))
-    }
-
-    // ── wordRangeAt ──────────────────────────────────────────────────────────
-
-    @Test
-    fun `word range covers the identifier around the offset`() {
-        val text = "val myValue = 1"
-        assertEquals(4 until 11, wordRangeAt(text, 4), "at the start of the word")
-        assertEquals(4 until 11, wordRangeAt(text, 7), "inside the word")
-        assertEquals(4 until 11, wordRangeAt(text, 11), "just past the word")
-    }
-
-    @Test
-    fun `word range includes digits and underscores`() {
-        val text = "val my_value2 = 1"
-        assertEquals(4 until 13, wordRangeAt(text, 8))
-    }
-
-    @Test
-    fun `word range is empty away from an identifier`() {
-        assertTrue(wordRangeAt("a = b", 2).isEmpty())
-        assertTrue(wordRangeAt("", 0).isEmpty())
-    }
-
-    @Test
-    fun `word range clamps an out of bounds offset`() {
-        val text = "value"
-        assertEquals(0 until 5, wordRangeAt(text, 99))
     }
 }

@@ -148,7 +148,6 @@ fun CodeEditorLayout(
     var completionJob by remember { mutableStateOf<Job?>(null) }
 
     // Code actions, Signature help & Rename state
-    var currentCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
     var showCodeActionsMenu by remember { mutableStateOf(false) }
     var currentSignatureHelp by remember { mutableStateOf<SignatureHelp?>(null) }
     var showSignatureHelp by remember { mutableStateOf(false) }
@@ -157,6 +156,9 @@ fun CodeEditorLayout(
     var renameTargetRange by remember { mutableStateOf(IntRange.EMPTY) }
 
     // ── Rename: resolve the symbol the host asked to rename, then open the dialog ─
+    // A null `prepareRename` means "this symbol cannot be renamed" — including the default
+    // implementation of a service that has no rename at all. Opening the dialog anyway produced a
+    // prompt whose confirmation silently did nothing, so the request just ends here instead.
     LaunchedEffect(state, languageService) {
         snapshotFlow { state.pendingRename }.collect { request ->
             if (request == null) return@collect
@@ -164,7 +166,7 @@ fun CodeEditorLayout(
             val text = state.document.text
             val range = withContext(Dispatchers.Default) {
                 languageService?.prepareRename(state.document, request.offset)
-            } ?: wordRangeAt(text, request.offset)
+            } ?: return@collect
             if (range.isEmpty()) return@collect
             renameTargetRange = range
             renameTargetName = text.substring(range.first, (range.last + 1).coerceAtMost(text.length))
@@ -175,32 +177,31 @@ fun CodeEditorLayout(
     if (languageService != null) {
         LaunchedEffect(languageService, state.selection, textVersion) {
             val offset = state.selection.start
-            if (offset >= 0 && offset <= state.document.length) {
-                // Keep asking while the cursor sits inside the argument list, not just right after
-                // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
-                // The service decides when the context has stopped being valid by returning null.
-                if (isInsideCallArguments(state.document.text, offset)) {
-                    val sig = withContext(Dispatchers.Default) {
-                        languageService.signatureHelp(state.document, offset)
-                    }
-                    currentSignatureHelp = sig
-                    showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
-                } else {
-                    showSignatureHelp = false
-                }
-
-                currentCodeActions = withContext(Dispatchers.Default) {
-                    languageService.codeActions(state.document, offset..offset)
-                }
+            if (offset < 0 || offset > state.document.length) return@LaunchedEffect
+            // Keep asking while the cursor sits inside the argument list, not just right after
+            // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
+            // The service decides when the context has stopped being valid by returning null.
+            if (!isInsideCallArguments(state.document.text, offset)) {
+                showSignatureHelp = false
+                return@LaunchedEffect
             }
+            // Debounced like the find and folding passes: a language server should not field a
+            // request per keystroke.
+            delay(SIGNATURE_HELP_DEBOUNCE_MS)
+            val sig = withContext(Dispatchers.Default) {
+                languageService.signatureHelp(state.document, offset)
+            }
+            currentSignatureHelp = sig
+            showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
         }
     }
 
     // Annotation tooltip: shown when user taps a gutter dot
     var tooltipDiagnostic by remember { mutableStateOf<Diagnostic?>(null) }
 
-    // Quick fixes for the tapped diagnostic. Tapping a gutter dot doesn't move the cursor, so the
-    // cursor's code actions belong to an unrelated location and must not be offered here.
+    // Quick fixes for the tapped diagnostic — the only way the action menu is opened. Tapping a
+    // gutter dot doesn't move the cursor, so actions are fetched for the diagnostic's own range,
+    // lazily, rather than for every cursor position the user passes through.
     var tooltipCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
     LaunchedEffect(languageService, tooltipDiagnostic, textVersion) {
         tooltipCodeActions = emptyList()
@@ -210,9 +211,6 @@ fun CodeEditorLayout(
             languageService.codeActions(state.document, tooltip.range)
         }
     }
-
-    // The menu is opened either from the tooltip or from the cursor, and shows that source's fixes.
-    val menuCodeActions = if (tooltipDiagnostic != null) tooltipCodeActions else currentCodeActions
 
     // Diff lane: compute line diffs when savedText or document changes
     var diffAnnotations by remember { mutableStateOf<Map<Int, LineDiffKind>>(emptyMap()) }
@@ -512,9 +510,9 @@ fun CodeEditorLayout(
             )
         }
 
-        if (showCodeActionsMenu && menuCodeActions.isNotEmpty()) {
+        if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
             CodeActionMenu(
-                actions = menuCodeActions,
+                actions = tooltipCodeActions,
                 onSelectAction = { action ->
                     state.applyTextEdits(action.edits)
                     fieldValue = TextFieldValue(state.document.text, state.selection)
@@ -810,7 +808,14 @@ private fun applyCompletion(
     onFieldValue(TextFieldValue(state.document.text, newSelection))
 }
 
-private val COMPLETION_BOUNDARY_CHARS = setOf('<', '>', '{', '}', '"', '\'', '=', ' ', '\n', '\t', '@', '|', ':')
+/**
+ * Characters a completion never reaches back across when guessing what it replaces.
+ *
+ * `.` is one of them: after `list.`, accepting a member completion must insert after the receiver,
+ * not swallow it. A provider that knows better says so with [CompletionItem.replaceRange].
+ */
+private val COMPLETION_BOUNDARY_CHARS =
+    setOf('<', '>', '{', '}', '(', ')', '[', ']', '"', '\'', '=', ',', ';', '.', ' ', '\n', '\t', '@', '|', ':')
 
 /**
  * Half-open-as-inclusive range in [text] that accepting [item] at [cursorPos] replaces.
@@ -832,23 +837,10 @@ internal fun completionReplaceRange(text: String, cursorPos: Int, item: Completi
     return start until cursor
 }
 
-// ── Rename target ──────────────────────────────────────────────────────────────
-
-/**
- * Identifier around [offset], used as the rename target when the language service has no
- * `prepareRename` answer. Empty when [offset] doesn't touch an identifier.
- */
-internal fun wordRangeAt(text: String, offset: Int): IntRange {
-    fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_'
-    val cursor = offset.coerceIn(0, text.length)
-    var start = cursor
-    while (start > 0 && isWordChar(text[start - 1])) start--
-    var end = cursor
-    while (end < text.length && isWordChar(text[end])) end++
-    return start until end
-}
-
 // ── Signature help context ─────────────────────────────────────────────────────
+
+/** Delay before a signature-help request, so a language server isn't asked per keystroke. */
+private const val SIGNATURE_HELP_DEBOUNCE_MS = 200L
 
 /** How far back the call scan looks — a call opened further above the cursor isn't worth chasing. */
 private const val CALL_SCAN_LIMIT = 2000

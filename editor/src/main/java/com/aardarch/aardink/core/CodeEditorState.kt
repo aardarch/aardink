@@ -184,13 +184,18 @@ class CodeEditorState(
     /**
      * Applies a batch of [TextEdit]s atomically to the document, recording the operation in
      * undo history as a single batch and scheduling tokenization.
+     *
+     * [selection] is clamped to the resulting document — a batch that shortens the text past the
+     * cursor would otherwise leave a selection out of bounds, which `TextFieldValue` rejects.
      */
     fun applyTextEdits(edits: List<TextEdit>) {
         if (edits.isEmpty()) return
         undoManager.flushPendingInsert()
 
-        // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent ranges
-        val sorted = edits.sortedByDescending { it.range.first }
+        // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent
+        // ranges; the secondary key keeps an insertion and a replacement at one offset in a defined
+        // order, matching how the LSP bridge sorts the same edits.
+        val sorted = edits.sortedWith(compareByDescending<TextEdit> { it.range.first }.thenByDescending { it.range.last })
         val ops = mutableListOf<EditorUndoManager.EditOperation>()
         // One snapshot for the whole batch: edits are applied high-to-low, so text below the lowest
         // offset touched so far is unchanged and can be sliced from the snapshot — O(len) per edit
@@ -223,8 +228,15 @@ class CodeEditorState(
             undoManager.recordBatch(ops)
         }
 
+        selection = clampToDocument(selection)
         textVersion++
         scheduleTokenization()
+    }
+
+    private fun clampToDocument(range: TextRange): TextRange {
+        val start = range.start.coerceIn(0, document.length)
+        val end = range.end.coerceIn(0, document.length)
+        return if (start == range.start && end == range.end) range else TextRange(start, end)
     }
 
     /**

@@ -80,6 +80,29 @@ class CodeEditorStateTest {
     }
 
     @Test
+    fun `applyTextEdits clamps a selection the batch left out of bounds`() {
+        val state = testState("value = someLongIdentifier")
+        state.selection = TextRange(26)
+
+        // A rename that shortens the tail past the cursor; an unclamped selection would make the
+        // TextFieldValue the layout rebuilds afterwards throw.
+        state.applyTextEdits(listOf(TextEdit(range = 8..25, newText = "x")))
+
+        assertEquals("value = x", state.text)
+        assertEquals(TextRange(9), state.selection)
+    }
+
+    @Test
+    fun `applyTextEdits leaves an in-bounds selection alone`() {
+        val state = testState("foo bar baz")
+        state.selection = TextRange(4, 7)
+
+        state.applyTextEdits(listOf(TextEdit(range = 8..10, newText = "BAZ")))
+
+        assertEquals(TextRange(4, 7), state.selection)
+    }
+
+    @Test
     fun `requestRename records the offset and clearRename consumes it`() {
         val state = testState("val value = 1")
 
