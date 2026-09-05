@@ -27,12 +27,13 @@ import org.junit.jupiter.api.Test
 class LanguageRegistryTest {
 
     @Test
-    fun `withBuiltIns includes all 8 built-in languages`() {
+    fun `withBuiltIns includes all 9 built-in languages`() {
         val registry = LanguageRegistry.withBuiltIns()
-        assertEquals(8, registry.all.size)
+        assertEquals(9, registry.all.size)
         assertNotNull(registry.byId("kotlin"))
         assertNotNull(registry.byId("typescript"))
         assertNotNull(registry.byId("json"))
+        assertNotNull(registry.byId("toml"))
         assertNotNull(registry.byId("xml"))
         assertNotNull(registry.byId("html"))
         assertNotNull(registry.byId("css"))
@@ -47,6 +48,7 @@ class LanguageRegistryTest {
         assertEquals("kotlin", registry.byExtension(".kt")?.id)
         assertEquals("kotlin", registry.byExtension("KT")?.id)
         assertEquals("typescript", registry.byExtension("tsx")?.id)
+        assertEquals("toml", registry.byExtension("toml")?.id)
         assertEquals("xml", registry.byExtension("xml")?.id)
         assertNull(registry.byExtension("unknown"))
         assertNull(registry.byExtension(""))
@@ -62,7 +64,7 @@ class LanguageRegistryTest {
             tokenizer = PlainTextTokenizer,
         )
         registry.register(custom)
-        assertEquals(9, registry.all.size)
+        assertEquals(10, registry.all.size)
         assertSame(custom, registry.byId("log"))
         assertSame(custom, registry.byExtension("log"))
     }
@@ -72,7 +74,7 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         registry.override("kotlin") { it.copy(displayName = "Kotlin (custom)") }
         assertEquals("Kotlin (custom)", registry.byId("kotlin")?.displayName)
-        assertEquals(8, registry.all.size)
+        assertEquals(9, registry.all.size)
     }
 
     @Test
@@ -88,6 +90,6 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         assertTrue(registry.unregister("plaintext"))
         assertNull(registry.byId("plaintext"))
-        assertEquals(7, registry.all.size)
+        assertEquals(8, registry.all.size)
     }
 }

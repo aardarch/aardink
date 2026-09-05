@@ -21,11 +21,14 @@ import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.TagFoldingProvider
+import com.aardarch.aardink.languages.internal.folding.TomlFoldingProvider
 import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import com.aardarch.aardink.languages.internal.markdown.MarkdownTokenizer
+import com.aardarch.aardink.languages.internal.toml.TomlLanguageService
+import com.aardarch.aardink.languages.internal.toml.TomlTokenizer
 import com.aardarch.aardink.languages.internal.typescript.TypeScriptTokenizer
 import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
@@ -66,6 +69,15 @@ object BuiltInLanguages {
             supportsSingleQuoted = false,
         ),
         languageService = JsonLanguageService,
+    )
+
+    val Toml: LanguageDefinition = LanguageDefinition(
+        id = "toml",
+        displayName = "TOML",
+        fileExtensions = listOf("toml"),
+        tokenizer = TomlTokenizer,
+        foldingProvider = TomlFoldingProvider,
+        languageService = TomlLanguageService,
     )
 
     val Xml: LanguageDefinition = LanguageDefinition(
@@ -119,6 +131,7 @@ object BuiltInLanguages {
         Kotlin,
         TypeScript,
         Json,
+        Toml,
         Xml,
         Html,
         Css,
