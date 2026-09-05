@@ -78,7 +78,7 @@ tests, sample build, and `publishToMavenLocal` sanity.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
 - Tests: JUnit 5 (`@Test` from `org.junit.jupiter.api`), no Mockk needed in the editor module
-- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose; `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads
+- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose; `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
 
 ## Separation of Concerns
 
