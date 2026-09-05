@@ -759,6 +759,47 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `a completion carries its additional edits`() = withServer("val x = fo") {
+        val server = async {
+            respond(
+                "textDocument/completion",
+                """[{"label":"foo","kind":3,
+                   "textEdit":{"range":${range(0, 8, 0, 10)},"newText":"foo"},
+                   "additionalTextEdits":[{"range":${range(0, 0, 0, 0)},"newText":"import a.foo\n"}]}]""",
+            )
+        }
+
+        val items = service.completions(doc, 10)
+        server.await()
+
+        // The import half of an auto-import completion; without it the symbol lands unresolved.
+        assertEquals(listOf(TextEdit(0 until 0, "import a.foo\n")), items[0].additionalEdits)
+        assertEquals(8..9, items[0].replaceRange)
+    }
+
+    @Test
+    fun `a diagnostic's opaque data is sent back with a code action request`() = withServer("val x = 1") {
+        publish(
+            URI,
+            """[{"range":${range(0, 0, 0, 3)},"message":"unresolved","severity":1,"data":{"fixId":"import-42"}}]""",
+        )
+        val server = async { respond("textDocument/codeAction", "[]") }
+
+        service.codeActions(doc, 1..1)
+        val sent = server.await()
+
+        // Servers key their quick fixes on this value and expect it back verbatim.
+        val forwarded = sent.params["context"]!!.jsonObject["diagnostics"]!!.jsonArray[0].jsonObject
+        assertEquals("import-42", forwarded["data"]!!.jsonObject["fixId"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the adapter declares rename support`() {
+        val client = LspClient(ChannelLspTransport(), CoroutineScope(Dispatchers.Default))
+        assertTrue(LspLanguageService(client, URI, "kotlin").supportsRename)
+    }
+
+    @Test
     fun `codeActions omit an action the server marked disabled`() = withServer("val x = 1") {
         val server = async {
             respond(

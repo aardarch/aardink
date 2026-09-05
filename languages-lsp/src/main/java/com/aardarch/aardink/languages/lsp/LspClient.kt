@@ -162,12 +162,14 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      */
     suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? {
         start()
-        if (closed) {
-            throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed")
-        }
         val id = nextRequestId.getAndIncrement()
         val deferred = CompletableDeferred<LspMessage.Response>()
-        pendingRequests[id] = deferred
+        // Checking `closed` and registering the deferred must happen together: between a bare check
+        // and the insert, teardown could run its `failPendingRequests()` and miss this entry, and a
+        // transport whose closed write does not throw would then leave the caller awaiting forever.
+        if (!registerPending(id, deferred)) {
+            throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed")
+        }
         try {
             val request = LspMessage.Request(id = id, method = method, params = params)
             try {
@@ -185,6 +187,21 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         } finally {
             pendingRequests.remove(id)
         }
+    }
+
+    /**
+     * Registers [deferred] against [id] unless the client is already closed.
+     *
+     * Shares the monitor with [onReceiveLoopEnded] and [onConnectionLost], so a request is either
+     * registered before teardown runs — and therefore failed by it — or refused outright.
+     *
+     * @return false when the connection is closed and the caller must not wait.
+     */
+    @Synchronized
+    private fun registerPending(id: Long, deferred: CompletableDeferred<LspMessage.Response>): Boolean {
+        if (closed) return false
+        pendingRequests[id] = deferred
+        return true
     }
 
     /**

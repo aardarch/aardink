@@ -109,6 +109,11 @@ data class LspCodeActionParams(val textDocument: LspTextDocumentIdentifier, val 
 /**
  * A server-reported diagnostic. [severity] follows the LSP `DiagnosticSeverity` enum:
  * 1 = Error, 2 = Warning, 3 = Information, 4 = Hint.
+ *
+ * @param data Opaque value the server attached, which it is entitled to expect back in the
+ *   `CodeActionContext` of a later `textDocument/codeAction`. Dropping it on the way through
+ *   re-encodes a different diagnostic than the one the server sent, and servers that key their
+ *   quick fixes on it then offer none.
  */
 @Serializable
 data class LspDiagnostic(
@@ -117,6 +122,7 @@ data class LspDiagnostic(
     val severity: Int? = null,
     val source: String? = null,
     val code: JsonElement? = null,
+    val data: JsonElement? = null,
 )
 
 @Serializable
@@ -153,6 +159,7 @@ data class LspCompletionItem(
     val insertText: String? = null,
     val insertTextFormat: Int? = null,
     val textEdit: JsonElement? = null,
+    val additionalTextEdits: List<LspTextEdit>? = null,
     val filterText: String? = null,
     val sortText: String? = null,
 )

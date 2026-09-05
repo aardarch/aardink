@@ -103,6 +103,23 @@ class LspTransportTest {
     }
 
     @Test
+    fun `a throwing input close still closes the output`() {
+        var outputClosed = false
+        val badInput = object : ByteArrayInputStream(ByteArray(0)) {
+            override fun close() = throw IOException("cannot close")
+        }
+        val output = object : ByteArrayOutputStream() {
+            override fun close() {
+                outputClosed = true
+            }
+        }
+
+        StreamLspTransport(badInput, output).close()
+
+        assertTrue(outputClosed, "a failing read-side close must not leak the write side")
+    }
+
+    @Test
     fun `an ordinary header block is well within the limit`() = runBlocking {
         val stream = "Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 2\r\n\r\n{}"
         assertEquals(listOf("{}"), framesOf(stream.toByteArray()))

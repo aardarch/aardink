@@ -81,6 +81,14 @@ class LspLanguageService(
     override val triggerCharacters: Set<Char> =
         serverTriggerCharacters?.takeIf { it.isNotEmpty() } ?: super.triggerCharacters
 
+    /**
+     * True: this adapter implements rename by asking the server.
+     *
+     * Whether a *particular* symbol can be renamed is still [prepareRename]'s answer — and a server
+     * with no rename support at all answers `MethodNotFound` there.
+     */
+    override val supportsRename: Boolean = true
+
     @Volatile
     private var lspDiagnostics: List<LspDiagnostic> = emptyList()
 
@@ -548,6 +556,8 @@ class LspLanguageService(
             documentation = markupText(documentation) ?: detail,
             filterText = filterText ?: label,
             replaceRange = edit?.effectiveRange?.let { offsetRangeOf(document, it) },
+            // The import half of an auto-import completion; applied in the same undo batch.
+            additionalEdits = additionalTextEdits.orEmpty().map { TextEdit(offsetRangeOf(document, it.range), it.newText) },
         )
     }
 

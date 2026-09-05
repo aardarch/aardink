@@ -134,8 +134,14 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
     }
 
     override fun close() {
+        // Guarded separately: a throwing read-side close must not skip the write side and leak the
+        // other half of a socket or process pipe.
         try {
             inputStream.close()
+        } catch (_: Exception) {
+            // Ignore close failures
+        }
+        try {
             outputStream.close()
         } catch (_: Exception) {
             // Ignore close failures
