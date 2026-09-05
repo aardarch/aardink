@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
 import kotlinx.coroutines.runBlocking
@@ -177,5 +178,42 @@ class XmlLanguageServiceTest {
         val items = XmlLanguageService.completions(CodeDocument(src), src.length)
         val name = items.single { it.label == "android:name" }
         assertEquals(3 until src.length, name.replaceRange, "the whole partial name goes, not just the part after ':'")
+    }
+
+    @Test
+    fun `attribute names are offered after a finished value`() = runBlocking {
+        // The last '=' belongs to id, whose value is closed, so the cursor is back in name
+        // territory - offering values here made attribute-name completion unreachable.
+        val src = "<a id=\"x\" android:"
+        val items = XmlLanguageService.completions(CodeDocument(src), src.length)
+        assertTrue(items.isNotEmpty(), "expected attribute names")
+        assertTrue(items.all { it.kind == CompletionKind.Attribute }, items.map { it.kind }.toString())
+    }
+
+    @Test
+    fun `values are still offered inside an open quote`() = runBlocking {
+        val src = "<a id=\""
+        val items = XmlLanguageService.completions(CodeDocument(src), src.length)
+        assertTrue(items.all { it.kind == CompletionKind.Value }, items.map { it.kind }.toString())
+    }
+
+    @Test
+    fun `format counts every tag on a line`() = runBlocking {
+        // <a><b> opens two levels, so </b> closes back to one - inside <a>. Treating the whole
+        // line as a single opener counted one level and left </b> at column 0.
+        val src = "<a><b>\n</b>\n</a>"
+        assertEquals("<a><b>\n    </b>\n</a>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
+    fun `format leaves a line that opens and closes at the same depth`() = runBlocking {
+        val src = "<root>\n<a><b></b></a>\n</root>"
+        assertEquals("<root>\n    <a><b></b></a>\n</root>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
+    fun `format outdents a line that closes several tags`() = runBlocking {
+        val src = "<a>\n<b>\n<c/>\n</b></a>"
+        assertEquals("<a>\n    <b>\n        <c/>\n</b></a>", XmlLanguageService.format(CodeDocument(src)))
     }
 }

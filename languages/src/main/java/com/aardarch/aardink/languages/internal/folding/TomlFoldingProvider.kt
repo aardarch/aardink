@@ -34,10 +34,10 @@ object TomlFoldingProvider : FoldingProvider {
         val ranges = mutableListOf<FoldRange>()
 
         // 1. Fold table sections [header] ...
+        val headerLines = tableHeaderLines(document)
         var currentSectionStart = -1
         for (i in 0 until lineCount) {
-            val lineText = document.lineText(i).trim()
-            if (isTableHeader(lineText)) {
+            if (i in headerLines) {
                 if (currentSectionStart >= 0 && i - 1 > currentSectionStart) {
                     ranges.add(FoldRange(currentSectionStart, i - 1))
                 }
@@ -54,10 +54,75 @@ object TomlFoldingProvider : FoldingProvider {
         return ranges.sortedBy { it.startLine }
     }
 
-    private fun isTableHeader(trimmedLine: String): Boolean {
-        if (trimmedLine.startsWith("#")) return false
-        return (trimmedLine.startsWith("[[") && trimmedLine.endsWith("]]")) ||
-            (trimmedLine.startsWith("[") && trimmedLine.endsWith("]"))
+    /**
+     * Lines that really open a table, found in one pass that tracks multiline strings.
+     *
+     * A line-by-line test cannot tell a header from its own text: `[example]` sitting inside a
+     * `"""` value looks exactly like one, and folding on it produces sections that overlap the
+     * string's own fold. The scan also lets a header carry an inline comment, which
+     * `endsWith("]")` rejected.
+     */
+    private fun tableHeaderLines(document: CodeDocument): Set<Int> {
+        val headers = mutableSetOf<Int>()
+        var inMultiline: String? = null
+
+        for (i in 0 until document.lineCount) {
+            val line = document.lineText(i)
+            val startedInsideString = inMultiline != null
+            var j = 0
+            while (j < line.length) {
+                val open = inMultiline
+                if (open != null) {
+                    val close = line.indexOf(open, j)
+                    if (close < 0) {
+                        j = line.length
+                    } else {
+                        inMultiline = null
+                        j = close + open.length
+                    }
+                    continue
+                }
+                when {
+                    line.startsWith(MULTILINE_BASIC, j) -> {
+                        inMultiline = MULTILINE_BASIC
+                        j += MULTILINE_BASIC.length
+                    }
+
+                    line.startsWith(MULTILINE_LITERAL, j) -> {
+                        inMultiline = MULTILINE_LITERAL
+                        j += MULTILINE_LITERAL.length
+                    }
+
+                    line[j] == '#' -> j = line.length
+
+                    line[j] == '"' || line[j] == '\'' -> j = endOfSingleLineString(line, j)
+
+                    else -> j++
+                }
+            }
+
+            if (startedInsideString) continue
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#") || !trimmed.startsWith("[")) continue
+            // Everything up to an unquoted '#' is the header; the rest is a comment.
+            val header = headerOf(trimmed)
+            if (header.endsWith("]")) headers.add(i)
+        }
+        return headers
+    }
+
+    /** [trimmedLine] up to an unquoted `#`, so `[versions] # catalog` reads as `[versions]`. */
+    private fun headerOf(trimmedLine: String): String {
+        var i = 0
+        while (i < trimmedLine.length) {
+            val c = trimmedLine[i]
+            when {
+                c == '#' -> return trimmedLine.substring(0, i).trimEnd()
+                c == '"' || c == '\'' -> i = endOfSingleLineString(trimmedLine, i)
+                else -> i++
+            }
+        }
+        return trimmedLine.trimEnd()
     }
 
     private fun findMultilineConstructs(document: CodeDocument): List<FoldRange> {
@@ -146,4 +211,7 @@ object TomlFoldingProvider : FoldingProvider {
         }
         return text.length
     }
+
+    private const val MULTILINE_BASIC = "\"\"\""
+    private const val MULTILINE_LITERAL = "'''"
 }

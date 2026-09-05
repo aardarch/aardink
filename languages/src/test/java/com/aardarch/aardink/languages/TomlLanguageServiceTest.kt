@@ -224,4 +224,32 @@ class TomlLanguageServiceTest {
         val versionRef = items.single { it.label == "version.ref" }
         assertEquals(12 until 20, versionRef.replaceRange, "the whole dotted prefix is replaced, not just after the dot")
     }
+
+    @Test
+    fun `quoted and bare spellings of one key are a duplicate`() {
+        val diags = diagnose("[versions]\nagp = \"1\"\n\"agp\" = \"2\"")
+        assertEquals(1, diags.size, "was ${diags.map { it.message }}")
+        assertTrue(diags[0].message.startsWith("Duplicate key"), diags[0].message)
+    }
+
+    @Test
+    fun `reopening a table keeps the keys it already had`() {
+        val diags = diagnose("[a]\nx = 1\n\n[b]\ny = 2\n\n[a]\nx = 3")
+        assertEquals(1, diags.size, "was ${diags.map { it.message }}")
+        assertTrue(diags[0].message.startsWith("Duplicate key"), diags[0].message)
+    }
+
+    @Test
+    fun `each array-of-table entry gets its own keys`() {
+        // [[x]] declares a new element each time, so repeating a key across entries is fine.
+        assertTrue(diagnose("[[x]]\nname = 1\n\n[[x]]\nname = 2").isEmpty())
+        // ...but repeating it inside one entry is still a duplicate.
+        assertEquals(1, diagnose("[[x]]\nname = 1\nname = 2").size)
+    }
+
+    @Test
+    fun `a dotted key path compares segment by segment`() {
+        assertEquals(1, diagnose("[a]\nb.c = 1\nb.\"c\" = 2").size, "same path, different spelling")
+        assertTrue(diagnose("[a]\nb.c = 1\nb.d = 2").isEmpty(), "different paths")
+    }
 }

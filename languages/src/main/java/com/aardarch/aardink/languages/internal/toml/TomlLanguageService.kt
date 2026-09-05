@@ -59,7 +59,12 @@ object TomlLanguageService : BaseLanguageService() {
 
         val diags = mutableListOf<Diagnostic>()
         var currentSection = ""
-        val sectionKeys = mutableSetOf<String>()
+        // Keys seen per table, keyed by normalized header. Reopening [section] later in the file
+        // continues the same table, so its keys must still be remembered; a [[array]] entry starts
+        // a fresh instance and gets its own set, which `arrayInstance` counts off.
+        val keysByTable = mutableMapOf<String, MutableSet<String>>()
+        val arrayInstances = mutableMapOf<String, Int>()
+        var sectionKeys = keysByTable.getOrPut("") { mutableSetOf() }
         val lineStates = lineStates(document)
 
         for (i in 0 until lineCount) {
@@ -89,7 +94,12 @@ object TomlLanguageService : BaseLanguageService() {
                     )
                 } else {
                     currentSection = header
-                    sectionKeys.clear()
+                    val isArrayEntry = header.startsWith("[[")
+                    val tableKey = normalizedTablePath(header).let { path ->
+                        // Each [[array]] element is its own table, so give it its own bucket.
+                        if (isArrayEntry) "$path#${arrayInstances.merge(path, 1, Int::plus)}" else path
+                    }
+                    sectionKeys = keysByTable.getOrPut(tableKey) { mutableSetOf() }
                 }
                 continue
             }
@@ -125,7 +135,7 @@ object TomlLanguageService : BaseLanguageService() {
                         source = "toml",
                     ),
                 )
-            } else if (!sectionKeys.add(rawKey)) {
+            } else if (!sectionKeys.add(normalizedKeyPath(rawKey))) {
                 val keyOffset = lineStartOffset + lineText.indexOf(rawKey)
                 val keyEnd = keyOffset + rawKey.length
                 diags.add(
@@ -348,6 +358,129 @@ object TomlLanguageService : BaseLanguageService() {
             states.add(TomlLineState(startedInsideValue, startedInsideString || openedString))
         }
         return states
+    }
+
+    /**
+     * A dotted key as TOML understands it, so two spellings of one key compare equal.
+     *
+     * `a`, `"a"` and `'a'` all name the key `a`, and `a.b` is the same key path however its
+     * segments are quoted. Escapes inside a basic-string segment are resolved; a literal segment
+     * has none.
+     */
+    private fun normalizedKeyPath(rawKey: String): String = splitKeySegments(rawKey).joinToString(".") { unquoteKey(it) }
+
+    /** The header's key path, normalized like [normalizedKeyPath]: `[[a.b]]` and `[a.b]` agree. */
+    private fun normalizedTablePath(header: String): String = normalizedKeyPath(header.trim().trim('[', ']'))
+
+    /** Splits a dotted key on the dots that separate segments, ignoring any inside quotes. */
+    private fun splitKeySegments(rawKey: String): List<String> {
+        val segments = mutableListOf<String>()
+        val current = StringBuilder()
+        var i = 0
+        while (i < rawKey.length) {
+            val c = rawKey[i]
+            when {
+                c == '.' -> {
+                    segments.add(current.toString())
+                    current.clear()
+                    i++
+                }
+
+                c == '"' || c == '\'' -> {
+                    val end = endOfBasicString(rawKey, i)
+                    current.append(rawKey, i, end)
+                    i = end
+                }
+
+                else -> {
+                    current.append(c)
+                    i++
+                }
+            }
+        }
+        segments.add(current.toString())
+        return segments
+    }
+
+    /** One key segment with its quotes removed and, for a basic string, its escapes resolved. */
+    private fun unquoteKey(segment: String): String {
+        val s = segment.trim()
+        if (s.length < 2) return s
+        return when {
+            s.startsWith("'") && s.endsWith("'") -> s.substring(1, s.length - 1)
+            s.startsWith("\"") && s.endsWith("\"") -> unescapeBasic(s.substring(1, s.length - 1))
+            else -> s
+        }
+    }
+
+    /** Resolves the escapes TOML allows in a basic string; an unknown one is left as written. */
+    private fun unescapeBasic(body: String): String {
+        if ('\\' !in body) return body
+        val out = StringBuilder(body.length)
+        var i = 0
+        while (i < body.length) {
+            val c = body[i]
+            if (c != '\\' || i + 1 >= body.length) {
+                out.append(c)
+                i++
+                continue
+            }
+            when (val esc = body[i + 1]) {
+                'b' -> {
+                    out.append('\b')
+                    i += 2
+                }
+
+                't' -> {
+                    out.append('\t')
+                    i += 2
+                }
+
+                'n' -> {
+                    out.append('\n')
+                    i += 2
+                }
+
+                'f' -> {
+                    out.append('\u000C')
+                    i += 2
+                }
+
+                'r' -> {
+                    out.append('\r')
+                    i += 2
+                }
+
+                '"' -> {
+                    out.append('"')
+                    i += 2
+                }
+
+                '\\' -> {
+                    out.append('\\')
+                    i += 2
+                }
+
+                'u', 'U' -> {
+                    val digits = if (esc == 'u') 4 else 8
+                    val hex = body.drop(i + 2).take(digits)
+                    val code = hex.takeIf { it.length == digits }?.toIntOrNull(16)
+                    if (code == null) {
+                        out.append(c)
+                        i++
+                    } else {
+                        out.appendCodePoint(code)
+                        i += 2 + digits
+                    }
+                }
+
+                else -> {
+                    out.append(c)
+                    i++
+                }
+            }
+        }
+        return out.toString()
     }
 
     /**

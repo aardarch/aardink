@@ -89,4 +89,24 @@ class TomlFoldingProviderTest {
         val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
         assertTrue(ranges.isEmpty(), "was $ranges")
     }
+
+    @Test
+    fun `a header inside a multiline string is text, not a section`() {
+        // note = """ / [example] / still inside / """ / real = 1
+        val src = "note = \"\"\"\n[example]\nstill inside\n\"\"\"\nreal = 1"
+        val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
+        // Only the string's own fold: the [example] on line 1 is string content, not a section.
+        assertEquals(listOf(0 to 3), ranges.map { it.startLine to it.endLine })
+    }
+
+    @Test
+    fun `a header with an inline comment still opens a section`() {
+        val src = """
+            [versions] # catalog
+            agp = "8.9.0"
+            kotlin = "2.1.10"
+        """.trimIndent()
+        val ranges = TomlFoldingProvider.foldableRanges(CodeDocument(src))
+        assertTrue(ranges.any { it.startLine == 0 && it.endLine == 2 }, "was $ranges")
+    }
 }

@@ -219,11 +219,13 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         if (lastLt > lastGt) {
             val tagContent = textBefore.substring(lastLt + 1)
 
-            // 1. Attribute value completion after '='
+            // 1. Attribute value completion after '=', while the value is still open. A finished
+            // value - `id="x"` - puts the cursor back in attribute-name territory, so the quote
+            // has to still be unclosed for this to be a value context.
             val lastEq = textBefore.lastIndexOf('=')
             if (lastEq > lastLt) {
                 val afterEq = textBefore.substring(lastEq + 1).trimStart()
-                if (afterEq.isEmpty() || afterEq.startsWith("\"") || afterEq.startsWith("'")) {
+                if (afterEq.isEmpty() || isUnclosedQuotedValue(afterEq)) {
                     // The editor's token scan would stop at the '@' in "@string/", so name the
                     // range: everything typed after the opening quote.
                     val valueStart = clampedOffset - afterEq.length + (if (afterEq.isEmpty()) 0 else 1)
@@ -327,20 +329,14 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 continue
             }
 
-            if (trimmed.startsWith("</")) {
-                depth = (depth - 1).coerceAtLeast(0)
-                result.add(" ".repeat(depth * 4) + trimmed)
-                continue
-            }
-
-            if (trimmed.endsWith("/>") || (trimmed.endsWith(">") && trimmed.contains("</"))) {
-                result.add(" ".repeat(depth * 4) + trimmed)
-                continue
-            }
-
-            result.add(" ".repeat(depth * 4) + trimmed)
-            // Whole-name match: <input-group> is not the void element <input>.
-            if (!isVoidElement(tagNameOf(trimmed.removePrefix("<")))) depth++
+            // The line's own tags decide both where it sits and how far it shifts what follows.
+            // The tags it closes before opening anything pull the line itself left - that is what
+            // puts `</a>` under its opener - and the net of all its tags moves everything after it,
+            // so `<a><b>` opens two levels where classifying the line as "an opener" saw one.
+            val (net, leadingCloses) = tagBalance(trimmed)
+            val lineDepth = (depth - leadingCloses).coerceAtLeast(0)
+            result.add(" ".repeat(lineDepth * 4) + trimmed)
+            depth = (lineDepth + net + leadingCloses).coerceAtLeast(0)
         }
 
         return result.joinToString("\n")
@@ -429,6 +425,79 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
     /** Element name at the start of [tagContent] (the text just inside `<`), without attributes. */
     private fun tagNameOf(tagContent: String): String = tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
+
+    /**
+     * The indentation effect of the tags on [trimmedLine].
+     *
+     * [net] is openers minus closers over the whole line; [leadingCloses] counts only the closers
+     * that come before the line's first opener, which is how far the line itself is outdented.
+     * Self-closing tags, void HTML elements, declarations, processing instructions and comments
+     * count for nothing. Attribute values are skipped, so a `<` or `>` inside one is not markup.
+     */
+    private data class TagBalance(val net: Int, val leadingCloses: Int)
+
+    private fun tagBalance(trimmedLine: String): TagBalance {
+        var net = 0
+        var leadingCloses = 0
+        var seenOpener = false
+        var i = 0
+        while (i < trimmedLine.length) {
+            if (trimmedLine[i] != '<') {
+                i++
+                continue
+            }
+            val end = indexOfTagEnd(trimmedLine, i)
+            if (end < 0) break
+            val raw = trimmedLine.substring(i + 1, end)
+            when {
+                raw.startsWith("!") || raw.startsWith("?") -> Unit
+
+                raw.startsWith("/") -> {
+                    net--
+                    if (!seenOpener) leadingCloses++
+                }
+
+                raw.trimEnd().endsWith("/") || isVoidElement(tagNameOf(raw)) -> seenOpener = true
+
+                else -> {
+                    net++
+                    seenOpener = true
+                }
+            }
+            i = end + 1
+        }
+        return TagBalance(net, leadingCloses)
+    }
+
+    /** Index of the `>` closing the tag that opens at [start], skipping quoted values; -1 if none. */
+    private fun indexOfTagEnd(text: String, start: Int): Int {
+        var i = start + 1
+        while (i < text.length) {
+            when (val c = text[i]) {
+                '"', '\'' -> {
+                    val close = text.indexOf(c, i + 1)
+                    i = if (close < 0) text.length else close + 1
+                }
+
+                '>' -> return i
+
+                else -> i++
+            }
+        }
+        return -1
+    }
+
+    /**
+     * Whether [afterEq] is a quoted attribute value the cursor is still inside.
+     *
+     * True for `"` and `"partial`, false for `"done"` — after a closed value the cursor has moved
+     * on to the next attribute name, and offering values there hides name completion entirely.
+     */
+    private fun isUnclosedQuotedValue(afterEq: String): Boolean {
+        val quote = afterEq.firstOrNull() ?: return false
+        if (quote != '"' && quote != '\'') return false
+        return afterEq.indexOf(quote, startIndex = 1) < 0
+    }
 
     /** Start of the attribute name being typed at [offset] — [offset] itself when none is. */
     private fun startOfAttributeName(text: String, offset: Int): Int {
