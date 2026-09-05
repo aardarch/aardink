@@ -78,6 +78,23 @@ internal object EditorIcons {
         lineToRelative(-3.6f, 3.6f)
         close()
     }
+
+    /** Dismiss / close cross, for the tooltip banner and the find panel. */
+    val Close: ImageVector = materialIcon("Close") {
+        moveTo(19.0f, 6.41f)
+        lineTo(17.59f, 5.0f)
+        lineTo(12.0f, 10.59f)
+        lineTo(6.41f, 5.0f)
+        lineTo(5.0f, 6.41f)
+        lineTo(10.59f, 12.0f)
+        lineTo(5.0f, 17.59f)
+        lineTo(6.41f, 19.0f)
+        lineTo(12.0f, 13.41f)
+        lineTo(17.59f, 19.0f)
+        lineTo(19.0f, 17.59f)
+        lineTo(13.41f, 12.0f)
+        close()
+    }
 }
 
 private fun materialIcon(name: String, pathBuilder: PathBuilder.() -> Unit): ImageVector = ImageVector.Builder(

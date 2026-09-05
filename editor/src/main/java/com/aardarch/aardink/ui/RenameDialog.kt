@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +52,11 @@ fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDi
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
+                    // The sentence above is a sibling, not this field's name; the label is what a
+                    // screen reader announces for the edit box.
+                    label = { Text("New name") },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },

@@ -179,26 +179,33 @@ fun CodeEditorLayout(
         }
     }
 
-    if (languageService != null) {
-        LaunchedEffect(languageService, state.selection, textVersion) {
-            val offset = state.selection.start
-            if (offset < 0 || offset > state.document.length) return@LaunchedEffect
-            // Keep asking while the cursor sits inside the argument list, not just right after
-            // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
-            // The service decides when the context has stopped being valid by returning null.
-            if (!isInsideCallArguments(state.document.text, offset)) {
-                showSignatureHelp = false
-                return@LaunchedEffect
-            }
-            // Debounced like the find and folding passes: a language server should not field a
-            // request per keystroke.
-            delay(SIGNATURE_HELP_DEBOUNCE_MS)
-            val sig = withContext(Dispatchers.Default) {
-                languageService.signatureHelp(state.document, offset)
-            }
-            currentSignatureHelp = sig
-            showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
+    // Unconditional, unlike the find and fold effects whose visible state lives in their nullable
+    // holders: the popup's state is remembered here, so the effect must still run when the host
+    // detaches the service in order to take the popup down with it.
+    LaunchedEffect(languageService, state.selection, textVersion) {
+        if (languageService == null) {
+            showSignatureHelp = false
+            currentSignatureHelp = null
+            return@LaunchedEffect
         }
+        val offset = state.selection.start
+        if (offset < 0 || offset > state.document.length) return@LaunchedEffect
+        // Keep asking while the cursor sits inside the argument list, not just right after
+        // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
+        // The service decides when the context has stopped being valid by returning null.
+        if (!isInsideCallArguments(state.document.text, offset)) {
+            showSignatureHelp = false
+            currentSignatureHelp = null
+            return@LaunchedEffect
+        }
+        // Debounced like the find and folding passes: a language server should not field a
+        // request per keystroke.
+        delay(SIGNATURE_HELP_DEBOUNCE_MS)
+        val sig = withContext(Dispatchers.Default) {
+            languageService.signatureHelp(state.document, offset)
+        }
+        currentSignatureHelp = sig
+        showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
     }
 
     // Annotation tooltip: shown when user taps a gutter dot
