@@ -527,9 +527,14 @@ fun CodeEditorLayout(
                 currentName = renameTargetName,
                 onConfirm = { newName ->
                     val target = renameTargetRange.first
+                    // The dialog closes now and the server answers later, so the user can type in
+                    // between. Those edits are offsets into the text as it was when we asked; once
+                    // it has changed they point at whatever happens to sit there now, so the rename
+                    // is dropped rather than applied to the wrong characters.
+                    val requestedVersion = state.textVersion
                     coroutineScope.launch {
                         val edits = languageService?.rename(state.document, target, newName) ?: emptyList()
-                        if (edits.isNotEmpty()) {
+                        if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
                             state.applyTextEdits(edits)
                             fieldValue = TextFieldValue(state.document.text, state.selection)
                         }

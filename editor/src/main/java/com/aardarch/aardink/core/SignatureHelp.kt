@@ -30,4 +30,15 @@ data class SignatureInformation(
     val parameters: List<ParameterInformation> = emptyList(),
 )
 
-data class ParameterInformation(val label: String, val documentation: String? = null)
+/**
+ * One parameter within a [SignatureInformation].
+ *
+ * @param label The parameter as it reads in the signature, e.g. `"count: Int"`.
+ * @param documentation Optional prose describing the parameter.
+ * @param labelRange Where [label] sits inside [SignatureInformation.label], when the provider knows.
+ *   A signature like `foo(Int, Int)` repeats its parameter text, so searching the label for a match
+ *   highlights the first occurrence whichever parameter is active; a provider that can name the
+ *   range — LSP servers report one — says so here and the popup uses it verbatim. Null means "find
+ *   it by matching", which stays correct whenever the parameter text is unique.
+ */
+data class ParameterInformation(val label: String, val documentation: String? = null, val labelRange: IntRange? = null)

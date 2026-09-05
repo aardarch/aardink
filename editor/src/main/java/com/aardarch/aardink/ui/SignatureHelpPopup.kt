@@ -67,14 +67,20 @@ fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Mod
                 val primaryColor = MaterialTheme.colorScheme.primary
                 val annotatedLabel = buildAnnotatedString {
                     val activeParam = sig.parameters.getOrNull(activeParamIndex)
-                    if (activeParam != null && sig.label.contains(activeParam.label)) {
-                        val paramStart = sig.label.indexOf(activeParam.label)
-                        val paramEnd = paramStart + activeParam.label.length
-                        append(sig.label.take(paramStart))
+                    // Prefer the range the provider named: `foo(Int, Int)` repeats its parameter
+                    // text, and matching on text would highlight the first Int for both.
+                    val highlight = activeParam?.labelRange
+                        ?.takeIf { it.first >= 0 && it.last < sig.label.length && !it.isEmpty() }
+                        ?: activeParam?.label
+                            ?.takeIf { it.isNotEmpty() && sig.label.contains(it) }
+                            ?.let { sig.label.indexOf(it).let { start -> start..(start + it.length - 1) } }
+
+                    if (highlight != null) {
+                        append(sig.label.take(highlight.first))
                         withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)) {
-                            append(activeParam.label)
+                            append(sig.label.substring(highlight.first, highlight.last + 1))
                         }
-                        append(sig.label.substring(paramEnd))
+                        append(sig.label.substring(highlight.last + 1))
                     } else {
                         append(sig.label)
                     }
