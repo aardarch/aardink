@@ -168,4 +168,60 @@ class TomlLanguageServiceTest {
         val formatted = TomlLanguageService.format(CodeDocument(src))
         assertEquals("arr = [\n\"a=1\",\n]", formatted)
     }
+
+    // ── Comments after a header, and '=' inside a quoted key ─────────────────
+
+    @Test
+    fun `a table header with an inline comment is closed`() {
+        assertTrue(diagnose("[versions] # catalog\nkotlin = \"2.1.10\"").isEmpty())
+    }
+
+    @Test
+    fun `a commented header still scopes duplicate keys and key completions`() {
+        val src = "[libraries] # deps\nkotlin = \"a\"\nkotlin = \"b\""
+        val diags = diagnose(src)
+        assertEquals(1, diags.size, "the duplicate must still be found: $diags")
+        assertTrue(diags[0].message.contains("[libraries]"), "the section name drops the comment: ${diags[0].message}")
+
+        val items = complete("$src\n", src.length + 1)
+        assertTrue(items.any { it.label == "module" }, "section-scoped completions still resolve: $items")
+    }
+
+    @Test
+    fun `an equals inside a quoted key is part of the key`() {
+        assertTrue(diagnose("\"a=b\" = 1").isEmpty())
+    }
+
+    @Test
+    fun `format does not rewrite a quoted key containing equals`() = runBlocking {
+        val formatted = TomlLanguageService.format(CodeDocument("\"a=b\"=1"))
+        assertEquals("\"a=b\" = 1", formatted)
+    }
+
+    // ── Completions and the auto-closer ──────────────────────────────────────
+
+    @Test
+    fun `a header completion replaces the auto-inserted bracket`() {
+        // Typing '[' auto-closes to "[]" with the cursor between the brackets.
+        val items = complete("[]", 1)
+        val versions = items.single { it.label == "versions" }
+        assertEquals("[versions]", versions.insertText)
+        assertEquals(0 until 2, versions.replaceRange, "the range must swallow the auto-inserted ']'")
+    }
+
+    @Test
+    fun `a double bracket header completion replaces both auto-inserted brackets`() {
+        val items = complete("[[]]", 2)
+        val libraries = items.single { it.label == "libraries" }
+        assertEquals("[[libraries]]", libraries.insertText)
+        assertEquals(0 until 4, libraries.replaceRange)
+    }
+
+    @Test
+    fun `a dotted key completion replaces the partial key`() {
+        val src = "[libraries]\nversion."
+        val items = complete(src, src.length)
+        val versionRef = items.single { it.label == "version.ref" }
+        assertEquals(12 until 20, versionRef.replaceRange, "the whole dotted prefix is replaced, not just after the dot")
+    }
 }

@@ -123,7 +123,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             // Closing tag </name>
             if (i + 1 < n && text[i + 1] == '/') {
                 val rawClose = text.substring(i + 2, tagEnd).trim()
-                val name = rawClose.takeWhile { !it.isWhitespace() }.lowercase()
+                val name = foldTagCase(rawClose.takeWhile { !it.isWhitespace() })
                 if (name.isEmpty()) {
                     diags.add(error(document, i, tagEnd + 1, "Empty closing tag"))
                 } else {
@@ -142,7 +142,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             val raw = text.substring(i + 1, tagEnd)
             val selfClosing = raw.trimEnd().endsWith('/')
             val rawNameEnd = raw.indexOfFirst { it.isWhitespace() || it == '/' }
-            val name = (if (rawNameEnd < 0) raw else raw.substring(0, rawNameEnd)).lowercase()
+            val name = foldTagCase(if (rawNameEnd < 0) raw else raw.substring(0, rawNameEnd))
             if (name.isEmpty()) {
                 diags.add(error(document, i, tagEnd + 1, "Empty tag"))
                 i = tagEnd + 1
@@ -224,12 +224,16 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             if (lastEq > lastLt) {
                 val afterEq = textBefore.substring(lastEq + 1).trimStart()
                 if (afterEq.isEmpty() || afterEq.startsWith("\"") || afterEq.startsWith("'")) {
+                    // The editor's token scan would stop at the '@' in "@string/", so name the
+                    // range: everything typed after the opening quote.
+                    val valueStart = clampedOffset - afterEq.length + (if (afterEq.isEmpty()) 0 else 1)
                     return COMMON_ATTR_VALUES.map { value ->
                         CompletionItem(
                             label = value,
                             kind = CompletionKind.Value,
                             insertText = if (afterEq.isEmpty()) "\"$value\"" else value,
                             documentation = "Attribute value $value",
+                            replaceRange = valueStart until clampedOffset,
                         )
                     }
                 }
@@ -237,12 +241,16 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
             // 2. Attribute name completion inside tag (after space)
             if (tagContent.contains(' ')) {
+                // ':' and '.' are token boundaries to the editor, so an "android:" already typed
+                // would be kept and duplicated — name the range covering the partial name instead.
+                val nameStart = startOfAttributeName(text, clampedOffset)
                 return COMMON_XML_ATTRIBUTES.map { attr ->
                     CompletionItem(
                         label = attr,
                         kind = CompletionKind.Attribute,
                         insertText = "$attr=\"\"",
                         documentation = "Attribute $attr",
+                        replaceRange = nameStart until clampedOffset,
                     )
                 }
             }
@@ -285,15 +293,29 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         return indent
     }
 
+    /**
+     * Re-indents structural lines and leaves everything else alone.
+     *
+     * Only a line that starts a tag and is markup from end to end can be safely re-indented.
+     * Whitespace in a text node is content — no schema here says otherwise — and the inside of a
+     * comment, a CDATA section or a tag spread over several lines is likewise not this formatter's
+     * to rewrite, so those lines are emitted verbatim.
+     */
     override suspend fun format(document: CodeDocument): String {
         val text = document.text
         if (text.isBlank()) return text
 
         val lines = text.lines()
+        val states = lineStates(lines)
         val result = mutableListOf<String>()
         var depth = 0
 
-        for (line in lines) {
+        for ((index, line) in lines.withIndex()) {
+            if (!states[index].isStructural) {
+                result.add(line)
+                continue
+            }
+
             val trimmed = line.trim()
             if (trimmed.isEmpty()) {
                 result.add("")
@@ -311,26 +333,112 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 continue
             }
 
-            if (trimmed.startsWith("<") && (trimmed.endsWith("/>") || (trimmed.endsWith(">") && trimmed.contains("</")))) {
+            if (trimmed.endsWith("/>") || (trimmed.endsWith(">") && trimmed.contains("</"))) {
                 result.add(" ".repeat(depth * 4) + trimmed)
-                continue
-            }
-
-            if (trimmed.startsWith("<")) {
-                result.add(" ".repeat(depth * 4) + trimmed)
-                // Whole-name match: <input-group> is not the void element <input>.
-                if (!isVoidElement(tagNameOf(trimmed.removePrefix("<")))) depth++
                 continue
             }
 
             result.add(" ".repeat(depth * 4) + trimmed)
+            // Whole-name match: <input-group> is not the void element <input>.
+            if (!isVoidElement(tagNameOf(trimmed.removePrefix("<")))) depth++
         }
 
         return result.joinToString("\n")
     }
 
+    /**
+     * @param isStructural The line is markup the formatter owns: blank, or opening with `<` and
+     *   closing its last tag on the same line, with nothing but markup in between. Everything else
+     *   — text nodes, mixed content, and continuation lines of a comment, CDATA section or
+     *   multi-line tag — is content and must survive verbatim.
+     */
+    private data class XmlLineState(val isStructural: Boolean)
+
+    /** Classifies every line in one pass, carrying comment / CDATA / open-tag state across lines. */
+    private fun lineStates(lines: List<String>): List<XmlLineState> {
+        val states = ArrayList<XmlLineState>(lines.size)
+        var inComment = false
+        var inCdata = false
+        var inTag = false
+
+        for (line in lines) {
+            val startedMidConstruct = inComment || inCdata || inTag
+            var i = 0
+
+            while (i < line.length) {
+                when {
+                    inComment -> {
+                        val close = line.indexOf("-->", i)
+                        if (close < 0) {
+                            i = line.length
+                        } else {
+                            inComment = false
+                            i = close + 3
+                        }
+                    }
+
+                    inCdata -> {
+                        val close = line.indexOf("]]>", i)
+                        if (close < 0) {
+                            i = line.length
+                        } else {
+                            inCdata = false
+                            i = close + 3
+                        }
+                    }
+
+                    inTag -> {
+                        val c = line[i]
+                        if (c == '"' || c == '\'') {
+                            val close = line.indexOf(c, i + 1)
+                            i = if (close < 0) line.length else close + 1
+                        } else {
+                            if (c == '>') inTag = false
+                            i++
+                        }
+                    }
+
+                    line.startsWith("<!--", i) -> {
+                        inComment = true
+                        i += 4
+                    }
+
+                    line.startsWith("<![CDATA[", i) -> {
+                        inCdata = true
+                        i += 9
+                    }
+
+                    line[i] == '<' -> {
+                        inTag = true
+                        i++
+                    }
+
+                    else -> i++
+                }
+            }
+
+            // Whole-line markup only: opens with a tag and closes one, with every construct it
+            // started finished by the end of the line. Text before the first `<` or after the last
+            // `>` is a text node, and its surrounding whitespace belongs to the document.
+            val trimmed = line.trim()
+            val wholeLineMarkup = trimmed.isEmpty() || (trimmed.startsWith("<") && trimmed.endsWith(">"))
+            states.add(XmlLineState(!startedMidConstruct && !inComment && !inCdata && !inTag && wholeLineMarkup))
+        }
+        return states
+    }
+
     /** Element name at the start of [tagContent] (the text just inside `<`), without attributes. */
     private fun tagNameOf(tagContent: String): String = tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
+
+    /** Start of the attribute name being typed at [offset] — [offset] itself when none is. */
+    private fun startOfAttributeName(text: String, offset: Int): Int {
+        var start = offset
+        while (start > 0 && isNameChar(text[start - 1])) start--
+        return start
+    }
+
+    /** XML element names are case-sensitive (`<Foo>` needs `</Foo>`); only HTML folds case. */
+    private fun foldTagCase(name: String): String = if (htmlMode) name.lowercase() else name
 
     /** Whether [name] is an HTML element that never has children — only meaningful in HTML mode. */
     private fun isVoidElement(name: String): Boolean = htmlMode && name.lowercase() in HTML_VOID_ELEMENTS
@@ -348,7 +456,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 val end = text.indexOf('>', i)
                 if (end in (i + 2)..<beforeOffset) {
                     val closeName = text.substring(i + 2, end).trim().takeWhile { !it.isWhitespace() }
-                    if (stack.lastOrNull()?.equals(closeName, ignoreCase = true) == true) {
+                    if (stack.lastOrNull()?.equals(closeName, ignoreCase = htmlMode) == true) {
                         stack.removeLast()
                     }
                     i = end + 1
@@ -377,12 +485,10 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         diags: MutableList<Diagnostic>,
     ) {
         val seen = mutableSetOf<String>()
-        val matches = ATTR_NAME_REGEX.findAll(rawTagContent)
-        for (m in matches) {
-            val attrName = m.value
+        for ((nameStart, attrName) in attributeNamesIn(rawTagContent)) {
             // XML attribute names are case-sensitive; only HTML folds case.
             if (!seen.add(if (htmlMode) attrName.lowercase() else attrName)) {
-                val attrOffset = rawStartOffset + m.range.first
+                val attrOffset = rawStartOffset + nameStart
                 val (line, _) = document.offsetToLineCol(attrOffset)
                 diags.add(
                     Diagnostic(
@@ -396,6 +502,49 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             }
         }
     }
+
+    /**
+     * Attribute names in [rawTagContent] (the text between `<` and `>`) as offset-to-name pairs.
+     *
+     * Walks the tag tracking quote state rather than pattern-matching the whole string, so
+     * `foo=…` appearing inside an attribute *value* — `<a data=" foo=1 foo=2"/>` — is value text,
+     * not two attributes.
+     */
+    private fun attributeNamesIn(rawTagContent: String): List<Pair<Int, String>> {
+        val names = mutableListOf<Pair<Int, String>>()
+        var i = 0
+        // Skip the element name; it is not an attribute.
+        while (i < rawTagContent.length && !rawTagContent[i].isWhitespace()) i++
+
+        while (i < rawTagContent.length) {
+            val c = rawTagContent[i]
+            when {
+                c == '"' || c == '\'' -> {
+                    val close = rawTagContent.indexOf(c, i + 1)
+                    i = if (close < 0) rawTagContent.length else close + 1
+                }
+
+                isNameStartChar(c) -> {
+                    val start = i
+                    while (i < rawTagContent.length && isNameChar(rawTagContent[i])) i++
+                    val afterName = i
+                    var j = i
+                    while (j < rawTagContent.length && rawTagContent[j].isWhitespace()) j++
+                    // Only a name followed by '=' is an attribute; a bare word is not.
+                    if (j < rawTagContent.length && rawTagContent[j] == '=') {
+                        names.add(start to rawTagContent.substring(start, afterName))
+                    }
+                }
+
+                else -> i++
+            }
+        }
+        return names
+    }
+
+    private fun isNameStartChar(c: Char): Boolean = c.isLetter() || c == '_' || c == ':'
+
+    private fun isNameChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_' || c == ':' || c == '.' || c == '-'
 
     private fun findTagEnd(text: String, from: Int): Int? {
         var i = from
@@ -427,7 +576,6 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
     private companion object {
         val ENTITY_REGEX = Regex("&(?:[a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);")
-        val ATTR_NAME_REGEX = Regex("(?<=\\s)[a-zA-Z_:][a-zA-Z0-9_.:-]*(?=\\s*=)")
 
         val HTML_VOID_ELEMENTS = setOf(
             "area", "base", "br", "col", "embed", "hr", "img", "input",

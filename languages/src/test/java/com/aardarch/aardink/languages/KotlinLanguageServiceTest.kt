@@ -103,4 +103,20 @@ class KotlinLanguageServiceTest {
         val formatted = KotlinLanguageService.format(doc)
         assertEquals("fun foo() {\n    val x = 1\n}", formatted)
     }
+
+    @Test
+    fun `format preserves raw string contents`() = runBlocking {
+        val q = "\"\"\""
+        val src = "fun foo() {\nval s = $q\n    indented   \n$q\nval x = 1\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("\n    indented   \n"), "raw string content is data: $formatted")
+        assertTrue(formatted.contains("\n    val x = 1\n"), "code after the string is still indented: $formatted")
+    }
+
+    @Test
+    fun `a brace in a comment or a string does not shift the indent`() = runBlocking {
+        val src = "fun foo() {\n// {\nval s = \"{\"\nval x = 1\n}"
+        val formatted = KotlinLanguageService.format(CodeDocument(src))
+        assertEquals("fun foo() {\n    // {\n    val s = \"{\"\n    val x = 1\n}", formatted)
+    }
 }

@@ -129,4 +129,53 @@ class XmlLanguageServiceTest {
         assertTrue(xml("""<a foo="1" foo="2"/>""").any { it.message.contains("Duplicate attribute") })
         assertTrue(html("""<a foo="1" FOO="2"/>""").any { it.message.contains("Duplicate attribute") })
     }
+
+    @Test
+    fun `an equals inside an attribute value is not an attribute`() {
+        assertTrue(xml("""<a data=" foo=1 foo=2"/>""").isEmpty(), "the duplicate is value text, not two attributes")
+        assertTrue(xml("""<a data=' foo=1 foo=2'/>""").isEmpty())
+        assertTrue(
+            xml("""<a foo="x" data=" foo=1" foo="y"/>""").any { it.message.contains("Duplicate attribute 'foo'") },
+            "a real duplicate around a value is still reported",
+        )
+    }
+
+    @Test
+    fun `tag names fold case only in html`() {
+        assertTrue(xml("<Foo></foo>").isNotEmpty(), "XML element names are case-sensitive")
+        assertTrue(xml("<Foo></Foo>").isEmpty())
+        assertTrue(html("<DIV></div>").isEmpty(), "HTML element names are not")
+    }
+
+    // ── Formatting leaves content alone ──────────────────────────────────────
+
+    @Test
+    fun `format preserves text node whitespace`() = runBlocking {
+        val src = "<a>\n<p>\n    leading and trailing   \n</p>\n</a>"
+        val formatted = XmlLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("\n    leading and trailing   \n"), "text nodes are content: $formatted")
+        assertTrue(formatted.contains("\n    <p>\n"), "surrounding structure is still indented: $formatted")
+    }
+
+    @Test
+    fun `format leaves the inside of a multi-line comment alone`() = runBlocking {
+        val src = "<a>\n<!--\n      note\n-->\n</a>"
+        val formatted = XmlLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("\n      note\n"), "comment body survives verbatim: $formatted")
+    }
+
+    @Test
+    fun `format leaves a mixed content line alone`() = runBlocking {
+        val src = "<a>\n  some <b>bold</b> text\n</a>"
+        val formatted = XmlLanguageService.format(CodeDocument(src))
+        assertTrue(formatted.contains("\n  some <b>bold</b> text\n"), "mixed content survives verbatim: $formatted")
+    }
+
+    @Test
+    fun `attribute completions replace the partial name`() = runBlocking {
+        val src = """<a android:"""
+        val items = XmlLanguageService.completions(CodeDocument(src), src.length)
+        val name = items.single { it.label == "android:name" }
+        assertEquals(3 until src.length, name.replaceRange, "the whole partial name goes, not just the part after ':'")
+    }
 }

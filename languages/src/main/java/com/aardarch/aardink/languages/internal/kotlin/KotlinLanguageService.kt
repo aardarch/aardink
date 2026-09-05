@@ -335,27 +335,135 @@ object KotlinLanguageService : BaseLanguageService() {
         if (text.isBlank()) return text
 
         val lines = text.lines()
+        val states = lineStates(lines)
         val formatted = mutableListOf<String>()
         var depth = 0
 
-        for (line in lines) {
+        for ((index, line) in lines.withIndex()) {
+            val state = states[index]
+            // Whitespace inside a raw string is data — re-indenting it changes the program.
+            if (state.touchesRawString) {
+                formatted.add(line)
+                continue
+            }
+
             val trimmed = line.trim()
             if (trimmed.isEmpty()) {
                 formatted.add("")
                 continue
             }
 
-            if (trimmed.startsWith("}") || trimmed.startsWith(")")) {
+            // Structure comes from the code on the line, so a brace in a comment or a string
+            // literal ("// {", "val s = \"{\"") no longer shifts everything below it.
+            if (state.code.startsWith("}") || state.code.startsWith(")")) {
                 depth = (depth - 1).coerceAtLeast(0)
             }
 
             formatted.add(" ".repeat(depth * 4) + trimmed)
 
-            if (trimmed.endsWith("{") || trimmed.endsWith("(")) {
+            if (state.code.endsWith("{") || state.code.endsWith("(")) {
                 depth++
             }
         }
 
         return formatted.joinToString("\n")
     }
+
+    /**
+     * How a line relates to the literals and comments around it.
+     *
+     * @param touchesRawString Any part of the line lies inside a `"""` string, whose leading and
+     *   trailing whitespace is data and must survive formatting verbatim.
+     * @param code The line with comments and string contents removed, trimmed — what the indenter
+     *   may draw structure from.
+     */
+    private data class KotlinLineState(val touchesRawString: Boolean, val code: String)
+
+    /**
+     * Classifies every line of the document in one pass, tracking raw strings, block comments,
+     * line comments and single-line strings across line boundaries.
+     */
+    private fun lineStates(lines: List<String>): List<KotlinLineState> {
+        val states = ArrayList<KotlinLineState>(lines.size)
+        var inRawString = false
+        var inBlockComment = false
+
+        for (line in lines) {
+            val startedInRawString = inRawString
+            var openedRawString = false
+            val code = StringBuilder()
+            var i = 0
+
+            while (i < line.length) {
+                when {
+                    inRawString -> {
+                        val close = line.indexOf(RAW_STRING_QUOTE, i)
+                        if (close < 0) {
+                            i = line.length
+                        } else {
+                            inRawString = false
+                            i = close + RAW_STRING_QUOTE.length
+                        }
+                    }
+
+                    inBlockComment -> {
+                        val close = line.indexOf("*/", i)
+                        if (close < 0) {
+                            i = line.length
+                        } else {
+                            inBlockComment = false
+                            i = close + 2
+                        }
+                    }
+
+                    line.startsWith("//", i) -> i = line.length
+
+                    line.startsWith("/*", i) -> {
+                        inBlockComment = true
+                        i += 2
+                    }
+
+                    line.startsWith(RAW_STRING_QUOTE, i) -> {
+                        inRawString = true
+                        openedRawString = true
+                        i += RAW_STRING_QUOTE.length
+                    }
+
+                    line[i] == '"' || line[i] == '\'' -> {
+                        // Keep the quotes, drop the contents: the literal is a token to the
+                        // indenter but its braces are not structure.
+                        val quote = line[i]
+                        code.append(quote)
+                        val end = endOfSingleLineLiteral(line, i)
+                        if (end > i + 1) code.append(quote)
+                        i = end
+                    }
+
+                    else -> {
+                        code.append(line[i])
+                        i++
+                    }
+                }
+            }
+
+            states.add(KotlinLineState(startedInRawString || openedRawString, code.toString().trim()))
+        }
+        return states
+    }
+
+    /** Index just past the single-line string or char literal opening at [start], or the line end. */
+    private fun endOfSingleLineLiteral(line: String, start: Int): Int {
+        val quote = line[start]
+        var i = start + 1
+        while (i < line.length) {
+            when {
+                line[i] == '\\' -> i += 2
+                line[i] == quote -> return i + 1
+                else -> i++
+            }
+        }
+        return line.length
+    }
+
+    private const val RAW_STRING_QUOTE = "\"\"\""
 }

@@ -34,6 +34,25 @@ object TomlLanguageService : BaseLanguageService() {
     private const val MULTILINE_BASIC = "\"\"\""
     private const val MULTILINE_LITERAL = "'''"
 
+    private val CATALOG_SECTIONS = listOf(
+        "versions" to "Version catalog dependency versions",
+        "libraries" to "Version catalog library declarations",
+        "plugins" to "Version catalog plugin declarations",
+        "bundles" to "Version catalog library bundles",
+    )
+
+    private val LIBRARY_KEYS = listOf(
+        "module" to "Group and artifact ID",
+        "group" to "Dependency group ID",
+        "name" to "Dependency artifact name",
+        "version.ref" to "Reference to [versions] entry",
+    )
+
+    private val PLUGIN_KEYS = listOf(
+        "id" to "Plugin ID",
+        "version.ref" to "Reference to [versions] entry",
+    )
+
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val lineCount = document.lineCount
         if (lineCount == 0 || document.text.isBlank()) return emptyList()
@@ -53,9 +72,10 @@ object TomlLanguageService : BaseLanguageService() {
 
             val lineStartOffset = document.lineStart(i)
 
-            // Table header [section] or [[array]]
+            // Table header [section] or [[array]] — an inline comment may follow it.
             if (trimmed.startsWith("[")) {
-                if (!trimmed.endsWith("]")) {
+                val header = headerOf(trimmed)
+                if (!header.endsWith("]")) {
                     val start = lineStartOffset + lineText.indexOf('[')
                     val end = lineStartOffset + lineText.length
                     diags.add(
@@ -68,14 +88,14 @@ object TomlLanguageService : BaseLanguageService() {
                         ),
                     )
                 } else {
-                    currentSection = trimmed
+                    currentSection = header
                     sectionKeys.clear()
                 }
                 continue
             }
 
-            // Key = Value
-            val eqIdx = lineText.indexOf('=')
+            // Key = Value — the '=' inside a quoted key ("a=b" = 1) is part of the key.
+            val eqIdx = assignmentIndex(lineText)
             if (eqIdx < 0) {
                 // Not a table header, comment, blank, or key=value assignment
                 val start = lineStartOffset
@@ -130,37 +150,25 @@ object TomlLanguageService : BaseLanguageService() {
 
         // 1. Table header completions after typing '[' or '[['
         if (textBeforeCursor == "[" || textBeforeCursor == "[[") {
-            val suffix = if (textBeforeCursor == "[") "]" else "]]"
-            return listOf(
+            val open = textBeforeCursor
+            val close = "]".repeat(open.length)
+            // The auto-closer has already put a ']' (or ']]') after the cursor. Accepting an item
+            // writes the whole header, so the replaced range must swallow those brackets too —
+            // otherwise the document ends up as `[versions]]`.
+            val lineStart = document.lineStart(lineIndex)
+            val headerStart = lineStart + lineText.indexOf('[')
+            val trailingBrackets = lineText.drop(col).takeWhile { it == ']' }.length.coerceAtMost(close.length)
+            val replaceRange = headerStart until (cursorOffset + trailingBrackets)
+            return CATALOG_SECTIONS.mapIndexed { index, (name, doc) ->
                 CompletionItem(
-                    label = "versions",
+                    label = name,
                     kind = CompletionKind.Element,
-                    insertText = "versions$suffix\n",
-                    documentation = "Version catalog dependency versions",
-                    sortPriority = 0,
-                ),
-                CompletionItem(
-                    label = "libraries",
-                    kind = CompletionKind.Element,
-                    insertText = "libraries$suffix\n",
-                    documentation = "Version catalog library declarations",
-                    sortPriority = 1,
-                ),
-                CompletionItem(
-                    label = "plugins",
-                    kind = CompletionKind.Element,
-                    insertText = "plugins$suffix\n",
-                    documentation = "Version catalog plugin declarations",
-                    sortPriority = 2,
-                ),
-                CompletionItem(
-                    label = "bundles",
-                    kind = CompletionKind.Element,
-                    insertText = "bundles$suffix\n",
-                    documentation = "Version catalog library bundles",
-                    sortPriority = 3,
-                ),
-            )
+                    insertText = "$open$name$close",
+                    documentation = doc,
+                    sortPriority = index,
+                    replaceRange = replaceRange,
+                )
+            }
         }
 
         // 2. Value completions after '='
@@ -185,21 +193,30 @@ object TomlLanguageService : BaseLanguageService() {
 
         // 3. Key completions based on current active section
         val activeSection = findActiveSection(document, lineIndex)
-        if (activeSection == "[libraries]") {
-            return listOf(
-                CompletionItem("module", CompletionKind.Property, "module = \"\"", "Group and artifact ID"),
-                CompletionItem("group", CompletionKind.Property, "group = \"\"", "Dependency group ID"),
-                CompletionItem("name", CompletionKind.Property, "name = \"\"", "Dependency artifact name"),
-                CompletionItem("version.ref", CompletionKind.Property, "version.ref = \"\"", "Reference to [versions] entry"),
-            )
-        } else if (activeSection == "[plugins]") {
-            return listOf(
-                CompletionItem("id", CompletionKind.Property, "id = \"\"", "Plugin ID"),
-                CompletionItem("version.ref", CompletionKind.Property, "version.ref = \"\"", "Reference to [versions] entry"),
+        val keys = when (activeSection) {
+            "[libraries]" -> LIBRARY_KEYS
+            "[plugins]" -> PLUGIN_KEYS
+            else -> return emptyList()
+        }
+        // These keys are dotted ("version.ref") and '.' is a token boundary to the editor, so a
+        // half-typed "version." would survive and be duplicated. Name the range explicitly.
+        val keyStart = document.lineStart(lineIndex) + startOfDottedKey(lineText, col)
+        return keys.map { (name, doc) ->
+            CompletionItem(
+                label = name,
+                kind = CompletionKind.Property,
+                insertText = "$name = \"\"",
+                documentation = doc,
+                replaceRange = keyStart until cursorOffset,
             )
         }
+    }
 
-        return emptyList()
+    /** Start column of the (possibly dotted) bare key being typed at [col] on [lineText]. */
+    private fun startOfDottedKey(lineText: String, col: Int): Int {
+        var start = col.coerceIn(0, lineText.length)
+        while (start > 0 && (lineText[start - 1].isLetterOrDigit() || lineText[start - 1] in "_-.")) start--
+        return start
     }
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = when (charTyped) {
@@ -246,7 +263,9 @@ object TomlLanguageService : BaseLanguageService() {
                 formattedLines.add(trimmed)
                 continue
             }
-            val eqIdx = trimmed.indexOf('=')
+            // Split on the assignment '=', never on one inside a quoted key: formatting
+            // `"a=b" = 1` must not rewrite the key to `"a = b"`.
+            val eqIdx = assignmentIndex(trimmed)
             if (eqIdx > 0) {
                 val key = trimmed.substring(0, eqIdx).trim()
                 val value = trimmed.substring(eqIdx + 1).trim()
@@ -331,6 +350,41 @@ object TomlLanguageService : BaseLanguageService() {
         return states
     }
 
+    /**
+     * The table header at the start of [trimmedLine], with any inline comment dropped —
+     * `[versions] # catalog` is a perfectly closed `[versions]`.
+     */
+    private fun headerOf(trimmedLine: String): String {
+        var i = 0
+        while (i < trimmedLine.length) {
+            val c = trimmedLine[i]
+            when {
+                c == '#' -> return trimmedLine.substring(0, i).trimEnd()
+                c == '"' || c == '\'' -> i = endOfBasicString(trimmedLine, i)
+                else -> i++
+            }
+        }
+        return trimmedLine.trimEnd()
+    }
+
+    /**
+     * Index of the `=` that separates key from value in [line], or -1 when the line has none.
+     * An `=` inside a quoted key or after a comment marker is not an assignment.
+     */
+    private fun assignmentIndex(line: String): Int {
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                c == '#' -> return -1
+                c == '=' -> return i
+                c == '"' || c == '\'' -> i = endOfBasicString(line, i)
+                else -> i++
+            }
+        }
+        return -1
+    }
+
     /** Index just past the single-line string opening at [start], or the line end if unterminated. */
     private fun endOfBasicString(line: String, start: Int): Int {
         val quote = line[start]
@@ -348,9 +402,9 @@ object TomlLanguageService : BaseLanguageService() {
     private fun findActiveSection(document: CodeDocument, currentLine: Int): String {
         for (i in currentLine downTo 0) {
             val trimmed = document.lineText(i).trim()
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                return trimmed
-            }
+            if (!trimmed.startsWith("[")) continue
+            val header = headerOf(trimmed)
+            if (header.endsWith("]")) return header
         }
         return ""
     }
