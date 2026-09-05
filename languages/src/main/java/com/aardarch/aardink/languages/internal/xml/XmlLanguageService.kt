@@ -330,8 +330,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
     }
 
     /** Element name at the start of [tagContent] (the text just inside `<`), without attributes. */
-    private fun tagNameOf(tagContent: String): String =
-        tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
+    private fun tagNameOf(tagContent: String): String = tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
 
     /** Whether [name] is an HTML element that never has children — only meaningful in HTML mode. */
     private fun isVoidElement(name: String): Boolean = htmlMode && name.lowercase() in HTML_VOID_ELEMENTS
