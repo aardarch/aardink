@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-07
+
 ### Added
 
 - **TOML Language Support**: Built-in TOML tokenizer (`TomlTokenizer`), folding provider (`TomlFoldingProvider`), and language service (`TomlLanguageService`) supporting Android Version Catalog completions, duplicate key diagnostics, auto-closing, and formatting. Diagnostics, formatting and folding all read the document through one string-and-bracket scanner, so multiline values, inline comments after a table header, quoted keys containing `=`, and brackets or `#` inside a quoted value are treated as the data they are. Table headers are recognised only at the start of a line, so an array value such as `deps = ["a", "b"]` is highlighted as strings rather than as a header.
