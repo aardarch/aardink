@@ -98,6 +98,7 @@ try {
         $SourceRoots = @(
             (Join-Path $ProjectRoot 'editor' 'src'),
             (Join-Path $ProjectRoot 'languages' 'src'),
+            (Join-Path $ProjectRoot 'languages-lsp' 'src'),
             (Join-Path $ProjectRoot 'sample' 'src')
         )
         $Sources = $SourceRoots |
@@ -118,9 +119,9 @@ try {
 
     # ── 3. Spotless (format check or auto-fix) ─────────────────────────
     $SpotlessTasks = if ($NoFix) {
-        @(':editor:spotlessCheck', ':languages:spotlessCheck', ':sample:spotlessCheck')
+        @(':editor:spotlessCheck', ':languages:spotlessCheck', ':languages-lsp:spotlessCheck', ':sample:spotlessCheck')
     } else {
-        @(':editor:spotlessApply', ':languages:spotlessApply', ':sample:spotlessApply')
+        @(':editor:spotlessApply', ':languages:spotlessApply', ':languages-lsp:spotlessApply', ':sample:spotlessApply')
     }
     $SpotlessLabel = if ($NoFix) { 'Spotless check' } else { 'Spotless apply (auto-fix)' }
 
@@ -131,14 +132,14 @@ try {
 
     # ── 4. Android Lint ─────────────────────────────────────────────────
     Invoke-Check 'Android lint' {
-        & $Gradlew ':editor:lint' ':languages:lint' ':sample:lintDebug' --quiet 2>&1 | Out-Host
+        & $Gradlew ':editor:lint' ':languages:lint' ':languages-lsp:lint' ':sample:lintDebug' --quiet 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
     }
 
     # ── 5. Unit tests ───────────────────────────────────────────────────
     if (-not $SkipTests) {
         Invoke-Check 'Unit tests' {
-            & $Gradlew ':editor:test' ':languages:test' --quiet 2>&1 | Out-Host
+            & $Gradlew ':editor:test' ':languages:test' ':languages-lsp:test' --quiet 2>&1 | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
         }
     }
@@ -154,7 +155,7 @@ try {
     # ── 7. Local Maven publish dry-run ─────────────────────────────────
     if (-not $SkipBuild) {
         Invoke-Check 'Publish to mavenLocal (dry sanity)' {
-            & $Gradlew ':editor:publishToMavenLocal' ':languages:publishToMavenLocal' --quiet 2>&1 | Out-Host
+            & $Gradlew ':editor:publishToMavenLocal' ':languages:publishToMavenLocal' ':languages-lsp:publishToMavenLocal' --quiet 2>&1 | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'publishToMavenLocal failed' }
         }
     }

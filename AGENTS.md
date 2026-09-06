@@ -8,14 +8,18 @@ Aardink is a standalone Jetpack Compose-native code editor library for Android p
 ```text
 editor/          # The library module — the published artifact (com.aardarch:aardink)
   src/main/java/com/aardarch/aardink/
-    core/        # Document model, tokenization, undo, find, folding
-    ui/          # Composables: CodeEditorLayout, EditorGutter, etc.
+    core/        # Document model, tokenization, undo, find, folding, LSP models (TextEdit, CodeAction, SignatureHelp)
+    ui/          # Composables: CodeEditorLayout, EditorGutter, SignatureHelpPopup, CodeActionMenu, RenameDialog, etc.
   src/test/      # JUnit 5 unit tests
 
 languages/       # Built-in language support — published as com.aardarch:aardink-languages
   src/main/java/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
-    internal/    # Per-language tokenizers + folding providers (regex-driven v1)
+    internal/    # Per-language tokenizers + folding providers + services (Kotlin, XML, JSON, TOML, etc.)
+
+languages-lsp/   # External Language Server Protocol bridge — published as com.aardarch:aardink-languages-lsp
+  src/main/java/com/aardarch/aardink/languages/lsp/
+    LspClient.kt / LspLanguageService.kt / LspTransport.kt / LspMessage.kt
 
 sample/          # Minimal Android app for local development and manual testing
   src/main/java/com/aardarch/aardink/sample/
@@ -27,6 +31,7 @@ sample/          # Minimal Android app for local development and manual testing
 - Material 3
 - JUnit 5 for tests
 - Spotless + ktlint for formatting
+- kotlinx-serialization-json (`:languages-lsp` only) for LSP JSON-RPC payloads
 - Binary compatibility validator (apiDump / apiCheck)
 - vanniktech Maven Publish plugin
 
@@ -35,13 +40,13 @@ sample/          # Minimal Android app for local development and manual testing
 All commands run from the repo root.
 
 ```pwsh
-./gradlew :editor:test :languages:test          # Unit tests
-./gradlew :editor:lint :languages:lint :sample:lintDebug     # Lint
-./gradlew :editor:spotlessCheck :languages:spotlessCheck :sample:spotlessCheck   # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply :sample:spotlessApply   # Auto-format
+./gradlew :editor:test :languages:test :languages-lsp:test          # Unit tests
+./gradlew :editor:lint :languages:lint :languages-lsp:lint :sample:lintDebug     # Lint
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
-./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal  # Publish to ~/.m2
-./gradlew dokkaAll                              # API docs (HTML) for both modules
+./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal  # Publish to ~/.m2
+./gradlew dokkaAll                              # API docs (HTML) for all modules
 ./gradlew dokkaAllGfm                           # API docs (GitHub-Flavored Markdown)
 ```
 
@@ -73,24 +78,27 @@ tests, sample build, and `publishToMavenLocal` sanity.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
 - Tests: JUnit 5 (`@Test` from `org.junit.jupiter.api`), no Mockk needed in the editor module
-- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose
+- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose; `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
 
 ## Separation of Concerns
 
 The `editor` module is intentionally language-agnostic:
 
 - Generic highlighting, gutter, undo, find/replace, folding → belongs in `editor`
-- Language-specific logic (Kotlin, TS, JSON, XML, HTML, CSS, Markdown, plain text) → belongs in
+- Language-specific logic (Kotlin, TS, JSON, TOML, XML, HTML, CSS, Markdown, plain text) → belongs in
   `languages` (or in a consumer override) via `IncrementalTokenizer` + `FoldingProvider`,
   packaged as `LanguageDefinition` and resolved through `LanguageRegistry`
+- External LSP integration bridge → belongs in `languages-lsp` via `LspClient` + `LspLanguageService`
 
 ## Public API Surface (key entry points)
 
 | Symbol | Description |
 | --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
-| `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor |
-| `LanguageService` | Interface — implement for completions, diagnostics, hover, formatting; `triggerCharacters` has a default empty-set implementation |
+| `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor, including `applyTextEdits()` |
+| `LanguageService` | Interface — completions, diagnostics, hover, formatting, code actions, definition, signature help, rename |
+| `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`) |
+| `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
 | `FoldingProvider` | Interface — implement for code folding |
 | `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal |
@@ -102,8 +110,8 @@ SemVer. Breaking API changes require a major version bump. Don't introduce break
 After any intentional public API change, run `./gradlew :editor:apiDump` and commit the result.
 
 The single source of truth for the published version is `VERSION_NAME` in
-`gradle.properties`. Both `editor` and `languages` modules read it via the vanniktech
-Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
+`gradle.properties`. The `editor`, `languages` and `languages-lsp` modules all read it via the
+vanniktech Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
 
 ## Releasing
 
@@ -123,7 +131,7 @@ proceed if the tag exists or if `[Unreleased]` is empty (override with
 commit whose tag matches `VERSION_NAME`.
 
 The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
-verifies the tag matches `VERSION_NAME`, publishes both artifacts, builds the sample app,
+verifies the tag matches `VERSION_NAME`, publishes all three artifacts, builds the sample app,
 and creates a GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body
 and two assets: the API docs tarball and `aardink-sample-vX.Y.Z.apk`.
 

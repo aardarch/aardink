@@ -16,15 +16,19 @@
 package com.aardarch.aardink.languages.internal.json
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 
 /**
- * Hand-written JSON validator. Reports the first syntax error as a [Diagnostic] with character-
- * range precision. Validation only — no completions, no formatting in v1.
+ * Hand-written JSON validator, auto-close provider, completion provider, and formatter.
+ * Reports syntax errors and duplicate keys as [Diagnostic]s with character-range precision.
  */
 object JsonLanguageService : BaseLanguageService() {
+
+    override val triggerCharacters: Set<Char> = setOf('{', '[', ':', '"', ',')
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val text = document.text
@@ -32,6 +36,171 @@ object JsonLanguageService : BaseLanguageService() {
         val parser = JsonParser(text)
         val diag = parser.parse() ?: return emptyList()
         return listOf(diag.toDiagnostic(document))
+    }
+
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = when (charTyped) {
+        '{' -> "}"
+        '[' -> "]"
+        '"' -> "\""
+        else -> null
+    }
+
+    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
+        if (lineIndex <= 0) return 0
+        val prevLine = document.lineText(lineIndex - 1)
+        val prevIndent = prevLine.takeWhile { it.isWhitespace() }.length
+        val trimmedPrev = prevLine.trim()
+        val currLine = document.lineText(lineIndex).trim()
+
+        var indent = prevIndent
+        if (trimmedPrev.endsWith("{") || trimmedPrev.endsWith("[") || trimmedPrev.endsWith(":")) {
+            indent += 4
+        }
+        if (currLine.startsWith("}") || currLine.startsWith("]")) {
+            indent = (indent - 4).coerceAtLeast(0)
+        }
+        return indent
+    }
+
+    override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
+        val text = document.text
+        val clampedOffset = cursorOffset.coerceIn(0, text.length)
+        val textBefore = text.take(clampedOffset).trimEnd()
+
+        if (textBefore.endsWith(":")) {
+            return listOf(
+                CompletionItem("true", CompletionKind.Value, " true"),
+                CompletionItem("false", CompletionKind.Value, " false"),
+                CompletionItem("null", CompletionKind.Value, " null"),
+                CompletionItem("\"\"", CompletionKind.Value, " \"\""),
+                CompletionItem("{}", CompletionKind.Snippet, " {\n    \n}"),
+                CompletionItem("[]", CompletionKind.Snippet, " [\n    \n]"),
+            )
+        }
+
+        // A comma continues whatever container it sits in, so `[1,` wants another element, not a
+        // property that would leave the array invalid.
+        val afterComma = textBefore.endsWith(",")
+        val container = if (afterComma) enclosingContainer(textBefore) else textBefore.lastOrNull()
+        return when (container) {
+            '{' -> listOf(
+                CompletionItem("\"id\"", CompletionKind.Property, "\"id\": \"\""),
+                CompletionItem("\"name\"", CompletionKind.Property, "\"name\": \"\""),
+                CompletionItem("\"type\"", CompletionKind.Property, "\"type\": \"\""),
+                CompletionItem("\"version\"", CompletionKind.Property, "\"version\": \"\""),
+                CompletionItem("\"enabled\"", CompletionKind.Property, "\"enabled\": true"),
+            )
+
+            '[' -> {
+                val gap = if (afterComma) " " else ""
+                listOf(
+                    CompletionItem("true", CompletionKind.Value, "${gap}true"),
+                    CompletionItem("false", CompletionKind.Value, "${gap}false"),
+                    CompletionItem("null", CompletionKind.Value, "${gap}null"),
+                    CompletionItem("\"\"", CompletionKind.Value, "$gap\"\""),
+                    CompletionItem("{}", CompletionKind.Snippet, "$gap{\n    \n}"),
+                    CompletionItem("[]", CompletionKind.Snippet, "$gap[\n    \n]"),
+                )
+            }
+
+            else -> emptyList()
+        }
+    }
+
+    /**
+     * The innermost unclosed `{` or `[` before the end of [text], or null at the top level.
+     * Strings are skipped, escapes included, so a bracket or comma inside one is data, not structure.
+     */
+    private fun enclosingContainer(text: String): Char? {
+        val open = ArrayDeque<Char>()
+        var inString = false
+        var escape = false
+        for (c in text) {
+            if (inString) {
+                when {
+                    escape -> escape = false
+                    c == '\\' -> escape = true
+                    c == '"' -> inString = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> inString = true
+                '{', '[' -> open.addLast(c)
+                '}', ']' -> open.removeLastOrNull()
+            }
+        }
+        return open.lastOrNull()
+    }
+
+    override suspend fun format(document: CodeDocument): String {
+        val text = document.text
+        if (text.isBlank()) return text
+
+        val sb = StringBuilder()
+        var depth = 0
+        var inString = false
+        var escape = false
+
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+
+            if (inString) {
+                sb.append(c)
+                if (escape) {
+                    escape = false
+                } else if (c == '\\') {
+                    escape = true
+                } else if (c == '"') {
+                    inString = false
+                }
+                i++
+                continue
+            }
+
+            when (c) {
+                '"' -> {
+                    inString = true
+                    sb.append(c)
+                }
+
+                '{', '[' -> {
+                    sb.append(c)
+                    depth++
+                    sb.append('\n')
+                    sb.append(" ".repeat(depth * 4))
+                }
+
+                '}', ']' -> {
+                    depth = (depth - 1).coerceAtLeast(0)
+                    sb.append('\n')
+                    sb.append(" ".repeat(depth * 4))
+                    sb.append(c)
+                }
+
+                ':' -> {
+                    sb.append(": ")
+                }
+
+                ',' -> {
+                    sb.append(',')
+                    sb.append('\n')
+                    sb.append(" ".repeat(depth * 4))
+                }
+
+                ' ', '\t', '\r', '\n' -> {
+                    // Ignore unquoted whitespace
+                }
+
+                else -> {
+                    sb.append(c)
+                }
+            }
+            i++
+        }
+
+        return sb.toString()
     }
 
     private data class ParseError(val start: Int, val end: Int, val message: String) {
@@ -87,10 +256,16 @@ object JsonLanguageService : BaseLanguageService() {
                 pos++
                 return
             }
+            val keys = mutableSetOf<String>()
             while (true) {
                 skipWs()
                 if (peek() != '"') fail("Expected a string key")
-                parseString()
+                val keyStart = pos
+                // The decoded key, not its spelling: "a" and "\u0061" name one member.
+                val keyName = parseString()
+                if (!keys.add(keyName)) {
+                    fail("Duplicate key '$keyName' in object", keyStart, pos)
+                }
                 skipWs()
                 if (peek() != ':') fail("Expected ':' after object key")
                 pos++
@@ -144,14 +319,21 @@ object JsonLanguageService : BaseLanguageService() {
             }
         }
 
-        private fun parseString() {
+        /**
+         * Consumes a string literal and returns the string it denotes, escapes resolved.
+         *
+         * Callers reading a value discard it; the object parser keeps it, because two members
+         * spelled differently can still name the same key — `"a"` and `"a"` are one member.
+         */
+        private fun parseString(): String {
             val start = pos
+            val decoded = StringBuilder()
             expect('"')
             while (pos < text.length) {
                 when (val c = text[pos]) {
                     '"' -> {
                         pos++
-                        return
+                        return decoded.toString()
                     }
 
                     '\\' -> {
@@ -163,9 +345,11 @@ object JsonLanguageService : BaseLanguageService() {
                             for (k in 1..4) {
                                 if (!isHex(text[pos + k])) fail("Invalid \\u escape", start)
                             }
+                            decoded.append(text.substring(pos + 1, pos + 5).toInt(16).toChar())
                             pos += 5
                         } else {
                             if (esc !in "\"\\/bfnrt") fail("Invalid escape \\$esc", pos - 1)
+                            decoded.append(unescape(esc))
                             pos++
                         }
                     }
@@ -175,11 +359,22 @@ object JsonLanguageService : BaseLanguageService() {
                     else -> if (c.code < 0x20) {
                         fail("Unescaped control character in string", pos)
                     } else {
+                        decoded.append(c)
                         pos++
                     }
                 }
             }
             fail("Unterminated string", start)
+        }
+
+        /** The character a single-letter escape stands for; the escape set is checked by the caller. */
+        private fun unescape(esc: Char): Char = when (esc) {
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            else -> esc // '"', '\\' and '/' stand for themselves
         }
 
         private fun parseNumber() {

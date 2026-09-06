@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
@@ -64,7 +66,9 @@ import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -145,8 +149,85 @@ fun CodeEditorLayout(
     var showCompletion by remember { mutableStateOf(false) }
     var completionJob by remember { mutableStateOf<Job?>(null) }
 
+    // Code actions, Signature help & Rename state
+    var showCodeActionsMenu by remember { mutableStateOf(false) }
+    var currentSignatureHelp by remember { mutableStateOf<SignatureHelp?>(null) }
+    var showSignatureHelp by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameTargetName by remember { mutableStateOf("") }
+    var renameTargetRange by remember { mutableStateOf(IntRange.EMPTY) }
+    var renameTargetVersion by remember { mutableIntStateOf(0) }
+
+    // ── Rename: resolve the symbol the host asked to rename, then open the dialog ─
+    // A null `prepareRename` means "this symbol cannot be renamed" — including the default
+    // implementation of a service that has no rename at all. Opening the dialog anyway produced a
+    // prompt whose confirmation silently did nothing, so the request just ends here instead.
+    LaunchedEffect(state, languageService) {
+        snapshotFlow { state.pendingRename }.collect { request ->
+            if (request == null) return@collect
+            state.clearRename()
+            val text = state.document.text
+            // Same guard the rename itself has: the server answers later, and a range measured
+            // against the older text would be sliced from a document that has since changed.
+            val requestedVersion = state.textVersion
+            val range = withContext(Dispatchers.Default) {
+                languageService?.prepareRename(state.document, request.offset)
+            } ?: return@collect
+            if (range.isEmpty() || state.textVersion != requestedVersion) return@collect
+            if (range.first < 0 || range.last >= text.length) return@collect
+            renameTargetRange = range
+            renameTargetName = text.substring(range.first, range.last + 1)
+            renameTargetVersion = requestedVersion
+            showRenameDialog = true
+        }
+    }
+
+    // Unconditional, unlike the find and fold effects whose visible state lives in their nullable
+    // holders: the popup's state is remembered here, so the effect must still run when the host
+    // detaches the service in order to take the popup down with it.
+    LaunchedEffect(languageService, state.selection, textVersion) {
+        if (languageService == null) {
+            showSignatureHelp = false
+            currentSignatureHelp = null
+            return@LaunchedEffect
+        }
+        val offset = state.selection.start
+        if (offset < 0 || offset > state.document.length) return@LaunchedEffect
+        // Keep asking while the cursor sits inside the argument list, not just right after
+        // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
+        // The service decides when the context has stopped being valid by returning null.
+        if (!isInsideCallArguments(state.document.text, offset)) {
+            showSignatureHelp = false
+            currentSignatureHelp = null
+            return@LaunchedEffect
+        }
+        // Debounced like the find and folding passes: a language server should not field a
+        // request per keystroke.
+        delay(SIGNATURE_HELP_DEBOUNCE_MS)
+        val sig = withContext(Dispatchers.Default) {
+            languageService.signatureHelp(state.document, offset)
+        }
+        currentSignatureHelp = sig
+        showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
+    }
+
     // Annotation tooltip: shown when user taps a gutter dot
     var tooltipDiagnostic by remember { mutableStateOf<Diagnostic?>(null) }
+
+    // Quick fixes for the tapped diagnostic — the only way the action menu is opened. Tapping a
+    // gutter dot doesn't move the cursor, so actions are fetched for the diagnostic's own range,
+    // lazily, rather than for every cursor position the user passes through.
+    // Not keyed on the text version: the tooltip is dismissed by any edit (see the sync effect
+    // below), because its diagnostic's range describes text that no longer exists.
+    var tooltipCodeActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
+    LaunchedEffect(languageService, tooltipDiagnostic) {
+        tooltipCodeActions = emptyList()
+        val tooltip = tooltipDiagnostic ?: return@LaunchedEffect
+        if (languageService == null) return@LaunchedEffect
+        tooltipCodeActions = withContext(Dispatchers.Default) {
+            languageService.codeActions(state.document, tooltip.range)
+        }
+    }
 
     // Diff lane: compute line diffs when savedText or document changes
     var diffAnnotations by remember { mutableStateOf<Map<Int, LineDiffKind>>(emptyMap()) }
@@ -188,6 +269,12 @@ fun CodeEditorLayout(
     LaunchedEffect(state) {
         snapshotFlow { state.textVersion }
             .collect { _ ->
+                // Any edit — typed, applied from a quick fix, or made by the host — leaves the
+                // tapped diagnostic's range pointing at text that has moved. Take the banner and
+                // its menu down rather than keep offering a fix for a range that no longer means
+                // what it did (or for a problem the fix just removed).
+                tooltipDiagnostic = null
+                showCodeActionsMenu = false
                 val currentText = state.document.text
                 if (fieldValue.text != currentText) {
                     fieldValue = TextFieldValue(
@@ -195,7 +282,6 @@ fun CodeEditorLayout(
                         selection = state.selection,
                     )
                     showCompletion = false
-                    tooltipDiagnostic = null
                 }
             }
     }
@@ -430,6 +516,59 @@ fun CodeEditorLayout(
                 message = tooltip.message,
                 severity = tooltip.severity,
                 onDismiss = { tooltipDiagnostic = null },
+                onQuickFix = if (tooltipCodeActions.isNotEmpty()) {
+                    { showCodeActionsMenu = true }
+                } else {
+                    null
+                },
+            )
+        }
+
+        // ── Signature help, Code action popups & Rename Dialog ────────────────
+        if (showSignatureHelp && currentSignatureHelp != null) {
+            SignatureHelpPopup(
+                help = currentSignatureHelp!!,
+                onDismiss = { showSignatureHelp = false },
+            )
+        }
+
+        if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
+            CodeActionMenu(
+                actions = tooltipCodeActions,
+                onSelectAction = { action ->
+                    state.applyTextEdits(action.edits)
+                    fieldValue = TextFieldValue(state.document.text, state.selection)
+                    showCodeActionsMenu = false
+                },
+                onDismiss = { showCodeActionsMenu = false },
+            )
+        }
+
+        if (showRenameDialog && renameTargetName.isNotEmpty()) {
+            RenameDialog(
+                currentName = renameTargetName,
+                onConfirm = { newName ->
+                    val target = renameTargetRange.first
+                    // The target offset was measured when the dialog opened, and the server's
+                    // edits are offsets into the text as it is when we ask. The host may have
+                    // replaced the document while the dialog was up, and the user can type while
+                    // the server works; in either case the offsets point at whatever happens to
+                    // sit there now, so the rename is dropped rather than applied to the wrong
+                    // characters.
+                    val requestedVersion = renameTargetVersion
+                    showRenameDialog = false
+                    if (state.textVersion != requestedVersion) return@RenameDialog
+                    coroutineScope.launch {
+                        val edits = withContext(Dispatchers.Default) {
+                            languageService?.rename(state.document, target, newName)
+                        } ?: emptyList()
+                        if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
+                            state.applyTextEdits(edits)
+                            fieldValue = TextFieldValue(state.document.text, state.selection)
+                        }
+                    }
+                },
+                onDismiss = { showRenameDialog = false },
             )
         }
 
@@ -556,6 +695,7 @@ fun CodeEditorLayout(
                                     languageService = languageService,
                                     triggerChars = triggerChars,
                                     onFieldValue = { fieldValue = it },
+                                    currentCompletionItems = completionItems,
                                     onCompletionItems = { completionItems = it },
                                     onShowCompletion = { showCompletion = it },
                                     completionJobRef = { completionJob = it },
@@ -618,6 +758,7 @@ private fun handleTextChange(
     languageService: LanguageService?,
     triggerChars: Set<Char>,
     onFieldValue: (TextFieldValue) -> Unit,
+    currentCompletionItems: List<CompletionItem>,
     onCompletionItems: (List<CompletionItem>) -> Unit,
     onShowCompletion: (Boolean) -> Unit,
     completionJobRef: (Job?) -> Unit,
@@ -635,6 +776,11 @@ private fun handleTextChange(
     if (isSingleInsert && languageService != null) {
         val typedChar = delta.insertText[0]
         val insertedAt = delta.deleteOffset
+        // The list stays up while a fresh request is in flight, so an item accepted in between
+        // comes from a list addressed to the text before this keystroke. Re-address the ranges a
+        // provider gave: the typed character joins the token being completed, and anything after
+        // the insertion moves along by one.
+        var carried = currentCompletionItems.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
 
         if (typedChar == '\n') {
             val (newLine, _) = state.document.offsetToLineCol(insertedAt + 1)
@@ -652,11 +798,14 @@ private fun handleTextChange(
             val closing = languageService.autoClose(state.document, insertedAt, typedChar)
             if (closing != null) {
                 state.applyEdit(finalSelection.start, 0, closing, finalSelection)
+                // Inserted after the cursor: a range ending at the cursor must not swallow it.
+                carried = carried.map { it.shiftedForInsert(finalSelection.start, closing.length, absorbing = false) }
             }
         }
 
         when {
             typedChar in triggerChars -> {
+                onCompletionItems(carried)
                 currentCompletionJob?.cancel()
                 completionJobRef(
                     coroutineScope.launch {
@@ -668,6 +817,7 @@ private fun handleTextChange(
             }
 
             typedChar.isLetterOrDigit() || typedChar == '_' -> {
+                onCompletionItems(carried)
                 currentCompletionJob?.cancel()
                 completionJobRef(
                     coroutineScope.launch {
@@ -695,17 +845,141 @@ private fun applyCompletion(
     item: CompletionItem,
     onFieldValue: (TextFieldValue) -> Unit,
 ) {
-    val cursorPos = fieldValue.selection.start
-    val text = fieldValue.text
-    val triggerOrBoundary = setOf('<', '>', '{', '}', '"', '\'', '=', ' ', '\n', '\t', '@', '|', ':')
-    var tokenStart = cursorPos
-    while (tokenStart > 0 && text[tokenStart - 1] !in triggerOrBoundary) {
-        tokenStart--
+    val target = completionReplaceRange(fieldValue.text, fieldValue.selection.start, item)
+
+    if (item.additionalEdits.isEmpty()) {
+        val newSelection = TextRange(target.first + item.insertText.length)
+        state.applyEdit(target.first, target.last - target.first + 1, item.insertText, newSelection)
+        onFieldValue(TextFieldValue(state.document.text, newSelection))
+        return
     }
-    val deleteLength = cursorPos - tokenStart
-    val newSelection = TextRange(tokenStart + item.insertText.length)
-    state.applyEdit(tokenStart, deleteLength, item.insertText, newSelection)
+
+    // An auto-import completion inserts the symbol and its import together, so the two go in as one
+    // batch: applyTextEdits orders them and records a single undo step, and the caret is placed
+    // afterwards accounting for any edit that shifted text ahead of it.
+    state.applyTextEdits(item.additionalEdits + TextEdit(target, item.insertText))
+    val shiftBefore = item.additionalEdits
+        .filter { it.range.first <= target.first }
+        .sumOf { it.newText.length - (it.range.last - it.range.first + 1) }
+    val caret = (target.first + shiftBefore + item.insertText.length).coerceIn(0, state.document.length)
+    val newSelection = TextRange(caret)
+    state.selection = newSelection
     onFieldValue(TextFieldValue(state.document.text, newSelection))
+}
+
+/**
+ * Characters a completion never reaches back across when guessing what it replaces.
+ *
+ * `.` is one of them: after `list.`, accepting a member completion must insert after the receiver,
+ * not swallow it. A provider that knows better says so with [CompletionItem.replaceRange].
+ */
+private val COMPLETION_BOUNDARY_CHARS =
+    setOf('<', '>', '{', '}', '(', ')', '[', ']', '"', '\'', '=', ',', ';', '.', ' ', '\n', '\t', '@', '|', ':')
+
+/**
+ * Half-open-as-inclusive range in [text] that accepting [item] at [cursorPos] replaces.
+ *
+ * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
+ * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
+ */
+internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
+    val cursor = cursorPos.coerceIn(0, text.length)
+    item.replaceRange?.let { provided ->
+        val start = provided.first.coerceIn(0, text.length)
+        val end = (provided.last + 1).coerceIn(start, text.length)
+        return start until end
+    }
+    var start = cursor
+    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
+        start--
+    }
+    return start until cursor
+}
+
+/**
+ * [CompletionItem] re-addressed after [length] characters were inserted at [at], for a list that
+ * outlives the text it was computed for. A provider's [CompletionItem.replaceRange] and
+ * [CompletionItem.additionalEdits] are offsets into that older text; applying them verbatim after
+ * a keystroke replaces the wrong span. Ranges after the insertion move along; a range the
+ * insertion lands inside grows to keep covering the same text; and when [absorbing] a range ending
+ * exactly at the insertion grows too, so the character just typed becomes part of the token the
+ * completion replaces rather than a leftover after it.
+ */
+internal fun CompletionItem.shiftedForInsert(at: Int, length: Int, absorbing: Boolean): CompletionItem {
+    val range = replaceRange?.let { shiftRangeForInsert(it, at, length, absorbing) }
+    val extra = additionalEdits.map { TextEdit(shiftRangeForInsert(it.range, at, length, absorbing = false), it.newText) }
+    return if (range == replaceRange && extra == additionalEdits) this else copy(replaceRange = range, additionalEdits = extra)
+}
+
+private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing: Boolean): IntRange = when {
+    at < range.first -> range.first + length..range.last + length
+    at <= range.last || (absorbing && at == range.last + 1) -> range.first..range.last + length
+    else -> range
+}
+
+// ── Signature help context ─────────────────────────────────────────────────────
+
+/** Delay before a signature-help request, so a language server isn't asked per keystroke. */
+private const val SIGNATURE_HELP_DEBOUNCE_MS = 200L
+
+/** How far back the call scan looks — a call opened further above the cursor isn't worth chasing. */
+private const val CALL_SCAN_LIMIT = 2000
+
+/**
+ * Whether [offset] sits inside an unclosed `(` argument list, ignoring parentheses in comments and
+ * string or character literals.
+ *
+ * The scan is bounded to the last [CALL_SCAN_LIMIT] characters, so it can start inside a multi-line
+ * literal and misjudge; that only costs one extra signature-help request, which the language service
+ * answers with null.
+ */
+internal fun isInsideCallArguments(text: String, offset: Int): Boolean {
+    val cursor = offset.coerceIn(0, text.length)
+    var i = (cursor - CALL_SCAN_LIMIT).coerceAtLeast(0)
+    var depth = 0
+    while (i < cursor) {
+        when {
+            text.startsWith("//", i) -> {
+                val nl = text.indexOf('\n', i)
+                i = if (nl < 0 || nl >= cursor) cursor else nl + 1
+            }
+
+            text.startsWith("/*", i) -> {
+                val end = text.indexOf("*/", i + 2)
+                i = if (end < 0 || end + 2 >= cursor) cursor else end + 2
+            }
+
+            text[i] == '"' || text[i] == '\'' -> i = endOfLiteral(text, i, cursor)
+
+            text[i] == '(' -> {
+                depth++
+                i++
+            }
+
+            text[i] == ')' -> {
+                depth = (depth - 1).coerceAtLeast(0)
+                i++
+            }
+
+            else -> i++
+        }
+    }
+    return depth > 0
+}
+
+/** Index just past the literal opened by the quote at [start], bounded by [limit]. */
+private fun endOfLiteral(text: String, start: Int, limit: Int): Int {
+    val quote = text[start]
+    var i = start + 1
+    while (i < limit) {
+        when (text[i]) {
+            '\\' -> i += 2
+            quote -> return i + 1
+            '\n' -> return i + 1
+            else -> i++
+        }
+    }
+    return limit
 }
 
 // ── Edit delta computation ─────────────────────────────────────────────────────

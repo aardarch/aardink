@@ -106,6 +106,26 @@ class CodeEditorState(
         pendingNavigation = null
     }
 
+    /**
+     * One-shot rename request. Set by the host app (a menu item, a toolbar button); consumed by
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout], which resolves the symbol at the
+     * offset through the language service and opens the rename dialog.
+     */
+    var pendingRename by mutableStateOf<Rename?>(null)
+        private set
+
+    data class Rename(val offset: Int)
+
+    /** Requests the editor to rename the symbol at [offset], defaulting to the one at the cursor. */
+    fun requestRename(offset: Int = selection.start) {
+        pendingRename = Rename(offset.coerceIn(0, document.length))
+    }
+
+    /** Called by [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] after consuming [pendingRename]. */
+    fun clearRename() {
+        pendingRename = null
+    }
+
     // ── Convenience reads ─────────────────────────────────────────────────────
 
     /**
@@ -159,6 +179,95 @@ class CodeEditorState(
         selection = newSelection
         textVersion++
         scheduleTokenization()
+    }
+
+    /**
+     * Applies a batch of [TextEdit]s atomically to the document, recording the operation in
+     * undo history as a single batch and scheduling tokenization.
+     *
+     * [selection] is clamped to the resulting document — a batch that shortens the text past the
+     * cursor would otherwise leave a selection out of bounds, which `TextFieldValue` rejects.
+     */
+    fun applyTextEdits(edits: List<TextEdit>) {
+        if (edits.isEmpty()) return
+        undoManager.flushPendingInsert()
+
+        // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent
+        // ranges. Edits sharing an offset are applied last-to-first, which lands them in the order
+        // they were given: LSP says several inserts at one position appear in array order, so
+        // inserting "a" then "b" must read "ab" and not "ba".
+        val sorted = edits.withIndex()
+            .sortedWith(
+                compareByDescending<IndexedValue<TextEdit>> { it.value.range.first }
+                    .thenByDescending { it.value.range.last }
+                    .thenByDescending { it.index },
+            )
+            .map { it.value }
+        val ops = mutableListOf<EditorUndoManager.EditOperation>()
+        // One snapshot for the whole batch: edits are applied high-to-low, so text below the lowest
+        // offset touched so far is unchanged and can be sliced from the snapshot — O(len) per edit
+        // instead of an O(n) document copy per edit.
+        val snapshot = document.text
+        var untouchedBelow = snapshot.length
+
+        for (edit in sorted) {
+            val start = edit.range.first.coerceIn(0, document.length)
+            val end = (edit.range.last + 1).coerceIn(start, document.length)
+            val deleteLen = end - start
+            val deletedText = when {
+                deleteLen == 0 -> ""
+                end <= untouchedBelow -> snapshot.substring(start, end)
+                else -> document.text.substring(start, end) // overlapping edits: fall back to live text
+            }
+            untouchedBelow = minOf(untouchedBelow, start)
+
+            if (deleteLen > 0) {
+                document.delete(start, deleteLen)
+                ops.add(EditorUndoManager.EditOperation.Delete(start, deleteLen, deletedText))
+            }
+            if (edit.newText.isNotEmpty()) {
+                document.insert(start, edit.newText)
+                ops.add(EditorUndoManager.EditOperation.Insert(start, edit.newText))
+            }
+        }
+
+        if (ops.isNotEmpty()) {
+            undoManager.recordBatch(ops)
+        }
+
+        // Carry the caret through the batch: a rename or import inserted above it must not leave
+        // it at a number that now points into unrelated text.
+        val before = selection
+        selection = clampToDocument(
+            TextRange(mapThroughEdits(before.start, sorted), mapThroughEdits(before.end, sorted)),
+        )
+        textVersion++
+        scheduleTokenization()
+    }
+
+    /**
+     * Where [offset] (into the text before a batch) sits after [edits] are applied. An edit ending
+     * at or before the offset shifts it by the size difference; one the offset falls inside snaps
+     * it to the end of the replacement, the same place a single [applyEdit] leaves the caret.
+     */
+    private fun mapThroughEdits(offset: Int, edits: List<TextEdit>): Int {
+        var shift = 0
+        var snapped: Int? = null
+        for (edit in edits) {
+            val start = edit.range.first.coerceAtLeast(0)
+            val end = (edit.range.last + 1).coerceAtLeast(start)
+            when {
+                end <= offset -> shift += edit.newText.length - (end - start)
+                start < offset -> snapped = start + edit.newText.length
+            }
+        }
+        return (snapped ?: offset) + shift
+    }
+
+    private fun clampToDocument(range: TextRange): TextRange {
+        val start = range.start.coerceIn(0, document.length)
+        val end = range.end.coerceIn(0, document.length)
+        return if (start == range.start && end == range.end) range else TextRange(start, end)
     }
 
     /**

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,6 +37,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.FindReplaceState
@@ -99,14 +103,23 @@ fun FindReplacePanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.width(48.dp),
                     )
-                    IconButton(onClick = onPrev, enabled = state.matches.isNotEmpty()) {
-                        Text("▲")
+                    // The glyphs mean nothing to a screen reader; the buttons carry the labels.
+                    IconButton(
+                        onClick = onPrev,
+                        enabled = state.matches.isNotEmpty(),
+                        modifier = Modifier.semantics { contentDescription = "Previous match" },
+                    ) {
+                        Text("▲", modifier = Modifier.clearAndSetSemantics { })
                     }
-                    IconButton(onClick = onNext, enabled = state.matches.isNotEmpty()) {
-                        Text("▼")
+                    IconButton(
+                        onClick = onNext,
+                        enabled = state.matches.isNotEmpty(),
+                        modifier = Modifier.semantics { contentDescription = "Next match" },
+                    ) {
+                        Text("▼", modifier = Modifier.clearAndSetSemantics { })
                     }
                     IconButton(onClick = onClose) {
-                        Text("✕")
+                        Icon(EditorIcons.Close, contentDescription = "Close find and replace")
                     }
                 }
 

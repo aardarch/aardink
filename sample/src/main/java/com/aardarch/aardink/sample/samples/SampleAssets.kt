@@ -29,6 +29,7 @@ object SampleAssets {
         "kotlin" -> KOTLIN
         "typescript" -> TYPESCRIPT
         "json" -> JSON
+        "toml" -> TOML
         "xml" -> XML
         "html" -> HTML
         "css" -> CSS
@@ -346,6 +347,35 @@ object SampleAssets {
             },
             "deprecated_keys": null
         }
+    """.trimIndent()
+
+    private val TOML: String = """
+        # Gradle Version Catalog (libs.versions.toml) sample
+        # Demonstrates TOML table headers, keys, strings, numbers, booleans, and inline tables.
+
+        [versions]
+        agp = "8.9.0"
+        kotlin = "2.1.10"
+        core-ktx = "1.15.0"
+        compose-bom = "2025.02.00"
+        material3 = "1.3.1"
+        junit5 = "5.11.4"
+        spotless = "7.0.2"
+
+        [libraries]
+        androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
+        androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+        androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+        androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+        junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit5" }
+
+        [bundles]
+        compose = ["androidx-compose-ui", "androidx-compose-material3"]
+
+        [plugins]
+        android-application = { id = "com.android.application", version.ref = "agp" }
+        kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+        spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
     """.trimIndent()
 
     private val XML: String = """

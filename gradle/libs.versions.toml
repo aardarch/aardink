@@ -4,10 +4,10 @@
 [versions]
 
 # Plugin versions
-plugin-agp = "9.3.2"
+plugin-agp = "9.4.0"
 plugin-kotlin = "2.4.10"
-plugin-spotless = "8.10.1"
-plugin-kotlin-binary-compat = "0.18.1"
+plugin-spotless = "8.10.2"
+plugin-kotlin-binary-compat = "0.18.2"
 plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
 
@@ -22,6 +22,8 @@ androidx-activity = "1.13.0"
 androidx-lifecycle = "2.11.0"
 google-material = "1.14.0"
 junit-jupiter = "6.1.3"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.11.0"
 
 ####################################################################################################
 # LIBRARIES
@@ -54,6 +56,10 @@ androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-ru
 
 # Google Material (sample app theme)
 google-android-material = { module = "com.google.android.material:material", version.ref = "google-material" }
+
+# KotlinX (languages-lsp only — JSON-RPC payloads and the transport's coroutines)
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 
 # JUnit 5
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-jupiter" }
@@ -94,6 +100,7 @@ plugin-android-library = { id = "com.android.library", version.ref = "plugin-agp
 
 # Kotlin
 plugin-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "plugin-kotlin" }
+plugin-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "plugin-kotlin" }
 
 # Code formatting
 plugin-spotless = { id = "com.diffplug.spotless", version.ref = "plugin-spotless" }
