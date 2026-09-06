@@ -66,10 +66,30 @@ try {
     $currentVersion = Get-VersionFromGradleProperties -RepoRoot $RepoRoot
     Write-Host "Current VERSION_NAME: $currentVersion" -ForegroundColor Cyan
 
+    # --- CHANGELOG sanity ---
+    $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
+    if (-not (Test-Path $changelogPath)) { throw "CHANGELOG.md not found." }
+    $unreleased = Get-ChangelogSection -ChangelogPath $changelogPath -Version 'Unreleased'
+    if ($null -eq $unreleased) {
+        throw "No ## [Unreleased] section found in CHANGELOG.md."
+    }
+    if ([string]::IsNullOrWhiteSpace($unreleased) -and -not $AllowEmptyChangelog) {
+        throw "[Unreleased] section is empty. Run ./update-changelog.ps1 first, or pass -AllowEmptyChangelog."
+    }
+
+    $changelogImpact = $null
+    if (-not [string]::IsNullOrWhiteSpace($unreleased)) {
+        $changelogImpact = Get-ChangelogReleaseImpact -Section $unreleased
+    }
+
     $latestTag = Get-LatestSemverTag
     $commits = @(Get-CommitsSinceTag -Tag $latestTag)
     $suggested = $null
-    if ($commits.Count -gt 0) {
+    if ($changelogImpact) {
+        $suggested = Get-SuggestedNextVersion -CurrentVersion $currentVersion `
+            -HasBreaking $false -HasFeature $false -Bump $changelogImpact.Bump
+        $suggested.Reason = $changelogImpact.Reason
+    } elseif ($commits.Count -gt 0) {
         $cat = Get-CategorizedCommits -Commits $commits
         $suggested = Get-SuggestedNextVersion -CurrentVersion $currentVersion `
             -HasBreaking $cat.HasBreaking -HasFeature $cat.HasFeature
@@ -85,6 +105,11 @@ try {
     if ($Version -notmatch '^\d+\.\d+\.\d+(?:[-+].+)?$') {
         throw "Version '$Version' is not a valid semver."
     }
+    $currentMajor = [int]($currentVersion.Split('.')[0])
+    $targetMajor = [int]($Version.Split('.')[0])
+    if ($currentMajor -eq 0 -and $targetMajor -ge 1) {
+        throw "Version '$Version' would cut a v1 release. Aardink is still pre-1.0; choose a 0.x.y version."
+    }
     $tag = "v$Version"
 
     if (git tag --list $tag) {
@@ -92,17 +117,6 @@ try {
     }
     if (git ls-remote --tags origin "refs/tags/$tag") {
         throw "Tag $tag already exists on origin."
-    }
-
-    # --- CHANGELOG sanity ---
-    $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
-    if (-not (Test-Path $changelogPath)) { throw "CHANGELOG.md not found." }
-    $unreleased = Get-ChangelogSection -ChangelogPath $changelogPath -Version 'Unreleased'
-    if ($null -eq $unreleased) {
-        throw "No ## [Unreleased] section found in CHANGELOG.md."
-    }
-    if ([string]::IsNullOrWhiteSpace($unreleased) -and -not $AllowEmptyChangelog) {
-        throw "[Unreleased] section is empty. Run ./update-changelog.ps1 first, or pass -AllowEmptyChangelog."
     }
 
     # --- Pre-push checks ---

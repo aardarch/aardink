@@ -125,19 +125,60 @@ function Get-SuggestedNextVersion {
     param(
         [string]$CurrentVersion,
         [bool]$HasBreaking,
-        [bool]$HasFeature
+        [bool]$HasFeature,
+        [ValidateSet('major', 'minor', 'patch')]
+        [string]$Bump
     )
 
     $parts = $CurrentVersion.Split('.')
     $major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
 
-    if ($HasBreaking) {
-        return [PSCustomObject]@{ Version = "$($major + 1).0.0";       Reason = 'BREAKING changes detected' }
-    } elseif ($HasFeature) {
-        return [PSCustomObject]@{ Version = "$major.$($minor + 1).0";  Reason = 'New features detected' }
-    } else {
-        return [PSCustomObject]@{ Version = "$major.$minor.$($patch + 1)"; Reason = 'Bug fixes / maintenance only' }
+    if (-not $Bump) {
+        $Bump = if ($HasBreaking) { 'major' } elseif ($HasFeature) { 'minor' } else { 'patch' }
     }
+
+    switch ($Bump) {
+        'major' {
+            if ($major -eq 0) {
+                return [PSCustomObject]@{ Version = "0.$($minor + 1).0"; Reason = 'Breaking / major changes detected before 1.0' }
+            }
+            return [PSCustomObject]@{ Version = "$($major + 1).0.0"; Reason = 'Breaking / major changes detected' }
+        }
+        'minor' {
+            return [PSCustomObject]@{ Version = "$major.$($minor + 1).0"; Reason = 'Minor changes detected' }
+        }
+        default {
+            return [PSCustomObject]@{ Version = "$major.$minor.$($patch + 1)"; Reason = 'Patch changes detected' }
+        }
+    }
+}
+
+function Get-ChangelogReleaseImpact {
+    <#
+    .SYNOPSIS
+        Classify a CHANGELOG section into the strongest SemVer bump it describes.
+    #>
+    param([string]$Section)
+
+    if ([string]::IsNullOrWhiteSpace($Section)) {
+        return [PSCustomObject]@{ Bump = 'patch'; Reason = 'Empty changelog section' }
+    }
+
+    $hasBreaking = $Section -match '(?im)(^###\s+(Breaking|Breaking Changes|Major)\b|\*\*BREAKING\*\*|BREAKING CHANGE)'
+    $hasMinor = $Section -match '(?im)^###\s+(Added|Changed|Deprecated|Minor)\b'
+    $hasPatch = $Section -match '(?im)^###\s+(Fixed|Security|Patch)\b'
+    $hasEntries = $Section -match '(?m)^\s*-\s+\S'
+
+    if ($hasBreaking) {
+        return [PSCustomObject]@{ Bump = 'major'; Reason = 'breaking / major changelog entries detected' }
+    }
+    if ($hasMinor) {
+        return [PSCustomObject]@{ Bump = 'minor'; Reason = 'minor changelog entries detected' }
+    }
+    if ($hasPatch -or $hasEntries) {
+        return [PSCustomObject]@{ Bump = 'patch'; Reason = 'patch changelog entries detected' }
+    }
+    return [PSCustomObject]@{ Bump = 'patch'; Reason = 'changelog section has no categorized entries' }
 }
 
 function Get-VersionFromGradleProperties {
