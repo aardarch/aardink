@@ -286,13 +286,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         closeTransport()
     }
 
-private fun failPendingRequests(reason: String) {
-    val pending = pendingRequests.values.toList()
-    pendingRequests.clear()
-    for (deferred in pending) {
-        deferred.completeExceptionally(LspRequestException(LspRequestException.CONNECTION_CLOSED, reason))
+    private fun failPendingRequests(reason: String) {
+        val pending = pendingRequests.values.toList()
+        pendingRequests.clear()
+        for (deferred in pending) {
+            deferred.completeExceptionally(LspRequestException(LspRequestException.CONNECTION_CLOSED, reason))
+        }
     }
-}
 
     private suspend fun handleIncomingPayload(payload: String) {
         val message = parseObjectOrNull(payload) ?: return
