@@ -882,6 +882,20 @@ private val COMPLETION_BOUNDARY_CHARS =
  * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
  * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
  */
+internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
+    val cursor = cursorPos.coerceIn(0, text.length)
+    item.replaceRange?.let { provided ->
+        val start = provided.first.coerceIn(0, text.length)
+        val end = (provided.last + 1).coerceIn(start, text.length)
+        return start until end
+    }
+    var start = cursor
+    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
+        start--
+    }
+    return start until cursor
+}
+
 /**
  * [CompletionItem] re-addressed after [length] characters were inserted at [at], for a list that
  * outlives the text it was computed for. A provider's [CompletionItem.replaceRange] and
@@ -901,20 +915,6 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
     at < range.first -> range.first + length..range.last + length
     at <= range.last || (absorbing && at == range.last + 1) -> range.first..range.last + length
     else -> range
-}
-
-internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
-    val cursor = cursorPos.coerceIn(0, text.length)
-    item.replaceRange?.let { provided ->
-        val start = provided.first.coerceIn(0, text.length)
-        val end = (provided.last + 1).coerceIn(start, text.length)
-        return start until end
-    }
-    var start = cursor
-    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
-        start--
-    }
-    return start until cursor
 }
 
 // ── Signature help context ─────────────────────────────────────────────────────
