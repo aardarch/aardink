@@ -100,7 +100,13 @@ object TomlLanguageService : BaseLanguageService() {
                     val isArrayEntry = header.startsWith("[[")
                     val path = normalizedTablePath(header)
                     // Each [[array]] element is its own table, so give it its own bucket.
-                    val instance = if (isArrayEntry) arrayInstances.merge(path, 1, Int::plus)!! else 0
+                    val instance = if (isArrayEntry) {
+                        val next = (arrayInstances[path] ?: 0) + 1
+                        arrayInstances[path] = next
+                        next
+                    } else {
+                        0
+                    }
                     sectionKeys = keysByTable.getOrPut(path to instance) { mutableSetOf() }
                 }
                 continue
@@ -421,6 +427,22 @@ object TomlLanguageService : BaseLanguageService() {
 
     /** A value Unicode can actually encode: within range, and not half of a surrogate pair. */
     private fun isUnicodeScalar(code: Int): Boolean = code in 0..0x10FFFF && code !in 0xD800..0xDFFF
+
+    /**
+     * Portable replacement for the JVM-only `StringBuilder.appendCodePoint`: encodes [codePoint]
+     * as one UTF-16 code unit, or a surrogate pair for values above the Basic Multilingual Plane.
+     * [codePoint] must already be a valid Unicode scalar (see [isUnicodeScalar]) — callers check
+     * that before calling this.
+     */
+    private fun StringBuilder.appendCodePoint(codePoint: Int) {
+        if (codePoint <= 0xFFFF) {
+            append(codePoint.toChar())
+        } else {
+            val adjusted = codePoint - 0x10000
+            append(((adjusted shr 10) + 0xD800).toChar())
+            append(((adjusted and 0x3FF) + 0xDC00).toChar())
+        }
+    }
 
     /** Resolves the escapes TOML allows in a basic string; an unknown one is left as written. */
     private fun unescapeBasic(body: String): String {

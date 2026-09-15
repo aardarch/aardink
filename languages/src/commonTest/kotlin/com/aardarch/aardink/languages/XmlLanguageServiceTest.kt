@@ -20,19 +20,19 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class XmlLanguageServiceTest {
 
-    private fun xml(text: String) = runBlocking { XmlLanguageService.diagnostics(CodeDocument(text)) }
-    private fun html(text: String) = runBlocking { HtmlLanguageService.diagnostics(CodeDocument(text)) }
+    private suspend fun xml(text: String) = XmlLanguageService.diagnostics(CodeDocument(text))
+    private suspend fun html(text: String) = HtmlLanguageService.diagnostics(CodeDocument(text))
 
     @Test
-    fun `well-formed XML yields no diagnostics`() {
+    fun `well-formed XML yields no diagnostics`() = runTest {
         assertTrue(xml("<root><child/></root>").isEmpty())
         assertTrue(xml("<a attr=\"v\"><b/></a>").isEmpty())
         assertTrue(xml("<!-- comment --><a/>").isEmpty())
@@ -41,90 +41,90 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `mismatched closing tag flagged`() {
+    fun `mismatched closing tag flagged`() = runTest {
         val diags = xml("<a><b></c></a>")
         assertTrue(diags.any { it.message.contains("Unmatched", ignoreCase = true) })
     }
 
     @Test
-    fun `unclosed open tag flagged`() {
+    fun `unclosed open tag flagged`() = runTest {
         val diags = xml("<a><b></a>")
         assertTrue(diags.any { it.message.contains("Unclosed", ignoreCase = true) })
     }
 
     @Test
-    fun `unterminated comment flagged`() {
+    fun `unterminated comment flagged`() = runTest {
         val diags = xml("<a><!-- never ends</a>")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("comment", ignoreCase = true))
     }
 
     @Test
-    fun `duplicate attribute flagged`() {
+    fun `duplicate attribute flagged`() = runTest {
         val diags = xml("<item android:name=\"a\" android:name=\"b\"/>")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("Duplicate attribute", ignoreCase = true))
     }
 
     @Test
-    fun `unescaped ampersand flagged`() {
+    fun `unescaped ampersand flagged`() = runTest {
         val diags = xml("<a>Rock & Roll</a>")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("Unescaped '&'", ignoreCase = true))
     }
 
     @Test
-    fun `auto close closing tag on angle bracket`() {
+    fun `auto close closing tag on angle bracket`() = runTest {
         val doc = CodeDocument("<LinearLayout>")
         val auto = XmlLanguageService.autoClose(doc, 13, '>')
         assertEquals("</LinearLayout>", auto)
     }
 
     @Test
-    fun `a closing angle bracket typed in text content closes nothing`() {
+    fun `a closing angle bracket typed in text content closes nothing`() = runTest {
         // `<p>1 >`: the last '<' opened a tag that its own '>' already closed, so this '>' is text.
         assertNull(XmlLanguageService.autoClose(CodeDocument("<p>1 >"), 5, '>'))
         assertNull(XmlLanguageService.autoClose(CodeDocument("<p>hello\na >"), 11, '>'))
     }
 
     @Test
-    fun `auto close tag name on slash`() {
+    fun `auto close tag name on slash`() = runTest {
         val doc = CodeDocument("<a><b></")
         val auto = XmlLanguageService.autoClose(doc, 7, '/')
         assertEquals("b>", auto)
     }
 
     @Test
-    fun `completions for elements and attributes`() {
+    fun `completions for elements and attributes`() = runTest {
         val doc1 = CodeDocument("<")
-        val elems = runBlocking { XmlLanguageService.completions(doc1, 1) }
+        val elems = XmlLanguageService.completions(doc1, 1)
         assertTrue(elems.any { it.label == "activity" })
 
         val doc2 = CodeDocument("<activity ")
-        val attrs = runBlocking { XmlLanguageService.completions(doc2, 10) }
+        val attrs = XmlLanguageService.completions(doc2, 10)
         assertTrue(attrs.any { it.label == "android:name" })
     }
 
     @Test
-    fun `format indents nested tags`() = runBlocking {
+    fun `format indents nested tags`() = runTest {
         val doc = CodeDocument("<a>\n<b>\n</b>\n</a>")
         val formatted = XmlLanguageService.format(doc)
         assertEquals("<a>\n    <b>\n    </b>\n</a>", formatted)
     }
 
     @Test
-    fun `html void elements do not need closing`() {
+    fun `html void elements do not need closing`() = runTest {
         assertTrue(html("<div><br><img src=\"x\"></div>").isEmpty())
     }
 
     @Test
-    fun `html still flags unbalanced non-void tags`() {
+    fun `html still flags unbalanced non-void tags`() = runTest {
         val diags = html("<div><span></div>")
         assertTrue(diags.isNotEmpty())
     }
 
     @Test
-    fun `a custom element only prefixed by a void name is not void`() = runBlocking {
+    fun `a custom element only prefixed by a void name is not void`() = runTest {
         val doc = CodeDocument("<input-group>\n<span>\n</span>\n</input-group>")
         val formatted = HtmlLanguageService.format(doc)
         assertEquals("<input-group>\n    <span>\n    </span>\n</input-group>", formatted)
@@ -134,14 +134,14 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `duplicate attributes fold case only in html`() {
+    fun `duplicate attributes fold case only in html`() = runTest {
         assertTrue(xml("""<a foo="1" FOO="2"/>""").isEmpty(), "XML attribute names are case-sensitive")
         assertTrue(xml("""<a foo="1" foo="2"/>""").any { it.message.contains("Duplicate attribute") })
         assertTrue(html("""<a foo="1" FOO="2"/>""").any { it.message.contains("Duplicate attribute") })
     }
 
     @Test
-    fun `an equals inside an attribute value is not an attribute`() {
+    fun `an equals inside an attribute value is not an attribute`() = runTest {
         assertTrue(xml("""<a data=" foo=1 foo=2"/>""").isEmpty(), "the duplicate is value text, not two attributes")
         assertTrue(xml("""<a data=' foo=1 foo=2'/>""").isEmpty())
         assertTrue(
@@ -151,7 +151,7 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `tag names fold case only in html`() {
+    fun `tag names fold case only in html`() = runTest {
         assertTrue(xml("<Foo></foo>").isNotEmpty(), "XML element names are case-sensitive")
         assertTrue(xml("<Foo></Foo>").isEmpty())
         assertTrue(html("<DIV></div>").isEmpty(), "HTML element names are not")
@@ -160,7 +160,7 @@ class XmlLanguageServiceTest {
     // ── Formatting leaves content alone ──────────────────────────────────────
 
     @Test
-    fun `format preserves text node whitespace`() = runBlocking {
+    fun `format preserves text node whitespace`() = runTest {
         val src = "<a>\n<p>\n    leading and trailing   \n</p>\n</a>"
         val formatted = XmlLanguageService.format(CodeDocument(src))
         assertTrue(formatted.contains("\n    leading and trailing   \n"), "text nodes are content: $formatted")
@@ -168,21 +168,21 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `format leaves the inside of a multi-line comment alone`() = runBlocking {
+    fun `format leaves the inside of a multi-line comment alone`() = runTest {
         val src = "<a>\n<!--\n      note\n-->\n</a>"
         val formatted = XmlLanguageService.format(CodeDocument(src))
         assertTrue(formatted.contains("\n      note\n"), "comment body survives verbatim: $formatted")
     }
 
     @Test
-    fun `format leaves a mixed content line alone`() = runBlocking {
+    fun `format leaves a mixed content line alone`() = runTest {
         val src = "<a>\n  some <b>bold</b> text\n</a>"
         val formatted = XmlLanguageService.format(CodeDocument(src))
         assertTrue(formatted.contains("\n  some <b>bold</b> text\n"), "mixed content survives verbatim: $formatted")
     }
 
     @Test
-    fun `attribute completions replace the partial name`() = runBlocking {
+    fun `attribute completions replace the partial name`() = runTest {
         val src = """<a android:"""
         val items = XmlLanguageService.completions(CodeDocument(src), src.length)
         val name = items.single { it.label == "android:name" }
@@ -190,7 +190,7 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `attribute names are offered after a finished value`() = runBlocking {
+    fun `attribute names are offered after a finished value`() = runTest {
         // The last '=' belongs to id, whose value is closed, so the cursor is back in name
         // territory - offering values here made attribute-name completion unreachable.
         val src = "<a id=\"x\" android:"
@@ -200,14 +200,14 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `values are still offered inside an open quote`() = runBlocking {
+    fun `values are still offered inside an open quote`() = runTest {
         val src = "<a id=\""
         val items = XmlLanguageService.completions(CodeDocument(src), src.length)
         assertTrue(items.all { it.kind == CompletionKind.Value }, items.map { it.kind }.toString())
     }
 
     @Test
-    fun `format counts every tag on a line`() = runBlocking {
+    fun `format counts every tag on a line`() = runTest {
         // <a><b> opens two levels, so </b> closes back to one - inside <a>. Treating the whole
         // line as a single opener counted one level and left </b> at column 0.
         val src = "<a><b>\n</b>\n</a>"
@@ -215,19 +215,19 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `format leaves a line that opens and closes at the same depth`() = runBlocking {
+    fun `format leaves a line that opens and closes at the same depth`() = runTest {
         val src = "<root>\n<a><b></b></a>\n</root>"
         assertEquals("<root>\n    <a><b></b></a>\n</root>", XmlLanguageService.format(CodeDocument(src)))
     }
 
     @Test
-    fun `format outdents a line that closes several tags`() = runBlocking {
+    fun `format outdents a line that closes several tags`() = runTest {
         val src = "<a>\n<b>\n<c/>\n</b></a>"
         assertEquals("<a>\n    <b>\n        <c/>\n</b></a>", XmlLanguageService.format(CodeDocument(src)))
     }
 
     @Test
-    fun `unescaped ampersand in an attribute value flagged`() {
+    fun `unescaped ampersand in an attribute value flagged`() = runTest {
         // The scan jumps past a whole tag, so the text-node check never saw attribute values.
         val diags = xml("""<a label="A & B"/>""")
         assertEquals(1, diags.size)
@@ -237,25 +237,25 @@ class XmlLanguageServiceTest {
     }
 
     @Test
-    fun `entity references in attribute values are not flagged`() {
+    fun `entity references in attribute values are not flagged`() = runTest {
         assertTrue(xml("""<a label="A &amp; B"/>""").isEmpty())
         assertTrue(xml("""<a label="x &#38; y" alt='&#x26;'/>""").isEmpty())
     }
 
     @Test
-    fun `every bare ampersand in an attribute value is flagged`() {
+    fun `every bare ampersand in an attribute value is flagged`() = runTest {
         assertEquals(2, xml("""<a b="1 & 2" c='3 & 4'>t</a>""").size)
     }
 
     @Test
-    fun `HTML tolerates a bare ampersand in an attribute value`() {
+    fun `HTML tolerates a bare ampersand in an attribute value`() = runTest {
         // HTML5 only objects to an ampersand that looks like a reference; a query string is fine.
         assertTrue(html("""<a href="page?x=1&y=2">go</a>""").isEmpty())
         assertTrue(html("""<img alt="A & B">""").isEmpty())
     }
 
     @Test
-    fun `HTML script and style contents are not markup`() {
+    fun `HTML script and style contents are not markup`() = runTest {
         // `&&` is an operator and `<` a comparison inside a raw-text element.
         assertTrue(html("<script>if (a && b < c) { go(); }</script>").isEmpty())
         assertTrue(html("<style>a > b { color: red; }</style><p>x</p>").isEmpty())

@@ -19,19 +19,17 @@ import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class JsonLanguageServiceTest {
 
-    private fun diagnose(text: String) = runBlocking {
-        JsonLanguageService.diagnostics(CodeDocument(text))
-    }
+    private suspend fun diagnose(text: String) = JsonLanguageService.diagnostics(CodeDocument(text))
 
     @Test
-    fun `valid JSON yields no diagnostics`() {
+    fun `valid JSON yields no diagnostics`() = runTest {
         assertTrue(diagnose("""{"a": 1, "b": [true, null, "x"]}""").isEmpty())
         assertTrue(diagnose("[]").isEmpty())
         assertTrue(diagnose("\"hi\"").isEmpty())
@@ -39,7 +37,7 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `unterminated string flagged`() {
+    fun `unterminated string flagged`() = runTest {
         val diags = diagnose("""{"a": "open}""")
         assertEquals(1, diags.size)
         assertEquals(DiagnosticSeverity.Error, diags[0].severity)
@@ -47,40 +45,40 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `duplicate key flagged`() {
+    fun `duplicate key flagged`() = runTest {
         val diags = diagnose("""{"a": 1, "a": 2}""")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("Duplicate key", ignoreCase = true))
     }
 
     @Test
-    fun `trailing comma flagged`() {
+    fun `trailing comma flagged`() = runTest {
         val diags = diagnose("""{"a": 1, "b": 2,}""")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains("Trailing comma", ignoreCase = true))
     }
 
     @Test
-    fun `missing colon flagged`() {
+    fun `missing colon flagged`() = runTest {
         val diags = diagnose("""{"a" 1}""")
         assertEquals(1, diags.size)
         assertTrue(diags[0].message.contains(":", ignoreCase = true))
     }
 
     @Test
-    fun `bare literal mistyped flagged`() {
+    fun `bare literal mistyped flagged`() = runTest {
         val diags = diagnose("""{"a": tru}""")
         assertEquals(1, diags.size)
     }
 
     @Test
-    fun `trailing content after value flagged`() {
+    fun `trailing content after value flagged`() = runTest {
         val diags = diagnose("""{"a": 1} extra""")
         assertEquals(1, diags.size)
     }
 
     @Test
-    fun `empty document yields no diagnostics`() {
+    fun `empty document yields no diagnostics`() = runTest {
         assertTrue(diagnose("").isEmpty())
         assertTrue(diagnose("   \n  ").isEmpty())
     }
@@ -94,7 +92,7 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `completions after colon`() = runBlocking {
+    fun `completions after colon`() = runTest {
         val doc = CodeDocument("{\"key\":")
         val items = JsonLanguageService.completions(doc, 7)
         assertTrue(items.any { it.label == "true" })
@@ -102,7 +100,7 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `format indents JSON objects`() = runBlocking {
+    fun `format indents JSON objects`() = runTest {
         val doc = CodeDocument("{\"a\":1,\"b\":[true]}")
         val formatted = JsonLanguageService.format(doc)
         assertEquals("{\n    \"a\": 1,\n    \"b\": [\n        true\n    ]\n}", formatted)
@@ -115,7 +113,7 @@ class JsonLanguageServiceTest {
     private val bs = '\\'
 
     @Test
-    fun `keys spelled differently but naming one member are duplicates`() {
+    fun `keys spelled differently but naming one member are duplicates`() = runTest {
         // The unicode escape spells "a", so the two members are one and the second is a duplicate.
         val diags = diagnose("""{"a": 1, "${bs}u0061": 2}""")
         assertEquals(1, diags.size)
@@ -124,21 +122,19 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `escapes decode rather than comparing as source text`() {
+    fun `escapes decode rather than comparing as source text`() = runTest {
         // Two spellings of a newline name one key; a newline and the letter n name two.
         assertEquals(1, diagnose("""{"${bs}n": 1, "${bs}u000A": 2}""").size)
         assertTrue(diagnose("""{"${bs}n": 1, "n": 2}""").isEmpty())
         assertTrue(diagnose("""{"a": 1, "b": 2}""").isEmpty())
     }
 
-    private fun complete(text: String) = runBlocking {
-        JsonLanguageService.completions(CodeDocument(text), text.length)
-    }
+    private suspend fun complete(text: String) = JsonLanguageService.completions(CodeDocument(text), text.length)
 
     private fun List<CompletionItem>.labels() = map { it.label }
 
     @Test
-    fun `a comma inside an array offers values, not properties`() {
+    fun `a comma inside an array offers values, not properties`() = runTest {
         // Accepting `"id": ""` after `[1,` would leave invalid JSON inside the array.
         val labels = complete("[1,").labels()
         assertTrue("true" in labels, labels.toString())
@@ -147,13 +143,13 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `an opening bracket offers values`() {
+    fun `an opening bracket offers values`() = runTest {
         assertTrue("null" in complete("[").labels())
         assertTrue("\"id\"" in complete("{").labels())
     }
 
     @Test
-    fun `a comma continues the innermost container`() {
+    fun `a comma continues the innermost container`() = runTest {
         assertTrue("true" in complete("""{"a": [1,""").labels(), "inside an array nested in an object")
         assertTrue("\"id\"" in complete("""[{"a": 1,""").labels(), "inside an object nested in an array")
         assertTrue("true" in complete("""[{"a": 1},""").labels(), "back in the array once the object closes")
@@ -161,14 +157,14 @@ class JsonLanguageServiceTest {
     }
 
     @Test
-    fun `brackets and commas inside strings are not structure`() {
+    fun `brackets and commas inside strings are not structure`() = runTest {
         val labels = complete("""{"a": "[,",""").labels()
         assertTrue("\"id\"" in labels, labels.toString())
         assertTrue("true" !in labels, labels.toString())
     }
 
     @Test
-    fun `array values leave a space only after a comma`() {
+    fun `array values leave a space only after a comma`() = runTest {
         assertEquals(" true", complete("[1,").first { it.label == "true" }.insertText)
         assertEquals("true", complete("[").first { it.label == "true" }.insertText)
     }

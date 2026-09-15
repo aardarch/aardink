@@ -18,19 +18,17 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.kotlin.KotlinLanguageService
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class KotlinLanguageServiceTest {
 
-    private fun diagnose(text: String) = runBlocking {
-        KotlinLanguageService.diagnostics(CodeDocument(text))
-    }
+    private suspend fun diagnose(text: String) = KotlinLanguageService.diagnostics(CodeDocument(text))
 
     @Test
-    fun `valid Kotlin produces no diagnostics`() {
+    fun `valid Kotlin produces no diagnostics`() = runTest {
         val src = """
             package com.example
             @Composable
@@ -43,7 +41,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `unclosed string flagged`() {
+    fun `unclosed string flagged`() = runTest {
         val diags = diagnose("val x = \"hello")
         assertEquals(1, diags.size)
         assertEquals(DiagnosticSeverity.Error, diags[0].severity)
@@ -51,7 +49,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `delimiters inside character literals are data`() {
+    fun `delimiters inside character literals are data`() = runTest {
         assertTrue(diagnose("val closing = '}'").isEmpty())
         assertTrue(diagnose("val opening = '{'").isEmpty())
         assertTrue(diagnose("fun f() { val p = '(' }").isEmpty())
@@ -60,14 +58,14 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `a lone quote does not hide a real unmatched delimiter`() {
+    fun `a lone quote does not hide a real unmatched delimiter`() = runTest {
         // Not a character literal, so the brace after it is still checked.
         val diags = diagnose("val s = \"it's\"\n}")
         assertTrue(diags.any { it.message.contains("Unmatched closing delimiter", ignoreCase = true) })
     }
 
     @Test
-    fun `unmatched delimiter flagged`() {
+    fun `unmatched delimiter flagged`() = runTest {
         val diags = diagnose("fun foo() { val x = 1 } }")
         assertEquals(1, diags.size)
         assertEquals(DiagnosticSeverity.Error, diags[0].severity)
@@ -75,7 +73,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `dot completions suggest stdlib methods`() = runBlocking {
+    fun `dot completions suggest stdlib methods`() = runTest {
         val doc = CodeDocument("list.")
         val items = KotlinLanguageService.completions(doc, 5)
         assertTrue(items.any { it.label == "map { }" })
@@ -83,7 +81,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `annotation completions suggest composable`() = runBlocking {
+    fun `annotation completions suggest composable`() = runTest {
         val doc = CodeDocument("@")
         val items = KotlinLanguageService.completions(doc, 1)
         assertTrue(items.any { it.label == "Composable" })
@@ -98,14 +96,14 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `format indents code blocks`() = runBlocking {
+    fun `format indents code blocks`() = runTest {
         val doc = CodeDocument("fun foo() {\nval x = 1\n}")
         val formatted = KotlinLanguageService.format(doc)
         assertEquals("fun foo() {\n    val x = 1\n}", formatted)
     }
 
     @Test
-    fun `format preserves raw string contents`() = runBlocking {
+    fun `format preserves raw string contents`() = runTest {
         val q = "\"\"\""
         val src = "fun foo() {\nval s = $q\n    indented   \n$q\nval x = 1\n}"
         val formatted = KotlinLanguageService.format(CodeDocument(src))
@@ -114,14 +112,14 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `a brace in a comment or a string does not shift the indent`() = runBlocking {
+    fun `a brace in a comment or a string does not shift the indent`() = runTest {
         val src = "fun foo() {\n// {\nval s = \"{\"\nval x = 1\n}"
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals("fun foo() {\n    // {\n    val s = \"{\"\n    val x = 1\n}", formatted)
     }
 
     @Test
-    fun `nested block comments are comment all the way to the outer terminator`() {
+    fun `nested block comments are comment all the way to the outer terminator`() = runTest {
         // The inner terminator closes only the inner comment; the brace after it is still comment,
         // so nothing here is an unmatched delimiter.
         val src = "fun f() {\n    /* outer /* inner */ } still comment */\n}"
@@ -129,7 +127,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `an unterminated nested block comment is still reported`() {
+    fun `an unterminated nested block comment is still reported`() = runTest {
         val src = "fun f() {\n    /* outer /* inner */\n}"
         val diags = diagnose(src)
         assertEquals(1, diags.size)
@@ -138,14 +136,14 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `format takes no structure from braces inside a nested comment`() = runBlocking {
+    fun `format takes no structure from braces inside a nested comment`() = runTest {
         val src = "fun f() {\n/* a /* b */ { */\nval x = 1\n}"
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals("fun f() {\n    /* a /* b */ { */\n    val x = 1\n}", formatted)
     }
 
     @Test
-    fun `format counts every delimiter on a line`() = runBlocking {
+    fun `format counts every delimiter on a line`() = runTest {
         // `fun f() { if (x) {` opens two blocks; taking only the last character saw one, so the
         // body was under-indented and the closing braces then outdented too far.
         val src = "fun f() { if (x) {\nval y = 1\n}\n}"
@@ -154,14 +152,14 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `format outdents a line that closes several blocks`() = runBlocking {
+    fun `format outdents a line that closes several blocks`() = runTest {
         val src = "fun f() {\nrun {\nval y = 1\n} }"
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals("fun f() {\n    run {\n        val y = 1\n} }", formatted)
     }
 
     @Test
-    fun `format keeps a closing-then-opening line at one level`() = runBlocking {
+    fun `format keeps a closing-then-opening line at one level`() = runTest {
         val src = "fun f() {\nif (x) {\nval y = 1\n} else {\nval z = 2\n}\n}"
         val formatted = KotlinLanguageService.format(CodeDocument(src))
         assertEquals(
@@ -171,7 +169,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `a raw string line still contributes its own delimiters`() = runBlocking {
+    fun `a raw string line still contributes its own delimiters`() = runTest {
         // The line is emitted verbatim, but the brace it opens still counts - otherwise everything
         // after the closing quotes was formatted at column 0.
         val q = "\"\"\""
@@ -182,7 +180,7 @@ class KotlinLanguageServiceTest {
     }
 
     @Test
-    fun `format does not read an apostrophe in a backtick name as a char literal`() = runBlocking {
+    fun `format does not read an apostrophe in a backtick name as a char literal`() = runTest {
         // `it's` opens no literal; treating it as one swallowed the brace and left the body unindented.
         val src = "fun `it's fine`() {\nval x = 1\n}"
         assertEquals("fun `it's fine`() {\n    val x = 1\n}", KotlinLanguageService.format(CodeDocument(src)))

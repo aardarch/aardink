@@ -1,8 +1,26 @@
-val jvmVersion: String = libs.versions.jvm.get()
-val jvmVersionInt = jvmVersion.toInt()
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+
+// Set before the plugins block below applies com.vanniktech.maven.publish, which auto-detects
+// and locks group/version as soon as it sees org.jetbrains.kotlin.multiplatform applied — see
+// the note in editor/build.gradle.kts for how this was discovered.
+group = "com.aardarch"
+version = providers.gradleProperty("VERSION_NAME").get()
+
+val jvmVersionInt =
+    libs.versions.jvm
+        .get()
+        .toInt()
 
 plugins {
-    alias(libs.plugins.plugin.android.library)
+    alias(libs.plugins.plugin.kotlin.multiplatform)
+    alias(libs.plugins.plugin.android.kmp.library)
+    // Not for any @Composable code of its own (there is none) — this module's wasmJs test
+    // binary transitively links :editor's Compose/Skiko runtime, and without this plugin
+    // applied here too, the wasmJs test webpack bundle doesn't know to bring skiko.mjs along
+    // (fails with "Module not found: Error: Can't resolve './skiko.mjs'").
+    alias(libs.plugins.plugin.compose.multiplatform)
     alias(libs.plugins.plugin.kotlin.compose)
     id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
@@ -10,52 +28,47 @@ plugins {
     signing
 }
 
-android {
-    namespace = "com.aardarch.aardink.languages"
-    compileSdk = 37
+kotlin {
+    jvmToolchain(jvmVersionInt)
 
-    defaultConfig {
+    androidLibrary {
+        namespace = "com.aardarch.aardink.languages"
+        compileSdk = 37
         minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+    jvm()
+
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        browser()
+        // See editor/build.gradle.kts's matching comment.
+        binaries.executable()
+    }
+
+    sourceSets {
+        commonMain.dependencies {
+            // :languages has zero Compose imports (verified — its tokenizers and language
+            // services are pure Kotlin), so unlike :editor it applies no Compose plugin here.
+            // The `api` dependency still gives consumers Compose transitively via :editor.
+            api(project(":editor"))
         }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.toVersion(jvmVersion)
-        targetCompatibility = JavaVersion.toVersion(jvmVersion)
-    }
-
-    buildFeatures {
-        compose = true
-    }
-
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-            isReturnDefaultValues = true
-            all {
-                it.useJUnitPlatform()
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test.junit5)
+                runtimeOnly(libs.junit.jupiter.engine)
+                runtimeOnly(libs.junit.platform.launcher)
             }
         }
     }
 }
 
-kotlin {
-    jvmToolchain(jvmVersionInt)
-}
-
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 spotless {
@@ -77,19 +90,6 @@ spotless {
     }
 }
 
-dependencies {
-    api(project(":editor"))
-
-    val composeBom = platform(libs.androidx.compose.bom)
-    implementation(composeBom)
-
-    implementation(libs.bundles.compose.core)
-
-    testImplementation(libs.junit.jupiter.api)
-    testRuntimeOnly(libs.junit.jupiter.engine)
-    testRuntimeOnly(libs.junit.platform.launcher)
-}
-
 // ── Publishing ────────────────────────────────────────────────────────────────
 
 if (providers.gradleProperty("signingInMemoryKey").orNull == null) {
@@ -99,14 +99,17 @@ if (providers.gradleProperty("signingInMemoryKey").orNull == null) {
 }
 
 mavenPublishing {
+    coordinates(artifactId = "aardink-languages")
+
+    configure(
+        KotlinMultiplatform(
+            // TODO(KMP Dokka): see the matching TODO in editor/build.gradle.kts.
+            javadocJar = JavadocJar.Empty(),
+            sourcesJar = true,
+        ),
+    )
     publishToMavenCentral(automaticRelease = true)
     signAllPublications()
-
-    coordinates(
-        groupId = "com.aardarch",
-        artifactId = "aardink-languages",
-        version = providers.gradleProperty("VERSION_NAME").get(),
-    )
 
     pom {
         name.set("Aardink Languages")
@@ -137,3 +140,7 @@ mavenPublishing {
         }
     }
 }
+
+// ── API compatibility tracking ────────────────────────────────────────────────
+// TODO: Wire up Kotlin 2.4's built-in `kotlin.abiValidation` now that this module is
+// multiplatform. See the note in the root build.gradle.kts for context.

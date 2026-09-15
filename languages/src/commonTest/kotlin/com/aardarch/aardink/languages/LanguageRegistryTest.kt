@@ -16,13 +16,13 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.PlainTextTokenizer
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertSame
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class LanguageRegistryTest {
 
@@ -80,7 +80,7 @@ class LanguageRegistryTest {
     @Test
     fun `override on unknown id throws`() {
         val registry = LanguageRegistry.withBuiltIns()
-        assertThrows(IllegalStateException::class.java) {
+        assertFailsWith<IllegalStateException> {
             registry.override("nonexistent") { it }
         }
     }

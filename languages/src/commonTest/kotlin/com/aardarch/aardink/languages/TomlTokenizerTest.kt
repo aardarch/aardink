@@ -17,9 +17,9 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.toml.TomlTokenizer
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class TomlTokenizerTest {
 

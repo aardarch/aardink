@@ -18,23 +18,19 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.toml.TomlLanguageService
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class TomlLanguageServiceTest {
 
-    private fun diagnose(text: String) = runBlocking {
-        TomlLanguageService.diagnostics(CodeDocument(text))
-    }
+    private suspend fun diagnose(text: String) = TomlLanguageService.diagnostics(CodeDocument(text))
 
-    private fun complete(text: String, cursorOffset: Int) = runBlocking {
-        TomlLanguageService.completions(CodeDocument(text), cursorOffset)
-    }
+    private suspend fun complete(text: String, cursorOffset: Int) = TomlLanguageService.completions(CodeDocument(text), cursorOffset)
 
     @Test
-    fun `valid TOML produces no diagnostics`() {
+    fun `valid TOML produces no diagnostics`() = runTest {
         val src = """
             [versions]
             kotlin = "2.1.10"
@@ -47,7 +43,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `unclosed table header produces error diagnostic`() {
+    fun `unclosed table header produces error diagnostic`() = runTest {
         val diags = diagnose("[versions")
         assertEquals(1, diags.size)
         assertEquals(DiagnosticSeverity.Error, diags[0].severity)
@@ -55,7 +51,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `duplicate key in same section produces warning`() {
+    fun `duplicate key in same section produces warning`() = runTest {
         val src = """
             [versions]
             kotlin = "2.1.10"
@@ -68,7 +64,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `missing equals sign flagged`() {
+    fun `missing equals sign flagged`() = runTest {
         val src = """
             [versions]
             kotlin "2.1.10"
@@ -80,7 +76,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `completions for table headers`() {
+    fun `completions for table headers`() = runTest {
         val items = complete("[", 1)
         assertTrue(items.any { it.label == "versions" })
         assertTrue(items.any { it.label == "libraries" })
@@ -88,15 +84,15 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `completions after equals`() {
+    fun `completions after equals`() = runTest {
         val doc = CodeDocument("key =")
-        val items = runBlocking { TomlLanguageService.completions(doc, 5) }
+        val items = TomlLanguageService.completions(doc, 5)
         assertTrue(items.any { it.label == "true" })
         assertTrue(items.any { it.label == "false" })
     }
 
     @Test
-    fun `auto close brackets and quotes`() {
+    fun `auto close brackets and quotes`() = runTest {
         val doc = CodeDocument("")
         assertEquals("]", TomlLanguageService.autoClose(doc, 0, '['))
         assertEquals("\"", TomlLanguageService.autoClose(doc, 0, '"'))
@@ -104,7 +100,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `format normalizes spacing`() = runBlocking {
+    fun `format normalizes spacing`() = runTest {
         val doc = CodeDocument("a=1\n  b  =  2 ")
         val formatted = TomlLanguageService.format(doc)
         assertEquals("a = 1\nb = 2", formatted)
@@ -113,7 +109,7 @@ class TomlLanguageServiceTest {
     // ── Multiline values ─────────────────────────────────────────────────────
 
     @Test
-    fun `multiline array produces no diagnostics`() {
+    fun `multiline array produces no diagnostics`() = runTest {
         val src = """
             [libraries]
             targets = [
@@ -126,7 +122,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `multiline string content is not parsed as declarations`() {
+    fun `multiline string content is not parsed as declarations`() = runTest {
         val src = """
             [tool]
             description = ${"\"\"\""}
@@ -139,7 +135,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `a key repeated after a multiline value is still a duplicate`() {
+    fun `a key repeated after a multiline value is still a duplicate`() = runTest {
         val src = """
             [versions]
             list = [
@@ -154,7 +150,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `format preserves whitespace inside a multiline string`() = runBlocking {
+    fun `format preserves whitespace inside a multiline string`() = runTest {
         val quotes = "\"\"\""
         val src = "text = $quotes\n    indented line   \n$quotes\nb=2"
         val formatted = TomlLanguageService.format(CodeDocument(src))
@@ -163,7 +159,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `format keeps array elements on their own lines without splitting on equals`() = runBlocking {
+    fun `format keeps array elements on their own lines without splitting on equals`() = runTest {
         val src = "arr = [\n  \"a=1\",\n]"
         val formatted = TomlLanguageService.format(CodeDocument(src))
         assertEquals("arr = [\n\"a=1\",\n]", formatted)
@@ -172,12 +168,12 @@ class TomlLanguageServiceTest {
     // ── Comments after a header, and '=' inside a quoted key ─────────────────
 
     @Test
-    fun `a table header with an inline comment is closed`() {
+    fun `a table header with an inline comment is closed`() = runTest {
         assertTrue(diagnose("[versions] # catalog\nkotlin = \"2.1.10\"").isEmpty())
     }
 
     @Test
-    fun `a commented header still scopes duplicate keys and key completions`() {
+    fun `a commented header still scopes duplicate keys and key completions`() = runTest {
         val src = "[libraries] # deps\nkotlin = \"a\"\nkotlin = \"b\""
         val diags = diagnose(src)
         assertEquals(1, diags.size, "the duplicate must still be found: $diags")
@@ -188,12 +184,12 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `an equals inside a quoted key is part of the key`() {
+    fun `an equals inside a quoted key is part of the key`() = runTest {
         assertTrue(diagnose("\"a=b\" = 1").isEmpty())
     }
 
     @Test
-    fun `format does not rewrite a quoted key containing equals`() = runBlocking {
+    fun `format does not rewrite a quoted key containing equals`() = runTest {
         val formatted = TomlLanguageService.format(CodeDocument("\"a=b\"=1"))
         assertEquals("\"a=b\" = 1", formatted)
     }
@@ -201,7 +197,7 @@ class TomlLanguageServiceTest {
     // ── Completions and the auto-closer ──────────────────────────────────────
 
     @Test
-    fun `a header completion replaces the auto-inserted bracket`() {
+    fun `a header completion replaces the auto-inserted bracket`() = runTest {
         // Typing '[' auto-closes to "[]" with the cursor between the brackets.
         val items = complete("[]", 1)
         val versions = items.single { it.label == "versions" }
@@ -210,7 +206,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `a double bracket header completion replaces both auto-inserted brackets`() {
+    fun `a double bracket header completion replaces both auto-inserted brackets`() = runTest {
         val items = complete("[[]]", 2)
         val libraries = items.single { it.label == "libraries" }
         assertEquals("[[libraries]]", libraries.insertText)
@@ -218,7 +214,7 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `a dotted key completion replaces the partial key`() {
+    fun `a dotted key completion replaces the partial key`() = runTest {
         val src = "[libraries]\nversion."
         val items = complete(src, src.length)
         val versionRef = items.single { it.label == "version.ref" }
@@ -226,21 +222,21 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `quoted and bare spellings of one key are a duplicate`() {
+    fun `quoted and bare spellings of one key are a duplicate`() = runTest {
         val diags = diagnose("[versions]\nagp = \"1\"\n\"agp\" = \"2\"")
         assertEquals(1, diags.size, "was ${diags.map { it.message }}")
         assertTrue(diags[0].message.startsWith("Duplicate key"), diags[0].message)
     }
 
     @Test
-    fun `reopening a table keeps the keys it already had`() {
+    fun `reopening a table keeps the keys it already had`() = runTest {
         val diags = diagnose("[a]\nx = 1\n\n[b]\ny = 2\n\n[a]\nx = 3")
         assertEquals(1, diags.size, "was ${diags.map { it.message }}")
         assertTrue(diags[0].message.startsWith("Duplicate key"), diags[0].message)
     }
 
     @Test
-    fun `each array-of-table entry gets its own keys`() {
+    fun `each array-of-table entry gets its own keys`() = runTest {
         // [[x]] declares a new element each time, so repeating a key across entries is fine.
         assertTrue(diagnose("[[x]]\nname = 1\n\n[[x]]\nname = 2").isEmpty())
         // ...but repeating it inside one entry is still a duplicate.
@@ -248,13 +244,13 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `a dotted key path compares segment by segment`() {
+    fun `a dotted key path compares segment by segment`() = runTest {
         assertEquals(1, diagnose("[a]\nb.c = 1\nb.\"c\" = 2").size, "same path, different spelling")
         assertTrue(diagnose("[a]\nb.c = 1\nb.d = 2").isEmpty(), "different paths")
     }
 
     @Test
-    fun `a dotted key and a quoted key containing a dot are different keys`() {
+    fun `a dotted key and a quoted key containing a dot are different keys`() = runTest {
         // "a.b" is one key whose name contains a dot; a.b is the path a -> b. Flattening the
         // normalized segments back into one string made them collide.
         assertTrue(diagnose("[t]\n\"a.b\" = 1\na.b = 2").isEmpty(), "these are two different keys")
@@ -262,12 +258,12 @@ class TomlLanguageServiceTest {
     }
 
     @Test
-    fun `table paths do not collide across dot boundaries`() {
+    fun `table paths do not collide across dot boundaries`() = runTest {
         assertTrue(diagnose("[\"a.b\"]\nx = 1\n\n[a.b]\nx = 2").isEmpty(), "two different tables")
     }
 
     @Test
-    fun `an out-of-range unicode escape in a key does not crash diagnostics`() {
+    fun `an out-of-range unicode escape in a key does not crash diagnostics`() = runTest {
         // A U-escape past the last code point, and a lone surrogate half; both used to reach
         // appendCodePoint, which throws on either.
         val bs = '\\'
