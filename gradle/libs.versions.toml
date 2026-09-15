@@ -11,6 +11,7 @@ plugin-kotlin-binary-compat = "0.18.2"
 plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
 plugin-roborazzi = "1.74.0" # https://github.com/takahirom/roborazzi/releases
+plugin-compose-multiplatform = "1.12.0" # https://github.com/JetBrains/compose-multiplatform/releases
 
 # Major version definitions
 jvm = "21"
@@ -117,6 +118,14 @@ plugin-android-library = { id = "com.android.library", version.ref = "plugin-agp
 # Kotlin
 plugin-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "plugin-kotlin" }
 plugin-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "plugin-kotlin" }
+plugin-kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "plugin-kotlin" }
+
+# Android KMP library (AGP 9's replacement for com.android.library inside a KMP module)
+plugin-android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "plugin-agp" }
+
+# Compose Multiplatform (adds jvm/wasmJs targets to the compose.* accessors already used via
+# the AndroidX Compose BOM on androidTarget)
+plugin-compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "plugin-compose-multiplatform" }
 
 # Code formatting
 plugin-spotless = { id = "com.diffplug.spotless", version.ref = "plugin-spotless" }
