@@ -99,7 +99,8 @@ try {
             (Join-Path $ProjectRoot 'editor' 'src'),
             (Join-Path $ProjectRoot 'languages' 'src'),
             (Join-Path $ProjectRoot 'languages-lsp' 'src'),
-            (Join-Path $ProjectRoot 'sample' 'src')
+            (Join-Path $ProjectRoot 'sample' 'src'),
+            (Join-Path $ProjectRoot 'tools' 'consumer-smoke' 'src')
         )
         $Sources = $SourceRoots |
             Where-Object { Test-Path $_ } |
@@ -152,11 +153,11 @@ try {
         }
     }
 
-    # ── 7. Local Maven publish dry-run ─────────────────────────────────
+    # ── 7. Local Maven publish + consumer smoke test ───────────────────
     if (-not $SkipBuild) {
-        Invoke-Check 'Publish to mavenLocal (dry sanity)' {
-            & $Gradlew ':editor:publishToMavenLocal' ':languages:publishToMavenLocal' ':languages-lsp:publishToMavenLocal' --quiet 2>&1 | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw 'publishToMavenLocal failed' }
+        Invoke-Check 'Publish to mavenLocal + consumer smoke test' {
+            & (Join-Path $PSScriptRoot 'verify-consumer.ps1')
+            if ($LASTEXITCODE -ne 0) { throw 'verify-consumer.ps1 failed' }
         }
     }
 

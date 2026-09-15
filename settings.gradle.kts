@@ -24,6 +24,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // Checked first so :tools:consumer-smoke picks up a freshly `publishToMavenLocal`'d
+        // com.aardarch:aardink before falling back to whatever is already on Maven Central.
+        mavenLocal()
         google()
         mavenCentral()
     }
@@ -34,3 +37,4 @@ include(":editor")
 include(":languages")
 include(":languages-lsp")
 include(":sample")
+include(":tools:consumer-smoke")
