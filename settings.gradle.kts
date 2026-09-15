@@ -22,7 +22,12 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // PREFER_PROJECT (not FAIL_ON_PROJECT_REPOS) because the Kotlin/Wasm Gradle plugin adds its
+    // own Node.js distribution repository (https://nodejs.org/dist, not a Maven repo mirror)
+    // directly to the root project when downloading the toolchain for wasmJs tests
+    // (kotlinWasmNodeJsSetup) — FAIL_ON_PROJECT_REPOS would reject it outright, and
+    // PREFER_SETTINGS would silently ignore it (nodejs.org isn't on Maven Central).
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
     repositories {
         // Checked first so :tools:consumer-smoke picks up a freshly `publishToMavenLocal`'d
         // com.aardarch:aardink before falling back to whatever is already on Maven Central.

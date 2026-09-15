@@ -19,9 +19,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.FoldRange
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @Suppress("DEPRECATION") // exercises the deprecated applyFolding directly; see FoldingTransform.kt
 class FoldingTransformTest {

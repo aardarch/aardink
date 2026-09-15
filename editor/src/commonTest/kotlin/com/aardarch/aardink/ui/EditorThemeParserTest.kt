@@ -17,9 +17,9 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.TokenType
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class EditorThemeParserTest {
 

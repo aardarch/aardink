@@ -71,6 +71,11 @@ junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.re
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 
+# kotlin.test — used in commonTest for KMP modules; the JUnit 5 engine above still runs them on
+# jvmTest via kotlin-test-junit5's bridge.
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "plugin-kotlin" }
+kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5", version.ref = "plugin-kotlin" }
+
 # Screenshot capture (sample app only) — Roborazzi renders Compose on the JVM via Robolectric
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "plugin-roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "plugin-roborazzi" }

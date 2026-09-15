@@ -119,7 +119,7 @@ class CodeDocument(initialText: String = "") {
         val deletedText = buffer.substring(start, end)
         val (startLine, _) = offsetToLineCol(start)
         val removedLines = deletedText.count { it == '\n' }
-        buffer.delete(start, end)
+        buffer.deleteRange(start, end)
         invalidateLineStarts()
         // After deletion the dirty range is just the start line (collapsed lines are gone)
         markDirty(startLine, startLine)
