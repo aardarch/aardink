@@ -45,6 +45,7 @@ All commands run from the repo root.
 ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck   # Formatting check
 ./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
+./scripts/capture-screenshots.ps1               # Render sample-app screenshots (all themes) to screenshots/
 ./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal  # Publish to ~/.m2
 ./gradlew dokkaAll                              # API docs (HTML) for all modules
 ./gradlew dokkaAllGfm                           # API docs (GitHub-Flavored Markdown)

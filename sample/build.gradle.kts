@@ -16,6 +16,7 @@ plugins {
     alias(libs.plugins.plugin.android.application)
     alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.spotless)
+    alias(libs.plugins.plugin.roborazzi)
 }
 
 android {
@@ -51,6 +52,20 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged resources/manifest to inflate the sample's theme.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+}
+
+tasks.withType<Test> {
+    // Roborazzi renders full-screen Compose layouts to bitmaps on the JVM; the default
+    // 512m unit-test heap is not enough for 1080x2400 captures.
+    maxHeapSize = "2g"
 }
 
 kotlin {
@@ -94,4 +109,14 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.google.android.material)
+
+    // Screenshot capture (scripts/capture-screenshots.ps1). Roborazzi/Robolectric run on the
+    // JUnit 4 runner, so unlike the library modules the sample's tests are not JUnit 5.
+    testImplementation(libs.bundles.testing.screenshot)
+    testImplementation(libs.androidx.compose.ui.ui.test.junit4)
+    testImplementation(libs.androidx.compose.ui.ui.test.manifest)
+    // Roborazzi/Robolectric build the unit-test manifest from the debug variant's merged
+    // manifest, so ui-test-manifest's ComponentActivity declaration must also be a debug dep
+    // (not just a test dep) for createComposeRule() to find an activity to launch.
+    debugImplementation(libs.androidx.compose.ui.ui.test.manifest)
 }

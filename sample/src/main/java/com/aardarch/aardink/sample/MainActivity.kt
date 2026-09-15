@@ -76,7 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-private val themeChoices: List<SampleThemeChoice> = listOf(
+internal val themeChoices: List<SampleThemeChoice> = listOf(
     SampleThemeChoice("midnight-ocean", "Midnight Ocean", EditorThemes.MidnightOcean),
     SampleThemeChoice("vscode-dark", "VS Code Dark", EditorThemes.VsCodeDark),
     SampleThemeChoice("vscode-light", "VS Code Light", EditorThemes.VsCodeLight),
@@ -95,8 +95,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Builds the [LanguageRegistry] the sample uses, including the in-process CSS language server.
+ *
+ * Hoisted out of [SampleApp] so the screenshot capture test (`SampleScreenshotTest`, driven by
+ * `scripts/capture-screenshots.ps1`) can build the same registry without going through
+ * [MainActivity].
+ */
 @Composable
-private fun SampleApp() {
+internal fun rememberSampleRegistry(): LanguageRegistry {
     // CSS ships with no built-in service; the demo server behind this connection shows the sample
     // app talking to a real (if in-process) language server via `:languages-lsp` instead.
     val lspScope = rememberCoroutineScope()
@@ -112,28 +119,59 @@ private fun SampleApp() {
             serverRenameSupport = LspLanguageService.renameSupportFrom(capabilities),
         )
     }
-    val registry = remember(cssLanguageService) {
+    return remember(cssLanguageService) {
         LanguageRegistry.withBuiltIns().apply {
             cssLanguageService?.let { service -> override("css") { it.copy(languageService = service) } }
         }
     }
+}
+
+@Composable
+private fun SampleApp() {
+    val registry = rememberSampleRegistry()
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var themeId by rememberSaveable { mutableStateOf(defaultThemeId) }
-    val active = themeChoices.firstOrNull { it.id == themeId } ?: themeChoices.first()
+
+    SampleAppContent(
+        registry = registry,
+        themeChoice = themeChoices.firstOrNull { it.id == themeId } ?: themeChoices.first(),
+        selectedId = selectedId,
+        onThemeChange = { themeId = it.id },
+        onSelect = { selectedId = it.id },
+        onBack = { selectedId = null },
+    )
+}
+
+/**
+ * The start screen / editor screen branch, hoisted out of [SampleApp] so `SampleScreenshotTest`
+ * can drive it directly: swap [selectedId] and [themeChoice] and recompose, the same way
+ * `MainActivity` does, without needing an [android.app.Activity] or a real CSS language server.
+ */
+@Composable
+internal fun SampleAppContent(
+    registry: LanguageRegistry,
+    themeChoice: SampleThemeChoice,
+    selectedId: String?,
+    onThemeChange: (SampleThemeChoice) -> Unit,
+    onSelect: (LanguageDefinition) -> Unit,
+    onBack: () -> Unit,
+    tokenizeDebounceMs: Long = 150L,
+) {
     val selected = selectedId?.let(registry::byId)
 
-    AardinkSampleTheme(editorTheme = active.theme) {
+    AardinkSampleTheme(editorTheme = themeChoice.theme) {
         if (selected == null) {
             StartScreen(
                 languages = registry.all,
-                currentTheme = active,
-                onThemeChange = { themeId = it.id },
-                onSelect = { selectedId = it.id },
+                currentTheme = themeChoice,
+                onThemeChange = onThemeChange,
+                onSelect = onSelect,
             )
         } else {
             EditorScreen(
                 language = selected,
-                onBack = { selectedId = null },
+                onBack = onBack,
+                tokenizeDebounceMs = tokenizeDebounceMs,
             )
         }
     }
@@ -232,13 +270,27 @@ private fun StartScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditorScreen(language: LanguageDefinition, onBack: () -> Unit) {
+private fun EditorScreen(
+    language: LanguageDefinition,
+    onBack: () -> Unit,
+    // Screenshot capture (SampleScreenshotTest) passes 0 so tokenization runs synchronously —
+    // Robolectric's paused main looper never fires the real, debounced coroutine delay used in
+    // production, which would otherwise render every sample with syntax highlighting missing.
+    tokenizeDebounceMs: Long = 150L,
+) {
     BackHandler(onBack = onBack)
     val initialText = remember(language.id) { SampleAssets.forId(language.id) }
     val state = rememberCodeEditorState(
         initialText = initialText,
         tokenizer = language.tokenizer,
+        tokenizeDebounceMs = tokenizeDebounceMs,
     )
+    if (tokenizeDebounceMs == 0L) {
+        // Also skip the real background thread hop: CodeEditorState.computeDispatcher is
+        // documented as "visible for testing" for exactly this reason — Dispatchers.Default
+        // work isn't tracked by Compose's test idling, so waitForIdle() can race it.
+        state.computeDispatcher = Dispatchers.Unconfined
+    }
     val foldState = remember(language.id) { FoldState() }
     val findReplaceState = remember(language.id) { FindReplaceState() }
 

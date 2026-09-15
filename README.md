@@ -108,6 +108,13 @@ A minimal Android app for manual testing lives under [`sample/`](sample/):
 ./gradlew :sample:installDebug
 ```
 
+To render screenshots of the start screen and every sample page, in every bundled theme,
+into [`screenshots/`](screenshots/) (no device or emulator needed):
+
+```pwsh
+./scripts/capture-screenshots.ps1
+```
+
 ## Building from source
 
 ```pwsh

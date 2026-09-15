@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.plugin.spotless) apply false
     alias(libs.plugins.plugin.kotlin.binary.compat) apply false
     alias(libs.plugins.plugin.vanniktech.maven.publish) apply false
+    alias(libs.plugins.plugin.roborazzi) apply false
 }
 
 tasks.register("dokkaAll") {
