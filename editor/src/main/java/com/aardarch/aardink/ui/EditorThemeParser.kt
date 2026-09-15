@@ -18,8 +18,15 @@ package com.aardarch.aardink.ui
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.TokenType
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Parses a VS Code theme JSON string into an [EditorTheme].
@@ -32,6 +39,10 @@ import org.json.JSONObject
  * val json = assets.open("my_theme.json").bufferedReader().readText()
  * val theme = EditorThemeParser.fromJson(json) ?: EditorThemes.VsCodeDark
  * ```
+ *
+ * Backed by `kotlinx.serialization.json` rather than the Android-only `org.json` — this is the
+ * one runtime dependency `:editor` needs beyond Compose, added specifically so this parser (and
+ * everything else in the module) compiles as common Kotlin. See AGENTS.md's dependency policy.
  */
 object EditorThemeParser {
 
@@ -40,13 +51,15 @@ object EditorThemeParser {
      * required keys are missing; the caller should fall back to a built-in theme.
      */
     fun fromJson(json: String): EditorTheme? = try {
-        parseTheme(JSONObject(json))
-    } catch (_: JSONException) {
+        parseTheme(Json.parseToJsonElement(json).jsonObject)
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
         null
     }
 
-    private fun parseTheme(root: JSONObject): EditorTheme {
-        val colors = root.optJSONObject("colors") ?: JSONObject()
+    private fun parseTheme(root: JsonObject): EditorTheme {
+        val colors = root["colors"]?.jsonObject ?: JsonObject(emptyMap())
         val fallback = EditorThemes.VsCodeDark
 
         val background = colors.hexColor("editor.background") ?: fallback.background
@@ -78,31 +91,21 @@ object EditorThemeParser {
         )
     }
 
-    private fun buildTokenColors(root: JSONObject, defaultFg: Color, fallback: Map<TokenType, Color>): Map<TokenType, Color> {
+    private fun buildTokenColors(root: JsonObject, defaultFg: Color, fallback: Map<TokenType, Color>): Map<TokenType, Color> {
         val result = fallback.toMutableMap()
         result[TokenType.Default] = defaultFg
 
-        val tokenColorsArray = root.optJSONArray("tokenColors") ?: return result
+        val tokenColorsArray = root["tokenColors"]?.jsonArray ?: return result
 
-        for (i in 0 until tokenColorsArray.length()) {
-            val entry = tokenColorsArray.optJSONObject(i) ?: continue
-            val settings = entry.optJSONObject("settings") ?: continue
+        for (entry in tokenColorsArray) {
+            val entryObj = entry as? JsonObject ?: continue
+            val settings = entryObj["settings"]?.jsonObject ?: continue
             val fg = settings.hexColor("foreground") ?: continue
 
-            val scopes: List<String> = when {
-                entry.has("scope") -> {
-                    val raw = entry.get("scope")
-                    when (raw) {
-                        is String -> raw.split(",").map { it.trim() }
-
-                        else -> {
-                            val arr = entry.optJSONArray("scope") ?: continue
-                            (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }
-                        }
-                    }
-                }
-
-                else -> continue
+            val scopeElement = entryObj["scope"] ?: continue
+            val scopes: List<String> = when (scopeElement) {
+                is JsonArray -> scopeElement.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf { s -> s.isNotEmpty() } }
+                else -> scopeElement.jsonPrimitive.content.split(",").map { it.trim() }
             }
 
             for (scope in scopes) {
@@ -144,8 +147,8 @@ object EditorThemeParser {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun JSONObject.hexColor(key: String): Color? {
-        val hex = optString(key).takeIf { it.startsWith("#") } ?: return null
+    private fun JsonObject.hexColor(key: String): Color? {
+        val hex = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.startsWith("#") } ?: return null
         return parseHex(hex)
     }
 

@@ -4,6 +4,7 @@ val jvmVersionInt = jvmVersion.toInt()
 plugins {
     alias(libs.plugins.plugin.android.library)
     alias(libs.plugins.plugin.kotlin.compose)
+    alias(libs.plugins.plugin.kotlin.serialization)
     id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
@@ -82,6 +83,10 @@ dependencies {
     implementation(composeBom)
 
     implementation(libs.bundles.compose.core)
+
+    // The only non-Compose runtime dependency in :editor — EditorThemeParser.kt uses it instead
+    // of the Android-only org.json, so the module compiles as common Kotlin. See AGENTS.md.
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
