@@ -1,8 +1,25 @@
-val jvmVersion: String = libs.versions.jvm.get()
-val jvmVersionInt = jvmVersion.toInt()
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+
+// Set before the plugins block below applies com.vanniktech.maven.publish — see the note in
+// editor/build.gradle.kts for why.
+group = "com.aardarch"
+version = providers.gradleProperty("VERSION_NAME").get()
+
+val jvmVersionInt =
+    libs.versions.jvm
+        .get()
+        .toInt()
 
 plugins {
-    alias(libs.plugins.plugin.android.library)
+    alias(libs.plugins.plugin.kotlin.multiplatform)
+    alias(libs.plugins.plugin.android.kmp.library)
+    // Not for any @Composable code of its own — see the matching comment in
+    // languages/build.gradle.kts; this module's wasmJs test binary transitively links
+    // :editor's Compose/Skiko runtime through api(project(":editor")).
+    alias(libs.plugins.plugin.compose.multiplatform)
+    alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.kotlin.serialization)
     id("aardink.dokka-gfm")
     alias(libs.plugins.plugin.spotless)
@@ -10,44 +27,60 @@ plugins {
     signing
 }
 
-android {
-    namespace = "com.aardarch.aardink.languages.lsp"
-    compileSdk = 37
+kotlin {
+    jvmToolchain(jvmVersionInt)
 
-    defaultConfig {
+    androidLibrary {
+        namespace = "com.aardarch.aardink.languages.lsp"
+        compileSdk = 37
         minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+    jvm()
+
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        browser()
+        // See editor/build.gradle.kts's matching comment.
+        binaries.executable()
+    }
+
+    applyDefaultHierarchyTemplate()
+
+    sourceSets {
+        // StreamLspTransport (java.io Input/OutputStream) and its test are JVM/Android only;
+        // the default hierarchy template doesn't create a shared set for exactly that pair.
+        val jvmAndAndroidMain by creating { dependsOn(commonMain.get()) }
+        val jvmAndAndroidTest by creating { dependsOn(commonTest.get()) }
+        jvmMain.get().dependsOn(jvmAndAndroidMain)
+        androidMain.get().dependsOn(jvmAndAndroidMain)
+        jvmTest.get().dependsOn(jvmAndAndroidTest)
+
+        commonMain.dependencies {
+            // JsonElement is part of LspClient's public API, hence `api` rather than
+            // `implementation`. This module needs no Compose of its own: every editor `core`
+            // type it bridges to is plain Kotlin.
+            api(project(":editor"))
+            api(libs.kotlinx.serialization.json)
+            // CoroutineScope is in LspClient's constructor signature — likewise `api`.
+            api(libs.kotlinx.coroutines.core)
         }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.toVersion(jvmVersion)
-        targetCompatibility = JavaVersion.toVersion(jvmVersion)
-    }
-
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-            isReturnDefaultValues = true
-            all {
-                it.useJUnitPlatform()
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test.junit5)
+                runtimeOnly(libs.junit.jupiter.engine)
+                runtimeOnly(libs.junit.platform.launcher)
             }
         }
     }
 }
 
-kotlin {
-    jvmToolchain(jvmVersionInt)
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 spotless {
@@ -69,19 +102,6 @@ spotless {
     }
 }
 
-dependencies {
-    api(project(":editor"))
-    // JsonElement is part of LspClient's public API, hence `api` rather than `implementation`.
-    api(libs.kotlinx.serialization.json)
-    // CoroutineScope is in LspClient's constructor signature — likewise `api`. This module needs
-    // no Compose of its own: every editor `core` type it bridges to is plain Kotlin.
-    api(libs.kotlinx.coroutines.core)
-
-    testImplementation(libs.junit.jupiter.api)
-    testRuntimeOnly(libs.junit.jupiter.engine)
-    testRuntimeOnly(libs.junit.platform.launcher)
-}
-
 // ── Publishing ────────────────────────────────────────────────────────────────
 
 if (providers.gradleProperty("signingInMemoryKey").orNull == null) {
@@ -91,14 +111,17 @@ if (providers.gradleProperty("signingInMemoryKey").orNull == null) {
 }
 
 mavenPublishing {
+    coordinates(artifactId = "aardink-languages-lsp")
+
+    configure(
+        KotlinMultiplatform(
+            // TODO(KMP Dokka): see the matching TODO in editor/build.gradle.kts.
+            javadocJar = JavadocJar.Empty(),
+            sourcesJar = true,
+        ),
+    )
     publishToMavenCentral(automaticRelease = true)
     signAllPublications()
-
-    coordinates(
-        groupId = "com.aardarch",
-        artifactId = "aardink-languages-lsp",
-        version = providers.gradleProperty("VERSION_NAME").get(),
-    )
 
     pom {
         name.set("Aardink Languages LSP")
@@ -128,3 +151,7 @@ mavenPublishing {
         }
     }
 }
+
+// ── API compatibility tracking ────────────────────────────────────────────────
+// TODO: Wire up Kotlin 2.4's built-in `kotlin.abiValidation` now that this module is
+// multiplatform. See the note in the root build.gradle.kts for context.
