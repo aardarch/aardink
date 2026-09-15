@@ -13,8 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.aardarch.aardink.core
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -60,6 +64,16 @@ class CodeEditorState(
     val tokenCache = TokenCache()
     val undoManager = EditorUndoManager()
 
+    /**
+     * The `BasicTextField` interop point — [document] remains the canonical text/undo model;
+     * this field mirrors it for the field to render and receive IME input into. Advanced hosts
+     * may read it, but every mutation should still go through this class's own methods
+     * ([applyEdit], [applyTextEdits], [loadText], [undo], [redo]) so [document] and the undo
+     * history stay in sync with it.
+     */
+    @ExperimentalFoundationApi
+    val textFieldState: TextFieldState = TextFieldState(initialText)
+
     // ── Snapshot-backed observable state ──────────────────────────────────────
 
     /** Incremented every time the document text changes. Triggers recomposition of text-dependent UI. */
@@ -70,9 +84,22 @@ class CodeEditorState(
     var tokenVersion by mutableIntStateOf(0)
         private set
 
+    /**
+     * Bumped by every mutation that did not originate from a keystroke inside [textFieldState]
+     * itself — i.e. every call to [applyEdit], [applyTextEdits], [loadText], [undo], and [redo].
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] uses this to dismiss transient
+     * UI (the completion dropdown, a diagnostic tooltip, the code-action menu) whose state
+     * describes text that just changed out from under it.
+     */
+    var externalEditVersion by mutableIntStateOf(0)
+        private set
+
     /** Current cursor / selection in document-absolute character offsets. */
-    var selection by mutableStateOf(TextRange(0))
-        internal set
+    var selection: TextRange
+        get() = textFieldState.selection
+        internal set(value) {
+            textFieldState.edit { selection = value }
+        }
 
     /** Cursor line (0-based). Derived from [selection] and the document's line index. */
     val cursorLine: Int
@@ -146,16 +173,21 @@ class CodeEditorState(
     fun loadText(newText: String) {
         document.replaceAll(newText)
         undoManager.clear()
-        selection = TextRange(0)
+        textFieldState.undoState.clearHistory()
+        syncFieldToDocument(TextRange(0))
         textVersion++
         scheduleTokenization()
     }
 
     /**
-     * Applies a user-initiated text edit: inserts [insertText] (may be empty) after deleting
+     * Applies a programmatic text edit — from the keyboard toolbar, find/replace, a completion
+     * accept, or a quick fix — inserting [insertText] (may be empty) after deleting
      * [deleteLength] characters starting at [deleteOffset].
      *
-     * Records the edit in [undoManager] and advances [textVersion].
+     * Records the edit in [undoManager] and advances [textVersion]. Not used for the user's own
+     * keystrokes inside [textFieldState] — those are applied directly to [document] and
+     * [undoManager] by the `InputTransformation` installed on the field, without a round trip
+     * through this method.
      */
     fun applyEdit(deleteOffset: Int, deleteLength: Int, insertText: String, newSelection: TextRange) {
         undoManager.flushPendingInsert()
@@ -176,7 +208,7 @@ class CodeEditorState(
             undoManager.recordInsert(deleteOffset, insertText)
         }
 
-        selection = newSelection
+        syncFieldToDocument(newSelection)
         textVersion++
         scheduleTokenization()
     }
@@ -238,9 +270,10 @@ class CodeEditorState(
         // Carry the caret through the batch: a rename or import inserted above it must not leave
         // it at a number that now points into unrelated text.
         val before = selection
-        selection = clampToDocument(
+        val newSelection = clampToDocument(
             TextRange(mapThroughEdits(before.start, sorted), mapThroughEdits(before.end, sorted)),
         )
+        syncFieldToDocument(newSelection)
         textVersion++
         scheduleTokenization()
     }
@@ -271,12 +304,13 @@ class CodeEditorState(
     }
 
     /**
-     * Undoes the most recent edit and returns the new document text (for the IME bridge to sync),
-     * or null if there is nothing to undo.
+     * Undoes the most recent edit and returns the new document text (for a host that wants to
+     * react to it), or null if there is nothing to undo.
      */
     fun undo(): String? {
         val op = undoManager.undo() ?: return null
-        applyOperationToDocument(undoManager.inverseOf(op))
+        val newSelection = applyOperationToDocument(undoManager.inverseOf(op))
+        syncFieldToDocument(newSelection)
         textVersion++
         scheduleTokenization()
         return document.text
@@ -287,7 +321,8 @@ class CodeEditorState(
      */
     fun redo(): String? {
         val op = undoManager.redo() ?: return null
-        applyOperationToDocument(op)
+        val newSelection = applyOperationToDocument(op)
+        syncFieldToDocument(newSelection)
         textVersion++
         scheduleTokenization()
         return document.text
@@ -349,22 +384,49 @@ class CodeEditorState(
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    private fun applyOperationToDocument(op: EditorUndoManager.EditOperation) {
-        when (op) {
-            is EditorUndoManager.EditOperation.Insert -> {
-                document.insert(op.offset, op.text)
-                selection = TextRange(op.offset + op.text.length)
-            }
-
-            is EditorUndoManager.EditOperation.Delete -> {
-                document.delete(op.offset, op.length)
-                selection = TextRange(op.offset)
-            }
-
-            is EditorUndoManager.EditOperation.Batch -> {
-                op.operations.forEach { applyOperationToDocument(it) }
-            }
+    /** Applies [op] to [document] only (not [textFieldState]) and returns the caret it implies. */
+    private fun applyOperationToDocument(op: EditorUndoManager.EditOperation): TextRange = when (op) {
+        is EditorUndoManager.EditOperation.Insert -> {
+            document.insert(op.offset, op.text)
+            TextRange(op.offset + op.text.length)
         }
+
+        is EditorUndoManager.EditOperation.Delete -> {
+            document.delete(op.offset, op.length)
+            TextRange(op.offset)
+        }
+
+        is EditorUndoManager.EditOperation.Batch -> {
+            var caret = TextRange(0)
+            op.operations.forEach { caret = applyOperationToDocument(it) }
+            caret
+        }
+    }
+
+    /**
+     * Replaces [textFieldState]'s entire content with [document]'s current text and places its
+     * selection at [newSelection], in one atomic edit so the selection is never validated against
+     * stale text. Bumps [externalEditVersion]. Called by every mutation method above — never by
+     * the field's own `InputTransformation`, which is already editing [textFieldState] directly.
+     */
+    private fun syncFieldToDocument(newSelection: TextRange) {
+        val newText = document.text
+        textFieldState.edit {
+            replace(0, length, newText)
+            selection = newSelection
+        }
+        externalEditVersion++
+    }
+
+    /**
+     * Advances [textVersion] and schedules a tokenization pass, without touching [textFieldState]
+     * or [externalEditVersion]. Called by the field's `InputTransformation` after it has already
+     * mutated [document] and [undoManager] directly to mirror a user keystroke it applied to
+     * [textFieldState] itself.
+     */
+    internal fun bumpTextVersionAndScheduleTokenization() {
+        textVersion++
+        scheduleTokenization()
     }
 }
 

@@ -34,6 +34,11 @@ import com.aardarch.aardink.core.FoldRange
  * Nested folds (inner ranges whose hidden region falls inside an outer fold's hidden region) are
  * skipped — the outer fold already hides them.
  */
+@Deprecated(
+    "CodeEditorLayout no longer uses VisualTransformation/TransformedText — folding now happens " +
+        "in EditorOutputTransformation, which layers onto a TextFieldState-based BasicTextField. " +
+        "Kept for hosts that built their own field around this function.",
+)
 fun applyFolding(
     text: AnnotatedString,
     foldedRanges: List<FoldRange>,

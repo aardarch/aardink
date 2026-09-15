@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.background
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -36,6 +39,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -47,13 +51,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
@@ -141,7 +140,6 @@ fun CodeEditorLayout(
         annotateTokens(state.document.text, cachedTokens, theme)
     }
 
-    var fieldValue by remember { mutableStateOf(TextFieldValue(state.document.text)) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     // Completion state
@@ -265,33 +263,32 @@ fun CodeEditorLayout(
         languageService?.triggerCharacters ?: emptySet()
     }
 
-    // Keep fieldValue in sync when text changes externally (undo/redo/load from ViewModel)
+    // Any edit — typed, applied from a quick fix, or made by the host — leaves the tapped
+    // diagnostic's range and the code-action menu pointing at text that has moved.
     LaunchedEffect(state) {
-        snapshotFlow { state.textVersion }
-            .collect { _ ->
-                // Any edit — typed, applied from a quick fix, or made by the host — leaves the
-                // tapped diagnostic's range pointing at text that has moved. Take the banner and
-                // its menu down rather than keep offering a fix for a range that no longer means
-                // what it did (or for a problem the fix just removed).
-                tooltipDiagnostic = null
-                showCodeActionsMenu = false
-                val currentText = state.document.text
-                if (fieldValue.text != currentText) {
-                    fieldValue = TextFieldValue(
-                        text = currentText,
-                        selection = state.selection,
-                    )
-                    showCompletion = false
-                }
-            }
+        snapshotFlow { textVersion }.collect {
+            tooltipDiagnostic = null
+            showCodeActionsMenu = false
+        }
+    }
+
+    // The completion dropdown manages its own visibility while the user is typing (see
+    // handleSingleCharacterInsert below); every OTHER kind of edit — undo/redo, a quick fix, a
+    // rename, a toolbar quick-insert, a host-driven loadText — closes it, because its items were
+    // addressed to text that just changed under it in a way typing's own re-addressing doesn't
+    // cover.
+    LaunchedEffect(state) {
+        snapshotFlow { state.externalEditVersion }.collect {
+            showCompletion = false
+        }
     }
 
     // Report cursor position changes upward
-    LaunchedEffect(fieldValue.selection) {
-        val sel = fieldValue.selection
-        val (line, col) = state.document.offsetToLineCol(sel.start)
-        onCursorChange(line + 1, col + 1)
-        state.selection = sel
+    LaunchedEffect(state) {
+        snapshotFlow { state.textFieldState.selection }.collect { sel ->
+            val (line, col) = state.document.offsetToLineCol(sel.start)
+            onCursorChange(line + 1, col + 1)
+        }
     }
 
     // ── Find/Replace: re-run search on query/option/text changes (debounced) ──
@@ -353,14 +350,7 @@ fun CodeEditorLayout(
                 (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
             }
             verticalScrollState.animateScrollTo(targetY)
-            if (nav.select != null) {
-                fieldValue = fieldValue.copy(selection = nav.select)
-                state.selection = nav.select
-            } else {
-                val sel = TextRange(nav.targetOffset)
-                fieldValue = fieldValue.copy(selection = sel)
-                state.selection = sel
-            }
+            state.selection = nav.select ?: TextRange(nav.targetOffset)
             state.clearNavigation()
         }
     }
@@ -372,48 +362,91 @@ fun CodeEditorLayout(
 
     val foldedRanges = foldState?.foldedRanges() ?: emptyList()
 
-    val syntaxTransformation =
-        remember(effectiveAnnotatedText, textColor, matches, currentMatchIndex, matchHighlight, currentMatchHighlight, foldedRanges) {
-            VisualTransformation { inputText ->
-                val base = if (effectiveAnnotatedText != null && effectiveAnnotatedText.text == inputText.text) {
-                    effectiveAnnotatedText
-                } else {
-                    buildAnnotatedString {
-                        append(inputText.text)
-                        addStyle(SpanStyle(color = textColor), 0, inputText.text.length)
-                    }
-                }
-                val highlighted = if (matches.isEmpty()) {
-                    base
-                } else {
-                    buildAnnotatedString {
-                        append(base)
-                        matches.forEachIndexed { idx, range ->
-                            val bg = if (idx == currentMatchIndex) currentMatchHighlight else matchHighlight
-                            val end = (range.last + 1).coerceAtMost(inputText.text.length)
-                            val start = range.first.coerceAtLeast(0).coerceAtMost(end)
-                            if (start < end) addStyle(SpanStyle(background = bg), start, end)
-                        }
-                    }
-                }
-                if (foldedRanges.isEmpty()) {
-                    TransformedText(highlighted, OffsetMapping.Identity)
-                } else {
-                    applyFolding(
-                        text = highlighted,
-                        foldedRanges = foldedRanges,
-                        document = state.document,
-                        placeholderStyle = SpanStyle(
-                            color = textColor.copy(alpha = 0.4f),
-                            fontStyle = FontStyle.Italic,
-                        ),
-                    )
+    // ── Completion trigger, on every ordinary (single-character) keystroke ───
+    // Needs composition-scoped state (completionItems/showCompletion/completionJob/
+    // coroutineScope) EditorInputTransformation itself doesn't have, so it lives here and is
+    // invoked from a stable callback the transformation holds onto across recompositions.
+    val currentLanguageService = rememberUpdatedState(languageService)
+    val currentTriggerChars = rememberUpdatedState(triggerChars)
+
+    val handleSingleCharacterInsert: (Int, Char, Int) -> Unit = handler@{ insertedAt, typedChar, autoCloseLength ->
+        val service = currentLanguageService.value
+        if (service == null) {
+            showCompletion = false
+            return@handler
+        }
+        val cursor = state.selection.start
+        // The list stays up while a fresh request is in flight, so an item accepted in between
+        // comes from a list addressed to the text before this keystroke. Re-address the ranges a
+        // provider gave: the typed character joins the token being completed, and any auto-closed
+        // character inserted right after the cursor must not be swallowed by it.
+        var carried = completionItems.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
+        if (autoCloseLength > 0) {
+            carried = carried.map { it.shiftedForInsert(insertedAt + 1, autoCloseLength, absorbing = false) }
+        }
+        when {
+            typedChar in currentTriggerChars.value -> {
+                completionItems = carried
+                completionJob?.cancel()
+                completionJob = coroutineScope.launch {
+                    val items = service.completions(state.document, cursor)
+                    completionItems = items
+                    showCompletion = items.isNotEmpty()
                 }
             }
+
+            typedChar.isLetterOrDigit() || typedChar == '_' -> {
+                completionItems = carried
+                completionJob?.cancel()
+                completionJob = coroutineScope.launch {
+                    val items = service.completions(state.document, cursor)
+                    completionItems = items
+                    if (items.isEmpty()) showCompletion = false
+                }
+            }
+
+            else -> showCompletion = false
         }
+    }
+    val currentHandleSingleCharacterInsert = rememberUpdatedState(handleSingleCharacterInsert)
+
+    val inputTransformation = remember(state) {
+        EditorInputTransformation(
+            state = state,
+            languageService = { currentLanguageService.value },
+            onSingleCharacterInsert = { insertedAt, typedChar, autoCloseLength ->
+                currentHandleSingleCharacterInsert.value(insertedAt, typedChar, autoCloseLength)
+            },
+            onOtherChange = { showCompletion = false },
+        )
+    }
+
+    val outputTransformation = remember(
+        effectiveAnnotatedText,
+        textColor,
+        matches,
+        currentMatchIndex,
+        matchHighlight,
+        currentMatchHighlight,
+        foldedRanges,
+    ) {
+        EditorOutputTransformation(
+            syntaxColoredText = effectiveAnnotatedText,
+            textColor = textColor,
+            matches = matches,
+            currentMatchIndex = currentMatchIndex,
+            matchHighlight = matchHighlight,
+            currentMatchHighlight = currentMatchHighlight,
+            foldedRanges = foldedRanges,
+            document = state.document,
+            placeholderStyle = SpanStyle(
+                color = textColor.copy(alpha = 0.4f),
+                fontStyle = FontStyle.Italic,
+            ),
+        )
+    }
 
     val foldableLines = foldState?.foldableRanges?.map { it.startLine }?.toSet() ?: emptySet()
-    // foldedRanges already computed above for syntaxTransformation
 
     val toolbar: @Composable () -> Unit = {
         if (keyboardToolbarPlacement != KeyboardToolbarPlacement.Hidden) {
@@ -422,41 +455,21 @@ fun CodeEditorLayout(
                 canUndo = state.undoManager.canUndo,
                 canRedo = state.undoManager.canRedo,
                 onInsertChar = { char ->
-                    val sel = fieldValue.selection
-                    val insertAt = sel.start
-                    val newText = fieldValue.text.let {
-                        it.substring(0, insertAt) + char + it.substring(insertAt)
-                    }
-                    val newSelection = TextRange(insertAt + 1)
-                    state.applyEdit(insertAt, 0, char.toString(), newSelection)
-                    fieldValue = TextFieldValue(newText, newSelection)
+                    val insertAt = state.selection.start
+                    state.applyEdit(insertAt, 0, char.toString(), TextRange(insertAt + 1))
                 },
                 onMoveCursorLeft = {
-                    val newPos = (fieldValue.selection.start - 1).coerceAtLeast(0)
-                    val newSel = TextRange(newPos)
-                    state.selection = newSel
-                    fieldValue = fieldValue.copy(selection = newSel)
+                    val newPos = (state.selection.start - 1).coerceAtLeast(0)
+                    state.selection = TextRange(newPos)
                     showCompletion = false
                 },
                 onMoveCursorRight = {
-                    val newPos = (fieldValue.selection.start + 1).coerceAtMost(fieldValue.text.length)
-                    val newSel = TextRange(newPos)
-                    state.selection = newSel
-                    fieldValue = fieldValue.copy(selection = newSel)
+                    val newPos = (state.selection.start + 1).coerceAtMost(state.document.length)
+                    state.selection = TextRange(newPos)
                     showCompletion = false
                 },
-                onUndo = {
-                    state.undo()?.let { newText ->
-                        fieldValue = TextFieldValue(newText, state.selection)
-                        showCompletion = false
-                    }
-                },
-                onRedo = {
-                    state.redo()?.let { newText ->
-                        fieldValue = TextFieldValue(newText, state.selection)
-                        showCompletion = false
-                    }
-                },
+                onUndo = { state.undo() },
+                onRedo = { state.redo() },
                 modifier = Modifier.fillMaxWidth(),
                 style = toolbarStyle,
                 alwaysVisible = keyboardToolbarPlacement != KeyboardToolbarPlacement.BottomHover,
@@ -488,7 +501,6 @@ fun CodeEditorLayout(
                     val replacement = findReplaceState.replacement
                     val newSel = TextRange(match.first + replacement.length)
                     state.applyEdit(match.first, match.last - match.first + 1, replacement, newSel)
-                    fieldValue = TextFieldValue(state.document.text, newSel)
                 },
                 onReplaceAll = {
                     val all = findReplaceState.matches
@@ -502,7 +514,6 @@ fun CodeEditorLayout(
                             newSelection = TextRange(range.first + replacement.length),
                         )
                     }
-                    fieldValue = TextFieldValue(state.document.text, state.selection)
                 },
                 onClose = { findReplaceState.hide() },
                 modifier = Modifier.fillMaxWidth(),
@@ -537,7 +548,6 @@ fun CodeEditorLayout(
                 actions = tooltipCodeActions,
                 onSelectAction = { action ->
                     state.applyTextEdits(action.edits)
-                    fieldValue = TextFieldValue(state.document.text, state.selection)
                     showCodeActionsMenu = false
                 },
                 onDismiss = { showCodeActionsMenu = false },
@@ -564,7 +574,6 @@ fun CodeEditorLayout(
                         } ?: emptyList()
                         if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
                             state.applyTextEdits(edits)
-                            fieldValue = TextFieldValue(state.document.text, state.selection)
                         }
                     }
                 },
@@ -682,33 +691,11 @@ fun CodeEditorLayout(
                     },
             ) {
                 BasicTextField(
-                    value = fieldValue,
-                    onValueChange = { newValue ->
-                        if (!readOnly) {
-                            val oldText = fieldValue.text
-                            val newText = newValue.text
-                            if (oldText != newText) {
-                                handleTextChange(
-                                    state = state,
-                                    newValue = newValue,
-                                    oldText = oldText,
-                                    languageService = languageService,
-                                    triggerChars = triggerChars,
-                                    onFieldValue = { fieldValue = it },
-                                    currentCompletionItems = completionItems,
-                                    onCompletionItems = { completionItems = it },
-                                    onShowCompletion = { showCompletion = it },
-                                    completionJobRef = { completionJob = it },
-                                    currentCompletionJob = completionJob,
-                                    coroutineScope = coroutineScope,
-                                )
-                            } else {
-                                state.selection = newValue.selection
-                                fieldValue = newValue
-                            }
-                        }
-                    },
-                    onTextLayout = { textLayoutResult = it },
+                    state = state.textFieldState,
+                    inputTransformation = inputTransformation,
+                    outputTransformation = outputTransformation,
+                    onTextLayout = { getResult -> textLayoutResult = getResult() },
+                    lineLimits = TextFieldLineLimits.MultiLine(),
                     modifier = Modifier.fillMaxSize(),
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
@@ -717,7 +704,6 @@ fun CodeEditorLayout(
                         color = textColor,
                     ),
                     cursorBrush = SolidColor(cursorColor),
-                    visualTransformation = syntaxTransformation,
                     readOnly = readOnly,
                 )
             }
@@ -728,12 +714,7 @@ fun CodeEditorLayout(
             items = completionItems,
             visible = showCompletion,
             onAccept = { item ->
-                applyCompletion(
-                    state = state,
-                    fieldValue = fieldValue,
-                    item = item,
-                    onFieldValue = { fieldValue = it },
-                )
+                applyCompletion(state, item)
                 showCompletion = false
                 completionItems = emptyList()
             },
@@ -749,108 +730,15 @@ fun CodeEditorLayout(
     }
 }
 
-// ── Text change handler ────────────────────────────────────────────────────────
-
-private fun handleTextChange(
-    state: CodeEditorState,
-    newValue: TextFieldValue,
-    oldText: String,
-    languageService: LanguageService?,
-    triggerChars: Set<Char>,
-    onFieldValue: (TextFieldValue) -> Unit,
-    currentCompletionItems: List<CompletionItem>,
-    onCompletionItems: (List<CompletionItem>) -> Unit,
-    onShowCompletion: (Boolean) -> Unit,
-    completionJobRef: (Job?) -> Unit,
-    currentCompletionJob: Job?,
-    coroutineScope: CoroutineScope,
-) {
-    val newText = newValue.text
-    val delta = computeEditDelta(oldText, newText)
-
-    state.applyEdit(delta.deleteOffset, delta.deleteLength, delta.insertText, newValue.selection)
-
-    var finalSelection = newValue.selection
-
-    val isSingleInsert = delta.deleteLength == 0 && delta.insertText.length == 1
-    if (isSingleInsert && languageService != null) {
-        val typedChar = delta.insertText[0]
-        val insertedAt = delta.deleteOffset
-        // The list stays up while a fresh request is in flight, so an item accepted in between
-        // comes from a list addressed to the text before this keystroke. Re-address the ranges a
-        // provider gave: the typed character joins the token being completed, and anything after
-        // the insertion moves along by one.
-        var carried = currentCompletionItems.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
-
-        if (typedChar == '\n') {
-            val (newLine, _) = state.document.offsetToLineCol(insertedAt + 1)
-            val spaces = languageService.smartIndent(state.document, newLine)
-            if (spaces > 0) {
-                val indent = " ".repeat(spaces)
-                val indentAt = insertedAt + 1
-                finalSelection = TextRange(indentAt + spaces)
-                state.applyEdit(indentAt, 0, indent, finalSelection)
-            }
-            onShowCompletion(false)
-        }
-
-        if (typedChar != '\n') {
-            val closing = languageService.autoClose(state.document, insertedAt, typedChar)
-            if (closing != null) {
-                state.applyEdit(finalSelection.start, 0, closing, finalSelection)
-                // Inserted after the cursor: a range ending at the cursor must not swallow it.
-                carried = carried.map { it.shiftedForInsert(finalSelection.start, closing.length, absorbing = false) }
-            }
-        }
-
-        when {
-            typedChar in triggerChars -> {
-                onCompletionItems(carried)
-                currentCompletionJob?.cancel()
-                completionJobRef(
-                    coroutineScope.launch {
-                        val items = languageService.completions(state.document, finalSelection.start)
-                        onCompletionItems(items)
-                        onShowCompletion(items.isNotEmpty())
-                    },
-                )
-            }
-
-            typedChar.isLetterOrDigit() || typedChar == '_' -> {
-                onCompletionItems(carried)
-                currentCompletionJob?.cancel()
-                completionJobRef(
-                    coroutineScope.launch {
-                        val items = languageService.completions(state.document, finalSelection.start)
-                        onCompletionItems(items)
-                        if (items.isEmpty()) onShowCompletion(false)
-                    },
-                )
-            }
-
-            else -> onShowCompletion(false)
-        }
-    } else if (!isSingleInsert) {
-        onShowCompletion(false)
-    }
-
-    onFieldValue(TextFieldValue(state.document.text, finalSelection))
-}
-
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
-private fun applyCompletion(
-    state: CodeEditorState,
-    fieldValue: TextFieldValue,
-    item: CompletionItem,
-    onFieldValue: (TextFieldValue) -> Unit,
-) {
-    val target = completionReplaceRange(fieldValue.text, fieldValue.selection.start, item)
+private fun applyCompletion(state: CodeEditorState, item: CompletionItem) {
+    val cursor = state.selection.start
+    val target = completionReplaceRange(state.document.text, cursor, item)
 
     if (item.additionalEdits.isEmpty()) {
         val newSelection = TextRange(target.first + item.insertText.length)
         state.applyEdit(target.first, target.last - target.first + 1, item.insertText, newSelection)
-        onFieldValue(TextFieldValue(state.document.text, newSelection))
         return
     }
 
@@ -862,9 +750,7 @@ private fun applyCompletion(
         .filter { it.range.first <= target.first }
         .sumOf { it.newText.length - (it.range.last - it.range.first + 1) }
     val caret = (target.first + shiftBefore + item.insertText.length).coerceIn(0, state.document.length)
-    val newSelection = TextRange(caret)
-    state.selection = newSelection
-    onFieldValue(TextFieldValue(state.document.text, newSelection))
+    state.selection = TextRange(caret)
 }
 
 /**
@@ -980,30 +866,4 @@ private fun endOfLiteral(text: String, start: Int, limit: Int): Int {
         }
     }
     return limit
-}
-
-// ── Edit delta computation ─────────────────────────────────────────────────────
-
-internal data class EditDelta(val deleteOffset: Int, val deleteLength: Int, val insertText: String)
-
-internal fun computeEditDelta(oldText: String, newText: String): EditDelta {
-    if (oldText == newText) return EditDelta(0, 0, "")
-
-    var prefixLen = 0
-    val maxPrefix = minOf(oldText.length, newText.length)
-    while (prefixLen < maxPrefix && oldText[prefixLen] == newText[prefixLen]) prefixLen++
-
-    var suffixLen = 0
-    val maxSuffix = minOf(oldText.length - prefixLen, newText.length - prefixLen)
-    while (suffixLen < maxSuffix &&
-        oldText[oldText.length - 1 - suffixLen] == newText[newText.length - 1 - suffixLen]
-    ) {
-        suffixLen++
-    }
-
-    return EditDelta(
-        deleteOffset = prefixLen,
-        deleteLength = oldText.length - prefixLen - suffixLen,
-        insertText = newText.substring(prefixLen, newText.length - suffixLen),
-    )
 }

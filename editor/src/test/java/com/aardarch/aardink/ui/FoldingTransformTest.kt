@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+@Suppress("DEPRECATION") // exercises the deprecated applyFolding directly; see FoldingTransform.kt
 class FoldingTransformTest {
 
     private val style = SpanStyle()
