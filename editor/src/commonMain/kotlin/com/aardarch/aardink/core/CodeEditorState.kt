@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -218,7 +219,7 @@ class CodeEditorState(
      * undo history as a single batch and scheduling tokenization.
      *
      * [selection] is clamped to the resulting document — a batch that shortens the text past the
-     * cursor would otherwise leave a selection out of bounds, which `TextFieldValue` rejects.
+     * cursor would otherwise leave a selection out of bounds, which `TextFieldState` rejects.
      */
     fun applyTextEdits(edits: List<TextEdit>) {
         if (edits.isEmpty()) return
@@ -330,8 +331,15 @@ class CodeEditorState(
 
     // ── Tokenization scheduling ───────────────────────────────────────────────
 
-    // Visible for testing — override to use test dispatcher and avoid real background threads
-    var computeDispatcher: CoroutineDispatcher = Dispatchers.Default
+    /**
+     * Dispatcher for tokenization and the other pure-computation passes the editor runs off the
+     * main thread.
+     *
+     * Defaults to [EditorDispatchers.compute], which is a background pool on Android and JVM and
+     * the single event loop on wasmJs. Tests override it with a test dispatcher to keep work on
+     * the test scheduler; hosts rarely need to.
+     */
+    var computeDispatcher: CoroutineDispatcher = EditorDispatchers.compute
 
     private var tokenizationJob: Job? = null
     private val tokenizationScope = scope
@@ -358,16 +366,24 @@ class CodeEditorState(
         val snapshot = document.text
         val dirty = document.dirtyLines
 
+        // Read the cache here, on the scope's dispatcher, not inside the withContext below.
+        // TokenCache.tokens is a *mutating* getter: it rebuilds and caches a flattened list
+        // behind non-volatile fields, while reset/merge/pruneLines run on this dispatcher.
+        // Touching it from the compute thread is a data race on Android and JVM (benign on
+        // wasmJs, which is single-threaded). The tokenizer only needs the previous tokens as
+        // an immutable input, so one snapshot before the hop is enough.
+        val previousTokens = tokenCache.tokens
+
         val updatedTokens = withContext(computeDispatcher) {
-            if (dirty == null || tokenCache.tokens.isEmpty()) {
+            if (dirty == null || previousTokens.isEmpty()) {
                 tokenizer.tokenizeFull(snapshot)
             } else {
-                val expandedDirty = if (tokenizer.canSpanLines(dirty.first, tokenCache.tokens)) {
+                val expandedDirty = if (tokenizer.canSpanLines(dirty.first, previousTokens)) {
                     0..dirty.last
                 } else {
                     dirty
                 }
-                tokenizer.tokenizeLines(snapshot, expandedDirty, tokenCache.tokens)
+                tokenizer.tokenizeLines(snapshot, expandedDirty, previousTokens)
             }
         }
 

@@ -23,7 +23,11 @@ import kotlinx.coroutines.channels.Channel
 interface LspTransport {
 
     /**
-     * Sends a raw JSON payload framed with HTTP Content-Length headers.
+     * Sends a raw JSON payload.
+     *
+     * Framing is the implementation's business, not part of this contract: a stream transport
+     * prefixes `Content-Length` headers, a WebSocket sends one payload per frame and needs no
+     * framing at all.
      *
      * A write that can no longer reach the server may fail with any exception — an `IOException`
      * from a stream, a `ClosedSendChannelException` from a channel closed underneath it, or
@@ -33,7 +37,7 @@ interface LspTransport {
     suspend fun sendPayload(jsonPayload: String)
 
     /**
-     * Receives the next raw JSON payload unframed from headers.
+     * Receives the next raw JSON payload, with any framing already stripped.
      * Returns null when the stream/channel is closed.
      */
     suspend fun receivePayload(): String?
@@ -46,9 +50,9 @@ interface LspTransport {
 
 /**
  * In-memory channel transport for testing or in-process coroutine servers. Fully portable —
- * unlike [StreamLspTransport] (JVM/Android only, in `jvmAndAndroidMain`), this is also the escape
- * hatch a wasmJs host can build its own transport around (see `WebSocketLspTransport`, added in a
- * later migration step).
+ * unlike `StreamLspTransport` (JVM/Android only, in `jvmAndAndroidMain`), this is also the
+ * escape hatch a wasmJs host can build its own transport around, alongside
+ * `WebSocketLspTransport`.
  */
 class ChannelLspTransport : LspTransport {
     val sendChannel = Channel<String>(Channel.UNLIMITED)

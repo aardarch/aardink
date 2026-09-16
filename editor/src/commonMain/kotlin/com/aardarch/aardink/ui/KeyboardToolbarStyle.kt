@@ -70,7 +70,8 @@ object KeyboardToolbarDefaults {
         itemSpacing: Dp = 4.dp,
         sectionSpacing: Dp = 12.dp,
         contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        charFontFamily: FontFamily = FontFamily.Monospace,
+        charFontFamily: FontFamily = LocalEditorTypography.current.fontFamily,
+        // Deliberately larger than the editor's own font size: these are tap targets, not code.
         charFontSize: TextUnit = 16.sp,
     ): KeyboardToolbarStyle = KeyboardToolbarStyle(
         background = background,

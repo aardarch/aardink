@@ -21,7 +21,7 @@ package com.aardarch.aardink.core
  * Implementations provide completions, diagnostics, smart-indent, auto-close, hover docs,
  * document formatting, code actions/quick fixes, definition lookup, signature help, and rename
  * refactoring for a specific language or DSL. All `suspend` functions are safe to call from a
- * coroutine on [kotlinx.coroutines.Dispatchers.Default].
+ * coroutine on [com.aardarch.aardink.platform.EditorDispatchers.compute].
  *
  * External library consumers implement this interface for their own DSLs.
  */

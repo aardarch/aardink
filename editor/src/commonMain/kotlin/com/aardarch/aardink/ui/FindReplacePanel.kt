@@ -93,7 +93,7 @@ fun FindReplacePanel(
                         placeholder = { Text("Find") },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = LocalEditorTypography.current.fontFamily,
                         ),
                         modifier = Modifier.weight(1f),
                     )
@@ -134,7 +134,7 @@ fun FindReplacePanel(
                         placeholder = { Text("Replace") },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = LocalEditorTypography.current.fontFamily,
                         ),
                         modifier = Modifier.weight(1f),
                     )

@@ -70,7 +70,6 @@ import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -113,7 +112,8 @@ fun CodeEditorLayout(
     softWrap: Boolean = false,
 ) {
     val density = LocalDensity.current
-    val lineHeightPx = with(density) { EditorDefaults.lineHeight.toPx() }
+    val typography = LocalEditorTypography.current
+    val lineHeightPx = with(density) { typography.lineHeight.toPx() }
     val topPaddingPx = with(density) { EditorDefaults.contentPaddingTop.toPx() }
 
     val verticalScrollState = rememberScrollState()
@@ -168,7 +168,7 @@ fun CodeEditorLayout(
             // Same guard the rename itself has: the server answers later, and a range measured
             // against the older text would be sliced from a document that has since changed.
             val requestedVersion = state.textVersion
-            val range = withContext(Dispatchers.Default) {
+            val range = withContext(state.computeDispatcher) {
                 languageService?.prepareRename(state.document, request.offset)
             } ?: return@collect
             if (range.isEmpty() || state.textVersion != requestedVersion) return@collect
@@ -202,7 +202,7 @@ fun CodeEditorLayout(
         // Debounced like the find and folding passes: a language server should not field a
         // request per keystroke.
         delay(SIGNATURE_HELP_DEBOUNCE_MS)
-        val sig = withContext(Dispatchers.Default) {
+        val sig = withContext(state.computeDispatcher) {
             languageService.signatureHelp(state.document, offset)
         }
         currentSignatureHelp = sig
@@ -222,7 +222,7 @@ fun CodeEditorLayout(
         tooltipCodeActions = emptyList()
         val tooltip = tooltipDiagnostic ?: return@LaunchedEffect
         if (languageService == null) return@LaunchedEffect
-        tooltipCodeActions = withContext(Dispatchers.Default) {
+        tooltipCodeActions = withContext(state.computeDispatcher) {
             languageService.codeActions(state.document, tooltip.range)
         }
     }
@@ -239,7 +239,7 @@ fun CodeEditorLayout(
             diffAnnotations = emptyMap()
             return@LaunchedEffect
         }
-        diffAnnotations = withContext(Dispatchers.Default) {
+        diffAnnotations = withContext(state.computeDispatcher) {
             SimpleDiffProvider.diff(savedText.lines(), current.lines())
                 .associate { it.lineIndex to it.kind }
         }
@@ -312,7 +312,7 @@ fun CodeEditorLayout(
                 delay(200)
                 val text = state.document.text
                 val opts = findReplaceState.toOptions()
-                val matches = withContext(Dispatchers.Default) {
+                val matches = withContext(state.computeDispatcher) {
                     FindEngine.findAll(text, findReplaceState.query, opts)
                 }
                 findReplaceState.matches = matches
@@ -326,7 +326,7 @@ fun CodeEditorLayout(
         LaunchedEffect(foldState, state, foldingProvider) {
             snapshotFlow { state.textVersion }.collect { _ ->
                 delay(200)
-                val ranges = withContext(Dispatchers.Default) {
+                val ranges = withContext(state.computeDispatcher) {
                     foldingProvider.foldableRanges(state.document)
                 }
                 foldState.updateFoldableRanges(ranges)
@@ -569,7 +569,7 @@ fun CodeEditorLayout(
                     showRenameDialog = false
                     if (state.textVersion != requestedVersion) return@RenameDialog
                     coroutineScope.launch {
-                        val edits = withContext(Dispatchers.Default) {
+                        val edits = withContext(state.computeDispatcher) {
                             languageService?.rename(state.document, target, newName)
                         } ?: emptyList()
                         if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
@@ -698,9 +698,9 @@ fun CodeEditorLayout(
                     lineLimits = TextFieldLineLimits.MultiLine(),
                     modifier = Modifier.fillMaxSize(),
                     textStyle = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = EditorDefaults.fontSize,
-                        lineHeight = EditorDefaults.lineHeight,
+                        fontFamily = typography.fontFamily,
+                        fontSize = typography.fontSize,
+                        lineHeight = typography.lineHeight,
                         color = textColor,
                     ),
                     cursorBrush = SolidColor(cursorColor),

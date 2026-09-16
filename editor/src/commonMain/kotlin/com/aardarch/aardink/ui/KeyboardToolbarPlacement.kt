@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.ui
 
+import com.aardarch.aardink.platform.PlatformInfo
+
 /**
  * Where [KeyboardToolbarRow] is rendered within [CodeEditorLayout].
  */
@@ -30,4 +32,18 @@ enum class KeyboardToolbarPlacement {
 
     /** Toolbar is not rendered. */
     Hidden,
+    ;
+
+    companion object {
+        /**
+         * The placement suited to the host platform: [BottomHover] on Android, [Hidden] on
+         * desktop, and on web [BottomFixed] for touch devices or [Hidden] otherwise.
+         *
+         * [CodeEditorLayout]'s own parameter default stays [BottomHover] for Android source and
+         * binary compatibility — hosts that want the platform-appropriate value pass this
+         * explicitly.
+         */
+        val platformDefault: KeyboardToolbarPlacement
+            get() = PlatformInfo.defaultToolbarPlacement
+    }
 }

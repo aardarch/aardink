@@ -18,8 +18,11 @@ package com.aardarch.aardink.core
 /**
  * Stateless search engine producing match ranges for the find/replace UI.
  *
- * Pure-function so it can run on [kotlinx.coroutines.Dispatchers.Default]; the caller is
- * responsible for debouncing rapid query changes (200 ms is typical).
+ * Pure-function so it can run on [com.aardarch.aardink.platform.EditorDispatchers.compute];
+ * the caller is responsible for debouncing rapid query changes (200 ms is typical).
+ *
+ * Note that on wasmJs that dispatcher is the single event loop, so a search over a very
+ * large document blocks painting; see [com.aardarch.aardink.platform.EditorDispatchers.computeIsMainThread].
  */
 object FindEngine {
 

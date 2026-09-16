@@ -19,8 +19,8 @@ package com.aardarch.aardink.core
  * Produces a list of foldable line ranges for a [CodeDocument].
  *
  * Implementations are language-specific: an XML provider stacks open/close tags, a brace-language
- * provider stacks `{`/`}`, etc. Implementations should be pure-function and run on
- * [kotlinx.coroutines.Dispatchers.Default].
+ * provider stacks `{`/`}`, etc. Implementations should be pure-function and are called on
+ * [com.aardarch.aardink.platform.EditorDispatchers.compute].
  */
 fun interface FoldingProvider {
     fun foldableRanges(document: CodeDocument): List<FoldRange>

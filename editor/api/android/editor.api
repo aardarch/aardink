@@ -697,6 +697,14 @@ public final class com/aardarch/aardink/platform/EditorDispatchers {
 	public final fun getIo ()Lkotlinx/coroutines/CoroutineDispatcher;
 }
 
+public final class com/aardarch/aardink/platform/PlatformInfo {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/platform/PlatformInfo;
+	public final fun getDefaultToolbarPlacement ()Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public final fun getHasSoftKeyboard ()Z
+	public final fun isMacOs ()Z
+}
+
 public final class com/aardarch/aardink/ui/AnnotationTooltipKt {
 	public static final fun AnnotationTooltip (Ljava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
 }
@@ -777,6 +785,28 @@ public final class com/aardarch/aardink/ui/EditorThemes {
 	public final fun getVsCodeLight ()Lcom/aardarch/aardink/core/EditorTheme;
 }
 
+public final class com/aardarch/aardink/ui/EditorTypography {
+	public static final field $stable I
+	public fun <init> ()V
+	public synthetic fun <init> (Landroidx/compose/ui/text/font/FontFamily;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Landroidx/compose/ui/text/font/FontFamily;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun component2-XSAIIZE ()J
+	public final fun component3-XSAIIZE ()J
+	public final fun copy-wCyjxdI (Landroidx/compose/ui/text/font/FontFamily;JJ)Lcom/aardarch/aardink/ui/EditorTypography;
+	public static synthetic fun copy-wCyjxdI$default (Lcom/aardarch/aardink/ui/EditorTypography;Landroidx/compose/ui/text/font/FontFamily;JJILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorTypography;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFontFamily ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun getFontSize-XSAIIZE ()J
+	public final fun getLineHeight-XSAIIZE ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/EditorTypographyKt {
+	public static final fun getLocalEditorTypography ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
 public final class com/aardarch/aardink/ui/FindReplacePanelKt {
 	public static final fun FindReplacePanel (Lcom/aardarch/aardink/core/FindReplaceState;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
@@ -812,11 +842,16 @@ public final class com/aardarch/aardink/ui/KeyboardToolbarDefaults {
 public final class com/aardarch/aardink/ui/KeyboardToolbarPlacement : java/lang/Enum {
 	public static final field BottomFixed Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
 	public static final field BottomHover Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static final field Companion Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement$Companion;
 	public static final field Hidden Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
 	public static final field Top Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
 	public static fun values ()[Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+}
+
+public final class com/aardarch/aardink/ui/KeyboardToolbarPlacement$Companion {
+	public final fun getPlatformDefault ()Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
 }
 
 public final class com/aardarch/aardink/ui/KeyboardToolbarRowKt {

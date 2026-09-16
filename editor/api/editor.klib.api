@@ -83,6 +83,11 @@ final enum class com.aardarch.aardink.ui/KeyboardToolbarPlacement : kotlin/Enum<
 
     final fun valueOf(kotlin/String): com.aardarch.aardink.ui/KeyboardToolbarPlacement // com.aardarch.aardink.ui/KeyboardToolbarPlacement.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<com.aardarch.aardink.ui/KeyboardToolbarPlacement> // com.aardarch.aardink.ui/KeyboardToolbarPlacement.values|values#static(){}[0]
+
+    final object Companion { // com.aardarch.aardink.ui/KeyboardToolbarPlacement.Companion|null[0]
+        final val platformDefault // com.aardarch.aardink.ui/KeyboardToolbarPlacement.Companion.platformDefault|{}platformDefault[0]
+            final fun <get-platformDefault>(): com.aardarch.aardink.ui/KeyboardToolbarPlacement // com.aardarch.aardink.ui/KeyboardToolbarPlacement.Companion.platformDefault.<get-platformDefault>|<get-platformDefault>(){}[0]
+    }
 }
 
 abstract fun interface com.aardarch.aardink.core/DiffProvider { // com.aardarch.aardink.core/DiffProvider|null[0]
@@ -742,6 +747,25 @@ final class com.aardarch.aardink.core/TokenCache { // com.aardarch.aardink.core/
     final fun tokensForLine(kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/TokenCache.tokensForLine|tokensForLine(kotlin.Int){}[0]
 }
 
+final class com.aardarch.aardink.ui/EditorTypography { // com.aardarch.aardink.ui/EditorTypography|null[0]
+    constructor <init>(androidx.compose.ui.text.font/FontFamily = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ...) // com.aardarch.aardink.ui/EditorTypography.<init>|<init>(androidx.compose.ui.text.font.FontFamily;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit){}[0]
+
+    final val fontFamily // com.aardarch.aardink.ui/EditorTypography.fontFamily|{}fontFamily[0]
+        final fun <get-fontFamily>(): androidx.compose.ui.text.font/FontFamily // com.aardarch.aardink.ui/EditorTypography.fontFamily.<get-fontFamily>|<get-fontFamily>(){}[0]
+    final val fontSize // com.aardarch.aardink.ui/EditorTypography.fontSize|{}fontSize[0]
+        final fun <get-fontSize>(): androidx.compose.ui.unit/TextUnit // com.aardarch.aardink.ui/EditorTypography.fontSize.<get-fontSize>|<get-fontSize>(){}[0]
+    final val lineHeight // com.aardarch.aardink.ui/EditorTypography.lineHeight|{}lineHeight[0]
+        final fun <get-lineHeight>(): androidx.compose.ui.unit/TextUnit // com.aardarch.aardink.ui/EditorTypography.lineHeight.<get-lineHeight>|<get-lineHeight>(){}[0]
+
+    final fun component1(): androidx.compose.ui.text.font/FontFamily // com.aardarch.aardink.ui/EditorTypography.component1|component1(){}[0]
+    final fun component2(): androidx.compose.ui.unit/TextUnit // com.aardarch.aardink.ui/EditorTypography.component2|component2(){}[0]
+    final fun component3(): androidx.compose.ui.unit/TextUnit // com.aardarch.aardink.ui/EditorTypography.component3|component3(){}[0]
+    final fun copy(androidx.compose.ui.text.font/FontFamily = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ...): com.aardarch.aardink.ui/EditorTypography // com.aardarch.aardink.ui/EditorTypography.copy|copy(androidx.compose.ui.text.font.FontFamily;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.ui/EditorTypography.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.ui/EditorTypography.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.ui/EditorTypography.toString|toString(){}[0]
+}
+
 final class com.aardarch.aardink.ui/KeyboardToolbarStyle { // com.aardarch.aardink.ui/KeyboardToolbarStyle|null[0]
     constructor <init>(androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, kotlin/Float, androidx.compose.ui.graphics/Shape, androidx.compose.ui.unit/Dp, androidx.compose.ui.unit/Dp, androidx.compose.ui.unit/Dp, androidx.compose.ui.unit/Dp, androidx.compose.foundation.layout/PaddingValues, androidx.compose.ui.text.font/FontFamily, androidx.compose.ui.unit/TextUnit) // com.aardarch.aardink.ui/KeyboardToolbarStyle.<init>|<init>(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.Float;androidx.compose.ui.graphics.Shape;androidx.compose.ui.unit.Dp;androidx.compose.ui.unit.Dp;androidx.compose.ui.unit.Dp;androidx.compose.ui.unit.Dp;androidx.compose.foundation.layout.PaddingValues;androidx.compose.ui.text.font.FontFamily;androidx.compose.ui.unit.TextUnit){}[0]
 
@@ -833,6 +857,15 @@ final object com.aardarch.aardink.platform/EditorDispatchers { // com.aardarch.a
         final fun <get-io>(): kotlinx.coroutines/CoroutineDispatcher // com.aardarch.aardink.platform/EditorDispatchers.io.<get-io>|<get-io>(){}[0]
 }
 
+final object com.aardarch.aardink.platform/PlatformInfo { // com.aardarch.aardink.platform/PlatformInfo|null[0]
+    final val defaultToolbarPlacement // com.aardarch.aardink.platform/PlatformInfo.defaultToolbarPlacement|{}defaultToolbarPlacement[0]
+        final fun <get-defaultToolbarPlacement>(): com.aardarch.aardink.ui/KeyboardToolbarPlacement // com.aardarch.aardink.platform/PlatformInfo.defaultToolbarPlacement.<get-defaultToolbarPlacement>|<get-defaultToolbarPlacement>(){}[0]
+    final val hasSoftKeyboard // com.aardarch.aardink.platform/PlatformInfo.hasSoftKeyboard|{}hasSoftKeyboard[0]
+        final fun <get-hasSoftKeyboard>(): kotlin/Boolean // com.aardarch.aardink.platform/PlatformInfo.hasSoftKeyboard.<get-hasSoftKeyboard>|<get-hasSoftKeyboard>(){}[0]
+    final val isMacOs // com.aardarch.aardink.platform/PlatformInfo.isMacOs|{}isMacOs[0]
+        final fun <get-isMacOs>(): kotlin/Boolean // com.aardarch.aardink.platform/PlatformInfo.isMacOs.<get-isMacOs>|<get-isMacOs>(){}[0]
+}
+
 final object com.aardarch.aardink.ui/EditorThemeParser { // com.aardarch.aardink.ui/EditorThemeParser|null[0]
     final fun fromJson(kotlin/String): com.aardarch.aardink.core/EditorTheme? // com.aardarch.aardink.ui/EditorThemeParser.fromJson|fromJson(kotlin.String){}[0]
 }
@@ -901,10 +934,14 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Punctuat
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_StringLiteral$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_StringLiteral$stableprop|#static{}com_aardarch_aardink_core_TokenType_StringLiteral$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_TypeName$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_TypeName$stableprop|#static{}com_aardarch_aardink_core_TokenType_TypeName$stableprop[0]
 final val com.aardarch.aardink.platform/com_aardarch_aardink_platform_EditorDispatchers$stableprop // com.aardarch.aardink.platform/com_aardarch_aardink_platform_EditorDispatchers$stableprop|#static{}com_aardarch_aardink_platform_EditorDispatchers$stableprop[0]
+final val com.aardarch.aardink.platform/com_aardarch_aardink_platform_PlatformInfo$stableprop // com.aardarch.aardink.platform/com_aardarch_aardink_platform_PlatformInfo$stableprop|#static{}com_aardarch_aardink_platform_PlatformInfo$stableprop[0]
 final val com.aardarch.aardink.ui/LocalEditorTheme // com.aardarch.aardink.ui/LocalEditorTheme|{}LocalEditorTheme[0]
     final fun <get-LocalEditorTheme>(): androidx.compose.runtime/ProvidableCompositionLocal<com.aardarch.aardink.core/EditorTheme> // com.aardarch.aardink.ui/LocalEditorTheme.<get-LocalEditorTheme>|<get-LocalEditorTheme>(){}[0]
+final val com.aardarch.aardink.ui/LocalEditorTypography // com.aardarch.aardink.ui/LocalEditorTypography|{}LocalEditorTypography[0]
+    final fun <get-LocalEditorTypography>(): androidx.compose.runtime/ProvidableCompositionLocal<com.aardarch.aardink.ui/EditorTypography> // com.aardarch.aardink.ui/LocalEditorTypography.<get-LocalEditorTypography>|<get-LocalEditorTypography>(){}[0]
 final val com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemeParser$stableprop // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemeParser$stableprop|#static{}com_aardarch_aardink_ui_EditorThemeParser$stableprop[0]
 final val com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemes$stableprop // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemes$stableprop|#static{}com_aardarch_aardink_ui_EditorThemes$stableprop[0]
+final val com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorTypography$stableprop // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorTypography$stableprop|#static{}com_aardarch_aardink_ui_EditorTypography$stableprop[0]
 final val com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop // com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop|#static{}com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop[0]
 final val com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop // com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop|#static{}com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop[0]
 
@@ -952,6 +989,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_StringLi
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_TypeName$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_TypeName$stableprop_getter|com_aardarch_aardink_core_TokenType_TypeName$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/rememberCodeEditorState(kotlin/String?, com.aardarch.aardink.core/IncrementalTokenizer?, kotlin/Long, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int): com.aardarch.aardink.core/CodeEditorState // com.aardarch.aardink.core/rememberCodeEditorState|rememberCodeEditorState(kotlin.String?;com.aardarch.aardink.core.IncrementalTokenizer?;kotlin.Long;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.platform/com_aardarch_aardink_platform_EditorDispatchers$stableprop_getter(): kotlin/Int // com.aardarch.aardink.platform/com_aardarch_aardink_platform_EditorDispatchers$stableprop_getter|com_aardarch_aardink_platform_EditorDispatchers$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.platform/com_aardarch_aardink_platform_PlatformInfo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.platform/com_aardarch_aardink_platform_PlatformInfo$stableprop_getter|com_aardarch_aardink_platform_PlatformInfo$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.ui/AnnotationTooltip(kotlin/String, com.aardarch.aardink.core/DiagnosticSeverity, kotlin/Function0<kotlin/Unit>, androidx.compose.ui/Modifier?, kotlin/Function0<kotlin/Unit>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/AnnotationTooltip|AnnotationTooltip(kotlin.String;com.aardarch.aardink.core.DiagnosticSeverity;kotlin.Function0<kotlin.Unit>;androidx.compose.ui.Modifier?;kotlin.Function0<kotlin.Unit>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/CodeActionMenu(kotlin.collections/List<com.aardarch.aardink.core/CodeAction>, kotlin/Function1<com.aardarch.aardink.core/CodeAction, kotlin/Unit>, kotlin/Function0<kotlin/Unit>, androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeActionMenu|CodeActionMenu(kotlin.collections.List<com.aardarch.aardink.core.CodeAction>;kotlin.Function1<com.aardarch.aardink.core.CodeAction,kotlin.Unit>;kotlin.Function0<kotlin.Unit>;androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/CodeEditorLayout(com.aardarch.aardink.core/CodeEditorState, androidx.compose.ui/Modifier?, androidx.compose.ui.text/AnnotatedString?, com.aardarch.aardink.core/LanguageService?, com.aardarch.aardink.core/FindReplaceState?, com.aardarch.aardink.core/FoldState?, com.aardarch.aardink.core/FoldingProvider?, kotlin.collections/List<com.aardarch.aardink.core/Diagnostic>?, kotlin/String?, kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/Unit>?, kotlin/Boolean, com.aardarch.aardink.ui/KeyboardToolbarStyle?, com.aardarch.aardink.ui/KeyboardToolbarPlacement?, kotlin/Boolean, kotlin/Boolean, kotlin/Boolean, kotlin/Boolean, kotlin/Boolean, kotlin/Boolean, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeEditorLayout|CodeEditorLayout(com.aardarch.aardink.core.CodeEditorState;androidx.compose.ui.Modifier?;androidx.compose.ui.text.AnnotatedString?;com.aardarch.aardink.core.LanguageService?;com.aardarch.aardink.core.FindReplaceState?;com.aardarch.aardink.core.FoldState?;com.aardarch.aardink.core.FoldingProvider?;kotlin.collections.List<com.aardarch.aardink.core.Diagnostic>?;kotlin.String?;kotlin.Function2<kotlin.Int,kotlin.Int,kotlin.Unit>?;kotlin.Boolean;com.aardarch.aardink.ui.KeyboardToolbarStyle?;com.aardarch.aardink.ui.KeyboardToolbarPlacement?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int;kotlin.Int){}[0]
@@ -968,5 +1006,6 @@ final fun com.aardarch.aardink.ui/annotateTokens(kotlin/String, kotlin.collectio
 final fun com.aardarch.aardink.ui/applyFolding(androidx.compose.ui.text/AnnotatedString, kotlin.collections/List<com.aardarch.aardink.core/FoldRange>, com.aardarch.aardink.core/CodeDocument, androidx.compose.ui.text/SpanStyle): androidx.compose.ui.text.input/TransformedText // com.aardarch.aardink.ui/applyFolding|applyFolding(androidx.compose.ui.text.AnnotatedString;kotlin.collections.List<com.aardarch.aardink.core.FoldRange>;com.aardarch.aardink.core.CodeDocument;androidx.compose.ui.text.SpanStyle){}[0]
 final fun com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemeParser$stableprop_getter(): kotlin/Int // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemeParser$stableprop_getter|com_aardarch_aardink_ui_EditorThemeParser$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemes$stableprop_getter(): kotlin/Int // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorThemes$stableprop_getter|com_aardarch_aardink_ui_EditorThemes$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorTypography$stableprop_getter(): kotlin/Int // com.aardarch.aardink.ui/com_aardarch_aardink_ui_EditorTypography$stableprop_getter|com_aardarch_aardink_ui_EditorTypography$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop_getter(): kotlin/Int // com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop_getter|com_aardarch_aardink_ui_KeyboardToolbarDefaults$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop_getter(): kotlin/Int // com.aardarch.aardink.ui/com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop_getter|com_aardarch_aardink_ui_KeyboardToolbarStyle$stableprop_getter(){}[0]

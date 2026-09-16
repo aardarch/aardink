@@ -97,11 +97,12 @@ fun EditorGutter(
 
     val gutterWidth = rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers, density)
 
-    val textStyle = remember(foreground) {
+    val typography = LocalEditorTypography.current
+    val textStyle = remember(foreground, typography) {
         TextStyle(
-            fontFamily = FontFamily.Monospace,
-            fontSize = EditorDefaults.fontSize,
-            lineHeight = EditorDefaults.lineHeight,
+            fontFamily = typography.fontFamily,
+            fontSize = typography.fontSize,
+            lineHeight = typography.lineHeight,
             color = foreground,
         )
     }

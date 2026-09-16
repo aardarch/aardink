@@ -89,7 +89,7 @@ fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Mod
                 Text(
                     text = annotatedLabel,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = LocalEditorTypography.current.fontFamily,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )

@@ -112,7 +112,7 @@ private fun CompletionChip(item: CompletionItem, onClick: () -> Unit) {
 
             Text(
                 text = item.label,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }

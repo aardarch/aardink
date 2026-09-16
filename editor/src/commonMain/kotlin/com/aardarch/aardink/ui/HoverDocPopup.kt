@@ -79,7 +79,7 @@ fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Mod
                             text = doc.example,
                             modifier = Modifier.padding(8.dp),
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = LocalEditorTypography.current.fontFamily,
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
