@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages.lsp
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -512,5 +513,113 @@ class LspClientTest {
         val failure = awaitSoon(outcome).exceptionOrNull()
         assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
         assertTrue(transport.sendChannel.isClosedForSend, "nothing may be written to a stopped transport")
+    }
+
+    // ---- Teardown and listener contracts after the Mutex rewrite (PR 5) -----------------
+    //
+    // These pin observable behaviour; they are NOT reproductions of the three races they
+    // relate to. All three only bite when the Mutex is genuinely contended, and
+    // `Mutex.lock()` takes an uncontended fast path that never suspends and so never checks
+    // for cancellation. From outside the class there is no way to hold the private lock at
+    // the required instant, so the contended interleavings are not reachable from a test.
+    // Each case below therefore passes both with and without its fix; what it guards is the
+    // ordinary path staying correct.
+
+    @Test
+    fun `cancelling the scope while the receive loop runs still closes the transport`() = runTest {
+        // The receive loop's teardown runs in a `finally` that suspends on the Mutex, and a
+        // suspend call in a finally throws CancellationException before its body runs — but
+        // only when it actually suspends, i.e. when the lock is contended. Uncontended (this
+        // test) teardown completes either way; the withContext(NonCancellable) wrapper in
+        // LspClient is what makes it hold under contention too.
+        val closes = MutableStateFlow(0)
+        val hanging = object : LspTransport {
+            /** Completes once a request is on the wire, so the loop is known to be running. */
+            val firstSent = CompletableDeferred<Unit>()
+
+            override suspend fun sendPayload(jsonPayload: String) {
+                firstSent.complete(Unit)
+            }
+
+            // Never returns, like a server that has gone quiet.
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() {
+                closes.update { it + 1 }
+            }
+        }
+        val scope = CoroutineScope(backgroundScope.coroutineContext + Job())
+        val client = LspClient(hanging, scope)
+
+        val stranded = CompletableDeferred<Result<JsonElement?>>()
+        backgroundScope.launch { stranded.complete(runCatching { client.sendRequest("textDocument/hover") }) }
+        awaitSoon(hanging.firstSent)
+
+        scope.cancel()
+
+        val failure = awaitSoon(stranded).exceptionOrNull()
+        assertTrue(failure is LspRequestException, "the pending request must be released: got $failure")
+        assertEquals(LspRequestException.CONNECTION_CLOSED, (failure as LspRequestException).code)
+        assertEquals(1, closes.value, "the transport must be closed exactly once")
+    }
+
+    @Test
+    fun `stop tears down when the scope is already cancelled`() = runTest {
+        // stop() promises unconditional teardown. withLockOrAsync's contended fallback is
+        // `scope.launch`, which never runs on a cancelled scope — so under contention stop()
+        // would quietly become a no-op without the inline fallback. Uncontended, tryLock
+        // succeeds and this passes regardless; the assertion is the contract, not the race.
+        val closes = MutableStateFlow(0)
+        val hanging = object : LspTransport {
+            override suspend fun sendPayload(jsonPayload: String) = Unit
+            override suspend fun receivePayload(): String? = CompletableDeferred<String>().await()
+            override fun close() {
+                closes.update { it + 1 }
+            }
+        }
+        val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined + Job())
+        val client = LspClient(hanging, scope)
+        client.start()
+        scope.cancel()
+
+        client.stop()
+
+        assertEquals(1, closes.value, "stop() must close the transport even on a cancelled scope")
+    }
+
+    @Test
+    fun `add then remove of a listener takes effect in call order`() = runTest {
+        // Routing listener mutations through withLockOrAsync made each one an independent
+        // scope.launch under contention, so a remove could execute before the add it followed
+        // and leave the listener registered for good. Keeping both writes off the lock makes
+        // call order the only possible order.
+        setUp()
+        var removedWasCalled = false
+        val listener: DiagnosticsListener = { _, _, _ -> removedWasCalled = true }
+
+        client.addDiagnosticsListener(listener)
+        client.removeDiagnosticsListener(listener)
+
+        val kept = CompletableDeferred<String>()
+        client.addDiagnosticsListener { uri, _, _ -> kept.complete(uri) }
+        client.start()
+        serverSends("""{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///A.kt","diagnostics":[]}}""")
+
+        assertEquals("file:///A.kt", awaitSoon(kept))
+        assertFalse(removedWasCalled, "a removed listener must not be called")
+        client.stop()
+    }
+
+    @Test
+    fun `a listener registered immediately before a notification receives it`() = runTest {
+        // LspLanguageService.didOpen registers and then immediately sends textDocument/didOpen;
+        // a registration deferred to scope.launch could miss the server's reply entirely.
+        setUp()
+        client.start()
+        val seen = CompletableDeferred<String>()
+        client.addDiagnosticsListener { uri, _, _ -> seen.complete(uri) }
+        serverSends("""{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///B.kt","diagnostics":[]}}""")
+
+        assertEquals("file:///B.kt", awaitSoon(seen))
+        client.stop()
     }
 }

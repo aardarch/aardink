@@ -74,9 +74,11 @@ class LspRequestException(val code: Int, message: String) : RuntimeException(mes
  * suspend call sites ([sendRequest], [sendNotification]) and potentially by a host calling them
  * directly, so they take the lock with [Mutex.tryLock] and fall back to an async acquisition on
  * [scope] when it's already held — contention here is a receive-loop-starts-or-stops event, not a
- * hot path. [diagnosticsListeners] is a `@Volatile` copy-on-write list instead: writes still go
- * through [lock] for atomicity, but the read in [handleNotification] (the receive loop's hot path)
- * stays lock-free, relying on `@Volatile` alone for cross-thread visibility.
+ * hot path. [diagnosticsListeners] is a `@Volatile` copy-on-write list outside [lock] entirely:
+ * both the read in [handleNotification] (the receive loop's hot path) and the writes in
+ * [addDiagnosticsListener]/[removeDiagnosticsListener] are lock-free, relying on `@Volatile` for
+ * cross-thread visibility. Keeping listener writes off [lock] is what preserves their program
+ * order — see [addDiagnosticsListener].
  */
 class LspClient(val transport: LspTransport, private val scope: CoroutineScope = CoroutineScope(EditorDispatchers.io)) {
     private val lock = Mutex()
@@ -98,19 +100,42 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     /** Guarded by [lock]; see [closeTransport]. */
     private var transportClosed = false
 
-    /** Registers [listener]; it stays registered until [removeDiagnosticsListener] is called. */
+    /**
+     * Registers [listener]; it stays registered until [removeDiagnosticsListener] is called.
+     * Takes effect before this call returns.
+     *
+     * Deliberately does not go through [withLockOrAsync]. Under contention that would defer the
+     * mutation to an independent `scope.launch`, and callers depend on program order here:
+     * `LspLanguageService.didOpen` registers and then immediately sends `textDocument/didOpen`,
+     * so a deferred registration can miss the diagnostics the server publishes in reply; an
+     * add followed by a remove can land in the opposite order and leak the listener; and
+     * `didClose` can be overtaken by a late notification that repopulates its cache. The
+     * previous `@Synchronized` implementation gave program order for free.
+     *
+     * [diagnosticsListeners] is a `@Volatile` copy-on-write list and every write here replaces
+     * it wholesale, so a plain read-modify-write is safe enough without the lock: concurrent
+     * registrations are last-writer-wins, which loses no ordering guarantee the lock preserved.
+     */
     fun addDiagnosticsListener(listener: DiagnosticsListener) {
-        withLockOrAsync { diagnosticsListeners = diagnosticsListeners.let { if (listener in it) it else it + listener } }
+        val current = diagnosticsListeners
+        if (listener !in current) diagnosticsListeners = current + listener
     }
 
+    /** Unregisters [listener]. Takes effect before this call returns; see [addDiagnosticsListener]. */
     fun removeDiagnosticsListener(listener: DiagnosticsListener) {
-        withLockOrAsync { diagnosticsListeners = diagnosticsListeners - listener }
+        diagnosticsListeners = diagnosticsListeners - listener
     }
 
     /**
      * Runs [block] under [lock], taking it synchronously via [Mutex.tryLock] when uncontended (the
      * overwhelmingly common case — these are rare, low-frequency calls), or asynchronously on
      * [scope] when another coroutine already holds it.
+     *
+     * A coroutine launched into a cancelled scope never runs, so the async path would silently
+     * drop [block] once the host has cancelled [scope] — and [stop] promises unconditional
+     * teardown. In that case run [block] inline without the lock instead: the scope is dead, so
+     * whoever holds the lock can no longer make progress either, and losing the teardown
+     * entirely is strictly worse than running it unsynchronized.
      */
     private fun withLockOrAsync(block: () -> Unit) {
         if (lock.tryLock()) {
@@ -119,8 +144,10 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
             } finally {
                 lock.unlock()
             }
-        } else {
+        } else if (scope.isActive) {
             scope.launch { lock.withLock { block() } }
+        } else {
+            block()
         }
     }
 
@@ -158,7 +185,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                 // would reach the scope's uncaught handler and take the host process down over a
                 // language server going away.
             } finally {
-                onReceiveLoopEnded()
+                // NonCancellable: onReceiveLoopEnded suspends on lock.withLock, and a suspend
+                // call in a finally block throws CancellationException before running its body
+                // once this coroutine is cancelled. Without this, a host cancelling the shared
+                // scope while the loop is alive would leave `closed` unset, every pending
+                // request waiting forever and the transport never closed. sendRequest's finally
+                // already does the same thing.
+                withContext(NonCancellable) { onReceiveLoopEnded() }
             }
         }
     }
@@ -315,6 +348,11 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     /**
      * Stops the receive loop, fails any pending requests and closes the transport. The client
      * cannot be restarted afterwards; construct a new one for a new connection.
+     *
+     * Teardown is unconditional, including when [scope] has already been cancelled (see
+     * [withLockOrAsync]). It is not, however, ordered against a [sendRequest] already in flight
+     * on another coroutine: such a request either registers before this runs and is failed by
+     * it, or is refused outright afterwards.
      */
     fun stop() {
         withLockOrAsync { stopLocked() }
