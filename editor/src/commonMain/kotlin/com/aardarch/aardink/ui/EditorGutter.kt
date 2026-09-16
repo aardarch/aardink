@@ -95,8 +95,6 @@ fun EditorGutter(
     val foldLaneWidthPx = with(density) { if (hasFoldLane) FOLD_LANE_WIDTH.toPx() else 0f }
     val annotLaneWidthPx = with(density) { if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.toPx() else 0f }
 
-    val gutterWidth = rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers, density)
-
     val typography = LocalEditorTypography.current
     val textStyle = remember(foreground, typography) {
         TextStyle(
@@ -106,6 +104,17 @@ fun EditorGutter(
             color = foreground,
         )
     }
+
+    val gutterWidth = rememberGutterWidth(
+        lineCount = lineCount,
+        hasDiffLane = hasDiffLane,
+        hasFoldLane = hasFoldLane,
+        hasAnnotationLane = hasAnnotationLane,
+        showLineNumbers = showLineNumbers,
+        density = density,
+        textMeasurer = textMeasurer,
+        textStyle = textStyle,
+    )
 
     val foldedStartLines = remember(foldedRanges) { foldedRanges.map { it.startLine }.toHashSet() }
     val hiddenLines = remember(foldedRanges) {
@@ -318,6 +327,19 @@ private val ANNOTATION_LANE_WIDTH = 12.dp
 /** Breathing room between the rightmost lane and the start of the line-number text. */
 private val LANE_TO_NUMBER_GAP = 2.dp
 
+/**
+ * Width of the gutter column, sized to hold [lineCount]'s digits plus whatever lanes are shown.
+ *
+ * The digit width is measured with [textMeasurer] against the actual [textStyle] rather than
+ * estimated. It used to be `EditorDefaults.fontSize.value * 0.7f`: a fixed advance-ratio guess
+ * that also treated an `sp` scalar as if it were `dp`, so it ignored the user's font scale. That
+ * was survivable only while the font was hardcoded to `FontFamily.Monospace` at a fixed size;
+ * now that a host can provide [EditorTypography], a guess would clip the line numbers of any
+ * font whose digits are wider than 0.7 em.
+ *
+ * Digits are measured as a run of [EditorDefaults.GUTTER_MIN_DIGITS]-or-more "0"s rather than one
+ * "0" scaled up, so letter spacing between digits is included.
+ */
 @Composable
 private fun rememberGutterWidth(
     lineCount: Int,
@@ -326,16 +348,21 @@ private fun rememberGutterWidth(
     hasAnnotationLane: Boolean,
     showLineNumbers: Boolean,
     density: Density,
-): Dp = remember(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers) {
+    textMeasurer: TextMeasurer,
+    textStyle: TextStyle,
+): Dp = remember(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers, density, textStyle) {
     val digits = lineCount.toString().length.coerceAtLeast(EditorDefaults.GUTTER_MIN_DIGITS)
     with(density) {
-        val charWidth = EditorDefaults.fontSize.value * 0.7f
+        val numbersWidth = if (showLineNumbers) {
+            textMeasurer.measure("0".repeat(digits), textStyle).size.width.toDp().value
+        } else {
+            0f
+        }
         val lanesExtra = (if (hasDiffLane) DIFF_LANE_WIDTH.value else 0f) +
             (if (hasFoldLane) FOLD_LANE_WIDTH.value else 0f) +
             (if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.value else 0f)
         val hasAnyLane = hasDiffLane || hasFoldLane || hasAnnotationLane
         val laneToNumberGap = if (showLineNumbers && hasAnyLane) LANE_TO_NUMBER_GAP.value else 0f
-        val numbersWidth = if (showLineNumbers) digits * charWidth else 0f
         val totalDp = numbersWidth + EditorDefaults.gutterPaddingHorizontal.value * 2 + lanesExtra + laneToNumberGap
         totalDp.dp
     }
