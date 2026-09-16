@@ -1,0 +1,261 @@
+// Klib ABI Dump
+// Targets: [wasmJs]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <com.aardarch:languages>
+abstract class com.aardarch.aardink.languages.internal.xml/TagValidator : com.aardarch.aardink.languages.internal/BaseLanguageService { // com.aardarch.aardink.languages.internal.xml/TagValidator|null[0]
+    constructor <init>(kotlin/Boolean, kotlin/String) // com.aardarch.aardink.languages.internal.xml/TagValidator.<init>|<init>(kotlin.Boolean;kotlin.String){}[0]
+
+    open val triggerCharacters // com.aardarch.aardink.languages.internal.xml/TagValidator.triggerCharacters|{}triggerCharacters[0]
+        open fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.xml/TagValidator.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
+
+    open fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.xml/TagValidator.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.xml/TagValidator.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.xml/TagValidator.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.xml/TagValidator.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.xml/TagValidator.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+abstract class com.aardarch.aardink.languages.internal/BaseLanguageService : com.aardarch.aardink.core/LanguageService { // com.aardarch.aardink.languages.internal/BaseLanguageService|null[0]
+    constructor <init>() // com.aardarch.aardink.languages.internal/BaseLanguageService.<init>|<init>(){}[0]
+
+    open val triggerCharacters // com.aardarch.aardink.languages.internal/BaseLanguageService.triggerCharacters|{}triggerCharacters[0]
+        open fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal/BaseLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
+
+    open fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal/BaseLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal/BaseLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal/BaseLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal/BaseLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal/BaseLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun hoverDoc(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/HoverDoc? // com.aardarch.aardink.languages.internal/BaseLanguageService.hoverDoc|hoverDoc(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+}
+
+abstract class com.aardarch.aardink.languages.internal/RegexTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages.internal/RegexTokenizer|null[0]
+    constructor <init>() // com.aardarch.aardink.languages.internal/RegexTokenizer.<init>|<init>(){}[0]
+
+    abstract val rules // com.aardarch.aardink.languages.internal/RegexTokenizer.rules|{}rules[0]
+        abstract fun <get-rules>(): kotlin.collections/List<kotlin/Pair<kotlin.text/Regex, com.aardarch.aardink.core/TokenType>> // com.aardarch.aardink.languages.internal/RegexTokenizer.rules.<get-rules>|<get-rules>(){}[0]
+    open val multiLineConstructs // com.aardarch.aardink.languages.internal/RegexTokenizer.multiLineConstructs|{}multiLineConstructs[0]
+        open fun <get-multiLineConstructs>(): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.multiLineConstructs.<get-multiLineConstructs>|<get-multiLineConstructs>(){}[0]
+
+    open fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    open fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
+    open fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+}
+
+final class com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider|null[0]
+    constructor <init>(kotlin/Char = ..., kotlin/Char = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ...) // com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider.<init>|<init>(kotlin.Char;kotlin.Char;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int){}[0]
+
+    final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final class com.aardarch.aardink.languages.internal.folding/TagFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages.internal.folding/TagFoldingProvider|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Int = ...) // com.aardarch.aardink.languages.internal.folding/TagFoldingProvider.<init>|<init>(kotlin.Boolean;kotlin.Int){}[0]
+
+    final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages.internal.folding/TagFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.aardink.languages/LanguageDefinition|null[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<kotlin/String>, com.aardarch.aardink.core/IncrementalTokenizer, com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...) // com.aardarch.aardink.languages/LanguageDefinition.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
+
+    final val displayName // com.aardarch.aardink.languages/LanguageDefinition.displayName|{}displayName[0]
+        final fun <get-displayName>(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.displayName.<get-displayName>|<get-displayName>(){}[0]
+    final val fileExtensions // com.aardarch.aardink.languages/LanguageDefinition.fileExtensions|{}fileExtensions[0]
+        final fun <get-fileExtensions>(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/LanguageDefinition.fileExtensions.<get-fileExtensions>|<get-fileExtensions>(){}[0]
+    final val foldingProvider // com.aardarch.aardink.languages/LanguageDefinition.foldingProvider|{}foldingProvider[0]
+        final fun <get-foldingProvider>(): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.languages/LanguageDefinition.foldingProvider.<get-foldingProvider>|<get-foldingProvider>(){}[0]
+    final val id // com.aardarch.aardink.languages/LanguageDefinition.id|{}id[0]
+        final fun <get-id>(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.id.<get-id>|<get-id>(){}[0]
+    final val keyboardToolbarChars // com.aardarch.aardink.languages/LanguageDefinition.keyboardToolbarChars|{}keyboardToolbarChars[0]
+        final fun <get-keyboardToolbarChars>(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages/LanguageDefinition.keyboardToolbarChars.<get-keyboardToolbarChars>|<get-keyboardToolbarChars>(){}[0]
+    final val languageService // com.aardarch.aardink.languages/LanguageDefinition.languageService|{}languageService[0]
+        final fun <get-languageService>(): com.aardarch.aardink.core/LanguageService? // com.aardarch.aardink.languages/LanguageDefinition.languageService.<get-languageService>|<get-languageService>(){}[0]
+    final val tokenizer // com.aardarch.aardink.languages/LanguageDefinition.tokenizer|{}tokenizer[0]
+        final fun <get-tokenizer>(): com.aardarch.aardink.core/IncrementalTokenizer // com.aardarch.aardink.languages/LanguageDefinition.tokenizer.<get-tokenizer>|<get-tokenizer>(){}[0]
+
+    final fun component1(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.component2|component2(){}[0]
+    final fun component3(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/LanguageDefinition.component3|component3(){}[0]
+    final fun component4(): com.aardarch.aardink.core/IncrementalTokenizer // com.aardarch.aardink.languages/LanguageDefinition.component4|component4(){}[0]
+    final fun component5(): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.languages/LanguageDefinition.component5|component5(){}[0]
+    final fun component6(): com.aardarch.aardink.core/LanguageService? // com.aardarch.aardink.languages/LanguageDefinition.component6|component6(){}[0]
+    final fun component7(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages/LanguageDefinition.component7|component7(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<kotlin/String> = ..., com.aardarch.aardink.core/IncrementalTokenizer = ..., com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.copy|copy(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageDefinition.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageDefinition.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.toString|toString(){}[0]
+}
+
+final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aardink.languages/LanguageRegistry|null[0]
+    constructor <init>() // com.aardarch.aardink.languages/LanguageRegistry.<init>|<init>(){}[0]
+
+    final val all // com.aardarch.aardink.languages/LanguageRegistry.all|{}all[0]
+        final fun <get-all>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageDefinition> // com.aardarch.aardink.languages/LanguageRegistry.all.<get-all>|<get-all>(){}[0]
+
+    final fun byExtension(kotlin/String): com.aardarch.aardink.languages/LanguageDefinition? // com.aardarch.aardink.languages/LanguageRegistry.byExtension|byExtension(kotlin.String){}[0]
+    final fun byId(kotlin/String): com.aardarch.aardink.languages/LanguageDefinition? // com.aardarch.aardink.languages/LanguageRegistry.byId|byId(kotlin.String){}[0]
+    final fun override(kotlin/String, kotlin/Function1<com.aardarch.aardink.languages/LanguageDefinition, com.aardarch.aardink.languages/LanguageDefinition>): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.override|override(kotlin.String;kotlin.Function1<com.aardarch.aardink.languages.LanguageDefinition,com.aardarch.aardink.languages.LanguageDefinition>){}[0]
+    final fun register(com.aardarch.aardink.languages/LanguageDefinition): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.register|register(com.aardarch.aardink.languages.LanguageDefinition){}[0]
+    final fun unregister(kotlin/String): kotlin/Boolean // com.aardarch.aardink.languages/LanguageRegistry.unregister|unregister(kotlin.String){}[0]
+
+    final object Companion { // com.aardarch.aardink.languages/LanguageRegistry.Companion|null[0]
+        final fun withBuiltIns(): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.Companion.withBuiltIns|withBuiltIns(){}[0]
+    }
+}
+
+final object com.aardarch.aardink.languages.internal.css/CssTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.css/CssTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.css/CssTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.folding/MarkdownFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages.internal.folding/MarkdownFoldingProvider|null[0]
+    final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages.internal.folding/MarkdownFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.folding/TomlFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages.internal.folding/TomlFoldingProvider|null[0]
+    final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages.internal.folding/TomlFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.html/HtmlTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages.internal.html/HtmlTokenizer|null[0]
+    final fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+    final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
+    final fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.json/JsonLanguageService : com.aardarch.aardink.languages.internal/BaseLanguageService { // com.aardarch.aardink.languages.internal.json/JsonLanguageService|null[0]
+    final val triggerCharacters // com.aardarch.aardink.languages.internal.json/JsonLanguageService.triggerCharacters|{}triggerCharacters[0]
+        final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
+
+    final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.json/JsonLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.json/JsonLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.json/JsonLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.json/JsonTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.json/JsonTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.json/JsonTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService : com.aardarch.aardink.languages.internal/BaseLanguageService { // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService|null[0]
+    final val triggerCharacters // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.triggerCharacters|{}triggerCharacters[0]
+        final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
+
+    final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.toml/TomlLanguageService : com.aardarch.aardink.languages.internal/BaseLanguageService { // com.aardarch.aardink.languages.internal.toml/TomlLanguageService|null[0]
+    final val triggerCharacters // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.triggerCharacters|{}triggerCharacters[0]
+        final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
+
+    final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.toml/TomlTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.toml/TomlTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.toml/TomlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer|null[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+}
+
+final object com.aardarch.aardink.languages.internal.xml/HtmlLanguageService : com.aardarch.aardink.languages.internal.xml/TagValidator // com.aardarch.aardink.languages.internal.xml/HtmlLanguageService|null[0]
+
+final object com.aardarch.aardink.languages.internal.xml/XmlLanguageService : com.aardarch.aardink.languages.internal.xml/TagValidator // com.aardarch.aardink.languages.internal.xml/XmlLanguageService|null[0]
+
+final object com.aardarch.aardink.languages.internal.xml/XmlTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages.internal.xml/XmlTokenizer|null[0]
+    final fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+    final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
+    final fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+}
+
+final object com.aardarch.aardink.languages/BuiltInLanguages { // com.aardarch.aardink.languages/BuiltInLanguages|null[0]
+    final val Css // com.aardarch.aardink.languages/BuiltInLanguages.Css|{}Css[0]
+        final fun <get-Css>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Css.<get-Css>|<get-Css>(){}[0]
+    final val Html // com.aardarch.aardink.languages/BuiltInLanguages.Html|{}Html[0]
+        final fun <get-Html>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Html.<get-Html>|<get-Html>(){}[0]
+    final val Json // com.aardarch.aardink.languages/BuiltInLanguages.Json|{}Json[0]
+        final fun <get-Json>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Json.<get-Json>|<get-Json>(){}[0]
+    final val Kotlin // com.aardarch.aardink.languages/BuiltInLanguages.Kotlin|{}Kotlin[0]
+        final fun <get-Kotlin>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Kotlin.<get-Kotlin>|<get-Kotlin>(){}[0]
+    final val Markdown // com.aardarch.aardink.languages/BuiltInLanguages.Markdown|{}Markdown[0]
+        final fun <get-Markdown>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Markdown.<get-Markdown>|<get-Markdown>(){}[0]
+    final val PlainText // com.aardarch.aardink.languages/BuiltInLanguages.PlainText|{}PlainText[0]
+        final fun <get-PlainText>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.PlainText.<get-PlainText>|<get-PlainText>(){}[0]
+    final val Toml // com.aardarch.aardink.languages/BuiltInLanguages.Toml|{}Toml[0]
+        final fun <get-Toml>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Toml.<get-Toml>|<get-Toml>(){}[0]
+    final val TypeScript // com.aardarch.aardink.languages/BuiltInLanguages.TypeScript|{}TypeScript[0]
+        final fun <get-TypeScript>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.TypeScript.<get-TypeScript>|<get-TypeScript>(){}[0]
+    final val Xml // com.aardarch.aardink.languages/BuiltInLanguages.Xml|{}Xml[0]
+        final fun <get-Xml>(): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/BuiltInLanguages.Xml.<get-Xml>|<get-Xml>(){}[0]
+    final val all // com.aardarch.aardink.languages/BuiltInLanguages.all|{}all[0]
+        final fun <get-all>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageDefinition> // com.aardarch.aardink.languages/BuiltInLanguages.all.<get-all>|<get-all>(){}[0]
+}
+
+final val com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop // com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop[0]
+final val com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop[0]
+final val com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop[0]
+final val com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop[0]
+final val com.aardarch.aardink.languages.internal.html/com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop // com.aardarch.aardink.languages.internal.html/com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop // com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop // com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop // com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop // com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.markdown/com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop // com.aardarch.aardink.languages.internal.markdown/com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop // com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop // com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.typescript/com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop // com.aardarch.aardink.languages.internal.typescript/com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop|#static{}com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop[0]
+final val com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop // com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop|#static{}com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop // com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop|#static{}com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_BuiltInLanguages$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_BuiltInLanguages$stableprop|#static{}com_aardarch_aardink_languages_BuiltInLanguages$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop|#static{}com_aardarch_aardink_languages_LanguageDefinition$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop|#static{}com_aardarch_aardink_languages_LanguageRegistry$stableprop[0]
+
+final fun com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_TagFoldingProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_TomlFoldingProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.html/com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.html/com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_html_HtmlTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_json_JsonLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.json/com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_json_JsonTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_kotlin_KotlinLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.kotlin/com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_kotlin_KotlinTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.markdown/com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.markdown/com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_markdown_MarkdownTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_toml_TomlLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.toml/com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_toml_TomlTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.typescript/com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.typescript/com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_typescript_TypeScriptTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_xml_HtmlLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop_getter|com_aardarch_aardink_languages_internal_xml_TagValidator$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_xml_XmlLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.xml/com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_xml_XmlTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop_getter|com_aardarch_aardink_languages_internal_BaseLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal/com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_RegexTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_BuiltInLanguages$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_BuiltInLanguages$stableprop_getter|com_aardarch_aardink_languages_BuiltInLanguages$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter|com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter|com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(){}[0]

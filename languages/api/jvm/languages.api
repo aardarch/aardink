@@ -1,0 +1,223 @@
+public final class com/aardarch/aardink/languages/BuiltInLanguages {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/BuiltInLanguages;
+	public final fun getAll ()Ljava/util/List;
+	public final fun getCss ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getHtml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getJson ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getKotlin ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getMarkdown ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getPlainText ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getToml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getTypeScript ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getXml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+}
+
+public final class com/aardarch/aardink/languages/LanguageDefinition {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
+	public final fun component5 ()Lcom/aardarch/aardink/core/FoldingProvider;
+	public final fun component6 ()Lcom/aardarch/aardink/core/LanguageService;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageDefinition;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getFileExtensions ()Ljava/util/List;
+	public final fun getFoldingProvider ()Lcom/aardarch/aardink/core/FoldingProvider;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKeyboardToolbarChars ()Ljava/util/List;
+	public final fun getLanguageService ()Lcom/aardarch/aardink/core/LanguageService;
+	public final fun getTokenizer ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageRegistry {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/LanguageRegistry$Companion;
+	public fun <init> ()V
+	public final fun byExtension (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun byId (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getAll ()Ljava/util/List;
+	public final fun override (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/aardarch/aardink/languages/LanguageRegistry;
+	public final fun register (Lcom/aardarch/aardink/languages/LanguageDefinition;)Lcom/aardarch/aardink/languages/LanguageRegistry;
+	public final fun unregister (Ljava/lang/String;)Z
+}
+
+public final class com/aardarch/aardink/languages/LanguageRegistry$Companion {
+	public final fun withBuiltIns ()Lcom/aardarch/aardink/languages/LanguageRegistry;
+}
+
+public abstract class com/aardarch/aardink/languages/internal/BaseLanguageService : com/aardarch/aardink/core/LanguageService {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getSupportsRename ()Z
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun canSpanLines (ILjava/util/List;)Z
+	protected fun getMultiLineConstructs ()Z
+	protected abstract fun getRules ()Ljava/util/List;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/css/CssTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/css/CssTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/folding/BraceFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (CCZZZZZI)V
+	public synthetic fun <init> (CCZZZZZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/folding/MarkdownFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/folding/MarkdownFoldingProvider;
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/folding/TagFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZI)V
+	public synthetic fun <init> (ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/folding/TomlFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/folding/TomlFoldingProvider;
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/html/HtmlTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/html/HtmlTokenizer;
+	public fun canSpanLines (ILjava/util/List;)Z
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/json/JsonLanguageService : com/aardarch/aardink/languages/internal/BaseLanguageService {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/json/JsonLanguageService;
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/languages/internal/json/JsonTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/json/JsonTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/kotlin/KotlinLanguageService : com/aardarch/aardink/languages/internal/BaseLanguageService {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/kotlin/KotlinLanguageService;
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/languages/internal/kotlin/KotlinTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/kotlin/KotlinTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/markdown/MarkdownTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/markdown/MarkdownTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/toml/TomlLanguageService : com/aardarch/aardink/languages/internal/BaseLanguageService {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/toml/TomlLanguageService;
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/languages/internal/toml/TomlTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/toml/TomlTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/typescript/TypeScriptTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/typescript/TypeScriptTokenizer;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/languages/internal/xml/HtmlLanguageService : com/aardarch/aardink/languages/internal/xml/TagValidator {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/xml/HtmlLanguageService;
+}
+
+public abstract class com/aardarch/aardink/languages/internal/xml/TagValidator : com/aardarch/aardink/languages/internal/BaseLanguageService {
+	public static final field $stable I
+	public fun <init> (ZLjava/lang/String;)V
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/languages/internal/xml/XmlLanguageService : com/aardarch/aardink/languages/internal/xml/TagValidator {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/xml/XmlLanguageService;
+}
+
+public final class com/aardarch/aardink/languages/internal/xml/XmlTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/xml/XmlTokenizer;
+	public fun canSpanLines (ILjava/util/List;)Z
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+

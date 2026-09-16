@@ -7,7 +7,6 @@
 plugin-agp = "9.4.0"
 plugin-kotlin = "2.4.20"
 plugin-spotless = "8.10.2"
-plugin-kotlin-binary-compat = "0.18.2"
 plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
 plugin-roborazzi = "1.74.0" # https://github.com/takahirom/roborazzi/releases
@@ -46,7 +45,6 @@ androidx-compose-runtime-runtime-saveable = { module = "androidx.compose.runtime
 androidx-compose-ui-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-ui-geometry = { module = "androidx.compose.ui:ui-geometry" }
 androidx-compose-ui-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
-androidx-compose-ui-ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts" }
 androidx-compose-ui-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-ui-ui-tooling-data = { module = "androidx.compose.ui:ui-tooling-data" }
 androidx-compose-ui-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
@@ -96,7 +94,6 @@ compose-core = [
     "androidx-compose-ui-ui",
     "androidx-compose-ui-ui-geometry",
     "androidx-compose-ui-ui-graphics",
-    "androidx-compose-ui-ui-text-google-fonts",
     "androidx-compose-ui-ui-tooling-preview",
     "androidx-compose-ui-ui-unit",
     "androidx-compose-ui-ui-util",
@@ -119,7 +116,6 @@ testing-screenshot = [
 
 # Android
 plugin-android-application = { id = "com.android.application", version.ref = "plugin-agp" }
-plugin-android-library = { id = "com.android.library", version.ref = "plugin-agp" }
 
 # Kotlin
 plugin-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "plugin-kotlin" }
@@ -143,5 +139,4 @@ plugin-dokka = { id = "org.jetbrains.dokka", version.ref = "plugin-dokka" }
 plugin-roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "plugin-roborazzi" }
 
 # Publishing
-plugin-kotlin-binary-compat = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "plugin-kotlin-binary-compat" }
 plugin-vanniktech-maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "plugin-vanniktech-maven-publish" }

@@ -1,0 +1,1338 @@
+public final class com/aardarch/aardink/languages/lsp/ChannelLspTransport : com/aardarch/aardink/languages/lsp/LspTransport {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun close ()V
+	public final fun getReceiveChannel ()Lkotlinx/coroutines/channels/Channel;
+	public final fun getSendChannel ()Lkotlinx/coroutines/channels/Channel;
+	public fun receivePayload (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun sendPayload (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspClient {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun addDiagnosticsListener (Lkotlin/jvm/functions/Function3;)V
+	public final fun getTransport ()Lcom/aardarch/aardink/languages/lsp/LspTransport;
+	public final fun initialize (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun initialize$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun removeDiagnosticsListener (Lkotlin/jvm/functions/Function3;)V
+	public final fun sendNotification (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun sendNotification$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun sendRequest (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun sendRequest$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun start ()V
+	public final fun stop ()V
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeAction {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCodeAction$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/Boolean;
+	public final fun component4 ()Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;
+	public final fun component5 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component6 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;)Lcom/aardarch/aardink/languages/lsp/LspCodeAction;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCodeAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCodeAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCommand ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getDiagnostics ()Ljava/util/List;
+	public final fun getDisabled ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getEdit ()Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isPreferred ()Ljava/lang/Boolean;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCodeAction$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCodeAction$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCodeAction;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCodeAction;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeAction$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeActionContext {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext$Companion;
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDiagnostics ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCodeActionContext$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeActionContext$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeActionParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component3 ()Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContext ()Lcom/aardarch/aardink/languages/lsp/LspCodeActionContext;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCodeActionParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCodeActionParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCodeActionParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionEdit {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit$Companion;
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component3 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component4 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;)Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit;Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEffectiveRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getInsert ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getNewText ()Ljava/lang/String;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getReplace ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCompletionEdit$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCompletionEdit;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionEdit$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionItem {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCompletionItem$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/lang/String;Ljava/lang/Integer;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/lang/String;Ljava/lang/Integer;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/Integer;
+	public final fun component7 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/lang/String;Ljava/lang/Integer;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspCompletionItem;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCompletionItem;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/lang/String;Ljava/lang/Integer;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCompletionItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdditionalTextEdits ()Ljava/util/List;
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getDocumentation ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getFilterText ()Ljava/lang/String;
+	public final fun getInsertText ()Ljava/lang/String;
+	public final fun getInsertTextFormat ()Ljava/lang/Integer;
+	public final fun getKind ()Ljava/lang/Integer;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getSortText ()Ljava/lang/String;
+	public final fun getTextEdit ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCompletionItem$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCompletionItem$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCompletionItem;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCompletionItem;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionItem$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionList {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspCompletionList$Companion;
+	public fun <init> ()V
+	public fun <init> (ZLjava/util/List;)V
+	public synthetic fun <init> (ZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (ZLjava/util/List;)Lcom/aardarch/aardink/languages/lsp/LspCompletionList;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspCompletionList;ZLjava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspCompletionList;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getItems ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun isIncomplete ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspCompletionList$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspCompletionList$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspCompletionList;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspCompletionList;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspCompletionList$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDiagnostic {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDiagnostic$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component6 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspDiagnostic;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDiagnostic;Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDiagnostic;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getData ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getSeverity ()Ljava/lang/Integer;
+	public final fun getSource ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDiagnostic$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDiagnostic$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDiagnostic;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDiagnostic;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDiagnostic$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;Ljava/util/List;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;Ljava/util/List;)Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams;Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContentChanges ()Ljava/util/List;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidChangeTextDocumentParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;)Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidCloseTextDocumentParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;)Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDidOpenTextDocumentParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDocumentFormattingParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;)Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOptions ()Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDocumentFormattingParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDocumentFormattingParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDocumentFormattingParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component3 ()Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;)Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOptions ()Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspDocumentRangeFormattingParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspError {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspError$Companion;
+	public fun <init> (ILjava/lang/String;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (ILjava/lang/String;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (ILjava/lang/String;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspError;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspError;ILjava/lang/String;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspError;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()I
+	public final fun getData ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspError$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspError$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspError;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspError;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspError$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspFormattingOptions {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions$Companion;
+	public fun <init> (IZ)V
+	public final fun component1 ()I
+	public final fun component2 ()Z
+	public final fun copy (IZ)Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;IZILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getInsertSpaces ()Z
+	public final fun getTabSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspFormattingOptions$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspFormattingOptions$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspHover {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspHover$Companion;
+	public fun <init> (Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspRange;)V
+	public synthetic fun <init> (Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun copy (Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspRange;)Lcom/aardarch/aardink/languages/lsp/LspHover;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspHover;Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspRange;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspHover;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContents ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspHover$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspHover$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspHover;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspHover;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspHover$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/aardarch/aardink/core/LanguageService {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspLanguageService$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun didChange (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun didClose (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun didOpen (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getClient ()Lcom/aardarch/aardink/languages/lsp/LspClient;
+	public final fun getDocumentUri ()Ljava/lang/String;
+	public final fun getLanguageId ()Ljava/lang/String;
+	public fun getSupportsRename ()Z
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLanguageService$Companion {
+	public final fun renameSupportFrom (Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+	public final fun triggerCharactersFrom (Lkotlinx/serialization/json/JsonElement;)Ljava/util/Set;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLocation {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspLocation$Companion;
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;)Lcom/aardarch/aardink/languages/lsp/LspLocation;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspLocation;Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspLocation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getUri ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspLocation$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspLocation$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspLocation;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspLocation;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLocation$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLocationLink {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspLocationLink$Companion;
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component3 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component4 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;)Lcom/aardarch/aardink/languages/lsp/LspLocationLink;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspLocationLink;Ljava/lang/String;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspRange;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspLocationLink;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOriginSelectionRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getTargetRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getTargetSelectionRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getTargetUri ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspLocationLink$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspLocationLink$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspLocationLink;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspLocationLink;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspLocationLink$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMarkupContent {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspMarkupContent$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspMarkupContent;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspMarkupContent;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspMarkupContent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspMarkupContent$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspMarkupContent$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspMarkupContent;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspMarkupContent;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMarkupContent$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public abstract class com/aardarch/aardink/languages/lsp/LspMessage {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspMessage$Companion;
+	public synthetic fun <init> (ILkotlinx/serialization/internal/SerializationConstructorMarker;)V
+	public static final synthetic fun write$Self (Lcom/aardarch/aardink/languages/lsp/LspMessage;Lkotlinx/serialization/encoding/CompositeEncoder;Lkotlinx/serialization/descriptors/SerialDescriptor;)V
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Notification : com/aardarch/aardink/languages/lsp/LspMessage {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getJsonrpc ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getParams ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspMessage$Notification$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspMessage$Notification;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Notification$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Request : com/aardarch/aardink/languages/lsp/LspMessage {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspMessage$Request$Companion;
+	public fun <init> (Ljava/lang/String;JLjava/lang/String;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (Ljava/lang/String;JLjava/lang/String;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (Ljava/lang/String;JLjava/lang/String;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Request;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspMessage$Request;Ljava/lang/String;JLjava/lang/String;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Request;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()J
+	public final fun getJsonrpc ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getParams ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspMessage$Request$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspMessage$Request$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Request;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspMessage$Request;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Request$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Response : com/aardarch/aardink/languages/lsp/LspMessage {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspMessage$Response$Companion;
+	public fun <init> (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspError;)V
+	public synthetic fun <init> (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspError;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component3 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component4 ()Lcom/aardarch/aardink/languages/lsp/LspError;
+	public final fun copy (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspError;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Response;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspMessage$Response;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;Lcom/aardarch/aardink/languages/lsp/LspError;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Response;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Lcom/aardarch/aardink/languages/lsp/LspError;
+	public final fun getId ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getJsonrpc ()Ljava/lang/String;
+	public final fun getResult ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspMessage$Response$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspMessage$Response$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspMessage$Response;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspMessage$Response;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspMessage$Response$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspParameterInformation {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspParameterInformation$Companion;
+	public fun <init> (Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component2 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspParameterInformation;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspParameterInformation;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspParameterInformation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentation ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getLabel ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspParameterInformation$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspParameterInformation$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspParameterInformation;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspParameterInformation;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspParameterInformation$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspPosition {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspPosition$Companion;
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspPosition;IIILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCharacter ()I
+	public final fun getLine ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspPosition$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspPosition$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspPosition;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspPosition$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/Integer;Ljava/util/List;)Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams;Ljava/lang/String;Ljava/lang/Integer;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDiagnostics ()Ljava/util/List;
+	public final fun getUri ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspPublishDiagnosticsParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRange {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspRange$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspPosition;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspPosition;)Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspRange;Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspPosition;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun getStart ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspRange$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspRange$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspRange;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRange$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspReferenceContext {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspReferenceContext$Companion;
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;ZILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIncludeDeclaration ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspReferenceContext$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspReferenceContext$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspReferenceContext$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspReferenceParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspReferenceParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun component3 ()Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;)Lcom/aardarch/aardink/languages/lsp/LspReferenceParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspReferenceParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspReferenceParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContext ()Lcom/aardarch/aardink/languages/lsp/LspReferenceContext;
+	public final fun getPosition ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspReferenceParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspReferenceParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspReferenceParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspReferenceParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspReferenceParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRenameParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspRenameParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Ljava/lang/String;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspRenameParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspRenameParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspRenameParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNewName ()Ljava/lang/String;
+	public final fun getPosition ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspRenameParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspRenameParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspRenameParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspRenameParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRenameParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRenameSupport : java/lang/Enum {
+	public static final field Rename Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+	public static final field RenameWithPrepare Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+	public static final field Unsupported Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+	public static fun values ()[Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRequestException : java/lang/RuntimeException {
+	public static final field $stable I
+	public static final field CONNECTION_CLOSED I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspRequestException$Companion;
+	public static final field METHOD_NOT_FOUND I
+	public fun <init> (ILjava/lang/String;)V
+	public final fun getCode ()I
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspRequestException$Companion {
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspSignatureHelp {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/util/List;Ljava/lang/Integer;Ljava/lang/Integer;)Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp;Ljava/util/List;Ljava/lang/Integer;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveParameter ()Ljava/lang/Integer;
+	public final fun getActiveSignature ()Ljava/lang/Integer;
+	public final fun getSignatures ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspSignatureHelp$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspSignatureHelp;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspSignatureHelp$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspSignatureInformation {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation$Companion;
+	public fun <init> (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/Integer;)Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Ljava/util/List;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveParameter ()Ljava/lang/Integer;
+	public final fun getDocumentation ()Lkotlinx/serialization/json/JsonElement;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getParameters ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspSignatureInformation$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspSignatureInformation;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspSignatureInformation$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent;Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentContentChangeEvent$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUri ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentItem {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLanguageId ()Ljava/lang/String;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getUri ()Ljava/lang/String;
+	public final fun getVersion ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspTextDocumentItem$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentItem;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentItem$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public final fun component2 ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;Lcom/aardarch/aardink/languages/lsp/LspPosition;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPosition ()Lcom/aardarch/aardink/languages/lsp/LspPosition;
+	public final fun getTextDocument ()Lcom/aardarch/aardink/languages/lsp/LspTextDocumentIdentifier;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextDocumentPositionParams$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextEdit {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspTextEdit$Companion;
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspTextEdit;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspTextEdit;Lcom/aardarch/aardink/languages/lsp/LspRange;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspTextEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNewText ()Ljava/lang/String;
+	public final fun getRange ()Lcom/aardarch/aardink/languages/lsp/LspRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspTextEdit$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspTextEdit$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspTextEdit;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspTextEdit;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspTextEdit$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public abstract interface class com/aardarch/aardink/languages/lsp/LspTransport {
+	public abstract fun close ()V
+	public abstract fun receivePayload (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun sendPayload (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier$Companion;
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;Ljava/lang/String;IILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUri ()Ljava/lang/String;
+	public final fun getVersion ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspVersionedTextDocumentIdentifier$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspWorkspaceEdit {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Map;Lkotlinx/serialization/json/JsonElement;)V
+	public synthetic fun <init> (Ljava/util/Map;Lkotlinx/serialization/json/JsonElement;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Map;
+	public final fun component2 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (Ljava/util/Map;Lkotlinx/serialization/json/JsonElement;)Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Ljava/util/Map;Lkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChanges ()Ljava/util/Map;
+	public final fun getDocumentChanges ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/aardarch/aardink/languages/lsp/LspWorkspaceEdit$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspWorkspaceEdit$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/aardarch/aardink/languages/lsp/StreamLspTransport : com/aardarch/aardink/languages/lsp/LspTransport {
+	public static final field $stable I
+	public fun <init> (Ljava/io/InputStream;Ljava/io/OutputStream;)V
+	public fun close ()V
+	public fun receivePayload (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun sendPayload (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+

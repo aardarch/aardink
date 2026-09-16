@@ -146,6 +146,11 @@ try {
     }
 
     # ── 5. Unit tests ───────────────────────────────────────────────────
+    Invoke-Check 'ABI check' {
+        & $Gradlew 'checkAbiAll' --quiet 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw 'Public ABI differs from the committed dumps - run `gradlew updateAbiAll` and review the diff' }
+    }
+
     # `jvmTest`, not `test`: a KMP module has no aggregate `test` task. The full aggregate is
     # `allTests`, but that also pulls in the browser run, which is gated separately below.
     if (-not $SkipTests) {

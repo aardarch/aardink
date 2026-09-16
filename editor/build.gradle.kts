@@ -1,6 +1,8 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
+import java.net.URI
 
 // Set before the plugins block below applies com.vanniktech.maven.publish, which auto-detects
 // and locks group/version as soon as it sees org.jetbrains.kotlin.multiplatform applied — an
@@ -19,7 +21,7 @@ plugins {
     alias(libs.plugins.plugin.compose.multiplatform)
     alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.kotlin.serialization)
-    id("aardink.dokka-gfm")
+    alias(libs.plugins.plugin.dokka)
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.vanniktech.maven.publish)
     signing
@@ -69,6 +71,41 @@ kotlin {
             }
         }
     }
+
+    // ABI validation (Kotlin 2.4 built-in, replacing the binary-compatibility-validator
+    // plugin that never worked on this repo's Android modules). Dumps live in `api/`;
+    // `checkLegacyAbi` gates CI and `updateLegacyAbi` refreshes them. Every PR through to
+    // 0.5.0 must show a purely additive diff.
+    //
+    // Configured here rather than in a shared convention plugin: buildSrc would need the
+    // Kotlin Gradle Plugin on its classpath for typed access to this extension, and that
+    // makes Gradle reject each module's own versioned
+    // `alias(libs.plugins.plugin.kotlin.multiplatform)` with "already on the classpath with
+    // an unknown version". It is the same collision that keeps AGP off buildSrc (see
+    // the Dokka note below).
+    @OptIn(ExperimentalAbiValidation::class)
+    abiValidation { }
+}
+
+// ── API documentation ─────────────────────────────────────────────────────────
+// Dokka is applied per-module rather than through a buildSrc convention plugin. A
+// precompiled script plugin in buildSrc is loaded by a parent classloader that cannot see
+// plugins resolved through a module's own `plugins {}` block, so Dokka applied from there
+// could not find KotlinBasePlugin, registered no source sets, and generated "Nothing to
+// document" — which is also why every module shipped an empty javadoc jar. Resolving Dokka
+// and the Kotlin plugin through the same root `plugins {}` block is what Dokka's own
+// diagnostic recommends.
+dokka {
+    dokkaSourceSets.configureEach {
+        // Turn resolved external references into hyperlinks.
+        externalDocumentationLinks.register("androidx") {
+            url.set(URI("https://developer.android.com/reference/kotlin/"))
+            packageListUrl.set(URI("https://developer.android.com/reference/kotlin/androidx/package-list"))
+        }
+        externalDocumentationLinks.register("coroutines") {
+            url.set(URI("https://kotlinlang.org/api/kotlinx.coroutines/"))
+        }
+    }
 }
 
 composeCompiler {
@@ -111,12 +148,7 @@ mavenPublishing {
 
     configure(
         KotlinMultiplatform(
-            // TODO(KMP Dokka): aardink.dokka-gfm.gradle.kts still hooks com.android.library,
-            // which this module no longer applies — its dokkaGenerateHtml/dokkaGenerateMarkdown
-            // tasks don't exist yet. Swap back to JavadocJar.Dokka(...) once that convention
-            // plugin is rewritten to hook org.jetbrains.kotlin.multiplatform instead (tracked in
-            // docs/KMP_MIGRATION_PLAN.md section 9.1).
-            javadocJar = JavadocJar.Empty(),
+            javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
             sourcesJar = true,
         ),
     )
@@ -151,7 +183,3 @@ mavenPublishing {
         }
     }
 }
-
-// ── API compatibility tracking ────────────────────────────────────────────────
-// TODO: Wire up Kotlin 2.4's built-in `kotlin.abiValidation` now that this module is
-// multiplatform. See the note in the root build.gradle.kts for context.

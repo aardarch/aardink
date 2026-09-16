@@ -50,6 +50,11 @@ jobs:
       - name: Lint
         run: ./gradlew :sample:lintDebug
 
+      # Fails on any public ABI change not reflected in the committed dumps under
+      # */api/. Every PR through to 0.5.0 must show a purely additive diff.
+      - name: ABI check
+        run: ./gradlew checkAbiAll
+
       - name: JVM unit tests
         run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest
 

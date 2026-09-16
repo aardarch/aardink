@@ -47,7 +47,7 @@ jobs:
       # `lint` task at all. wasmJs browser tests are covered by CI on every PR and need a
       # Chrome install, so a release tag re-runs only the JVM half plus the Android gates.
       - name: Run checks before publish
-        run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest :sample:lintDebug :sample:verifyRoborazziDebug
+        run: ./gradlew checkAbiAll :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest :sample:lintDebug :sample:verifyRoborazziDebug
 
       - name: Publish to Maven Central
         run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
@@ -57,26 +57,22 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
-      - name: Generate API docs (GFM)
-        # Dokka's Android adapter can't read AGP 9's `androidComponents` extension
-        # (classloader mismatch under `android.newDsl=true`); it logs a benign warning
-        # while our convention plugin configures the source set manually. No upstream fix
-        # exists at Dokka 2.2.0 — see Kotlin/dokka#4256 and #4439. Filter the known noise
-        # lines (pipefail keeps a real Gradle failure fatal). Drop this once Dokka ships
-        # AGP 9 support.
-        run: |
-          set -o pipefail
-          ./gradlew dokkaAllGfm 2>&1 | grep -vE \
-            'failed to get extension androidComponents|Please make sure plugins in all subprojects are consistent|^  Applied plugins:|^  Available extensions:'
+      # HTML, not GFM: Dokka 2's Gradle plugin does not support the Markdown/GFM format
+      # (the task reports success but emits zero files), so dokkaAllGfm is gone. The AGP 9
+      # androidComponents noise filter that used to wrap this step is gone too -- the three
+      # modules are multiplatform now, so Dokka's KGP adapter handles them directly and
+      # never touches the Android model.
+      - name: Generate API docs
+        run: ./gradlew dokkaAll
 
       - name: Bundle API docs
         id: docs
         run: |
           staging="$(mktemp -d)"
           mkdir -p "$staging/aardink-docs/editor" "$staging/aardink-docs/languages" "$staging/aardink-docs/languages-lsp"
-          cp -R editor/build/dokka/markdown/. "$staging/aardink-docs/editor/"
-          cp -R languages/build/dokka/markdown/. "$staging/aardink-docs/languages/"
-          cp -R languages-lsp/build/dokka/markdown/. "$staging/aardink-docs/languages-lsp/"
+          cp -R editor/build/dokka/html/. "$staging/aardink-docs/editor/"
+          cp -R languages/build/dokka/html/. "$staging/aardink-docs/languages/"
+          cp -R languages-lsp/build/dokka/html/. "$staging/aardink-docs/languages-lsp/"
           archive="aardink-docs-${GITHUB_REF_NAME}.tgz"
           tar -czf "$archive" -C "$staging" aardink-docs
           echo "archive=$archive" >> "$GITHUB_OUTPUT"

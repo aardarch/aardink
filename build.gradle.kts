@@ -1,33 +1,38 @@
 plugins {
     alias(libs.plugins.plugin.android.application) apply false
-    alias(libs.plugins.plugin.android.library) apply false
     alias(libs.plugins.plugin.kotlin.compose) apply false
     alias(libs.plugins.plugin.kotlin.serialization) apply false
     alias(libs.plugins.plugin.kotlin.multiplatform) apply false
     alias(libs.plugins.plugin.android.kmp.library) apply false
     alias(libs.plugins.plugin.compose.multiplatform) apply false
+    alias(libs.plugins.plugin.dokka) apply false
     alias(libs.plugins.plugin.spotless) apply false
-    alias(libs.plugins.plugin.kotlin.binary.compat) apply false
     alias(libs.plugins.plugin.vanniktech.maven.publish) apply false
     alias(libs.plugins.plugin.roborazzi) apply false
 }
 
+/** The three published Kotlin Multiplatform libraries. */
+val publishedLibraries = listOf(":editor", ":languages", ":languages-lsp")
+
 tasks.register("dokkaAll") {
     group = "documentation"
     description = "Generates Dokka HTML documentation for all published modules."
-    dependsOn(":editor:dokkaGenerateHtml", ":languages:dokkaGenerateHtml", ":languages-lsp:dokkaGenerateHtml")
+    dependsOn(publishedLibraries.map { "$it:dokkaGenerateHtml" })
 }
 
-tasks.register("dokkaAllGfm") {
-    group = "documentation"
-    description = "Generates Dokka GFM (Markdown) documentation for all published modules."
-    dependsOn(":editor:dokkaGenerateMarkdown", ":languages:dokkaGenerateMarkdown", ":languages-lsp:dokkaGenerateMarkdown")
+// `dokkaAllGfm` is gone along with the Markdown format it drove. Dokka 2's Gradle plugin does
+// not support the GFM output format: the gfm-plugin dependency resolves and the task reports
+// success, but it emits zero files (verified at Dokka 2.2.0). release.yml bundles the HTML
+// output instead. See buildSrc/src/main/kotlin/aardink.dokka.gradle.kts.
+
+tasks.register("checkAbiAll") {
+    group = "verification"
+    description = "Checks the public ABI of all published modules against the committed dumps."
+    dependsOn(publishedLibraries.map { "$it:checkKotlinAbi" })
 }
 
-// NOTE: kotlinx.binary-compatibility-validator (BCV 0.18) is currently parked.
-// As of this writing it does not register apiCheck/apiDump tasks on Android
-// library modules under AGP 9 + Kotlin 2.3 — the plugin loads but cannot detect
-// the Android variant's Kotlin source sets. KGP's built-in `kotlin.abiValidation`
-// is multiplatform-only and likewise unavailable on Android-only modules.
-// Re-enable when either BCV adds first-class Android support or the project
-// migrates to KMP. Until then, public API surface changes are reviewed manually.
+tasks.register("updateAbiAll") {
+    group = "verification"
+    description = "Rewrites the committed public ABI dumps for all published modules."
+    dependsOn(publishedLibraries.map { "$it:updateKotlinAbi" })
+}

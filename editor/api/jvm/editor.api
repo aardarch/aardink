@@ -1,0 +1,881 @@
+public final class com/aardarch/aardink/core/CodeAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/aardarch/aardink/core/CodeActionKind;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Z
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;Z)Lcom/aardarch/aardink/core/CodeAction;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/CodeAction;Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZILjava/lang/Object;)Lcom/aardarch/aardink/core/CodeAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEdits ()Ljava/util/List;
+	public final fun getKind ()Lcom/aardarch/aardink/core/CodeActionKind;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isPreferred ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/CodeActionKind : java/lang/Enum {
+	public static final field QuickFix Lcom/aardarch/aardink/core/CodeActionKind;
+	public static final field Refactor Lcom/aardarch/aardink/core/CodeActionKind;
+	public static final field SourceOrganizeImports Lcom/aardarch/aardink/core/CodeActionKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/core/CodeActionKind;
+	public static fun values ()[Lcom/aardarch/aardink/core/CodeActionKind;
+}
+
+public final class com/aardarch/aardink/core/CodeDocument {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun delete (II)V
+	public final fun getDirtyLines ()Lkotlin/ranges/IntRange;
+	public final fun getLength ()I
+	public final fun getLineCount ()I
+	public final fun getText ()Ljava/lang/String;
+	public final fun insert (ILjava/lang/String;)V
+	public final fun lineColToOffset (II)I
+	public final fun lineEnd (I)I
+	public final fun lineStart (I)I
+	public final fun lineText (I)Ljava/lang/String;
+	public final fun offsetToLineCol (I)Lkotlin/Pair;
+	public final fun replaceAll (Ljava/lang/String;)V
+}
+
+public final class com/aardarch/aardink/core/CodeEditorState {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/IncrementalTokenizer;JLkotlinx/coroutines/CoroutineScope;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/IncrementalTokenizer;JLkotlinx/coroutines/CoroutineScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun applyEdit-yZ3qJ5A (IILjava/lang/String;J)V
+	public final fun applyTextEdits (Ljava/util/List;)V
+	public final fun clearNavigation ()V
+	public final fun clearRename ()V
+	public final fun getComputeDispatcher ()Lkotlinx/coroutines/CoroutineDispatcher;
+	public final fun getCursorColumn ()I
+	public final fun getCursorLine ()I
+	public final fun getDocument ()Lcom/aardarch/aardink/core/CodeDocument;
+	public final fun getExternalEditVersion ()I
+	public final fun getHasSelection ()Z
+	public final fun getPendingNavigation ()Lcom/aardarch/aardink/core/CodeEditorState$Navigation;
+	public final fun getPendingRename ()Lcom/aardarch/aardink/core/CodeEditorState$Rename;
+	public final fun getSelection-d9O1mEE ()J
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTextFieldState ()Landroidx/compose/foundation/text/input/TextFieldState;
+	public final fun getTextVersion ()I
+	public final fun getTokenCache ()Lcom/aardarch/aardink/core/TokenCache;
+	public final fun getTokenVersion ()I
+	public final fun getTokenizeDebounceMs ()J
+	public final fun getTokenizer ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
+	public final fun getUndoManager ()Lcom/aardarch/aardink/core/EditorUndoManager;
+	public final fun loadText (Ljava/lang/String;)V
+	public final fun navigateTo-psREZIo (ILandroidx/compose/ui/text/TextRange;)V
+	public static synthetic fun navigateTo-psREZIo$default (Lcom/aardarch/aardink/core/CodeEditorState;ILandroidx/compose/ui/text/TextRange;ILjava/lang/Object;)V
+	public final fun redo ()Ljava/lang/String;
+	public final fun requestRename (I)V
+	public static synthetic fun requestRename$default (Lcom/aardarch/aardink/core/CodeEditorState;IILjava/lang/Object;)V
+	public final fun scheduleTokenization ()V
+	public final fun setComputeDispatcher (Lkotlinx/coroutines/CoroutineDispatcher;)V
+	public final fun undo ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/CodeEditorState$Navigation {
+	public static final field $stable I
+	public synthetic fun <init> (ILandroidx/compose/ui/text/TextRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ILandroidx/compose/ui/text/TextRange;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2-MzsxiRA ()Landroidx/compose/ui/text/TextRange;
+	public final fun copy-psREZIo (ILandroidx/compose/ui/text/TextRange;)Lcom/aardarch/aardink/core/CodeEditorState$Navigation;
+	public static synthetic fun copy-psREZIo$default (Lcom/aardarch/aardink/core/CodeEditorState$Navigation;ILandroidx/compose/ui/text/TextRange;ILjava/lang/Object;)Lcom/aardarch/aardink/core/CodeEditorState$Navigation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSelect-MzsxiRA ()Landroidx/compose/ui/text/TextRange;
+	public final fun getTargetOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/CodeEditorState$Rename {
+	public static final field $stable I
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Lcom/aardarch/aardink/core/CodeEditorState$Rename;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/CodeEditorState$Rename;IILjava/lang/Object;)Lcom/aardarch/aardink/core/CodeEditorState$Rename;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/CodeEditorStateKt {
+	public static final fun rememberCodeEditorState (Ljava/lang/String;Lcom/aardarch/aardink/core/IncrementalTokenizer;JLandroidx/compose/runtime/Composer;II)Lcom/aardarch/aardink/core/CodeEditorState;
+}
+
+public final class com/aardarch/aardink/core/CompletionItem {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CompletionKind;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/ranges/IntRange;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CompletionKind;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/ranges/IntRange;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/aardarch/aardink/core/CompletionKind;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()I
+	public final fun component7 ()Lkotlin/ranges/IntRange;
+	public final fun component8 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/core/CompletionKind;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/ranges/IntRange;Ljava/util/List;)Lcom/aardarch/aardink/core/CompletionItem;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/CompletionItem;Ljava/lang/String;Lcom/aardarch/aardink/core/CompletionKind;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/ranges/IntRange;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/core/CompletionItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdditionalEdits ()Ljava/util/List;
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getFilterText ()Ljava/lang/String;
+	public final fun getInsertText ()Ljava/lang/String;
+	public final fun getKind ()Lcom/aardarch/aardink/core/CompletionKind;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getReplaceRange ()Lkotlin/ranges/IntRange;
+	public final fun getSortPriority ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/CompletionKind : java/lang/Enum {
+	public static final field Attribute Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field ColorRef Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Element Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Module Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Property Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Snippet Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Transform Lcom/aardarch/aardink/core/CompletionKind;
+	public static final field Value Lcom/aardarch/aardink/core/CompletionKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/core/CompletionKind;
+	public static fun values ()[Lcom/aardarch/aardink/core/CompletionKind;
+}
+
+public final class com/aardarch/aardink/core/Diagnostic {
+	public static final field $stable I
+	public fun <init> (Lkotlin/ranges/IntRange;ILjava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Ljava/lang/String;)V
+	public synthetic fun <init> (Lkotlin/ranges/IntRange;ILjava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlin/ranges/IntRange;
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Lkotlin/ranges/IntRange;ILjava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Ljava/lang/String;)Lcom/aardarch/aardink/core/Diagnostic;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/Diagnostic;Lkotlin/ranges/IntRange;ILjava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/Diagnostic;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLineNumber ()I
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getRange ()Lkotlin/ranges/IntRange;
+	public final fun getSeverity ()Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public final fun getSource ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/DiagnosticSeverity : java/lang/Enum {
+	public static final field Error Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public static final field Info Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public static final field Warning Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/core/DiagnosticSeverity;
+	public static fun values ()[Lcom/aardarch/aardink/core/DiagnosticSeverity;
+}
+
+public abstract interface class com/aardarch/aardink/core/DiffProvider {
+	public abstract fun diff (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/EditorTheme {
+	public static final field $stable I
+	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-0d7_KjU ()J
+	public final fun component10-0d7_KjU ()J
+	public final fun component11-0d7_KjU ()J
+	public final fun component12 ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun component13-XSAIIZE ()J
+	public final fun component14-XSAIIZE ()J
+	public final fun component2-0d7_KjU ()J
+	public final fun component3-0d7_KjU ()J
+	public final fun component4-0d7_KjU ()J
+	public final fun component5-0d7_KjU ()J
+	public final fun component6-0d7_KjU ()J
+	public final fun component7-0d7_KjU ()J
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9-0d7_KjU ()J
+	public final fun copy-_0bBojw (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJ)Lcom/aardarch/aardink/core/EditorTheme;
+	public static synthetic fun copy-_0bBojw$default (Lcom/aardarch/aardink/core/EditorTheme;JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorTheme;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBackground-0d7_KjU ()J
+	public final fun getCursorColor-0d7_KjU ()J
+	public final fun getErrorColor-0d7_KjU ()J
+	public final fun getFindMatchColor-0d7_KjU ()J
+	public final fun getFontFamily ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun getFontSize-XSAIIZE ()J
+	public final fun getGutterBackground-0d7_KjU ()J
+	public final fun getGutterForeground-0d7_KjU ()J
+	public final fun getInfoColor-0d7_KjU ()J
+	public final fun getLineHeight-XSAIIZE ()J
+	public final fun getLineHighlight-0d7_KjU ()J
+	public final fun getSelectionColor-0d7_KjU ()J
+	public final fun getTokenColors ()Ljava/util/Map;
+	public final fun getWarningColor-0d7_KjU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorUndoManager {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun clear ()V
+	public final fun flushPendingInsert ()V
+	public final fun getCanRedo ()Z
+	public final fun getCanUndo ()Z
+	public final fun inverseOf (Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation;
+	public final fun recordBatch (Ljava/util/List;)V
+	public final fun recordDelete (IILjava/lang/String;)V
+	public final fun recordInsert (ILjava/lang/String;)V
+	public final fun redo ()Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation;
+	public final fun undo ()Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation;
+}
+
+public abstract class com/aardarch/aardink/core/EditorUndoManager$EditOperation {
+	public static final field $stable I
+}
+
+public final class com/aardarch/aardink/core/EditorUndoManager$EditOperation$Batch : com/aardarch/aardink/core/EditorUndoManager$EditOperation {
+	public static final field $stable I
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Batch;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Batch;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Batch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOperations ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorUndoManager$EditOperation$Delete : com/aardarch/aardink/core/EditorUndoManager$EditOperation {
+	public static final field $stable I
+	public fun <init> (IILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (IILjava/lang/String;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Delete;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Delete;IILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Delete;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeletedText ()Ljava/lang/String;
+	public final fun getLength ()I
+	public final fun getOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorUndoManager$EditOperation$Insert : com/aardarch/aardink/core/EditorUndoManager$EditOperation {
+	public static final field $stable I
+	public fun <init> (ILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Insert;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Insert;ILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorUndoManager$EditOperation$Insert;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOffset ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/FindEngine {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/FindEngine;
+	public final fun findAll (Ljava/lang/String;Ljava/lang/String;Lcom/aardarch/aardink/core/FindEngine$Options;)Ljava/util/List;
+	public static synthetic fun findAll$default (Lcom/aardarch/aardink/core/FindEngine;Ljava/lang/String;Ljava/lang/String;Lcom/aardarch/aardink/core/FindEngine$Options;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/FindEngine$Options {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZZZ)V
+	public synthetic fun <init> (ZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun copy (ZZZ)Lcom/aardarch/aardink/core/FindEngine$Options;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/FindEngine$Options;ZZZILjava/lang/Object;)Lcom/aardarch/aardink/core/FindEngine$Options;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCaseSensitive ()Z
+	public final fun getUseRegex ()Z
+	public final fun getWholeWord ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/FindReplaceState {
+	public static final field $stable I
+	public fun <init> ()V
+	public final fun getCaseSensitive ()Z
+	public final fun getCurrentMatchIndex ()I
+	public final fun getMatches ()Ljava/util/List;
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getUseRegex ()Z
+	public final fun getVisible ()Z
+	public final fun getWholeWord ()Z
+	public final fun hide ()V
+	public final fun nextMatch ()Lkotlin/ranges/IntRange;
+	public final fun prevMatch ()Lkotlin/ranges/IntRange;
+	public final fun setCaseSensitive (Z)V
+	public final fun setQuery (Ljava/lang/String;)V
+	public final fun setReplacement (Ljava/lang/String;)V
+	public final fun setUseRegex (Z)V
+	public final fun setVisible (Z)V
+	public final fun setWholeWord (Z)V
+	public final fun show ()V
+	public final fun toOptions ()Lcom/aardarch/aardink/core/FindEngine$Options;
+}
+
+public final class com/aardarch/aardink/core/FoldRange {
+	public static final field $stable I
+	public fun <init> (IILjava/lang/String;)V
+	public synthetic fun <init> (IILjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (IILjava/lang/String;)Lcom/aardarch/aardink/core/FoldRange;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/FoldRange;IILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/FoldRange;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndLine ()I
+	public final fun getLineCount ()I
+	public final fun getPlaceholder ()Ljava/lang/String;
+	public final fun getStartLine ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/FoldState {
+	public static final field $stable I
+	public fun <init> ()V
+	public final fun foldAll ()V
+	public final fun foldedRanges ()Ljava/util/List;
+	public final fun getFoldableRanges ()Ljava/util/List;
+	public final fun getFoldedCount ()I
+	public final fun isFoldable (I)Z
+	public final fun isFolded (I)Z
+	public final fun rangeAt (I)Lcom/aardarch/aardink/core/FoldRange;
+	public final fun toggle (I)V
+	public final fun unfoldAll ()V
+	public final fun updateFoldableRanges (Ljava/util/List;)V
+}
+
+public abstract interface class com/aardarch/aardink/core/FoldingProvider {
+	public abstract fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/FoldingProviderKt {
+	public static final fun getNoOpFoldingProvider ()Lcom/aardarch/aardink/core/FoldingProvider;
+}
+
+public final class com/aardarch/aardink/core/HoverDoc {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lkotlin/ranges/IntRange;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;)Lcom/aardarch/aardink/core/HoverDoc;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/HoverDoc;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;ILjava/lang/Object;)Lcom/aardarch/aardink/core/HoverDoc;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getExample ()Ljava/lang/String;
+	public final fun getRange ()Lkotlin/ranges/IntRange;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/aardarch/aardink/core/IncrementalTokenizer {
+	public abstract fun canSpanLines (ILjava/util/List;)Z
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public abstract fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public abstract fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/IncrementalTokenizer$DefaultImpls {
+	public static fun keyboardToolbarChars (Lcom/aardarch/aardink/core/IncrementalTokenizer;)Ljava/util/List;
+}
+
+public abstract interface class com/aardarch/aardink/core/LanguageService {
+	public abstract fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getSupportsRename ()Z
+	public fun getTriggerCharacters ()Ljava/util/Set;
+	public abstract fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+}
+
+public final class com/aardarch/aardink/core/LanguageService$DefaultImpls {
+	public static fun codeActions (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun definition (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun formatRange (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getSupportsRename (Lcom/aardarch/aardink/core/LanguageService;)Z
+	public static fun getTriggerCharacters (Lcom/aardarch/aardink/core/LanguageService;)Ljava/util/Set;
+	public static fun prepareRename (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun references (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun rename (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun signatureHelp (Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/aardarch/aardink/core/LineDiff {
+	public static final field $stable I
+	public fun <init> (ILcom/aardarch/aardink/core/LineDiffKind;)V
+	public final fun component1 ()I
+	public final fun component2 ()Lcom/aardarch/aardink/core/LineDiffKind;
+	public final fun copy (ILcom/aardarch/aardink/core/LineDiffKind;)Lcom/aardarch/aardink/core/LineDiff;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/LineDiff;ILcom/aardarch/aardink/core/LineDiffKind;ILjava/lang/Object;)Lcom/aardarch/aardink/core/LineDiff;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKind ()Lcom/aardarch/aardink/core/LineDiffKind;
+	public final fun getLineIndex ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/LineDiffKind : java/lang/Enum {
+	public static final field Added Lcom/aardarch/aardink/core/LineDiffKind;
+	public static final field Modified Lcom/aardarch/aardink/core/LineDiffKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/core/LineDiffKind;
+	public static fun values ()[Lcom/aardarch/aardink/core/LineDiffKind;
+}
+
+public final class com/aardarch/aardink/core/Location {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lkotlin/ranges/IntRange;
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/lang/Integer;Ljava/lang/Integer;)Lcom/aardarch/aardink/core/Location;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/Location;Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/lang/Integer;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/aardarch/aardink/core/Location;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumn ()Ljava/lang/Integer;
+	public final fun getLine ()Ljava/lang/Integer;
+	public final fun getRange ()Lkotlin/ranges/IntRange;
+	public final fun getUri ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/ParameterInformation {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lkotlin/ranges/IntRange;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;)Lcom/aardarch/aardink/core/ParameterInformation;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/ParameterInformation;Ljava/lang/String;Ljava/lang/String;Lkotlin/ranges/IntRange;ILjava/lang/Object;)Lcom/aardarch/aardink/core/ParameterInformation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getLabelRange ()Lkotlin/ranges/IntRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/PlainTextTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/PlainTextTokenizer;
+	public fun canSpanLines (ILjava/util/List;)Z
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/SignatureHelp {
+	public static final field $stable I
+	public fun <init> (Ljava/util/List;II)V
+	public synthetic fun <init> (Ljava/util/List;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/util/List;II)Lcom/aardarch/aardink/core/SignatureHelp;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/SignatureHelp;Ljava/util/List;IIILjava/lang/Object;)Lcom/aardarch/aardink/core/SignatureHelp;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveParameter ()I
+	public final fun getActiveSignature ()I
+	public final fun getSignatures ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/SignatureInformation {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/aardarch/aardink/core/SignatureInformation;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/SignatureInformation;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/core/SignatureInformation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getParameters ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/SimpleDiffProvider : com/aardarch/aardink/core/DiffProvider {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/SimpleDiffProvider;
+	public fun diff (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class com/aardarch/aardink/core/TextEdit {
+	public static final field $stable I
+	public fun <init> (Lkotlin/ranges/IntRange;Ljava/lang/String;)V
+	public final fun component1 ()Lkotlin/ranges/IntRange;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lkotlin/ranges/IntRange;Ljava/lang/String;)Lcom/aardarch/aardink/core/TextEdit;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/TextEdit;Lkotlin/ranges/IntRange;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/TextEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNewText ()Ljava/lang/String;
+	public final fun getRange ()Lkotlin/ranges/IntRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/Token {
+	public static final field $stable I
+	public fun <init> (IILcom/aardarch/aardink/core/TokenType;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Lcom/aardarch/aardink/core/TokenType;
+	public final fun copy (IILcom/aardarch/aardink/core/TokenType;)Lcom/aardarch/aardink/core/Token;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/Token;IILcom/aardarch/aardink/core/TokenType;ILjava/lang/Object;)Lcom/aardarch/aardink/core/Token;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getLength ()I
+	public final fun getStart ()I
+	public final fun getType ()Lcom/aardarch/aardink/core/TokenType;
+	public fun hashCode ()I
+	public final fun isEmpty ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenCache {
+	public static final field $stable I
+	public fun <init> ()V
+	public final fun clear ()V
+	public final fun getTokens ()Ljava/util/List;
+	public final fun merge (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Ljava/util/List;)V
+	public final fun pruneLines (I)V
+	public final fun reset (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;)V
+	public final fun tokensForLine (I)Ljava/util/List;
+}
+
+public abstract interface class com/aardarch/aardink/core/TokenType {
+}
+
+public final class com/aardarch/aardink/core/TokenType$Annotation : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Annotation;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Comment : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Comment;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Default : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Default;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$FunctionCall : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$FunctionCall;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Identifier : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Identifier;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Invalid : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Invalid;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Keyword : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Keyword;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Number : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Number;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Operator : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Operator;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$Punctuation : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$Punctuation;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$StringLiteral : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$StringLiteral;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/TokenType$TypeName : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/TokenType$TypeName;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/platform/EditorDispatchers {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/platform/EditorDispatchers;
+	public final fun getCompute ()Lkotlinx/coroutines/CoroutineDispatcher;
+	public final fun getComputeIsMainThread ()Z
+	public final fun getIo ()Lkotlinx/coroutines/CoroutineDispatcher;
+}
+
+public final class com/aardarch/aardink/ui/AnnotationTooltipKt {
+	public static final fun AnnotationTooltip (Ljava/lang/String;Lcom/aardarch/aardink/core/DiagnosticSeverity;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/CodeActionMenuKt {
+	public static final fun CodeActionMenu (Ljava/util/List;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/CodeEditorLayoutKt {
+	public static final fun CodeEditorLayout (Lcom/aardarch/aardink/core/CodeEditorState;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/FindReplaceState;Lcom/aardarch/aardink/core/FoldState;Lcom/aardarch/aardink/core/FoldingProvider;Ljava/util/List;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ZLcom/aardarch/aardink/ui/KeyboardToolbarStyle;Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;ZZZZZZLandroidx/compose/runtime/Composer;III)V
+}
+
+public final class com/aardarch/aardink/ui/CompletionDropdownKt {
+	public static final fun CompletionDropdown (Ljava/util/List;ZLkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/ComposableSingletons$AnnotationTooltipKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$AnnotationTooltipKt;
+	public fun <init> ()V
+	public final fun getLambda$-2037439873$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt;
+	public fun <init> ()V
+	public final fun getLambda$-1088215910$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1194525862$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1971954223$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1988451003$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-750560481$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-977784956$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1735550802$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1758297251$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1840380520$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$65438541$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class com/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt;
+	public fun <init> ()V
+	public final fun getLambda$-2026463061$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-278813530$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1287653564$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1443189156$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class com/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt;
+	public fun <init> ()V
+	public final fun getLambda$-1863149251$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-5658142$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1568893708$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$326984996$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
+	public static final fun EditorAttributionBadge (Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/EditorGutterKt {
+	public static final fun EditorGutter-ip_dT8w (ILandroidx/compose/foundation/ScrollState;FFJJLandroidx/compose/ui/Modifier;Ljava/util/Map;Ljava/util/Set;Ljava/util/List;Lkotlin/jvm/functions/Function1;Ljava/util/Map;Lkotlin/jvm/functions/Function1;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
+}
+
+public final class com/aardarch/aardink/ui/EditorThemeParser {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorThemeParser;
+	public final fun fromJson (Ljava/lang/String;)Lcom/aardarch/aardink/core/EditorTheme;
+}
+
+public final class com/aardarch/aardink/ui/EditorThemes {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorThemes;
+	public final fun getMaterialDark ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getMaterialLight ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getMidnightOcean ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getSolarizedDark ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getVsCodeDark ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getVsCodeLight ()Lcom/aardarch/aardink/core/EditorTheme;
+}
+
+public final class com/aardarch/aardink/ui/FindReplacePanelKt {
+	public static final fun FindReplacePanel (Lcom/aardarch/aardink/core/FindReplaceState;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/FoldingTransformKt {
+	public static final fun applyFolding (Landroidx/compose/ui/text/AnnotatedString;Ljava/util/List;Lcom/aardarch/aardink/core/CodeDocument;Landroidx/compose/ui/text/SpanStyle;)Landroidx/compose/ui/text/input/TransformedText;
+}
+
+public final class com/aardarch/aardink/ui/GoToLineDialogKt {
+	public static final fun GoToLineDialog (ILkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V
+}
+
+public final class com/aardarch/aardink/ui/GutterAnnotationKind : java/lang/Enum {
+	public static final field Error Lcom/aardarch/aardink/ui/GutterAnnotationKind;
+	public static final field Info Lcom/aardarch/aardink/ui/GutterAnnotationKind;
+	public static final field Warning Lcom/aardarch/aardink/ui/GutterAnnotationKind;
+	public final fun getColor-0d7_KjU ()J
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/GutterAnnotationKind;
+	public static fun values ()[Lcom/aardarch/aardink/ui/GutterAnnotationKind;
+}
+
+public final class com/aardarch/aardink/ui/HoverDocPopupKt {
+	public static final fun HoverDocPopup (Lcom/aardarch/aardink/core/HoverDoc;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/KeyboardToolbarDefaults {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/KeyboardToolbarDefaults;
+	public final fun style-42JA0iM (JJJJFLandroidx/compose/ui/graphics/Shape;FFFFLandroidx/compose/foundation/layout/PaddingValues;Landroidx/compose/ui/text/font/FontFamily;JLandroidx/compose/runtime/Composer;III)Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;
+}
+
+public final class com/aardarch/aardink/ui/KeyboardToolbarPlacement : java/lang/Enum {
+	public static final field BottomFixed Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static final field BottomHover Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static final field Hidden Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static final field Top Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+	public static fun values ()[Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;
+}
+
+public final class com/aardarch/aardink/ui/KeyboardToolbarRowKt {
+	public static final fun KeyboardToolbarRow (Ljava/util/List;ZZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;ZLandroidx/compose/runtime/Composer;III)V
+}
+
+public final class com/aardarch/aardink/ui/KeyboardToolbarStyle {
+	public static final field $stable I
+	public synthetic fun <init> (JJJJFLandroidx/compose/ui/graphics/Shape;FFFFLandroidx/compose/foundation/layout/PaddingValues;Landroidx/compose/ui/text/font/FontFamily;JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-0d7_KjU ()J
+	public final fun component10-D9Ej5fM ()F
+	public final fun component11 ()Landroidx/compose/foundation/layout/PaddingValues;
+	public final fun component12 ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun component13-XSAIIZE ()J
+	public final fun component2-0d7_KjU ()J
+	public final fun component3-0d7_KjU ()J
+	public final fun component4-0d7_KjU ()J
+	public final fun component5 ()F
+	public final fun component6 ()Landroidx/compose/ui/graphics/Shape;
+	public final fun component7-D9Ej5fM ()F
+	public final fun component8-D9Ej5fM ()F
+	public final fun component9-D9Ej5fM ()F
+	public final fun copy-L4O8zJc (JJJJFLandroidx/compose/ui/graphics/Shape;FFFFLandroidx/compose/foundation/layout/PaddingValues;Landroidx/compose/ui/text/font/FontFamily;J)Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;
+	public static synthetic fun copy-L4O8zJc$default (Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;JJJJFLandroidx/compose/ui/graphics/Shape;FFFFLandroidx/compose/foundation/layout/PaddingValues;Landroidx/compose/ui/text/font/FontFamily;JILjava/lang/Object;)Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccentColor-0d7_KjU ()J
+	public final fun getBackground-0d7_KjU ()J
+	public final fun getButtonShape ()Landroidx/compose/ui/graphics/Shape;
+	public final fun getButtonSize-D9Ej5fM ()F
+	public final fun getCharColor-0d7_KjU ()J
+	public final fun getCharFontFamily ()Landroidx/compose/ui/text/font/FontFamily;
+	public final fun getCharFontSize-XSAIIZE ()J
+	public final fun getContentPadding ()Landroidx/compose/foundation/layout/PaddingValues;
+	public final fun getDisabledAlpha ()F
+	public final fun getIconColor-0d7_KjU ()J
+	public final fun getIconSize-D9Ej5fM ()F
+	public final fun getItemSpacing-D9Ej5fM ()F
+	public final fun getSectionSpacing-D9Ej5fM ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/LocalEditorThemeKt {
+	public static final fun getLocalEditorTheme ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public final class com/aardarch/aardink/ui/RenameDialogKt {
+	public static final fun RenameDialog (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V
+}
+
+public final class com/aardarch/aardink/ui/SignatureHelpPopupKt {
+	public static final fun SignatureHelpPopup (Lcom/aardarch/aardink/core/SignatureHelp;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/SquiggleUnderlineKt {
+	public static final fun drawSquiggles-15-ZiRo (Landroidx/compose/ui/graphics/drawscope/DrawScope;Ljava/util/List;Landroidx/compose/ui/text/TextLayoutResult;JJJ)V
+}
+
+public final class com/aardarch/aardink/ui/TokenAnnotatorKt {
+	public static final fun annotateTokens (Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/EditorTheme;)Landroidx/compose/ui/text/AnnotatedString;
+}
+
