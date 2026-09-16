@@ -174,8 +174,12 @@ class CodeEditorState(
     fun loadText(newText: String) {
         document.replaceAll(newText)
         undoManager.clear()
-        textFieldState.undoState.clearHistory()
         syncFieldToDocument(TextRange(0))
+        // After the sync, not before: syncFieldToDocument edits the field, and that edit pushes
+        // its own entry onto the field's undo stack. Clearing first left the freshly loaded
+        // document undoable back to the previous one, so a platform-level undo gesture could
+        // resurrect text the document no longer has.
+        textFieldState.undoState.clearHistory()
         textVersion++
         scheduleTokenization()
     }

@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.text.TextRange
@@ -20,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -178,5 +181,81 @@ class CodeEditorStateTest {
 
         state.requestRename(999)
         assertEquals(CodeEditorState.Rename(13), state.pendingRename)
+    }
+
+    // ---- textFieldState mirroring -------------------------------------------------------
+    //
+    // CodeDocument stays the canonical text and undo model; textFieldState is what the
+    // BasicTextField renders and receives IME input into. If the two drift, the editor shows
+    // something other than what it will save. PR 1 introduced the field and asserted nothing
+    // about it -- no test in the module so much as mentioned textFieldState.
+
+    @Test
+    fun `textFieldState tracks the document through applyEdit`() {
+        val state = testState("hello")
+        state.applyEdit(5, 0, " world", TextRange(11))
+
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+        assertEquals("hello world", state.textFieldState.text.toString())
+    }
+
+    @Test
+    fun `textFieldState tracks the document through applyTextEdits`() {
+        val state = testState("foo bar baz")
+        state.applyTextEdits(
+            listOf(
+                TextEdit(range = 0..2, newText = "FOO"),
+                TextEdit(range = 8..10, newText = "BAZ"),
+            ),
+        )
+
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+    }
+
+    @Test
+    fun `textFieldState tracks the document through undo and redo`() {
+        val state = testState("hello")
+        state.applyEdit(5, 0, " world", TextRange(11))
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+
+        state.undo()
+        assertEquals("hello", state.document.text)
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+
+        state.redo()
+        assertEquals("hello world", state.document.text)
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+    }
+
+    @Test
+    fun `textFieldState tracks the document through loadText`() {
+        val state = testState("old content")
+        state.loadText("entirely new content")
+
+        assertEquals("entirely new content", state.document.text)
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+    }
+
+    @Test
+    fun `loadText clears the field's own undo history`() {
+        // Ctrl+Z is intercepted and routed through EditorUndoManager, so the field's built-in
+        // stack is never used -- but if loadText left it populated, a platform-level undo
+        // gesture could resurrect text from a previously loaded document.
+        val state = testState("first document")
+        state.applyEdit(5, 0, "X", TextRange(6))
+        state.loadText("second document")
+
+        assertFalse(
+            state.textFieldState.undoState.canUndo,
+            "loadText must clear the field's undo history",
+        )
+    }
+
+    @Test
+    fun `selection reads through to the field`() {
+        val state = testState("hello world")
+        state.applyTextEdits(listOf(TextEdit(range = 0..4, newText = "HELLO")))
+
+        assertEquals(state.textFieldState.selection, state.selection)
     }
 }
