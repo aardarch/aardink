@@ -24,6 +24,12 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # Karma launches headless Chrome for the wasmJs browser tests below and finds the
+      # binary through CHROME_BIN.
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
         with:
@@ -36,14 +42,27 @@ jobs:
       - name: Spotless check
         run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck
 
+      # Only :sample runs Android Lint. The three libraries are now
+      # com.android.kotlin.multiplatform.library modules, and that plugin registers no `lint`
+      # task at all (verified with `./gradlew :editor:tasks --all`) — the previous
+      # `:editor:lint :languages:lint :languages-lsp:lint` line is why this workflow has been
+      # failing since PR 3. Revisit if AGP adds lint support for KMP library modules.
       - name: Lint
-        run: ./gradlew :editor:lint :languages:lint :languages-lsp:lint :sample:lintDebug
+        run: ./gradlew :sample:lintDebug
 
-      - name: Unit tests
-        run: ./gradlew :editor:test :languages:test :languages-lsp:test
+      - name: JVM unit tests
+        run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest
 
-      - name: Build sample app (debug + release)
-        run: ./gradlew :sample:assembleDebug :sample:assembleRelease
+      - name: wasmJs browser tests
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: ./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest
+
+      # verifyRoborazziDebug, not testDebugUnitTest: the plain test task re-renders the
+      # screenshots but compares them against nothing. verifyRoborazziDebug runs the same
+      # tests in compare mode against the committed baselines under screenshots/.
+      - name: Build sample app (debug + release) and verify screenshots
+        run: ./gradlew :sample:assembleDebug :sample:assembleRelease :sample:verifyRoborazziDebug
 
       - name: Upload sample APKs
         uses: actions/upload-artifact@v7
@@ -63,14 +82,20 @@ jobs:
             editor/build/reports/tests/
             languages/build/reports/tests/
             languages-lsp/build/reports/tests/
+            sample/build/reports/tests/
+
+      # Roborazzi writes the actual-vs-expected comparison images here when a screenshot
+      # test fails; without them a red build says only that pixels moved, not how.
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-diffs
+          path: sample/build/outputs/roborazzi/
 
       - name: Upload lint results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: lint-results
-          path: |
-            editor/build/reports/lint-results-*.html
-            languages/build/reports/lint-results-*.html
-            languages-lsp/build/reports/lint-results-*.html
-            sample/build/reports/lint-results-*.html
+          path: sample/build/reports/lint-results-*.html

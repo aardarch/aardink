@@ -51,7 +51,24 @@ import java.io.File
 class SampleScreenshotTest {
 
     companion object {
-        private const val OUTPUT_DIR = "build/outputs/screenshots"
+        /**
+         * The committed baselines under the repo's `screenshots/` folder, relative to this
+         * module's directory (Gradle runs unit tests with the project dir as working dir).
+         *
+         * Deliberately NOT under `build/`: `verifyRoborazziDebug` compares what it renders
+         * against whatever is already at these paths, so baselines kept in the build directory
+         * are wiped by every clean checkout and the comparison silently has nothing to compare
+         * against. Pointing at the tracked folder is what makes the screenshot check a real
+         * regression gate in CI rather than a re-render that always agrees with itself.
+         */
+        private const val OUTPUT_DIR = "../screenshots"
+
+        /**
+         * True while `recordRoborazziDebug` is running, false for `verifyRoborazziDebug`.
+         * Roborazzi sets this system property from the Gradle task.
+         */
+        private val isRecording: Boolean
+            get() = System.getProperty("roborazzi.test.record")?.toBoolean() == true
 
         /** Page id `null` renders the start screen; every other id renders that sample's editor. */
         private val pageIds: List<String?> = listOf(null) + LanguageRegistry.withBuiltIns().all.map { it.id }
@@ -91,8 +108,13 @@ class SampleScreenshotTest {
      * the same pattern aardflex's PromoScreenshotTest uses to cycle wallpaper pages.
      */
     private fun captureTheme(themeChoice: SampleThemeChoice) {
-        File(OUTPUT_DIR).listFiles { f -> f.name.startsWith("${themeChoice.id}-") }
-            ?.forEach { it.delete() }
+        // Clear this theme's stale PNGs so a removed sample page does not leave an orphan
+        // behind. Record mode only: OUTPUT_DIR now holds the committed baselines, and doing
+        // this while verifying would delete the very files being compared against.
+        if (isRecording) {
+            File(OUTPUT_DIR).listFiles { f -> f.name.startsWith("${themeChoice.id}-") }
+                ?.forEach { it.delete() }
+        }
 
         var selectedId by mutableStateOf<String?>(null)
 

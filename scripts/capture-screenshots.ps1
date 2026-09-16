@@ -6,17 +6,13 @@
 
 .DESCRIPTION
     Runs the Roborazzi/Robolectric screenshot test (SampleScreenshotTest) via Gradle, which
-    renders each page to PNG on the JVM (no device or emulator needed), then copies the
-    results into the repo's screenshots/ folder.
+    renders each page to PNG on the JVM (no device or emulator needed) directly into the
+    repo's screenshots/ folder - the same baselines :sample:verifyRoborazziDebug compares
+    against in CI. Review the resulting git diff before committing.
 
 .EXAMPLE
     .\scripts\capture-screenshots.ps1
-    .\scripts\capture-screenshots.ps1 -KeepExisting
 #>
-param(
-    [switch]$KeepExisting
-)
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -30,7 +26,6 @@ if (-not (Test-Path $Gradlew)) {
     exit 1
 }
 
-$BuildOutput = Join-Path $ProjectRoot 'sample\build\outputs\screenshots'
 $DestDir = Join-Path $ProjectRoot 'screenshots'
 
 Push-Location $ProjectRoot
@@ -39,19 +34,13 @@ try {
     & $Gradlew ':sample:recordRoborazziDebug' --tests '*.SampleScreenshotTest' --no-daemon --rerun-tasks
     if ($LASTEXITCODE -ne 0) { throw "Gradle build failed with exit code $LASTEXITCODE" }
 
-    $built = @(Get-ChildItem "$BuildOutput\*.png" -ErrorAction SilentlyContinue)
-    if ($built.Count -eq 0) {
-        throw "No screenshots generated at $BuildOutput"
+    # SampleScreenshotTest writes straight into $DestDir, and clears each theme's stale PNGs
+    # itself when recording, so there is nothing to copy or pre-delete here.
+    $files = @(Get-ChildItem "$DestDir\*.png" -ErrorAction SilentlyContinue | Sort-Object Name)
+    if ($files.Count -eq 0) {
+        throw "No screenshots generated at $DestDir"
     }
 
-    Write-Step "Copying screenshots to $DestDir"
-    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
-    if (-not $KeepExisting) {
-        Get-ChildItem "$DestDir\*.png" -ErrorAction SilentlyContinue | Remove-Item -Force
-    }
-    Copy-Item "$BuildOutput\*.png" -Destination $DestDir -Force
-
-    $files = @(Get-ChildItem "$DestDir\*.png" | Sort-Object Name)
     Write-Host "`n==> Done! $($files.Count) screenshots in $DestDir`:" -ForegroundColor Green
     $files | ForEach-Object { Write-Host "    $($_.Name)" }
 }

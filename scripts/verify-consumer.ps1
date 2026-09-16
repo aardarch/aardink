@@ -48,7 +48,26 @@ try {
 
     Write-Step 'Resolved Aardink dependency variant'
     $Resolved = & $Gradlew ':tools:consumer-smoke:dependencies' '--configuration' 'debugRuntimeClasspath' --quiet 2>&1
-    $Resolved | Select-String -Pattern 'com\.aardarch:aardink' | ForEach-Object { Write-Host "    $_" }
+    if ($LASTEXITCODE -ne 0) { Write-Error 'Could not resolve the consumer dependency graph.'; exit 1 }
+
+    $AardinkLines = $Resolved | Select-String -Pattern 'com\.aardarch:aardink'
+    $AardinkLines | ForEach-Object { Write-Host "    $_" }
+
+    # The whole point of this script. Kotlin Multiplatform publishes a root module plus one
+    # per target; an Android consumer must land on the `-android` variant via Gradle Module
+    # Metadata. If variant selection ever regresses, the build above would still succeed
+    # (a -jvm .jar compiles fine) and the regression would ship — so assert on it rather
+    # than printing it and trusting a human to read the output.
+    if (-not ($AardinkLines | Where-Object { $_ -match 'aardink-android' })) {
+        Write-Error @'
+Expected the consumer to resolve com.aardarch:aardink-android, but no such variant appeared
+in debugRuntimeClasspath. Gradle Module Metadata is no longer selecting the Android variant
+for an Android consumer - existing implementation("com.aardarch:aardink:x") declarations
+would silently get the wrong artifact.
+'@
+        exit 1
+    }
+    Write-Host '    OK: resolved the -android variant' -ForegroundColor Green
 
     Write-Host "`nConsumer smoke test passed: com.aardarch:aardink resolves and builds for a real consumer.`n" -ForegroundColor Green
     exit 0

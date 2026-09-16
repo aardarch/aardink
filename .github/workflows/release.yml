@@ -43,8 +43,11 @@ jobs:
             exit 1
           fi
 
+      # jvmTest, not `test`: the KMP libraries register no aggregate `test` task and no
+      # `lint` task at all. wasmJs browser tests are covered by CI on every PR and need a
+      # Chrome install, so a release tag re-runs only the JVM half plus the Android gates.
       - name: Run checks before publish
-        run: ./gradlew :editor:test :editor:lint :languages:test :languages:lint :languages-lsp:test :languages-lsp:lint
+        run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest :sample:lintDebug :sample:verifyRoborazziDebug
 
       - name: Publish to Maven Central
         run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache

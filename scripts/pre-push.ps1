@@ -5,11 +5,13 @@
     Mirrors the CI pipeline checks so issues are caught locally before push.
 
 .DESCRIPTION
-    Runs secret scan, formatting, lint, unit tests, API compatibility check,
-    and (optionally) the sample app build.
+    Runs secret scan, licence headers, formatting, lint, unit tests (JVM + wasmJs),
+    and (optionally) the sample app build and consumer smoke test.
     Autofixes (Spotless) are applied by default. Use -NoFix to run check-only.
     Use -SkipBuild to skip the sample APK build (faster iteration).
     Use -SkipTests to skip unit tests.
+    Use -SkipWasm to skip the wasmJs browser tests, which need a local Chrome
+    (Karma finds it via CHROME_BIN, or on PATH).
 
 .EXAMPLE
     .\scripts\pre-push.ps1
@@ -19,7 +21,8 @@
 param(
     [switch]$NoFix,
     [switch]$SkipBuild,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$SkipWasm
 )
 
 Set-StrictMode -Version Latest
@@ -119,10 +122,13 @@ try {
     }
 
     # ── 3. Spotless (format check or auto-fix) ─────────────────────────
+    # Every published library, in one place so a new module only needs adding here.
+    $Libs = @(':editor', ':languages', ':languages-lsp')
+    $SpotlessModules = $Libs + ':sample'
     $SpotlessTasks = if ($NoFix) {
-        @(':editor:spotlessCheck', ':languages:spotlessCheck', ':languages-lsp:spotlessCheck', ':sample:spotlessCheck')
+        $SpotlessModules | ForEach-Object { "${_}:spotlessCheck" }
     } else {
-        @(':editor:spotlessApply', ':languages:spotlessApply', ':languages-lsp:spotlessApply', ':sample:spotlessApply')
+        $SpotlessModules | ForEach-Object { "${_}:spotlessApply" }
     }
     $SpotlessLabel = if ($NoFix) { 'Spotless check' } else { 'Spotless apply (auto-fix)' }
 
@@ -132,16 +138,29 @@ try {
     }
 
     # ── 4. Android Lint ─────────────────────────────────────────────────
+    # :sample only. com.android.kotlin.multiplatform.library registers no `lint` task, so the
+    # three libraries have no lint to run (verified with `gradlew :editor:tasks --all`).
     Invoke-Check 'Android lint' {
-        & $Gradlew ':editor:lint' ':languages:lint' ':languages-lsp:lint' ':sample:lintDebug' --quiet 2>&1 | Out-Host
+        & $Gradlew ':sample:lintDebug' --quiet 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
     }
 
     # ── 5. Unit tests ───────────────────────────────────────────────────
+    # `jvmTest`, not `test`: a KMP module has no aggregate `test` task. The full aggregate is
+    # `allTests`, but that also pulls in the browser run, which is gated separately below.
     if (-not $SkipTests) {
-        Invoke-Check 'Unit tests' {
-            & $Gradlew ':editor:test' ':languages:test' ':languages-lsp:test' --quiet 2>&1 | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+        Invoke-Check 'Unit tests (JVM)' {
+            $Tasks = $Libs | ForEach-Object { "${_}:jvmTest" }
+            & $Gradlew @Tasks --quiet 2>&1 | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'JVM tests failed' }
+        }
+
+        if (-not $SkipWasm) {
+            Invoke-Check 'Unit tests (wasmJs browser)' {
+                $Tasks = $Libs | ForEach-Object { "${_}:wasmJsBrowserTest" }
+                & $Gradlew @Tasks --quiet 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw 'wasmJs browser tests failed (is Chrome installed? set CHROME_BIN)' }
+            }
         }
     }
 
@@ -150,6 +169,13 @@ try {
         Invoke-Check 'Build sample app (debug)' {
             & $Gradlew ':sample:assembleDebug' --quiet 2>&1 | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Sample build failed' }
+        }
+
+        # Roborazzi in verify mode - the Android zero-regression gate every migration PR is
+        # measured against. Nothing else in this script would notice a pixel change.
+        Invoke-Check 'Screenshot regression (Roborazzi verify)' {
+            & $Gradlew ':sample:verifyRoborazziDebug' --quiet 2>&1 | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Screenshot verification failed - see sample/build/outputs/roborazzi/' }
         }
     }
 
