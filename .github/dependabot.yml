@@ -1,3 +1,9 @@
+# NOTE: renovate.json at the repo root is also active and covers both the gradle and
+# github-actions ecosystems, so this file duplicates it -- two bots will open competing
+# PRs against the same manifests. Renovate is the one carrying the project-specific rules
+# (notably keeping Compose Multiplatform in step with Kotlin), so this file is the
+# redundant one. Left in place rather than deleted because that is a maintainer's call,
+# not a side effect of a hardening PR.
 version: 2
 updates:
   - package-ecosystem: gradle

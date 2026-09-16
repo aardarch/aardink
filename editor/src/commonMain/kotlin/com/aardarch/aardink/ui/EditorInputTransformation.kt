@@ -51,6 +51,14 @@ internal class EditorInputTransformation(
     private val onOtherChange: () -> Unit,
 ) : InputTransformation {
 
+    // TODO(CRLF): nothing here normalises line endings. A paste from a Windows clipboard
+    // arrives as a multi-character change whose inserted text still contains CR LF
+    // pairs, and the carriage return is mirrored verbatim
+    // into CodeDocument, the token stream and the line index. Not reachable on Android
+    // today, which is why this is a note rather than a fix; desktop (a Windows paste) will
+    // hit it before the web checklist does. The fix is a normalising pass over inserted
+    // text here and in CodeEditorState.loadText -- deliberately deferred so it can be
+    // written against a real failing case rather than guessed at.
     override fun TextFieldBuffer.transformInput() {
         var singleCharInsertAt = -1
         var singleCharTyped: Char? = null

@@ -278,6 +278,38 @@ kotlin {
 }
 ```
 
+### 2.4a Deviations from the above, as actually implemented
+
+These were deliberate and are load-bearing. Do not "fix" them back to what §2.4 sketches.
+
+- **Compose plugins ARE applied to `:languages` and `:languages-lsp`**, despite neither
+  containing Compose code. Compose Multiplatform's `wasmJsBrowserTest` needs the bundled
+  skiko runtime to run *any* browser test, including plain `kotlin.test` ones.
+- **`binaries.executable()` IS declared on all three library `wasmJs` targets**, even though
+  the published artifact is a klib. Same reason — see CMP-4906.
+- **`androidUnitTest.dependsOn(jvmAndAndroidTest)` is omitted** in `:languages-lsp`. Android
+  host tests are not enabled (every test already runs on `jvmTest` and `wasmJsBrowserTest`),
+  so wiring it would reference a source set nothing consumes.
+- **No explicit `useKarma { useChromeHeadless() }`.** The default browser test configuration
+  already resolves headless Chrome via `CHROME_BIN`.
+- **No `aardink.kmp-library` convention plugin** (§2.3). It needs the Kotlin and Spotless
+  plugins on `buildSrc`'s classpath for typed extension access, and that makes Gradle reject
+  each module's own versioned `alias(...)` with "already on the classpath with an unknown
+  version". `compileOnly` does not help: the types are then invisible at execution time. The
+  same collision is why AGP was always kept off that classpath. `buildSrc` is gone entirely
+  as a result, and `abiValidation { }` is configured per module.
+- **Dokka is applied per module, not from `buildSrc`** (§9.1), for the same classloader
+  reason: a precompiled script plugin cannot see plugins resolved through a module's
+  `plugins {}` block, so Dokka could not find `KotlinBasePlugin` and generated nothing.
+- **There is no GFM/Markdown Dokka output** (§9.1, §9.4). Dokka 2's Gradle plugin does not
+  support it: the dependency resolves and the task reports success while emitting zero files.
+  `dokkaAllGfm` is removed and `release.yml` bundles the HTML output.
+- **The libraries have no `lint` task.** `com.android.kotlin.multiplatform.library` registers
+  none, so §9.3's `:editor:lint` line is not achievable; only `:sample:lintDebug` runs.
+- **ABI task names are `checkKotlinAbi` / `updateKotlinAbi`** (§9.2's first guess), aggregated
+  by root `checkAbiAll` / `updateAbiAll`. `checkLegacyAbi` / `updateLegacyAbi` also exist as
+  aliases.
+
 ### 2.5 `gradle.properties`
 
 Add `kotlin.mpp.enableCInteropCommonization=false` (no native targets); raise
@@ -442,7 +474,23 @@ prose, not code.
 
 - `interface LspTransport`, `ChannelLspTransport` — unchanged, stay in `commonMain` (already fully portable).
 - `StreamLspTransport(InputStream, OutputStream)` — move **verbatim** (same public constructor, same behaviour, same `MAX_FRAME_BYTES`/`MAX_HEADER_BYTES` limits) into `languages-lsp/src/jvmAndAndroidMain/kotlin/com/aardarch/aardink/languages/lsp/StreamLspTransport.kt`. Its two `withContext(Dispatchers.IO)` sites are untouched (`Dispatchers.IO` is available in this source set).
-- New `languages-lsp/src/wasmJsMain/kotlin/com/aardarch/aardink/languages/lsp/WebSocketLspTransport.kt`:
+- New `languages-lsp/src/wasmJsMain/kotlin/com/aardarch/aardink/languages/lsp/WebSocketLspTransport.kt`.
+
+> **The sketch below has three bugs and was NOT implemented as written.** Read the shipped
+> `WebSocketLspTransport.kt` instead; it is kept here only to document the intent.
+>
+> 1. `onerror` is assigned after `onopen` inside the `connect` continuation, so a socket that
+>    opens and then errors resumes the continuation twice.
+> 2. There is no `invokeOnCancellation { socket.close() }`, so a cancelled `connect` leaks
+>    the socket.
+> 3. `connect` installs handlers that the instance's `init` then replaces, dropping any frame
+>    that arrives in between.
+>
+> The implementation instead installs all four handlers once in the constructor and never
+> replaces them, and `connect` awaits a `CompletableDeferred` those handlers complete — whose
+> idempotent completion makes double-resume impossible rather than merely unlikely. It also
+> treats a close *before* open as a failure, so a refused connection cannot hang the caller.
+
 
 ```kotlin
 class WebSocketLspTransport private constructor(private val socket: WebSocket) : LspTransport {

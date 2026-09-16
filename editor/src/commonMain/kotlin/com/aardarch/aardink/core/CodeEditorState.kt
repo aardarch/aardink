@@ -53,6 +53,11 @@ import kotlinx.coroutines.withContext
  * @param tokenizer The tokenizer used for syntax highlighting. Defaults to [PlainTextTokenizer].
  * @param tokenizeDebounceMs Delay (ms) after the last keystroke before incremental tokenization
  *   runs. A 0 value tokenizes synchronously (use only for tests or small documents).
+ * @param scope The scope tokenization is scheduled on. Defaults to `Dispatchers.Main`, which
+ *   Android and the browser provide out of the box. **On desktop JVM there is no Main
+ *   dispatcher unless `kotlinx-coroutines-swing` (or `-javafx`) is on the runtime classpath**;
+ *   without it, constructing a state with the default scope throws at runtime. Add that
+ *   dependency, or pass a scope of your own.
  */
 @Stable
 class CodeEditorState(

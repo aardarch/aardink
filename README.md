@@ -1,12 +1,13 @@
 # Aardink
 
-A Jetpack Compose-native code editor for Android — incremental tokenization,
-LSP-lite language services, code folding, find/replace, and rich gutter
-annotations.
+A Compose Multiplatform code editor — incremental tokenization, LSP-lite
+language services, code folding, find/replace, and rich gutter annotations.
+Runs on Android, desktop (JVM) and the browser (Wasm) from one codebase.
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.aardarch/aardink.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/com.aardarch/aardink)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![minSdk](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](#requirements)
+[![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20JVM%20%7C%20Wasm-blue.svg)](#requirements)
 
 ## Features
 
@@ -21,21 +22,33 @@ annotations.
 
 ## Modules
 
-Aardink is published as two artifacts on Maven Central:
+Aardink publishes three artifacts on Maven Central:
 
 - **`com.aardarch:aardink`** — the editor library: composables, state,
   theming, and the language-service interfaces.
 - **`com.aardarch:aardink-languages`** — built-in language definitions
   (Kotlin, TypeScript, JSON, XML, HTML, CSS, Markdown, plain text).
+- **`com.aardarch:aardink-languages-lsp`** — a bridge to an external
+  Language Server over JSON-RPC.
 
 The `editor` module is intentionally language-agnostic. Pull in
 `aardink-languages` for the bundled definitions, or implement your own via
 `LanguageDefinition` + `LanguageRegistry`.
 
+Each is a Kotlin Multiplatform publication: a Gradle Module Metadata root plus one
+artifact per target. Declaring `com.aardarch:aardink` resolves to `aardink-android`,
+`aardink-jvm` or `aardink-wasm-js` automatically, the same way `kotlinx.coroutines`
+works — you do not name the target yourself.
+
 ## Requirements
 
-- Android `minSdk` 26, `compileSdk` 37
-- Kotlin + Jetpack Compose (Material 3)
+| Platform | Requirement |
+| --- | --- |
+| Android | `minSdk` 26, `compileSdk` 37 |
+| Desktop (JVM) | JDK 21. Add `kotlinx-coroutines-swing` — `CodeEditorState` defaults its scope to `Dispatchers.Main`, which on the JVM has no implementation without it |
+| Browser (Wasm) | Chrome/Edge 119+, Firefox 120+, Safari 18.2+ (WasmGC + exception handling) |
+
+Kotlin with Compose Multiplatform (Material 3) on every target.
 
 ## Installation
 
@@ -49,8 +62,9 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("com.aardarch:aardink:0.1.0")
-    implementation("com.aardarch:aardink-languages:0.1.0")
+    // Use the current version from the Maven Central badge above.
+    implementation("com.aardarch:aardink:<version>")
+    implementation("com.aardarch:aardink-languages:<version>")
 }
 ```
 
@@ -58,22 +72,27 @@ dependencies {
 
 ```kotlin
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.aardarch.aardink.core.rememberCodeEditorState
+import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.LocalEditorTheme
-import com.aardarch.aardink.core.rememberCodeEditorState
-import com.aardarch.aardink.languages.LanguageRegistry
-import androidx.compose.runtime.CompositionLocalProvider
 
 @Composable
 fun MyEditor() {
+    val kotlinLanguage = LanguageRegistry.withBuiltIns().byId("kotlin")!!
     val state = rememberCodeEditorState(
         initialText = "fun main() = println(\"Hello, Aardink\")",
-        language = LanguageRegistry.byId("kotlin"),
+        tokenizer = kotlinLanguage.tokenizer,
     )
 
     CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
-        CodeEditorLayout(state = state)
+        CodeEditorLayout(
+            state = state,
+            languageService = kotlinLanguage.languageService,
+            foldingProvider = kotlinLanguage.foldingProvider,
+        )
     }
 }
 ```
@@ -118,10 +137,11 @@ into [`screenshots/`](screenshots/) (no device or emulator needed):
 ## Building from source
 
 ```pwsh
-./gradlew :editor:test :languages:test                                 # Unit tests
-./gradlew :editor:lint :languages:lint                                 # Lint
-./gradlew :editor:spotlessApply :languages:spotlessApply               # Auto-format
-./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal   # Publish to ~/.m2
+./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest    # JVM unit tests
+./gradlew :editor:wasmJsBrowserTest                                    # Browser tests (needs Chrome)
+./gradlew checkAbiAll                                                  # Public ABI check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply   # Auto-format
+./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal   # Publish to ~/.m2
 ```
 
 For the full build/test/release workflow — including the `scripts/pre-push.ps1`

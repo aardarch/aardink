@@ -36,6 +36,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Kotlin Multiplatform: `:editor`, `:languages` and `:languages-lsp` now build for
+  Android, JVM (desktop) and wasmJs (browser) in addition to Android.
+- `CodeEditorState.textFieldState`, the `BasicTextField` interop point for the new
+  `TextFieldState` input model.
+- `com.aardarch.aardink.platform.EditorDispatchers` — platform-appropriate `compute` and
+  `io` dispatchers. `Dispatchers.IO` does not exist on wasmJs.
+- `com.aardarch.aardink.platform.PlatformInfo` and
+  `KeyboardToolbarPlacement.platformDefault`, so a host can take the toolbar placement and
+  modifier-key convention that suit the platform.
+- `EditorTypography` and `LocalEditorTypography` — the editor's font family and metrics are
+  now provided rather than hardcoded. No font is bundled; the defaults are unchanged.
+- `WebSocketLspTransport` (wasmJs only) — a browser transport for `LspClient`, alongside the
+  existing `StreamLspTransport` (JVM/Android) and `ChannelLspTransport` (common).
+- Public ABI validation for all three libraries, with committed dumps under `*/api/`.
+
+### Changed
+
+- **Packaging.** Each library now publishes a Gradle Module Metadata root plus one artifact
+  per target instead of a single `.aar`: `com.aardarch:aardink` resolves to
+  `aardink-android`, `aardink-jvm` or `aardink-wasm-js` automatically. Existing Android
+  consumers keep writing `implementation("com.aardarch:aardink:<version>")` unchanged — the
+  mechanism is the one `kotlinx.coroutines` already relies on. A consumer that pinned the
+  `.aar` classifier explicitly would need to stop doing so.
+- The editor's text input moved from the deprecated `BasicTextField(TextFieldValue)` +
+  `VisualTransformation` to `BasicTextField(TextFieldState)` + `InputTransformation` /
+  `OutputTransformation`. `CodeEditorState`'s public surface is unchanged.
+- `EditorThemeParser` parses with `kotlinx.serialization` instead of the Android-only
+  `org.json`, which makes `:editor` compile as common Kotlin. This adds
+  `kotlinx-serialization-json` as `:editor`'s only non-Compose runtime dependency.
+- `LspClient` synchronises with a `Mutex` instead of `@Synchronized` / `ConcurrentHashMap` /
+  `AtomicLong`, none of which exist in common Kotlin.
+- `:languages` no longer applies the Compose compiler plugin — it contains no Compose code.
+- The gutter sizes its line-number column by measuring the digits rather than assuming a
+  fixed 0.7 em advance. The gutter is slightly narrower at the default font size.
+
+### Deprecated
+
+- `applyFolding` — superseded by `EditorOutputTransformation`; kept for hosts that built
+  their own field around it.
+- `EditorTheme.fontFamily`, `EditorTheme.fontSize` and `EditorTheme.lineHeight` — these were
+  never read by the editor. Provide `LocalEditorTypography` instead.
+
+### Fixed
+
+- `LspClient` no longer skips connection teardown when the host cancels its scope while the
+  receive loop is running, which could leave pending requests waiting forever and the
+  transport open.
+- `LspClient.addDiagnosticsListener` / `removeDiagnosticsListener` now take effect before
+  they return. Under lock contention they could previously be reordered or deferred past the
+  notification they were registered for.
+- `LspClient.stop()` no longer silently does nothing when its scope has already been
+  cancelled.
+- `CodeEditorState.loadText` now clears the text field's own undo history *after* syncing the
+  field, so a freshly loaded document can no longer be undone back to the previous one.
+- Tokenization no longer reads the token cache from a background thread while the main thread
+  may be mutating it.
+
 ## [0.4.1] - 2026-09-12
 
 ### Changed

@@ -1,38 +1,55 @@
 # Aardink — Agent Instructions
 
-Aardink is a standalone Jetpack Compose-native code editor library for Android published as
-`com.aardarch:aardink` on Maven Central.
+Aardink is a standalone Compose Multiplatform code editor library published as
+`com.aardarch:aardink` on Maven Central. It targets Android, JVM (desktop) and wasmJs
+(browser) from one common source set.
 
 ## Project Layout
 
+Every library is Kotlin Multiplatform. Source lives in `commonMain` unless it genuinely
+cannot -- `src/main/java` no longer exists anywhere.
+
 ```text
-editor/          # The library module — the published artifact (com.aardarch:aardink)
-  src/main/java/com/aardarch/aardink/
+editor/          # The library module -- the published artifact (com.aardarch:aardink)
+  src/commonMain/kotlin/com/aardarch/aardink/
     core/        # Document model, tokenization, undo, find, folding, LSP models (TextEdit, CodeAction, SignatureHelp)
     ui/          # Composables: CodeEditorLayout, EditorGutter, SignatureHelpPopup, CodeActionMenu, RenameDialog, etc.
-  src/test/      # JUnit 5 unit tests
+    platform/    # expect declarations -- the ONLY package where expect/actual may live
+  src/androidMain/ src/jvmMain/ src/wasmJsMain/      # actuals, under platform/ only
+  src/commonTest/kotlin/                             # kotlin.test, runs on every target
+  api/           # Committed public ABI dumps (klib + android + jvm)
 
-languages/       # Built-in language support — published as com.aardarch:aardink-languages
-  src/main/java/com/aardarch/aardink/languages/
+languages/       # Built-in language support -- published as com.aardarch:aardink-languages
+  src/commonMain/kotlin/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
     internal/    # Per-language tokenizers + folding providers + services (Kotlin, XML, JSON, TOML, etc.)
 
-languages-lsp/   # External Language Server Protocol bridge — published as com.aardarch:aardink-languages-lsp
-  src/main/java/com/aardarch/aardink/languages/lsp/
+languages-lsp/   # External Language Server Protocol bridge -- published as com.aardarch:aardink-languages-lsp
+  src/commonMain/kotlin/com/aardarch/aardink/languages/lsp/
     LspClient.kt / LspLanguageService.kt / LspTransport.kt / LspMessage.kt
+  src/jvmAndAndroidMain/   # StreamLspTransport -- java.io has no common equivalent
+  src/wasmJsMain/          # WebSocketLspTransport
 
-sample/          # Minimal Android app for local development and manual testing
+sample/          # Minimal Android app for local development and manual testing (not KMP)
   src/main/java/com/aardarch/aardink/sample/
+  src/test/      # Roborazzi screenshot tests -- the Android zero-regression gate
+
+tools/consumer-smoke/   # Android app depending on the PUBLISHED coordinates, not project(...)
+screenshots/     # Committed Roborazzi baselines -- verifyRoborazziDebug compares against these
 ```
 
 ## Tech Stack
 
-- Kotlin + Jetpack Compose (no XML layouts — ever)
+- Kotlin Multiplatform + Compose Multiplatform (no XML layouts — ever)
+- Targets: Android, JVM (desktop), wasmJs (browser)
 - Material 3
-- JUnit 5 for tests
+- `kotlin.test` in `commonTest`. JUnit 5 survives only as the `jvmTest` runner, via the
+  `kotlin-test-junit5` bridge — `commonTest` cannot use `org.junit.jupiter`, and wasm has
+  no `runBlocking`, so coroutine tests use `runTest` from `kotlinx-coroutines-test`
 - Spotless + ktlint for formatting
-- kotlinx-serialization-json (`:languages-lsp` only) for LSP JSON-RPC payloads
-- Binary compatibility validator (apiDump / apiCheck)
+- kotlinx-serialization-json — `:languages-lsp` for JSON-RPC, `:editor` for theme parsing
+- Kotlin 2.4 built-in ABI validation (`checkKotlinAbi` / `updateKotlinAbi`)
+- Dokka 2.2, HTML only (Dokka 2's Gradle plugin does not support GFM output)
 - vanniktech Maven Publish plugin
 
 ## Build Commands
@@ -40,16 +57,27 @@ sample/          # Minimal Android app for local development and manual testing
 All commands run from the repo root.
 
 ```pwsh
-./gradlew :editor:test :languages:test :languages-lsp:test          # Unit tests
-./gradlew :editor:lint :languages:lint :languages-lsp:lint :sample:lintDebug     # Lint
+./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest              # JVM unit tests
+./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest   # Browser tests (needs Chrome)
+./gradlew :editor:allTests                      # Every target for one module
+./gradlew checkAbiAll                           # Public ABI vs the committed dumps
+./gradlew updateAbiAll                          # Rewrite the dumps after an intentional API change
+./gradlew :sample:lintDebug                     # Lint (see the note below)
 ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck   # Formatting check
 ./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
-./scripts/capture-screenshots.ps1               # Render sample-app screenshots (all themes) to screenshots/
-./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal  # Publish to ~/.m2
-./gradlew dokkaAll                              # API docs (HTML) for all modules
-./gradlew dokkaAllGfm                           # API docs (GitHub-Flavored Markdown)
+./gradlew :sample:verifyRoborazziDebug          # Screenshot regression check
+./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change
+./scripts/verify-consumer.ps1                   # Publish to ~/.m2 and prove a real consumer still resolves -android
+./gradlew dokkaAll                              # API docs (HTML)
 ```
+
+The wasmJs tests run in headless Chrome via Karma. Install Chrome locally and, if it is not
+on `PATH`, point `CHROME_BIN` at it. `scripts/pre-push.ps1 -SkipWasm` skips them.
+
+> **Lint:** only `:sample` has a `lint` task. `com.android.kotlin.multiplatform.library`
+> registers none for the three libraries — verify with `./gradlew :editor:tasks --all` before
+> assuming otherwise. Spotless, the ABI check and the test suites cover them instead.
 
 ### Pre-push end-to-end check
 
@@ -58,16 +86,13 @@ Before pushing, run the full local equivalent of CI:
 ```pwsh
 ./scripts/pre-push.ps1                        # Full check + Spotless auto-fix
 ./scripts/pre-push.ps1 -NoFix                 # Check-only (matches CI exactly)
-./scripts/pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (lint + format + apiCheck)
+./scripts/pre-push.ps1 -SkipBuild -SkipTests  # Fast iteration (secrets + headers + format + lint + ABI)
+./scripts/pre-push.ps1 -SkipWasm              # Skip the browser tests
 ```
 
-The script runs: secret scan, Apache 2.0 header check, Spotless, lint, unit
-tests, sample build, and `publishToMavenLocal` sanity.
-
-> **Note:** `apiCheck` / `apiDump` are temporarily disabled — the
-> `kotlinx.binary-compatibility-validator` plugin doesn't yet register tasks on
-> Android library modules under AGP 9 + Kotlin 2.4. See the comment in the root
-> `build.gradle.kts` for re-enable context.
+The script runs: secret scan, Apache 2.0 header check, Spotless, lint, the ABI check,
+JVM tests, wasmJs browser tests, the sample build, the Roborazzi screenshot check, and
+the consumer smoke test.
 
 ## Code Conventions
 
@@ -75,11 +100,19 @@ tests, sample build, and `publishToMavenLocal` sanity.
 - **Kotlin only** - Kotlin and Kotlin-idiomatic code only, no legacy, no Java
 - **Compose-only** — zero XML layouts, zero Android resource files in the editor module
 - **No cross-module imports** — `editor` must not import from `sample` or any external module
-- **Public API discipline** — run `apiDump` after any intentional API change, commit the updated `.api` file
+- **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
+  and commit the updated dumps under `*/api/`. Through 0.5.0 the diff must be purely additive.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
-- Tests: JUnit 5 (`@Test` from `org.junit.jupiter.api`), no Mockk needed in the editor module
-- **Do not add runtime dependencies without necessity** — the library's only runtime dep is Jetpack Compose; `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
+- Tests: `kotlin.test` (`@Test` from `kotlin.test`) in `commonTest`; `runTest` rather than
+  `runBlocking`, which wasm does not have. No Mockk needed in the editor module.
+- **`expect`/`actual` declarations live only under `platform/`** — nowhere else.
+- **Never reference `Dispatchers.Default` or `Dispatchers.IO` directly** in `:editor` or
+  `:languages-lsp`. Use `EditorDispatchers`: `Dispatchers.IO` does not exist on wasmJs, and
+  `Dispatchers.Default` there is the UI event loop, not a background pool.
+- **Do not add runtime dependencies without necessity** — `:editor` depends on Compose plus
+  `kotlinx-serialization-json` (an agreed exception: `EditorThemeParser` needs it in place of
+  the Android-only `org.json` so the module compiles as common Kotlin); `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
 
 ## Separation of Concerns
 
@@ -108,7 +141,14 @@ The `editor` module is intentionally language-agnostic:
 ## Versioning
 
 SemVer. Breaking API changes require a major version bump. Don't introduce breaking changes lightly.
-After any intentional public API change, run `./gradlew :editor:apiDump` and commit the result.
+After any intentional public API change, run `./gradlew updateAbiAll` and commit the updated
+dumps under `*/api/`. Until 0.5.0 ships, that diff must be purely additive.
+
+> The 0.5.0 multiplatform work carries a `feat(editor)!:` marker, scoped to packaging only.
+> `create-release.ps1` reads that `!` and will suggest a **1.0.0** bump; override it to the
+> intended version. The packaging change is that each library now publishes a Gradle Module
+> Metadata root plus one artifact per target rather than a single `.aar` — Android consumers
+> resolve `-android` automatically and need no change.
 
 The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. The `editor`, `languages` and `languages-lsp` modules all read it via the

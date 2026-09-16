@@ -12,6 +12,17 @@
       "matchUpdateTypes": ["major"],
       "groupName": "major updates",
       "groupSlug": "major"
+    },
+    {
+      "description": "Compose Multiplatform is built against a specific Kotlin version; bumping one without the other is a known breakage vector, so they move together or not at all.",
+      "matchPackageNames": [
+        "org.jetbrains.kotlin:**",
+        "org.jetbrains.kotlin.multiplatform",
+        "org.jetbrains.compose",
+        "org.jetbrains.compose:**"
+      ],
+      "groupName": "kotlin and compose multiplatform",
+      "groupSlug": "kotlin-cmp"
     }
   ]
 }

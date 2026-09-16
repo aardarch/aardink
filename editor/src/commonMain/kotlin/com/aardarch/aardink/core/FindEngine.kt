@@ -42,6 +42,10 @@ object FindEngine {
     private fun buildPattern(query: String, options: Options): Regex? {
         val raw = if (options.useRegex) query else Regex.escape(query)
         val withWordBoundary = if (options.wholeWord) """\b$raw\b""" else raw
+        // IGNORE_CASE is not identical across targets: on JVM it is Unicode-aware, while on
+        // wasmJs it becomes the JS `i` flag, whose case folding differs for some non-ASCII
+        // characters. ASCII searches -- the overwhelming majority in code -- behave the same
+        // everywhere.
         val flags = if (options.caseSensitive) emptySet() else setOf(RegexOption.IGNORE_CASE)
         return try {
             Regex(withWordBoundary, flags)

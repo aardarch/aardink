@@ -40,6 +40,10 @@ object KotlinTokenizer : RegexTokenizer() {
         Regex("\"(?:\\\\.|[^\"\\\\\\n])*\"") to TokenType.StringLiteral,
         // Char literal: any single character, escape sequence, or 4-digit unicode escape
         Regex("'(?:\\\\u[0-9A-Fa-f]{4}|\\\\.|[^'\\\\\\n])'") to TokenType.StringLiteral,
+        // The next two rules use lookbehind, which compiles to a JS RegExp lookbehind on
+        // wasmJs. That is the narrowest browser requirement in the library: Safari only
+        // gained lookbehind support in 16.4. Still comfortably inside the WasmGC floor
+        // (Safari 18.2+) the editor already requires, so it costs nothing in practice.
         // Function declaration: highlight the name immediately following `fun`
         Regex("(?<=\\bfun\\s)[A-Za-z_][A-Za-z0-9_]*") to TokenType.FunctionCall,
         // Class / object / interface declaration name
