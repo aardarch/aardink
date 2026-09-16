@@ -1130,6 +1130,10 @@ final class com.aardarch.aardink.languages.lsp/LspTextEdit { // com.aardarch.aar
     }
 }
 
+final class com.aardarch.aardink.languages.lsp/LspTransportException : kotlin/RuntimeException { // com.aardarch.aardink.languages.lsp/LspTransportException|null[0]
+    constructor <init>(kotlin/String) // com.aardarch.aardink.languages.lsp/LspTransportException.<init>|<init>(kotlin.String){}[0]
+}
+
 final class com.aardarch.aardink.languages.lsp/LspVersionedTextDocumentIdentifier { // com.aardarch.aardink.languages.lsp/LspVersionedTextDocumentIdentifier|null[0]
     constructor <init>(kotlin/String, kotlin/Int) // com.aardarch.aardink.languages.lsp/LspVersionedTextDocumentIdentifier.<init>|<init>(kotlin.String;kotlin.Int){}[0]
 
@@ -1187,6 +1191,16 @@ final class com.aardarch.aardink.languages.lsp/LspWorkspaceEdit { // com.aardarc
         final val $childSerializers // com.aardarch.aardink.languages.lsp/LspWorkspaceEdit.Companion.$childSerializers|{}$childSerializers[0]
 
         final fun serializer(): kotlinx.serialization/KSerializer<com.aardarch.aardink.languages.lsp/LspWorkspaceEdit> // com.aardarch.aardink.languages.lsp/LspWorkspaceEdit.Companion.serializer|serializer(){}[0]
+    }
+}
+
+final class com.aardarch.aardink.languages.lsp/WebSocketLspTransport : com.aardarch.aardink.languages.lsp/LspTransport { // com.aardarch.aardink.languages.lsp/WebSocketLspTransport|null[0]
+    final fun close() // com.aardarch.aardink.languages.lsp/WebSocketLspTransport.close|close(){}[0]
+    final suspend fun receivePayload(): kotlin/String? // com.aardarch.aardink.languages.lsp/WebSocketLspTransport.receivePayload|receivePayload(){}[0]
+    final suspend fun sendPayload(kotlin/String) // com.aardarch.aardink.languages.lsp/WebSocketLspTransport.sendPayload|sendPayload(kotlin.String){}[0]
+
+    final object Companion { // com.aardarch.aardink.languages.lsp/WebSocketLspTransport.Companion|null[0]
+        final suspend fun connect(kotlin/String): com.aardarch.aardink.languages.lsp/WebSocketLspTransport // com.aardarch.aardink.languages.lsp/WebSocketLspTransport.Companion.connect|connect(kotlin.String){}[0]
     }
 }
 
@@ -1377,10 +1391,12 @@ final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTransportException$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTransportException$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspTransportException$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop|#static{}com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop[0]
 
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop_getter|com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspClient$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspClient$stableprop_getter|com_aardarch_aardink_languages_lsp_LspClient$stableprop_getter(){}[0]
@@ -1460,7 +1476,9 @@ final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspTextDocumentPositionParams_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop_getter|com_aardarch_aardink_languages_lsp_LspTextEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspTextEdit_$serializer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTransportException$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspTransportException$stableprop_getter|com_aardarch_aardink_languages_lsp_LspTransportException$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop_getter|com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspVersionedTextDocumentIdentifier_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop_getter|com_aardarch_aardink_languages_lsp_LspWorkspaceEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspWorkspaceEdit_$serializer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop_getter|com_aardarch_aardink_languages_lsp_WebSocketLspTransport$stableprop_getter(){}[0]
