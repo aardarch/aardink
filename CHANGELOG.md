@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modifier-key convention that suit the platform.
 - `EditorTypography` and `LocalEditorTypography` — the editor's font family and metrics are
   now provided rather than hardcoded. No font is bundled; the defaults are unchanged.
+- `CodeEditorLayout(onRequestGoToLine = ...)`, hardware-keyboard shortcuts (undo/redo,
+  find, replace, go-to-line, Tab/Shift+Tab indent, Escape) and desktop/web scrollbars.
+  `CodeEditorState.indentSelection()` / `outdentSelection()`.
 - `WebSocketLspTransport` (wasmJs only) — a browser transport for `LspClient`, alongside the
   existing `StreamLspTransport` (JVM/Android) and `ChannelLspTransport` (common).
 - Public ABI validation for all three libraries, with committed dumps under `*/api/`.
@@ -72,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `:languages` no longer applies the Compose compiler plugin — it contains no Compose code.
 - The gutter sizes its line-number column by measuring the digits rather than assuming a
   fixed 0.7 em advance. The gutter is slightly narrower at the default font size.
+
+### Binary compatibility
+
+- `CodeEditorLayout` gained a trailing defaulted `onRequestGoToLine` parameter. This is
+  **source-compatible but not binary-compatible**: the Compose compiler encodes every
+  parameter in a composable's JVM signature, so any added parameter changes it and a
+  consumer compiled against an earlier build must be recompiled. That is inherent to
+  adding a parameter to a `@Composable` and applies to any future one too. Recompiling
+  is all that is required; no source change.
 
 ### Deprecated
 

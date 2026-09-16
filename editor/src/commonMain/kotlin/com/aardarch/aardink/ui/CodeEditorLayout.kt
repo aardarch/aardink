@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -69,6 +70,7 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.platform.EditorScrollbars
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -110,6 +112,11 @@ fun CodeEditorLayout(
     showDiagnosticAnnotations: Boolean = true,
     showDiffMarkers: Boolean = true,
     softWrap: Boolean = false,
+    /**
+     * Invoked when the user presses Cmd/Ctrl+G. Hosts wire this to [GoToLineDialog]; the
+     * default does nothing, so the shortcut is inert until a host opts in.
+     */
+    onRequestGoToLine: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val typography = LocalEditorTypography.current
@@ -145,6 +152,37 @@ fun CodeEditorLayout(
     // Completion state
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
     var showCompletion by remember { mutableStateOf(false) }
+
+    // Hardware-keyboard shortcuts. Unreachable without a physical keyboard, so this changes
+    // nothing for touch input on Android.
+    val shortcutActions = remember(state, findReplaceState, onRequestGoToLine) {
+        EditorShortcutActions(
+            onUndo = { state.undo() },
+            onRedo = { state.redo() },
+            onFind = { findReplaceState?.show() },
+            onReplace = { findReplaceState?.show() },
+            onGoToLine = onRequestGoToLine,
+            onIndent = { state.indentSelection() },
+            onOutdent = { state.outdentSelection() },
+            onEscape = {
+                // Consume Escape only when it actually dismissed something, so a host's own
+                // dialog still sees the key when the editor had nothing open.
+                when {
+                    showCompletion -> {
+                        showCompletion = false
+                        true
+                    }
+
+                    findReplaceState?.visible == true -> {
+                        findReplaceState.hide()
+                        true
+                    }
+
+                    else -> false
+                }
+            },
+        )
+    }
     var completionJob by remember { mutableStateOf<Job?>(null) }
 
     // Code actions, Signature help & Rename state
@@ -669,42 +707,59 @@ fun CodeEditorLayout(
                 )
             }
 
+            // Outer box exists so the scrollbars can overlay the scrolling content rather
+            // than take layout space from it. On Android EditorScrollbars draws nothing, so
+            // this costs one empty Box and changes no pixels.
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .verticalScroll(verticalScrollState)
-                    .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
-                    .padding(
-                        start = EditorDefaults.contentPaddingHorizontal,
-                        top = EditorDefaults.contentPaddingTop,
-                        end = EditorDefaults.contentPaddingHorizontal,
-                    )
-                    .drawBehind {
-                        drawSquiggles(
-                            diagnostics = diagnostics,
-                            textLayoutResult = textLayoutResult,
-                            errorColor = theme.errorColor,
-                            warningColor = theme.warningColor,
-                            infoColor = theme.infoColor,
-                        )
-                    },
+                    .fillMaxHeight(),
             ) {
-                BasicTextField(
-                    state = state.textFieldState,
-                    inputTransformation = inputTransformation,
-                    outputTransformation = outputTransformation,
-                    onTextLayout = { getResult -> textLayoutResult = getResult() },
-                    lineLimits = TextFieldLineLimits.MultiLine(),
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(verticalScrollState)
+                        .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
+                        .padding(
+                            start = EditorDefaults.contentPaddingHorizontal,
+                            top = EditorDefaults.contentPaddingTop,
+                            end = EditorDefaults.contentPaddingHorizontal,
+                        )
+                        .drawBehind {
+                            drawSquiggles(
+                                diagnostics = diagnostics,
+                                textLayoutResult = textLayoutResult,
+                                errorColor = theme.errorColor,
+                                warningColor = theme.warningColor,
+                                infoColor = theme.infoColor,
+                            )
+                        },
+                ) {
+                    BasicTextField(
+                        state = state.textFieldState,
+                        inputTransformation = inputTransformation,
+                        outputTransformation = outputTransformation,
+                        onTextLayout = { getResult -> textLayoutResult = getResult() },
+                        lineLimits = TextFieldLineLimits.MultiLine(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag(EditorTestTags.TEXT_FIELD)
+                            .editorKeyboardShortcuts(shortcutActions),
+                        textStyle = TextStyle(
+                            fontFamily = typography.fontFamily,
+                            fontSize = typography.fontSize,
+                            lineHeight = typography.lineHeight,
+                            color = textColor,
+                        ),
+                        cursorBrush = SolidColor(cursorColor),
+                        readOnly = readOnly,
+                    )
+                }
+
+                EditorScrollbars(
+                    vertical = verticalScrollState,
+                    horizontal = if (softWrap) null else horizontalScrollState,
                     modifier = Modifier.fillMaxSize(),
-                    textStyle = TextStyle(
-                        fontFamily = typography.fontFamily,
-                        fontSize = typography.fontSize,
-                        lineHeight = typography.lineHeight,
-                        color = textColor,
-                    ),
-                    cursorBrush = SolidColor(cursorColor),
-                    readOnly = readOnly,
                 )
             }
         }

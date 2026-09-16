@@ -38,6 +38,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** One indentation step. Spaces, not a tab, to match what smartIndent already inserts. */
+private const val INDENT: String = "    "
+
 /**
  * The central state holder for a [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout].
  *
@@ -336,6 +339,81 @@ class CodeEditorState(
         textVersion++
         scheduleTokenization()
         return document.text
+    }
+
+    // -- Indentation ----------------------------------------------------------
+
+    /**
+     * Indents every line touched by the selection by [INDENT] spaces.
+     *
+     * With a collapsed cursor and nothing selected this inserts an indent at the cursor, which
+     * is what Tab does in every editor. With a selection it shifts whole lines and keeps the
+     * selection covering them, so Tab can be pressed repeatedly.
+     */
+    fun indentSelection() {
+        val sel = selection
+        if (sel.collapsed) {
+            applyEdit(sel.start, 0, INDENT, TextRange(sel.start + INDENT.length))
+            return
+        }
+        val (firstLine, lastLine) = selectedLineRange(sel)
+        val edits = (firstLine..lastLine).map { line ->
+            val start = document.lineStart(line)
+            TextEdit(range = start until start, newText = INDENT)
+        }
+        if (edits.isEmpty()) return
+        applyTextEdits(edits)
+        selection = TextRange(
+            document.lineStart(firstLine),
+            document.lineEnd(lastLine),
+        )
+    }
+
+    /**
+     * Removes up to [INDENT] leading spaces (or one leading tab) from every line the selection
+     * touches. Lines with no leading whitespace are left alone rather than eating real text.
+     */
+    fun outdentSelection() {
+        val sel = selection
+        val (firstLine, lastLine) = selectedLineRange(sel)
+        val edits = (firstLine..lastLine).mapNotNull { line ->
+            val start = document.lineStart(line)
+            val text = document.lineText(line)
+            val removable = leadingIndentWidth(text)
+            if (removable == 0) null else TextEdit(range = start until (start + removable), newText = "")
+        }
+        if (edits.isEmpty()) return
+        applyTextEdits(edits)
+        if (!sel.collapsed) {
+            selection = TextRange(document.lineStart(firstLine), document.lineEnd(lastLine))
+        }
+    }
+
+    /** The inclusive range of lines the selection touches. */
+    private fun selectedLineRange(sel: TextRange): Pair<Int, Int> {
+        val first = document.offsetToLineCol(sel.min).first
+        // A selection ending exactly at a line start has not really reached that line; treating
+        // it as included would indent a line the user never highlighted.
+        val endOffset = if (sel.max > sel.min && sel.max == document.lineStart(
+                document.offsetToLineCol(sel.max).first,
+            )
+        ) {
+            sel.max - 1
+        } else {
+            sel.max
+        }
+        val last = document.offsetToLineCol(endOffset.coerceAtLeast(sel.min)).first
+        return first to maxOf(first, last)
+    }
+
+    /** How many characters of leading indentation one outdent step should remove. */
+    private fun leadingIndentWidth(lineText: String): Int {
+        if (lineText.startsWith("\t")) return 1
+        var spaces = 0
+        while (spaces < INDENT.length && spaces < lineText.length && lineText[spaces] == ' ') {
+            spaces++
+        }
+        return spaces
     }
 
     // ── Tokenization scheduling ───────────────────────────────────────────────

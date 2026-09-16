@@ -71,9 +71,11 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun getTokenizeDebounceMs ()J
 	public final fun getTokenizer ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
 	public final fun getUndoManager ()Lcom/aardarch/aardink/core/EditorUndoManager;
+	public final fun indentSelection ()V
 	public final fun loadText (Ljava/lang/String;)V
 	public final fun navigateTo-psREZIo (ILandroidx/compose/ui/text/TextRange;)V
 	public static synthetic fun navigateTo-psREZIo$default (Lcom/aardarch/aardink/core/CodeEditorState;ILandroidx/compose/ui/text/TextRange;ILjava/lang/Object;)V
+	public final fun outdentSelection ()V
 	public final fun redo ()Ljava/lang/String;
 	public final fun requestRename (I)V
 	public static synthetic fun requestRename$default (Lcom/aardarch/aardink/core/CodeEditorState;IILjava/lang/Object;)V
@@ -714,7 +716,7 @@ public final class com/aardarch/aardink/ui/CodeActionMenuKt {
 }
 
 public final class com/aardarch/aardink/ui/CodeEditorLayoutKt {
-	public static final fun CodeEditorLayout (Lcom/aardarch/aardink/core/CodeEditorState;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/FindReplaceState;Lcom/aardarch/aardink/core/FoldState;Lcom/aardarch/aardink/core/FoldingProvider;Ljava/util/List;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ZLcom/aardarch/aardink/ui/KeyboardToolbarStyle;Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;ZZZZZZLandroidx/compose/runtime/Composer;III)V
+	public static final fun CodeEditorLayout (Lcom/aardarch/aardink/core/CodeEditorState;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/FindReplaceState;Lcom/aardarch/aardink/core/FoldState;Lcom/aardarch/aardink/core/FoldingProvider;Ljava/util/List;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ZLcom/aardarch/aardink/ui/KeyboardToolbarStyle;Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;ZZZZZZLkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;III)V
 }
 
 public final class com/aardarch/aardink/ui/CompletionDropdownKt {

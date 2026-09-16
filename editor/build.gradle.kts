@@ -68,6 +68,17 @@ kotlin {
                 implementation(libs.kotlin.test.junit5)
                 runtimeOnly(libs.junit.jupiter.engine)
                 runtimeOnly(libs.junit.platform.launcher)
+                // Compose UI tests run on the desktop target: runComposeUiTest needs a real
+                // renderer, and the JVM one is the only headless-capable target here.
+                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+                implementation(compose.uiTest)
+                implementation(compose.desktop.currentOs)
+                // CodeEditorState defaults its scope to Dispatchers.Main, which the JVM
+                // has no implementation for until a UI dispatcher is on the classpath --
+                // the same requirement desktop consumers have. Without it every UI test
+                // fails with "Dispatchers.Main was accessed when the platform dispatcher
+                // was absent".
+                implementation(libs.kotlinx.coroutines.swing)
             }
         }
     }
