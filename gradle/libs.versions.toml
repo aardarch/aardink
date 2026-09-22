@@ -4,7 +4,7 @@
 [versions]
 
 # Plugin versions
-plugin-agp = "9.4.0"
+plugin-agp = "9.4.1"
 plugin-kotlin = "2.4.20"
 plugin-spotless = "8.10.2"
 plugin-kotlin-binary-compat = "0.18.2"
