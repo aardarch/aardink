@@ -4,14 +4,14 @@
 [versions]
 
 # Plugin versions
-plugin-agp = "9.4.0"
+plugin-agp = "9.4.1"
 plugin-kotlin = "2.4.20"
-plugin-spotless = "8.10.2"
+plugin-spotless = "8.10.3"
 plugin-kotlin-binary-compat = "0.18.2"
 plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
-plugin-roborazzi = "1.74.0" # https://github.com/takahirom/roborazzi/releases
-plugin-compose-multiplatform = "1.12.0" # https://github.com/JetBrains/compose-multiplatform/releases
+plugin-roborazzi = "1.75.0" # https://github.com/takahirom/roborazzi/releases
+plugin-compose-multiplatform = "1.12.1" # https://github.com/JetBrains/compose-multiplatform/releases
 
 # Major version definitions
 jvm = "21"
