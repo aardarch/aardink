@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.SourcesJar
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import java.net.URI
@@ -30,7 +31,7 @@ plugins {
 kotlin {
     jvmToolchain(jvmVersionInt)
 
-    androidLibrary {
+    android {
         namespace = "com.aardarch.aardink"
         compileSdk = 37
         minSdk = 26
@@ -50,10 +51,10 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api(compose.runtime)
-            api(compose.foundation)
-            api(compose.material3)
-            api(compose.ui)
+            api("org.jetbrains.compose.runtime:runtime")
+            api("org.jetbrains.compose.foundation:foundation")
+            api("org.jetbrains.compose.material3:material3")
+            api("org.jetbrains.compose.ui:ui")
             implementation(libs.kotlinx.coroutines.core)
             // The only non-Compose runtime dependency in :editor — EditorThemeParser.kt uses it
             // instead of the Android-only org.json, so the module compiles as common Kotlin.
@@ -63,15 +64,14 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
-        val jvmTest by getting {
+        named("jvmTest") {
             dependencies {
                 implementation(libs.kotlin.test.junit5)
                 runtimeOnly(libs.junit.jupiter.engine)
                 runtimeOnly(libs.junit.platform.launcher)
                 // Compose UI tests run on the desktop target: runComposeUiTest needs a real
                 // renderer, and the JVM one is the only headless-capable target here.
-                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
-                implementation(compose.uiTest)
+                implementation("org.jetbrains.compose.ui:ui-test")
                 implementation(compose.desktop.currentOs)
                 // CodeEditorState defaults its scope to Dispatchers.Main, which the JVM
                 // has no implementation for until a UI dispatcher is on the classpath --
@@ -160,7 +160,7 @@ mavenPublishing {
     configure(
         KotlinMultiplatform(
             javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
-            sourcesJar = true,
+            sourcesJar = SourcesJar.Sources(),
         ),
     )
     publishToMavenCentral(automaticRelease = true)

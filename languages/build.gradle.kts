@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.SourcesJar
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import java.net.URI
@@ -33,7 +34,7 @@ plugins {
 kotlin {
     jvmToolchain(jvmVersionInt)
 
-    androidLibrary {
+    android {
         namespace = "com.aardarch.aardink.languages"
         compileSdk = 37
         minSdk = 26
@@ -59,7 +60,7 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
         }
-        val jvmTest by getting {
+        named("jvmTest") {
             dependencies {
                 implementation(libs.kotlin.test.junit5)
                 runtimeOnly(libs.junit.jupiter.engine)
@@ -141,7 +142,7 @@ mavenPublishing {
     configure(
         KotlinMultiplatform(
             javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
-            sourcesJar = true,
+            sourcesJar = SourcesJar.Sources(),
         ),
     )
     publishToMavenCentral(automaticRelease = true)

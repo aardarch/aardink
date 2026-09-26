@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.SourcesJar
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import java.net.URI
@@ -32,7 +33,7 @@ plugins {
 kotlin {
     jvmToolchain(jvmVersionInt)
 
-    androidLibrary {
+    android {
         namespace = "com.aardarch.aardink.languages.lsp"
         compileSdk = 37
         minSdk = 26
@@ -52,8 +53,8 @@ kotlin {
     sourceSets {
         // StreamLspTransport (java.io Input/OutputStream) and its test are JVM/Android only;
         // the default hierarchy template doesn't create a shared set for exactly that pair.
-        val jvmAndAndroidMain by creating { dependsOn(commonMain.get()) }
-        val jvmAndAndroidTest by creating { dependsOn(commonTest.get()) }
+        val jvmAndAndroidMain = create("jvmAndAndroidMain") { dependsOn(commonMain.get()) }
+        val jvmAndAndroidTest = create("jvmAndAndroidTest") { dependsOn(commonTest.get()) }
         jvmMain.get().dependsOn(jvmAndAndroidMain)
         androidMain.get().dependsOn(jvmAndAndroidMain)
         jvmTest.get().dependsOn(jvmAndAndroidTest)
@@ -71,7 +72,7 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
         }
-        val jvmTest by getting {
+        named("jvmTest") {
             dependencies {
                 implementation(libs.kotlin.test.junit5)
                 runtimeOnly(libs.junit.jupiter.engine)
@@ -153,7 +154,7 @@ mavenPublishing {
     configure(
         KotlinMultiplatform(
             javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
-            sourcesJar = true,
+            sourcesJar = SourcesJar.Sources(),
         ),
     )
     publishToMavenCentral(automaticRelease = true)
