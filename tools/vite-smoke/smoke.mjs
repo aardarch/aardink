@@ -20,23 +20,10 @@
 //
 //   pnpm install && pnpm smoke          # CHROME_BIN overrides the Chrome location
 
-import { existsSync } from 'node:fs';
-import puppeteer from 'puppeteer-core';
-import { preview } from 'vite';
+import { startHarness } from './harness.mjs';
 
-const chromeCandidates = [
-  process.env.CHROME_BIN,
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium',
-].filter(Boolean);
-const executablePath = chromeCandidates.find((p) => existsSync(p));
-if (!executablePath) throw new Error('No Chrome found; set CHROME_BIN');
-
-const server = await preview({ preview: { port: 0 } });
-const url = server.resolvedUrls.local[0];
-const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
+const harness = await startHarness();
+const { browser, url } = harness;
 const failures = [];
 const notices = [];
 
@@ -72,8 +59,7 @@ try {
   if (failedChecks.length) failures.push(`failed checks: ${failedChecks.join(', ')}`);
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
 } finally {
-  await browser.close();
-  await new Promise((resolve) => server.httpServer.close(resolve));
+  await harness.close();
 }
 
 if (notices.length) {

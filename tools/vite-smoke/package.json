@@ -5,7 +5,9 @@
   "description": "Proves the @aardarch/aardink-web npm package works in a real Vite app. Not published.",
   "scripts": {
     "build": "vite build",
-    "smoke": "vite build && node smoke.mjs"
+    "smoke": "vite build && node smoke.mjs",
+    "checklist": "vite build && node checklist.mjs",
+    "perf": "vite build && node perf.mjs"
   },
   "dependencies": {
     "@aardarch/aardink-web": "file:../../sample-web/build/npm"

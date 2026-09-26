@@ -130,6 +130,12 @@ function Get-SuggestedNextVersion {
         [string]$Bump
     )
 
+    # Between releases VERSION_NAME carries the next version plus a suffix (0.6.0-SNAPSHOT).
+    # That version was chosen deliberately, so it is the suggestion regardless of the commits.
+    if ($CurrentVersion -match '^(\d+\.\d+\.\d+)-') {
+        return [PSCustomObject]@{ Version = $Matches[1]; Reason = "VERSION_NAME is $CurrentVersion" }
+    }
+
     $parts = $CurrentVersion.Split('.')
     $major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
 

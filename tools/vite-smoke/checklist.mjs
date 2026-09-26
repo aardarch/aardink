@@ -17,66 +17,22 @@
 // The automatable part of the web verification checklist (docs/WEB_INTEGRATION.md, W-1..W-10),
 // run against the production build of this Vite app in headless Chrome. Prints measurements;
 // it does not fail on thresholds, because the numbers are for a human to record and compare.
+// Latency gates live in perf.mjs.
 //
-//   pnpm build && node checklist.mjs
+//   pnpm build && node checklist.mjs [W-1 W-2 ...]   # no ids = every check
 
-import { existsSync } from 'node:fs';
-import puppeteer from 'puppeteer-core';
-import { preview } from 'vite';
+import { freshPage, largeKotlin, MOUNT, startHarness } from './harness.mjs';
 
-const executablePath = [
-  process.env.CHROME_BIN,
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium',
-].filter(Boolean).find((p) => existsSync(p));
-if (!executablePath) throw new Error('No Chrome found; set CHROME_BIN');
+const only = process.argv.slice(2).filter((a) => /^W-\d+$/.test(a));
+const wanted = (id) => only.length === 0 || only.includes(id);
 
-const server = await preview({ preview: { port: 0 } });
-const url = server.resolvedUrls.local[0];
-const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
-
-const kotlinLines = [
-  'package demo',
-  '',
-  '/** A sample block, repeated to build a large document. */',
-  'data class Point(val x: Int, val y: Int) {',
-  '    fun plus(other: Point): Point = Point(x + other.x, y + other.y)',
-  '    // a comment with "quotes" and 0x1F numbers',
-  '}',
-];
-const largeKotlin = (lines) => Array.from({ length: lines }, (_, i) => kotlinLines[i % kotlinLines.length]).join('\n');
-
-// Each check mounts into its own container laid over the viewport; #editor already holds the
-// smoke test's editor, and a second viewport in the same element would take the input.
-const MOUNT = `(() => {
-  document.getElementById('editor').style.display = 'none';
-  const box = document.createElement('div');
-  box.id = 'check';
-  box.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:10;background:#fff';
-  document.body.append(box);
-  return box;
-})()`;
-
-async function freshPage(options = {}) {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1000, height: 600, deviceScaleFactor: options.dpr ?? 1 });
-  await page.goto(url, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
-  return page;
-}
-
-const results = [];
-const record = (id, text) => {
-  results.push(`${id}: ${text}`);
-  console.log(`${id}: ${text}`);
-};
+const harness = await startHarness();
+const record = (id, text) => console.log(`${id}: ${text}`);
 
 try {
   // ── W-1: mount + dispose 50×, heap after forced GC ─────────────────────────
-  {
-    const page = await freshPage();
+  if (wanted('W-1')) {
+    const page = await freshPage(harness);
     const cdp = await page.createCDPSession();
     await cdp.send('Performance.enable');
     const heapMb = async () => {
@@ -106,10 +62,47 @@ try {
     await page.close();
   }
 
+  // ── W-2 (automated part): IME composition through the DevTools protocol ─────
+  // Input.imeSetComposition / Input.insertText are what Chrome's own IME bridge calls, so this
+  // covers composition start, update and commit, not the platform IMEs themselves (Pinyin,
+  // Japanese, Gboard, dead keys), which stay on the manual checklist.
+  if (wanted('W-2')) {
+    const page = await freshPage(harness);
+    await page.evaluate(async (mount) => {
+      window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: '' });
+    }, MOUNT);
+    await new Promise((r) => setTimeout(r, 500));
+    await page.mouse.click(200, 20);
+    const cdp = await page.createCDPSession();
+    const compose = async (steps, commit) => {
+      for (const text of steps) {
+        await cdp.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length });
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      await cdp.send('Input.insertText', { text: commit });
+      await new Promise((r) => setTimeout(r, 300));
+    };
+    const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+    const cases = [];
+    await compose(['n', 'に', 'にh', 'にほ', 'にほn', 'にほん'], '日本');
+    cases.push(['Japanese kana → kanji', await value(), '日本']);
+    await compose(['ご'], '語');
+    cases.push(['second composition appends', await value(), '日本語']);
+    await page.keyboard.type(' ');
+    await compose(['´'], 'é');
+    cases.push(['dead key (´ then e)', await value(), '日本語 é']);
+    await compose(['zhong', 'zhongwen'], '中文');
+    cases.push(['Pinyin-style letters → hanzi', await value(), '日本語 é中文']);
+    const failed = cases.filter(([, actual, expected]) => actual !== expected);
+    record('W-2', `${cases.length - failed.length}/${cases.length} simulated compositions committed exactly` +
+      (failed.length ? `; wrong: ${failed.map(([name, actual, expected]) => `${name} gave ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`).join('; ')}` : ''));
+    await page.close();
+  }
+
   // ── W-3: 100 KB paste latency and CRLF ─────────────────────────────────────
-  {
-    const page = await freshPage();
-    await browser.defaultBrowserContext().overridePermissions(url, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
+  if (wanted('W-3')) {
+    const page = await freshPage(harness);
+    await harness.browser.defaultBrowserContext().overridePermissions(harness.url, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
     const pasted = largeKotlin(3000).slice(0, 100 * 1024).replace(/\n/g, '\r\n');
     await page.evaluate(async (text, mount) => {
       window.__changes = [];
@@ -134,8 +127,8 @@ try {
   }
 
   // ── W-7: wheel over the editor must not scroll the page ───────────────────
-  {
-    const page = await freshPage();
+  if (wanted('W-7')) {
+    const page = await freshPage(harness);
     await page.evaluate(async (text) => {
       document.getElementById('editor').style.display = 'none';
       document.body.style.height = '3000px';
@@ -153,8 +146,8 @@ try {
   }
 
   // ── W-8: devicePixelRatio 2 ──────────────────────────────────────────────
-  {
-    const page = await freshPage({ dpr: 2 });
+  if (wanted('W-8')) {
+    const page = await freshPage(harness, { dpr: 2 });
     await new Promise((r) => setTimeout(r, 1000));
     await page.screenshot({ path: 'dist/checklist-dpr2.png' });
     const canvas = await page.evaluate(() => {
@@ -168,8 +161,8 @@ try {
   }
 
   // ── W-10: typing latency in a 5,000-line file; longest task while tokenizing ─
-  {
-    const page = await freshPage();
+  if (wanted('W-10')) {
+    const page = await freshPage(harness);
     const text = largeKotlin(5000);
     const longest = await page.evaluate(async (text, mount) => {
       const longTasks = [];
@@ -180,8 +173,8 @@ try {
       return { max: Math.max(0, ...longTasks), count: longTasks.length };
     }, text, MOUNT);
     await page.mouse.click(300, 30);
-    // Few keys, generous timeout: each keystroke re-lays-out the whole document (see
-    // docs/WEB_INTEGRATION.md), so at this size one key takes on the order of a second.
+    // Few keys, generous timeout: at 0.5 each keystroke re-lays-out the whole document, so at
+    // this size one key takes on the order of a second. perf.mjs has the full latency profile.
     const typed = 'val z ';
     const timings = [];
     for (const ch of typed) {
@@ -192,11 +185,10 @@ try {
     }
     timings.sort((a, b) => a - b);
     const median = timings[Math.floor(timings.length / 2)];
-    const p95 = timings[timings.length - 1];
-    record('W-10', `${(text.length / 1024).toFixed(0)} KB Kotlin: longest main-thread task during initial tokenization ${longest.max.toFixed(0)} ms (${longest.count} long tasks); keystroke→change median ${median.toFixed(0)} ms, worst ${p95.toFixed(0)} ms over ${timings.length} keys`);
+    const worst = timings[timings.length - 1];
+    record('W-10', `${(text.length / 1024).toFixed(0)} KB Kotlin: longest main-thread task during initial tokenization ${longest.max.toFixed(0)} ms (${longest.count} long tasks); keystroke→change median ${median.toFixed(0)} ms, worst ${worst.toFixed(0)} ms over ${timings.length} keys`);
     await page.close();
   }
 } finally {
-  await browser.close();
-  await new Promise((resolve) => server.httpServer.close(resolve));
+  await harness.close();
 }

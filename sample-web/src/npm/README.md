@@ -72,9 +72,9 @@ the measurements and the device checklist.
 - **Typing latency grows with document size, and fast typing can lose keys in large files.**
   Up to a few hundred lines of highlighted code it is comfortable. At 1,000 lines each keystroke
   keeps the editor busy for about half a second, and typing at 10 keys a second can drop around
-  half the keys. At 5,000 lines each keystroke takes several seconds. 0.5.x is for small files
-  such as configuration or markup documents; a virtualised renderer that fixes this is planned
-  for 0.6.0.
+  half the keys. At 5,000 lines each keystroke keeps it busy for several seconds. 0.5.x is for
+  small files such as configuration or markup documents; a virtualised renderer that fixes this
+  is planned for 0.6.0.
 - **A disposed editor is not fully released** (about 275 KB each), because Compose
   Multiplatform cannot yet tear down its viewport. Reuse one editor with `setValue` and
   `updateOptions` rather than mounting one per view.

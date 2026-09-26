@@ -170,42 +170,50 @@ Wasm GC and exception handling: Chrome/Edge 119+, Firefox 120+, Safari 18.2+.
 
 ## Performance
 
-Measured in headless Chrome on a desktop machine (`tools/vite-smoke/checklist.mjs`, and the
-harness's development build for profiles). Expect slower on phones.
+Measured with `tools/vite-smoke/perf.mjs` in headless Chrome 154 on a desktop machine, on
+highlighted Kotlin (0.5 renderer, 2026-09-27). Expect slower on phones.
 
-**Typing latency grows linearly with document size.** Keystroke to painted frame:
+- **Idle:** the time from the event until frames have come at display rate for a third of a
+  second, so it includes every frame the event causes, re-highlighting too.
+- **Keys lost:** a 30-character burst typed at 10 keys a second, about 120 words a minute.
 
-| Document | Kotlin | Plain text |
-| --- | --- | --- |
-| 250 lines (6 KB) | ~50 ms | — |
-| 1,000 lines (26 KB) | ~190 ms | — |
-| 2,000 lines (54 KB) | 90–440 ms | ~100 ms |
-| 5,000 lines (139 KB) | ~1 s | ~250 ms |
+| Document | Mount → idle | Key → idle, p50 / p95 | Key → change callback, p95 | Keys lost at 10 keys/s |
+| --- | --- | --- | --- | --- |
+| 50 lines (2 KB) | 22 ms | 13 / 29 ms | 15 ms | 0 of 30 |
+| 250 lines (8 KB) | 317 ms | 25 / 92 ms | 22 ms | 0 of 30 |
+| 1,000 lines (33 KB) | 604 ms | 487 / 642 ms | 30 ms | 16 of 30 |
+| 5,000 lines (163 KB) | 3.2 s | 3.7 / 4.6 s | 163 ms | 15–29 of 30 |
+
+**Typing cost grows with document size, and past a few hundred lines fast typing loses keys.**
+A key that arrives while the editor is still laying out after the previous one can be dropped.
+Keys typed one at a time with the editor idle in between are never lost.
 
 The cause is architectural. The editor is one `BasicTextField`, and Compose lays out the whole
 document as a single paragraph on every change, then again when Skia paints it. A profile of five
 keystrokes in 125 KB of Kotlin puts ~4.6 of ~6 s in `ParagraphLayouter.layoutParagraph`.
-Aardink's own share is small: re-applying token styles costs ~65 ms per keystroke at that size.
+Re-highlighting then applies a new style set to the whole document, which lays it out again.
+Aardink's own share is small: re-applying token styles costs ~65 ms per keystroke at 125 KB.
 Android runs the same design, but its native text stack is fast enough that it does not show.
-Fixing it for the web means rendering only the visible lines, which is a redesign; see the
-migration plan, §7.4.
+The fix is to lay out only the visible lines, which is what 0.6.0 does; see
+[AARDINK_0.6_PLAN.md](AARDINK_0.6_PLAN.md).
 
-Tokenization is not the bottleneck: documents over 64 KB are tokenized in chunks that yield to
-the browser (`EditorLimits`), and 64 KB of Kotlin takes ~170 ms of total tokenizing work. The first
-layout of a large document is one long task, though: ~1.4 s for 163 KB.
+Tokenization itself is not the bottleneck: documents over 64 KB are tokenized in chunks that
+yield to the browser (`EditorLimits`), and 64 KB of Kotlin takes ~170 ms of total tokenizing work.
 
-**Guidance:** fine for files of a few hundred lines, which is what the editor was designed
-around. Beyond ~1,000 lines of highlighted code, typing is noticeably laggy.
+**Guidance for 0.5:** fine for files of a few hundred lines, which is what the editor was designed
+around, such as configuration and markup documents. Do not use it for files beyond ~500 lines of
+highlighted code.
 
 ## Verification checklist
 
-Automated items run against the production build: `pnpm build && node checklist.mjs` in
-`tools/vite-smoke/` covers W-1, W-3, W-7, W-8 and W-10. The rest need real devices or a person.
+Automated items run against the production build: `pnpm checklist` in `tools/vite-smoke/`
+covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` runs a subset), and
+`pnpm perf` measures latency and lost keys. The rest need real devices or a person.
 
 | ID | Check | Result |
 | --- | --- | --- |
-| W-1 | Mount + dispose 50×, heap | **Leaks ~275 KB per disposed editor.** JS heap after forced GC goes 8.5 → 22.2 → 35.9 MB over two batches of 50; no canvases are left behind. Each `ComposeViewport` adds `resize`, `focus`, `blur`, `visibilitychange` and `dragend` listeners to `window` that Compose 1.12.1 never removes, and there is no public API to tear a viewport down. Removing those listeners by hand does not free the memory, so something inside the scene (such as the Recomposer's snapshot observers) also holds it. **Reuse one editor with `setValue`/`updateOptions` instead of mounting a new one per view.** To report upstream. |
-| W-2 | IME composition: CJK, macOS dead keys, Android Chrome Gboard | **Manual.** Not yet run. |
+| W-1 | Mount + dispose 50×, heap | **Leaks ~275 KB per disposed editor.** JS heap after forced GC goes 8.5 → 22.2 → 35.9 MB over two batches of 50; no canvases are left behind. Each `ComposeViewport` adds `resize`, `focus`, `blur`, `visibilitychange` and `dragend` listeners to `window` that Compose 1.12.1 never removes, and there is no public API to tear a viewport down. Removing those listeners by hand does not free the memory, so something inside the scene (such as the Recomposer's snapshot observers) also holds it. **Reuse one editor with `setValue`/`updateOptions` instead of mounting a new one per view.** Tracked upstream as [CMP-9090](https://youtrack.jetbrains.com/issue/CMP-9090) and [CMP-10507](https://youtrack.jetbrains.com/issue/CMP-10507); fixed for Compose Multiplatform 1.13, which disposes a viewport when its element leaves the DOM ([compose-multiplatform-core#3242](https://github.com/JetBrains/compose-multiplatform-core/pull/3242)). |
+| W-2 | IME composition: CJK, macOS dead keys, Android Chrome Gboard | **Automated part passes:** `checklist.mjs W-2` drives composition through the DevTools protocol (`Input.imeSetComposition` / `Input.insertText`), the path Chrome's own IME bridge uses: kana → kanji, a second composition, a simulated dead key and Pinyin-style letters all commit exactly (4/4). **Real IMEs still manual:** Windows/macOS CJK, macOS dead keys and press-and-hold, Android Chrome with Gboard. |
 | W-3 | Paste: 100 KB latency, CRLF, Firefox permission prompt | A 101 KB paste reports its change after ~120 ms. **CRLF used to be kept verbatim**; typed and pasted text is now normalised to LF. Firefox prompt: **manual**. |
 | W-4 | Selection: mouse drag, Shift+arrows, double-click, touch handles | **Manual.** |
 | W-5 | Mobile soft keyboard: viewport resize, toolbar placement | **Manual** (needs a phone). |
@@ -213,10 +221,10 @@ Automated items run against the production build: `pnpm build && node checklist.
 | W-7 | Wheel over the editor must not scroll the page | Contained: a 600 px wheel over the editor leaves the page's `scrollY` at 0. |
 | W-8 | devicePixelRatio and zoom | At DPR 2 the canvas has a 2000×1200 backing store for 1000×600 CSS px, and text and squiggles are sharp. Browser zoom: **manual**. |
 | W-9 | No flicker when Compose fetches a fallback font for a missing glyph | **Manual.** The bundled font swaps in once it loads (the first frame uses the default monospace). |
-| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin, keystroke → change callback has a median of ~160 ms and a worst case of ~330 ms; to a *painted frame* it is ~1 s. See [Performance](#performance). |
+| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke keeps the editor busy for 3.7 s (p50), and a 10 keys/s burst loses about half the keys. `perf.mjs` measures it; see [Performance](#performance). |
 
 ## Known limitations
 
-- Typing latency grows with document size (see [Performance](#performance)).
-- A disposed editor is not fully released (W-1); reuse editors.
+- Typing latency grows with document size, and past a few hundred lines fast typing loses keys (see [Performance](#performance)).
+- A disposed editor is not fully released (W-1); reuse editors. Fixed upstream for Compose Multiplatform 1.13.
 - No minimap, no bracket-pair colouring, no multi-cursor.

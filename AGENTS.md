@@ -74,8 +74,8 @@ All commands run from the repo root.
 ./gradlew checkAbiAll                           # Public ABI vs the committed dumps
 ./gradlew updateAbiAll                          # Rewrite the dumps after an intentional API change
 ./gradlew :sample:lintDebug                     # Lint (see the note below)
-./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck   # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply   # Auto-format
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply :sample-web:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :sample:verifyRoborazziDebug          # Screenshot regression check
 ./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change
@@ -117,7 +117,9 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **Compose-only** — zero XML layouts, zero Android resource files in the editor module
 - **No cross-module imports** — `editor` must not import from `sample` or any external module
 - **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
-  and commit the updated dumps under `*/api/`. Through 0.5.0 the diff must be purely additive.
+  and commit the updated dumps under `*/api/`. Every public symbol added, changed or removed
+  must be in the API ledger of [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5 and, if
+  it breaks consumers, in `docs/MIGRATION_0.6.md`. Nothing public is added without that.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
 - Tests: `kotlin.test` (`@Test` from `kotlin.test`) in `commonTest`; `runTest` rather than
@@ -160,19 +162,23 @@ The `editor` module is intentionally language-agnostic:
 
 ## Versioning
 
-SemVer. Breaking API changes require a major version bump. Don't introduce breaking changes lightly.
-After any intentional public API change, run `./gradlew updateAbiAll` and commit the updated
-dumps under `*/api/`. Until 0.5.0 ships, that diff must be purely additive.
+SemVer, pre-1.0: a minor bump (0.x → 0.x+1) may break the API; a patch never does. Don't
+introduce breaking changes lightly. After any intentional public API change, run
+`./gradlew updateAbiAll` and commit the updated dumps under `*/api/`.
 
-> The 0.5.0 multiplatform work carries a `feat(editor)!:` marker, scoped to packaging only.
-> `create-release.ps1` reads that `!` and will suggest a **1.0.0** bump; override it to the
-> intended version. The packaging change is that each library now publishes a Gradle Module
-> Metadata root plus one artifact per target rather than a single `.aar` — Android consumers
-> resolve `-android` automatically and need no change.
+**0.6.0 is a deliberate clean break** (the virtualised renderer and own text input, see
+[docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md)). Removals and signature changes are
+allowed on the 0.6 line only when they are in the plan's §5 API ledger, and each one gets a
+before/after entry in `docs/MIGRATION_0.6.md` in the same PR. Mark breaking commits with `!`
+(`feat(editor)!:`).
 
 The single source of truth for the published version is `VERSION_NAME` in
-`gradle.properties`. The `editor`, `languages` and `languages-lsp` modules all read it via the
-vanniktech Maven Publish plugin — never hardcode a version in `build.gradle.kts`.
+`gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the
+vanniktech Maven Publish plugin, and `:sample-web` stamps it into the npm package — never
+hardcode a version in `build.gradle.kts`. Between releases `VERSION_NAME` is the next version
+with a `-SNAPSHOT` suffix (now `0.6.0-SNAPSHOT`); `create-release.ps1` suggests the version
+without the suffix, and the first commit after a release moves `VERSION_NAME` to the next
+`-SNAPSHOT`.
 
 ## Releasing
 

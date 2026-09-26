@@ -46,7 +46,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Spotless check
-        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck
+        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck
 
       # Only :sample runs Android Lint. The three libraries are now
       # com.android.kotlin.multiplatform.library modules, and that plugin registers no `lint`
@@ -57,7 +57,7 @@ jobs:
         run: ./gradlew :sample:lintDebug
 
       # Fails on any public ABI change not reflected in the committed dumps under
-      # */api/. Every PR through to 0.5.0 must show a purely additive diff.
+      # */api/. On the 0.6 line every change must be in docs/AARDINK_0.6_PLAN.md section 5.
       - name: ABI check
         run: ./gradlew checkAbiAll
 
@@ -100,6 +100,14 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm smoke
 
+      # Latency on the 5,000-line reference document (docs/AARDINK_0.6_PLAN.md section 6). It only
+      # reports until the virtualised renderer lands; PR 7 turns on --gate.
+      - name: Web performance
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: node perf.mjs --keys 20
+
       - name: Upload web sample
         uses: actions/upload-artifact@v7
         with:
@@ -107,6 +115,7 @@ jobs:
           path: |
             sample-web/build/dist/wasmJs/productionExecutable
             tools/vite-smoke/dist/smoke.png
+            tools/vite-smoke/dist/perf.json
           retention-days: 14
 
       - name: Upload sample APKs

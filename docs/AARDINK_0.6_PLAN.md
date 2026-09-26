@@ -8,7 +8,8 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 | PR | State | Notes |
 | --- | --- | --- |
 | 0 | Not started | Spike: IME on three platforms, virtualised drawing on wasm. Gate for PR 5 onward. |
-| 1–17 | Not started | See §6. Merge order: 1, **15** (npm publishing; needs the manual npm bootstrap), then 2–14, 16, 17. |
+| 1 | Done | Branch `v0.6-uplift`. Dependencies already current (§3); `0.6.0-SNAPSHOT`; canary workflow; `perf.mjs` + 0.5 baseline; CDP IME check; CMP 1.13 findings (W-1 fixed upstream). |
+| 2–17 | Not started | See §6. Merge order: 1, **15** (npm publishing; needs the manual bootstrap in `docs/NPM_BOOTSTRAP.md`), then 2–14, 16, 17. |
 | A1–A3 | Not started | `aardflex-web-app` switch-over (§7.1). |
 | B1 | Not started | `aardflex` Android upgrade 0.4.0 → 0.6.0 (§7.2). |
 
@@ -35,7 +36,14 @@ plain audit turned up more gaps behind them:
 
   Fixing W-10 therefore means a new render and input path, not a tweak.
 - **A disposed web editor leaks about 275 KB (W-1).** `ComposeViewport` has no teardown in
-  CMP 1.12.1.
+  CMP 1.12.1. Upstream tracks this as CMP-9090 and CMP-10507, and has fixed it for CMP 1.13
+  (compose-multiplatform-core PR #3242, merged 2026-07-21). The viewport's root is now a
+  `<compose-component>` custom element whose `disconnectedCallback` disposes the whole app
+  (recomposer, scene, Skia layer, canvas event listeners) as soon as it leaves the DOM.
+- **Fast typing loses keys on the web** (found while building PR 1's performance gate). A key
+  that arrives while the editor is still laying out after the previous one can be dropped. At
+  1,000 lines a 10 keys/s burst loses about half the keys, and at 5,000 lines nearly all of
+  them. At 250 lines nothing is lost. PR 6 and PR 7 gate on zero lost keys.
 - **Manual device checks were never run:** W-2 IME, W-4 selection/touch, W-5 mobile keyboard,
   W-6 browser shortcuts, W-8 zoom, W-9 font flicker.
 - **Existing capability that is never shown to the user:**
@@ -94,8 +102,19 @@ Current stack, from `gradle/libs.versions.toml`:
 Policy for this plan:
 
 - **PR 1** takes every available stable bump, including a CMP 1.12.x patch if one exists.
-- **CMP 1.13** is adopted only if it is stable before PR 7 **and** the spike's skiko input
-  request still compiles against it (§4.1). Otherwise stay on 1.12.x for 0.6.0.
+  Checked 2026-09-27: every catalog entry, Gradle 9.8.0 and every GitHub Action were already on
+  their newest stable release. pnpm stays on 11 (as in astro-components); pnpm 12 is a major
+  with a new lockfile and gains nothing here.
+  - CMP 1.13.0-alpha01 already compiles, and `:editor:jvmTest` passes, with no source change
+    (local canary run).
+- **CMP 1.13 is wanted for 0.6.0.** It fixes W-1 (§1), and its web text input moved to a
+  `contenteditable` backing element (compose-multiplatform-core #3167). Checked on `jb-main`
+  (2026-09-27): the skiko `PlatformTextInputMethodRequest` only gained `editorToken: Any?` with
+  a default getter, so a request written against 1.12.1 still compiles.
+  - As of 2026-09-27, 1.13.0-alpha01 is the newest build.
+  - The spike (S1, S3, S5) runs against both 1.12.1 and the newest 1.13 pre-release.
+  - Adopt 1.13 at the first stable release before PR 17. If it isn't stable by then, ship
+    0.6.0 on 1.12.x with the W-1 known issue, and adopt 1.13 in 0.6.1.
 - **Build conventions:** every snippet follows the current DSL in `KMP_MIGRATION_PLAN.md`
   §2.4b (`android {}`, `SourcesJar.Sources()`, `named("jvmTest") { dependencies {} }`,
   `libs.compose.mp.*`).
@@ -398,11 +417,15 @@ building its own wasm executable.
     Promises.
   - `registerTheme(name, vsCodeThemeJson)`, built on `EditorThemeParser.fromJson`.
   - The npm `index.js` also converts Monaco `defineTheme` rules.
-- **W-1 mitigation:** an editor pool in `index.js`.
-  - `dispose()` parks the viewport's host `<div>` off-screen, and `createEditor` reuses it with
-    reset state.
-  - `destroy()` is the real teardown.
-  - The upstream CMP issue is filed in PR 1.
+- **W-1:** fixed by CMP 1.13's auto-dispose (§1).
+  - `AardinkWeb.dispose()` removes the viewport's `<compose-component>` from its container,
+    which on 1.13 triggers the full teardown. On 1.12.x the same call only stops the editor, and
+    the "reuse one editor" guidance stays.
+  - **No editor pool.** Parking a viewport by moving its element to another parent fires
+    `disconnectedCallback`, which on 1.13 disposes the app, so a reparenting pool would destroy
+    the editors it keeps.
+  - Hosts must not move a mounted editor's container around the DOM (document it; Svelte
+    `{#key}` blocks and React re-parenting do this).
 - **W-9:** `preloadAardink()` also fetches the font, and mount waits up to 500 ms for it. A
   font-load epoch invalidates the layout cache.
 - **W-8:** density and `fontScale` are part of the layout-cache key.
@@ -503,7 +526,7 @@ The report is committed as `docs/spikes/0.6-input-renderer.md`, with a go/no-go 
 | S2 render | 100k lines from the LRU cache. Our own work stays under 8 ms per frame on wasm while scrolling and typing. |
 | S3 source set | The `skikoMain` intermediate set compiles against CMP's skiko `actual interface`. If it doesn't, duplicate the roughly 150-line file into `jvmMain` and `wasmJsMain`. |
 | S4 web clipboard | The document-level listener works in Chrome, Firefox and Safari with no prompt. |
-| S5 pooling | A viewport's host `<div>` can be reparented between containers and resizes correctly. |
+| S5 teardown | On the newest CMP 1.13 pre-release, removing the viewport from the DOM frees it: 50 mount/dispose cycles grow the heap by less than 1 MB (the `checklist.mjs` W-1 probe). |
 | S6 semantics | `runComposeUiTest` drives the node via `InsertTextAtCursor`; TalkBack reads the line. |
 | S7 fallback | Only if S1 fails somewhere: the input proxy on that platform. |
 
@@ -516,17 +539,18 @@ Nothing from PR 5 onward starts until S1–S3 pass.
   - "through 0.5.0 additive" becomes the 0.6.0 clean-break rule.
   - Release notes: four artifacts plus the web zip.
   - The versioning note now includes `editor-web`.
-- **Docs:** a skeleton `docs/MIGRATION_0.6.md`. File the CMP YouTrack issue for `ComposeViewport`
-  teardown, with the W-1 repro, and link it from `WEB_INTEGRATION.md`.
-- **Performance gate:** `tools/vite-smoke/checklist.mjs --gate` reports p50 and p95 for:
-  - keystroke → painted frame
-  - keystroke → `onChange`
-  - first frame after mount
-  - 163 KB `setValue` → paint
-
-  Record the 0.5.0 baseline.
-- **IME automation:** a CDP script (`Input.imeSetComposition` / `Input.insertText`) that
-  partly automates W-2.
+- **Docs:** a skeleton `docs/MIGRATION_0.6.md`. No upstream issue to file: link CMP-9090 and
+  CMP-10507 (fixed for CMP 1.13) from `WEB_INTEGRATION.md`'s W-1 entry.
+- **Canary:** `.github/workflows/canary.yml`, run weekly and on demand. It builds and tests
+  `:editor`, `:languages` and `:editor-web` against the newest CMP pre-release, with the version
+  swapped into the catalog, and never blocks `main`.
+- **Performance gate:** `tools/vite-smoke/perf.mjs [--gate]` (shared set-up in `harness.mjs`)
+  reports mount → idle, keystroke → idle p50/p95, keystroke → `onChange` p95, `setValue` → idle,
+  scroll frame p95, and keys lost one at a time and in a 10 keys/s burst. It writes
+  `dist/perf.json`. CI runs it without `--gate` until PR 7. The 0.5 baseline is recorded in the
+  PR 7 table and in `WEB_INTEGRATION.md`.
+- **IME automation:** `checklist.mjs W-2` drives composition through CDP
+  (`Input.imeSetComposition` / `Input.insertText`); it passes 4/4 on 0.5.
 - **Unrelated fix:** the aardarch.github.io page shows `org.aardarch:aardink`; the real
   coordinate is `com.aardarch:aardink`. That is a separate repo, so it is noted here only.
 - **Public API:** none.
@@ -623,14 +647,20 @@ Nothing from PR 5 onward starts until S1–S3 pass.
 - **Performance gates:** CI enforces the gate column; the targets are measured locally and
   recorded in `WEB_INTEGRATION.md`.
 
-  | Measurement (wasm, Chrome) | Target | CI gate | 0.5.0 |
+  All measured by `tools/vite-smoke/perf.mjs` on the 5,000-line / 163 KB reference document.
+  "Idle" means frames have come at display rate for a third of a second, so it includes
+  re-highlighting and every other frame the event causes.
+
+  | Measurement (wasm, Chrome) | Target | CI gate | 0.5 baseline (2026-09-27) |
   | --- | --- | --- | --- |
-  | First frame, 163 KB | < 200 ms | < 400 ms | ~1.4 s |
-  | Keystroke → painted frame, 5,000 lines / 139 KB, p50 | < 16 ms | — | ~1 s |
-  | Keystroke → painted frame, 5,000 lines / 139 KB, p95 | < 33 ms | < 50 ms | ~1 s |
-  | Keystroke → `onChange`, p95 | < 20 ms | — | — |
-  | `setValue` 163 KB → paint | < 150 ms | — | — |
-  | Scrolling 5,000 lines, frame p95 | < 16.7 ms | — | — |
+  | Mount → idle (`mountToIdleMs`) | < 200 ms | < 400 ms | 3.2 s |
+  | Keystroke → idle, p50 | < 16 ms | — | 3.7 s |
+  | Keystroke → idle, p95 | < 33 ms | < 50 ms | 4.6 s |
+  | Keystroke → `onChange`, p95 | < 20 ms | — | 163 ms |
+  | `setValue` → idle | < 150 ms | — | 444 ms |
+  | Scrolling, frame p95 | < 20 ms (no dropped frames at 60 Hz) | — | 16.8 ms |
+  | Keys lost, one at a time | 0 | 0 | 0 |
+  | Keys lost, 30-key burst at 10 keys/s | 0 | 0 | 15–29 |
   | JVM command plus one-line relayout, median | < 2 ms | informational | — |
 
 - **Done when:** a manual pass on all three platforms covers typing, CJK IME, dead keys, Gboard,
@@ -686,12 +716,12 @@ Nothing from PR 5 onward starts until S1–S3 pass.
 
 - New options, events and commands; `registerTheme`, `registerLanguage` and the `tokenize`
   debug export.
-- The editor pool (W-1), font preload (W-9), density in the cache key (W-8), and the W-5 CSS
-  docs.
+- W-1 disposal through CMP 1.13 (§4.8), font preload (W-9), density in the cache key (W-8), and
+  the W-5 CSS docs.
 - **Tests:**
   - `AardinkWebTest`: registration, and a grammar with a lookbehind rejected.
   - Vite smoke test: register a toy grammar and check token colours by pixel probe.
-  - 50 pooled mount/dispose cycles grow the heap by less than 1 MB.
+  - On CMP 1.13: 50 mount/dispose cycles grow the heap by less than 1 MB.
 - **Optional PR 14b:** `connectLanguageServer(url, languageId)` over `WebSocketLspTransport`
   and `LspLanguageService`.
 
@@ -854,7 +884,8 @@ JavaScript (§4.8).
 6. `EditorPane.svelte`:
    - `onMount(async …)`, with a guard for unmount before the promise resolves.
    - Keep the `applyingExternal` echo guard.
-   - Keep one pane mounted, or rely on the pool.
+   - Keep one pane mounted and switch files with `setValue`, and never move its container in
+     the DOM (§4.8).
 7. `vite.config.ts`: `optimizeDeps.exclude: ['@aardarch/aardink-web']`. The Monaco include and
    the worker import move behind the flag.
 8. `firebase.json`: `application/wasm`, and long cache headers for hashed assets.
@@ -893,7 +924,7 @@ Monaco's on the fixtures, and bundle size recorded.
 | A full re-baseline hides a real regression. | The new scenes land in PR 5 so V1 and V2 are compared; a dedicated re-baseline commit with gallery sign-off. |
 | Scroll jumps from soft-wrap estimates. | Anchor-based scrolling; estimates are exact for monospace ASCII; corrections apply only below the anchor. |
 | Per-line layout cost on wasm. | Measured in spike S2; colour-only cache keys; no relayout for selection or carets; the text layer in a `graphicsLayer`. |
-| W-1 is not fixed upstream. | Pooling; hosts told to reuse editors; the issue is tracked. |
+| CMP 1.13 (the W-1 fix) is not stable before PR 17. | Ship 0.6.0 on 1.12.x with W-1 as a known issue and the reuse guidance; adopt 1.13 in 0.6.1. The canary job keeps the code ready for it. |
 | Slow regexes in registered grammars on wasm. | Lookbehind rejected; a line-stateful tokenizer scans only the current state's rules; the cooperative pass. |
 | Scope creep. | Cut line after PR 12; features are independent PRs after the switch-over. |
 | npm publish failures (trusted-publisher mismatch, provenance, npm CLI version). | The bootstrap runbook in PR 15; `repository.url` pinned; `npm@latest` in the job; publint and attw in CI; an idempotent publish step; the rc goes to `next` first. |

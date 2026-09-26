@@ -1,0 +1,100 @@
+name: Canary (next Compose Multiplatform)
+
+# Builds and tests the libraries against the newest Compose Multiplatform pre-release on Maven
+# Central (alpha, beta or rc), so an upstream change to the experimental skiko text-input API or
+# to the web viewport shows up here weeks before the stable release. Informational: it never
+# gates main, and a red run means "read the log before the next CMP bump", not "revert".
+
+on:
+  schedule:
+    - cron: '17 3 * * 1' # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      cmp-version:
+        description: 'Compose Multiplatform version (empty = newest on Maven Central)'
+        required: false
+        default: ''
+
+env:
+  CI: true
+
+jobs:
+  canary:
+    name: Build and test against the next CMP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+
+      # See ci.yml: Ubuntu 24.04 blocks the namespaces Chrome's sandbox needs.
+      - name: Allow the Chrome sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-provider: basic # MIT-licensed
+          cache-read-only: true # never let canary dependencies into main's cache
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # The catalog pins CMP and its separately versioned Material 3. Both are swapped for the
+      # newest version on Maven Central (the last <version> in maven-metadata.xml is the newest
+      # published, pre-releases included) unless one was given by hand.
+      - name: Point the catalog at the next CMP
+        id: versions
+        env:
+          REQUESTED: ${{ inputs.cmp-version }}
+        run: |
+          newest() {
+            curl -fsS "https://repo1.maven.org/maven2/$1/maven-metadata.xml" |
+              grep -o '<version>[^<]*</version>' | tail -1 | sed 's/<[^>]*>//g'
+          }
+          cmp="${REQUESTED:-$(newest org/jetbrains/compose/compose-gradle-plugin)}"
+          m3="$(newest org/jetbrains/compose/material3/material3)"
+          sed -i "s/^plugin-compose-multiplatform = \"[^\"]*\"/plugin-compose-multiplatform = \"$cmp\"/" gradle/libs.versions.toml
+          sed -i "s/^compose-multiplatform-material3 = \"[^\"]*\"/compose-multiplatform-material3 = \"$m3\"/" gradle/libs.versions.toml
+          grep -nE '^(plugin-compose-multiplatform|compose-multiplatform-material3|plugin-kotlin) ' gradle/libs.versions.toml
+          echo "cmp=$cmp" >> "$GITHUB_OUTPUT"
+          echo "### Canary against Compose Multiplatform $cmp (Material 3 $m3)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compile every target
+        run: ./gradlew :editor:assemble :languages:assemble :languages-lsp:assemble :editor-web:assemble :sample-web:npmPackage --continue
+
+      - name: JVM unit tests
+        run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest --continue
+
+      - name: wasmJs browser tests
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: ./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :editor-web:wasmJsBrowserTest --continue
+
+      # Informational: shows which public signatures the new CMP would change in our dumps.
+      - name: ABI drift
+        if: always()
+        run: ./gradlew checkAbiAll --continue || echo "ABI differs against CMP ${{ steps.versions.outputs.cmp }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: canary-test-results
+          path: |
+            editor/build/reports/tests/
+            languages/build/reports/tests/
+            languages-lsp/build/reports/tests/
+            editor-web/build/reports/tests/
+          retention-days: 14
