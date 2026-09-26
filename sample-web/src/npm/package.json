@@ -1,0 +1,27 @@
+{
+  "name": "@aardarch/aardink-web",
+  "version": "@VERSION@",
+  "description": "The Aardink code editor for the browser: Compose Multiplatform on WebAssembly behind a Monaco-shaped API.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aardarch/aardink.git"
+  },
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "kotlin/",
+    "JETBRAINS_MONO_OFL.txt"
+  ],
+  "sideEffects": false,
+  "dependencies": "@DEPENDENCIES@"
+}

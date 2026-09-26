@@ -15,22 +15,14 @@
  */
 @file:OptIn(ExperimentalJsExport::class)
 
-package com.aardarch.aardink.web
+package com.aardarch.aardink.sampleweb
 
-// ─────────────────────────────────────────────────────────────────────────────────────────────
-// THE @JsExport TEMPLATE (docs/KMP_MIGRATION_PLAN.md §6.3).
-//
-// Copy this file into the wasmJs module that builds your executable (the one declaring
-// binaries.executable()), change the package, and fill in the three marked places. It lives in
-// :editor-web's test sources so that every build proves it still compiles against AardinkWeb,
-// and ExportsTemplateTest exercises it; :sample-web holds the running copy.
-//
-// Handles cross the JS boundary as integer ids, not JsReference: simpler for the JS side, and
-// no reliance on JsReference semantics. Every export is prefixed `aardink` so it cannot collide
-// with your module's own exports.
-// ─────────────────────────────────────────────────────────────────────────────────────────────
+// The running copy of the @JsExport template (editor-web/src/wasmJsTest/.../ExportsTemplate.kt)
+// that the npm package's index.js calls. Keep the two in step: a change to one belongs in both.
 
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.web.AardinkEditorHandle
+import com.aardarch.aardink.web.AardinkWeb
 
 private val handles = mutableMapOf<Int, AardinkEditorHandle>()
 private var nextHandleId = 1
@@ -50,9 +42,7 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
         containerId = containerId,
         initialText = initialText,
         options = AardinkWeb.parseOptions(optionsJson),
-        // (1) Your languages: e.g. MyLanguages.register(LanguageRegistry.withBuiltIns()).
         registry = LanguageRegistry.withBuiltIns(),
-        // (2) Your themes: e.g. AardinkWeb.builtInThemes + ("my-dark" to MyDarkTheme).
         themes = AardinkWeb.builtInThemes,
     )
     val id = nextHandleId++
@@ -88,5 +78,4 @@ fun aardinkDispose(id: Int) {
     handles.remove(id)?.let(AardinkWeb::dispose)
 }
 
-// (3) Your published version, e.g. generated from Gradle.
-@JsExport fun aardinkVersion(): String = "0.0.0-template"
+@JsExport fun aardinkVersion(): String = BuildInfo.VERSION

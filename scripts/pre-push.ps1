@@ -104,6 +104,7 @@ try {
             (Join-Path $ProjectRoot 'languages-lsp' 'src'),
             (Join-Path $ProjectRoot 'editor-web' 'src'),
             (Join-Path $ProjectRoot 'sample-desktop' 'src'),
+            (Join-Path $ProjectRoot 'sample-web' 'src'),
             (Join-Path $ProjectRoot 'sample' 'src'),
             (Join-Path $ProjectRoot 'tools' 'consumer-smoke' 'src')
         )
@@ -129,7 +130,7 @@ try {
     # wasmJs-only libraries: no JVM target, so they join the Spotless and browser-test steps
     # but not the JVM one.
     $WebLibs = @(':editor-web')
-    $SpotlessModules = $Libs + $WebLibs + ':sample'
+    $SpotlessModules = $Libs + $WebLibs + ':sample' + ':sample-web'
     $SpotlessTasks = if ($NoFix) {
         $SpotlessModules | ForEach-Object { "${_}:spotlessCheck" }
     } else {
@@ -170,6 +171,23 @@ try {
                 $Tasks = ($Libs + $WebLibs) | ForEach-Object { "${_}:wasmJsBrowserTest" }
                 & $Gradlew @Tasks --quiet 2>&1 | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw 'wasmJs browser tests failed (is Chrome installed? set CHROME_BIN)' }
+            }
+
+            # The npm package in a real Vite app, in headless Chrome. Needs pnpm on PATH.
+            Invoke-Check 'Web npm package + Vite smoke test' {
+                & $Gradlew ':sample-web:npmPackage' ':sample-web:verifyExportsMatchTemplate' --quiet 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw 'Building the npm package failed' }
+                Push-Location (Join-Path $ProjectRoot 'tools' 'vite-smoke')
+                try {
+                    # --force: the package is a file: dependency, copied at install time, so a
+                    # plain install would keep testing the previous build.
+                    pnpm install --force --frozen-lockfile 2>&1 | Out-Host
+                    if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed (is pnpm installed?)' }
+                    pnpm smoke 2>&1 | Out-Host
+                    if ($LASTEXITCODE -ne 0) { throw 'Vite smoke test failed - see tools/vite-smoke/dist/smoke.png' }
+                } finally {
+                    Pop-Location
+                }
             }
         }
     }

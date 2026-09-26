@@ -94,6 +94,9 @@ final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.
 }
 
 final object com.aardarch.aardink.web/AardinkWeb { // com.aardarch.aardink.web/AardinkWeb|null[0]
+    final const val BUNDLED_FONT_PATH // com.aardarch.aardink.web/AardinkWeb.BUNDLED_FONT_PATH|{}BUNDLED_FONT_PATH[0]
+        final fun <get-BUNDLED_FONT_PATH>(): kotlin/String // com.aardarch.aardink.web/AardinkWeb.BUNDLED_FONT_PATH.<get-BUNDLED_FONT_PATH>|<get-BUNDLED_FONT_PATH>(){}[0]
+
     final val builtInThemes // com.aardarch.aardink.web/AardinkWeb.builtInThemes|{}builtInThemes[0]
         final fun <get-builtInThemes>(): kotlin.collections/Map<kotlin/String, com.aardarch.aardink.core/EditorTheme> // com.aardarch.aardink.web/AardinkWeb.builtInThemes.<get-builtInThemes>|<get-builtInThemes>(){}[0]
 
@@ -110,6 +113,7 @@ final object com.aardarch.aardink.web/AardinkWeb { // com.aardarch.aardink.web/A
     final fun redo(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/Boolean // com.aardarch.aardink.web/AardinkWeb.redo|redo(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun setDiagnostics(com.aardarch.aardink.web/AardinkEditorHandle, kotlin.collections/List<com.aardarch.aardink.web/WebDiagnostic>) // com.aardarch.aardink.web/AardinkWeb.setDiagnostics|setDiagnostics(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.collections.List<com.aardarch.aardink.web.WebDiagnostic>){}[0]
     final fun setDiagnosticsJson(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/String) // com.aardarch.aardink.web/AardinkWeb.setDiagnosticsJson|setDiagnosticsJson(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.String){}[0]
+    final fun setResourceUrl(kotlin/String, kotlin/String) // com.aardarch.aardink.web/AardinkWeb.setResourceUrl|setResourceUrl(kotlin.String;kotlin.String){}[0]
     final fun setValue(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/String) // com.aardarch.aardink.web/AardinkWeb.setValue|setValue(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.String){}[0]
     final fun showFind(com.aardarch.aardink.web/AardinkEditorHandle) // com.aardarch.aardink.web/AardinkWeb.showFind|showFind(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun undo(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/Boolean // com.aardarch.aardink.web/AardinkWeb.undo|undo(com.aardarch.aardink.web.AardinkEditorHandle){}[0]

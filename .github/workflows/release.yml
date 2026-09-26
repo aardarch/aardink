@@ -86,6 +86,16 @@ jobs:
           cp sample/build/outputs/apk/release/sample-release.apk "$apk"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
 
+      # A browser build of the harness, for trying a tagged release without a Vite project:
+      # unzip and serve the folder with any static file server.
+      - name: Build web sample
+        id: web
+        run: |
+          ./gradlew :sample-web:wasmJsBrowserDistribution
+          archive="aardink-sample-web-${GITHUB_REF_NAME}.zip"
+          (cd sample-web/build/dist/wasmJs/productionExecutable && zip -qr "$GITHUB_WORKSPACE/$archive" .)
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |
@@ -111,4 +121,4 @@ jobs:
             --notes-file "${{ steps.notes.outputs.file }}" \
             --verify-tag \
             "${{ steps.docs.outputs.archive }}" \
-            "${{ steps.apk.outputs.apk }}#Sample app (APK, debug-signed)"
+            "${{ steps.apk.outputs.apk }}#Sample app (APK, debug-signed)"             "${{ steps.web.outputs.archive }}#Web sample (static files)"

@@ -69,6 +69,40 @@ jobs:
       - name: Build sample app (debug + release) and verify screenshots
         run: ./gradlew :sample:assembleDebug :sample:assembleRelease :sample:verifyRoborazziDebug
 
+      # The browser harness, the @aardarch/aardink-web npm package, and the check that the
+      # running Exports.kt still matches the template consumers copy.
+      - name: Build web sample and npm package
+        run: ./gradlew :sample-web:wasmJsBrowserDistribution :sample-web:npmPackage :sample-web:verifyExportsMatchTemplate
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # A real Vite app installs the npm package, builds, and runs it in headless Chrome: every
+      # in-page check must pass and no request (a .wasm, the font) may fail.
+      - name: Vite smoke test
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm smoke
+
+      - name: Upload web sample
+        uses: actions/upload-artifact@v7
+        with:
+          name: sample-web-dist
+          path: |
+            sample-web/build/dist/wasmJs/productionExecutable
+            tools/vite-smoke/dist/smoke.png
+          retention-days: 14
+
       - name: Upload sample APKs
         uses: actions/upload-artifact@v7
         with:
@@ -88,6 +122,7 @@ jobs:
             languages/build/reports/tests/
             languages-lsp/build/reports/tests/
             editor-web/build/reports/tests/
+            tools/vite-smoke/dist/smoke.png
             sample/build/reports/tests/
 
       # Roborazzi writes the actual-vs-expected comparison images here when a screenshot

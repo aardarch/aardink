@@ -1,0 +1,52 @@
+<!doctype html>
+<!--
+  Copyright 2026 Aardarch
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aardink web harness</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+        html, body { height: 100%; margin: 0; }
+        body { display: flex; flex-direction: column; }
+        header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #8884; }
+        header label { display: inline-flex; gap: 4px; align-items: center; font-size: 14px; }
+        #editor { flex: 1; min-height: 0; position: relative; }
+        footer { display: flex; gap: 16px; padding: 4px 12px; font: 12px ui-monospace, monospace; border-top: 1px solid #8884; }
+        #stress-box { position: absolute; left: -10000px; width: 400px; height: 300px; }
+    </style>
+</head>
+<body id="aardink-harness">
+<header>
+    <label>Language <select id="language"></select></label>
+    <label>Theme <select id="theme"></select></label>
+    <label><input type="checkbox" id="wordWrap" checked> Wrap</label>
+    <label><input type="checkbox" id="showGutter" checked> Gutter</label>
+    <label><input type="checkbox" id="readOnly"> Read-only</label>
+    <button id="load-large" type="button">Load 5,000-line file</button>
+    <button id="stress" type="button" title="W-1: mount and dispose 50 editors, then report heap">Mount/dispose ×50</button>
+</header>
+<div id="editor"></div>
+<footer>
+    <span id="stats"></span>
+    <span id="caret"></span>
+    <span id="status"></span>
+</footer>
+<div id="stress-box"></div>
+<script type="application/javascript" src="sample-web.js"></script>
+</body>
+</html>

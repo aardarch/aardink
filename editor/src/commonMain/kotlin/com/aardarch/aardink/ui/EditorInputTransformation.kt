@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.forEachChangeReversed
 import androidx.compose.foundation.text.input.insert
+import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
 
@@ -51,15 +52,9 @@ internal class EditorInputTransformation(
     private val onOtherChange: () -> Unit,
 ) : InputTransformation {
 
-    // TODO(CRLF): nothing here normalises line endings. A paste from a Windows clipboard
-    // arrives as a multi-character change whose inserted text still contains CR LF
-    // pairs, and the carriage return is mirrored verbatim
-    // into CodeDocument, the token stream and the line index. Not reachable on Android
-    // today, which is why this is a note rather than a fix; desktop (a Windows paste) will
-    // hit it before the web checklist does. The fix is a normalising pass over inserted
-    // text here and in CodeEditorState.loadText -- deliberately deferred so it can be
-    // written against a real failing case rather than guessed at.
     override fun TextFieldBuffer.transformInput() {
+        normalizeLineEndings()
+
         var singleCharInsertAt = -1
         var singleCharTyped: Char? = null
         val isSingleChange = changes.changeCount == 1
@@ -113,12 +108,35 @@ internal class EditorInputTransformation(
             }
         }
 
-        state.bumpTextVersionAndScheduleTokenization()
+        // A pass with no text change is not an edit. On wasmJs every programmatic update of the
+        // field (loadText, undo, ...) is echoed back through here with an empty change list;
+        // bumping for it reported each setValue to the host twice and tokenized twice.
+        if (changes.changeCount > 0) state.bumpTextVersionAndScheduleTokenization()
 
         if (typedChar != null) {
             onSingleCharacterInsert(singleCharInsertAt, typedChar, autoCloseLength)
         } else {
             onOtherChange()
+        }
+    }
+
+    /**
+     * Rewrites CR LF (and a lone CR) in the text just inserted as LF, in the buffer itself, so
+     * the field shows and [CodeEditorState.document] receives the same text. A Windows clipboard
+     * or a browser paste delivers CR LF; left in, the carriage return is an invisible character
+     * a caret can stop on, and a paste into an LF document leaves mixed line endings.
+     *
+     * Only user input is normalised: [CodeEditorState.loadText] keeps a host's text verbatim, so a
+     * CR LF file round-trips unchanged.
+     */
+    private fun TextFieldBuffer.normalizeLineEndings() {
+        // Collected first, then rewritten from the end: editing while iterating the change list
+        // would shift the ranges still to come.
+        val inserted = ArrayList<TextRange>(changes.changeCount)
+        changes.forEachChangeReversed { range, _ -> if (range.length > 0) inserted += range }
+        for (range in inserted) {
+            val text = asCharSequence().substring(range.min, range.max)
+            if ('\r' in text) replace(range.min, range.max, text.replace("\r\n", "\n").replace('\r', '\n'))
         }
     }
 }

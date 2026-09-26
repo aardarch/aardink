@@ -39,7 +39,13 @@ sample/          # Minimal Android app for local development and manual testing 
   src/main/java/com/aardarch/aardink/sample/
   src/test/      # Roborazzi screenshot tests -- the Android zero-regression gate
 
+sample-desktop/  # JVM desktop harness (not published)
+sample-web/      # wasmJs executable: browser harness + builds the @aardarch/aardink-web npm package
+  src/wasmJsMain/kotlin/.../Exports.kt   # Running copy of editor-web's ExportsTemplate.kt -- keep in step
+  src/npm/       # index.js / index.d.ts / package.json template for the npm package
+
 tools/consumer-smoke/   # Android app depending on the PUBLISHED coordinates, not project(...)
+tools/vite-smoke/       # Vite app consuming the built npm package; `pnpm smoke` drives it in headless Chrome
 screenshots/     # Committed Roborazzi baselines -- verifyRoborazziDebug compares against these
 ```
 
@@ -75,6 +81,11 @@ All commands run from the repo root.
 ./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change
 ./scripts/verify-consumer.ps1                   # Publish to ~/.m2 and prove a real consumer still resolves -android
 ./gradlew dokkaAll                              # API docs (HTML)
+./gradlew :sample-desktop:run                   # Desktop harness
+./gradlew :sample-web:wasmJsBrowserDevelopmentRun   # Browser harness, with reload
+./gradlew :sample-web:npmPackage                # Build the npm package into sample-web/build/npm
+cd tools/vite-smoke; pnpm install --force; pnpm smoke   # npm package in a real Vite app (after npmPackage)
+cd tools/vite-smoke; pnpm build; node checklist.mjs     # Measure web checklist items W-1/3/7/8/10
 ```
 
 The wasmJs tests run in headless Chrome via Karma. Install Chrome locally and, if it is not
@@ -96,8 +107,8 @@ Before pushing, run the full local equivalent of CI:
 ```
 
 The script runs: secret scan, Apache 2.0 header check, Spotless, lint, the ABI check,
-JVM tests, wasmJs browser tests, the sample build, the Roborazzi screenshot check, and
-the consumer smoke test.
+JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; skipped with
+`-SkipWasm`), the sample build, the Roborazzi screenshot check, and the consumer smoke test.
 
 ## Code Conventions
 

@@ -19,6 +19,7 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.text.input.delete
 import androidx.compose.foundation.text.input.insert
+import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
@@ -212,5 +213,50 @@ class EditorInputTransformationTest {
         runInput(state) { insert(1, "b") }
 
         assertTrue(state.textVersion > before, "tokenization is scheduled off textVersion")
+    }
+
+    @Test
+    fun `a pass with no text change does not bump the text version`() {
+        // wasmJs echoes every programmatic field update back through the transformation with an
+        // empty change list; counting it reported each setValue to web hosts twice.
+        val state = stateFor("a")
+        val before = state.textVersion
+        runInput(state) { }
+
+        assertEquals(before, state.textVersion)
+    }
+
+    @Test
+    fun `a pasted CRLF block reaches field and document as LF`() {
+        val state = stateFor("ab")
+        runInput(state) {
+            insert(1, "x\r\ny\r\n")
+            // Where a real paste leaves the caret: right after the inserted text.
+            selection = TextRange(7)
+        }
+
+        assertEquals("ax\ny\nb", state.document.text)
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+        assertEquals(TextRange(5), state.textFieldState.selection, "caret stays right after the (shorter) pasted text")
+    }
+
+    @Test
+    fun `a lone carriage return typed as Enter becomes a newline keystroke`() {
+        val state = stateFor("{")
+        val recorded = runInput(state, TestLanguageService(autoCloseFor = emptyMap(), indentSpaces = 2)) {
+            insert(1, "\r")
+        }
+
+        assertEquals("{\n  ", state.document.text, "normalised first, so smart indent still runs")
+        assertEquals('\n', recorded.singleCharInserts.single().second)
+    }
+
+    @Test
+    fun `a CRLF file loaded by the host keeps its line endings`() {
+        // Only user input is normalised; a host's own text round-trips verbatim.
+        val state = stateFor("")
+        state.loadText("one\r\ntwo\r\n")
+
+        assertEquals("one\r\ntwo\r\n", state.document.text)
     }
 }

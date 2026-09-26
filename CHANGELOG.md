@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `onChange`, `setDiagnostics`, `dispose`, ...). It bundles JetBrains Mono (SIL OFL 1.1) for
   the font-less browser canvas, and comes with a compiled `@JsExport` template for the app
   module that builds the executable. See `docs/WEB_INTEGRATION.md`.
+- `:sample-web`, a browser harness, and the `@aardarch/aardink-web` npm package it builds: the
+  editor behind a Monaco-shaped `createEditor(...)` API, checked end to end in a real Vite app
+  (`tools/vite-smoke/`). `AardinkWeb.setResourceUrl` lets a bundler serve the bundled font from
+  wherever it emitted it.
 - `IncrementalTokenizer.tokenizeFullCooperative` and `EditorLimits` — on a single-threaded
   host (wasmJs) documents over 64 KB are tokenized in chunks that yield to the event loop,
   and documents over 2 MB skip highlighting and folding. Both thresholds are configurable;
@@ -105,6 +109,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pasted or typed text now has CR LF (and a lone CR) normalised to LF. A paste from a Windows
+  or browser clipboard used to leave invisible carriage returns in the document, which the caret
+  could stop on, and mixed line endings. Text a host passes to `loadText` is still kept verbatim.
+- An input pass that changed no text (on the web, every programmatic update of the field is
+  echoed back this way) no longer advances `textVersion`. It used to schedule a second
+  tokenization and report the change to listeners twice.
 - `LspClient` no longer skips connection teardown when the host cancels its scope while the
   receive loop is running, which could leave pending requests waiting forever and the
   transport open.

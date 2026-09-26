@@ -58,6 +58,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
+import org.jetbrains.compose.resources.ExperimentalResourceApi
+import org.jetbrains.compose.resources.configureWebResources
 
 /**
  * One editor mounted by [AardinkWeb.mount]. Opaque to hosts: every operation goes through
@@ -268,6 +270,34 @@ object AardinkWeb {
         handle.onCursorChange = null
         handle.scope.cancel()
     }
+
+    /**
+     * The path under which the bundled JetBrains Mono is requested, for [setResourceUrl].
+     */
+    const val BUNDLED_FONT_PATH: String =
+        "composeResources/com.aardarch.aardink.web.res/font/jetbrains_mono_regular.ttf"
+
+    /**
+     * Fetches the resource at [path] (e.g. [BUNDLED_FONT_PATH]) from [url] instead of from
+     * `./path` relative to the *page*, which is where Compose looks by default.
+     *
+     * A bundler that packages Aardink as a dependency puts its files somewhere else — Vite, for
+     * one, emits them as hashed assets — so the page-relative default misses them. Call this
+     * before [mount]. Other paths, including your own app's resources, keep the default.
+     */
+    @OptIn(ExperimentalResourceApi::class)
+    fun setResourceUrl(path: String, url: String) {
+        resourceUrls[path] = url
+        if (!resourceMappingInstalled) {
+            resourceMappingInstalled = true
+            configureWebResources {
+                resourcePathMapping { requested -> resourceUrls[requested] ?: "./$requested" }
+            }
+        }
+    }
+
+    private val resourceUrls = mutableMapOf<String, String>()
+    private var resourceMappingInstalled = false
 
     /** True once [dispose] has run. */
     fun isDisposed(handle: AardinkEditorHandle): Boolean = handle.disposed.value

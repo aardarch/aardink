@@ -34,8 +34,9 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | — | Done | Build DSL moved to the current plugin APIs (CMP 1.12.1, AGP 9.4.1, vanniktech 0.37) — see §2.4b. **Every snippet in this document that predates it has been updated; follow §2.4b over any older example you find elsewhere.** |
 | 7 | Done | Cooperative tokenization + `EditorLimits`; see §5.4a for what differs from the sketch. |
 | 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
-| 9 | **Next** | `:sample-web` harness, npm packaging (§6.4), W-1…W-10 checklist. |
-| 10–11 | Not started | |
+| 9 | Done | `:sample-web`, npm package, `tools/vite-smoke/`, checklist. See §7.4: W-1 leak and W-10 latency are open. |
+| 10 | **Next** | Release prep: README, remaining docs, dry-run tag. **Decide §7.4's open items first.** |
+| 11 | Not started | |
 
 ## 0. Executive summary and decisions
 
@@ -1215,6 +1216,57 @@ Executed against `:sample-web` during PR 9, results recorded in the doc:
 | W-8 | DPI/zoom: `devicePixelRatio` changes re-layout correctly; font sharpness |
 | W-9 | Fallback font loading: no visible flicker when Compose downloads a Noto subset for an unsupported glyph |
 | W-10 | Performance: typing latency in the 5,000-line file, with and without the cooperative-tokenization path (§5.4) |
+
+### 7.4 As implemented (PR 9), and what the checklist found
+
+Implementation, versus §6.4/§7.2:
+
+- **No `bridge.html`.** The compiled `.mjs` has a bare `import '@js-joda/core'` (Compose's
+  kotlinx-datetime), which a plain HTML page cannot resolve without an import map. Instead,
+  `tools/vite-smoke/` exercises the whole JS surface through the real npm package in a real Vite
+  build, driven by puppeteer-core (`pnpm smoke`), which is stronger than a hand-opened page. The
+  harness `index.html` uses the webpack distribution as usual. Its `main()` only runs on
+  `<body id="aardink-harness">`, so importing the same module from the npm package never touches a
+  host's page.
+- **The npm package ships the raw ES modules** from `wasmJsProductionExecutableCompileSync`,
+  which already contain `skiko.mjs`/`skiko.wasm`. Its `dependencies` are copied from the
+  package.json Kotlin generates. `@VERSION@` is stamped from `VERSION_NAME`, and `aardinkVersion()`
+  reads a generated `BuildInfo`.
+- **Fonts:** Compose resolves resources against the *page*, so `index.js` calls a new
+  `aardinkSetBundledFontUrl(new URL('./kotlin/composeResources/…', import.meta.url).href)`,
+  backed by a new `AardinkWeb.setResourceUrl` (`configureWebResources` +
+  `resourcePathMapping`). The literal `new URL` is also what makes Vite emit the font.
+- `:sample-web:verifyExportsMatchTemplate` (wired into `check` and CI) fails when `Exports.kt`
+  and editor-web's `ExportsTemplate.kt` export different functions.
+- Versions were current majors at the time: Vite 8.3, puppeteer-core 25.12,
+  `pnpm/action-setup@v6.1.0`, `actions/setup-node@v7`, Node 24.
+
+Fixed on the way (both in `:editor`, all platforms):
+
+- **CRLF (review B7).** Pasted text kept `\r\n` verbatim. `EditorInputTransformation` now
+  rewrites CR LF and lone CR to LF in the buffer before mirroring, so a lone `\r` typed as Enter
+  still triggers smart indent. `loadText`/`setValue` keep a host's text verbatim.
+- **Spurious `textVersion` bumps.** `transformInput` bumped even for passes with no text change;
+  on wasmJs every programmatic field update is echoed back that way, so each `setValue` reached
+  `onChange` twice and tokenized twice.
+
+**Open — decide before 0.5.0:**
+
+1. **W-1: each disposed editor leaks ~275 KB.** Every `ComposeViewport` registers five `window`
+   listeners that are never removed, and CMP 1.12.1 has no teardown API. Removing the listeners by
+   hand (tried) does not free the memory, so the scene is held elsewhere too (Recomposer / snapshot
+   observers). Needs an upstream issue. Until it is fixed, hosts should reuse editors.
+   `docs/WEB_INTEGRATION.md` says so.
+2. **W-10: typing latency is linear in document size**: ~50 ms per keystroke at 6 KB of Kotlin,
+   ~190 ms at 26 KB, ~1 s at 139 KB. A profile puts the time in Compose laying out the whole
+   `BasicTextField` text as one paragraph, twice per frame: once in measure and once inside
+   `SkiaParagraph.paint`. Aardink's share (`EditorOutputTransformation`) is ~65 ms per keystroke
+   at 125 KB. The fix is to lay out only the visible lines, which means leaving the
+   single-`BasicTextField` design: a large change touching input/IME handling, and Android. The
+   options are (a) ship 0.5.0 for small documents with the limits documented, (b) make
+   virtualisation a follow-up project, or (c) both. This decision belongs to the product owner.
+   For reference, the aardflex XML files it would replace Monaco for are typically a few hundred
+   lines.
 
 ## 8. Test strategy
 
