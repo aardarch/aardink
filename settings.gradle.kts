@@ -41,6 +41,7 @@ rootProject.name = "Aardink"
 include(":editor")
 include(":languages")
 include(":languages-lsp")
+include(":editor-web")
 include(":sample")
 include(":sample-desktop")
 include(":tools:consumer-smoke")

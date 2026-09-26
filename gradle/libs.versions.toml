@@ -63,6 +63,7 @@ compose-mp-foundation = { module = "org.jetbrains.compose.foundation:foundation"
 compose-mp-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-multiplatform-material3" }
 compose-mp-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "plugin-compose-multiplatform" }
 compose-mp-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "plugin-compose-multiplatform" }
+compose-mp-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "plugin-compose-multiplatform" }
 
 # Activity / Lifecycle (sample app only)
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }

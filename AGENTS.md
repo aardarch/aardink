@@ -30,6 +30,11 @@ languages-lsp/   # External Language Server Protocol bridge -- published as com.
   src/jvmAndAndroidMain/   # StreamLspTransport -- java.io has no common equivalent
   src/wasmJsMain/          # WebSocketLspTransport
 
+editor-web/      # Browser bridge -- published as com.aardarch:aardink-editor-web (wasmJs only)
+  src/wasmJsMain/kotlin/com/aardarch/aardink/web/   # AardinkWeb (mount/getValue/...), WebEditorOptions
+  src/wasmJsMain/composeResources/font/             # Bundled JetBrains Mono (OFL, see JETBRAINS_MONO_OFL.txt)
+  src/wasmJsTest/.../ExportsTemplate.kt             # The @JsExport template consumers copy -- compiled and tested here
+
 sample/          # Minimal Android app for local development and manual testing (not KMP)
   src/main/java/com/aardarch/aardink/sample/
   src/test/      # Roborazzi screenshot tests -- the Android zero-regression gate
@@ -58,13 +63,13 @@ All commands run from the repo root.
 
 ```pwsh
 ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest              # JVM unit tests
-./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest   # Browser tests (needs Chrome)
+./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest :editor-web:wasmJsBrowserTest   # Browser tests (needs Chrome)
 ./gradlew :editor:allTests                      # Every target for one module
 ./gradlew checkAbiAll                           # Public ABI vs the committed dumps
 ./gradlew updateAbiAll                          # Rewrite the dumps after an intentional API change
 ./gradlew :sample:lintDebug                     # Lint (see the note below)
-./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck   # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :sample:spotlessApply   # Auto-format
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :sample:verifyRoborazziDebug          # Screenshot regression check
 ./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change

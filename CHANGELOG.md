@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WebSocketLspTransport` (wasmJs only) — a browser transport for `LspClient`, alongside the
   existing `StreamLspTransport` (JVM/Android) and `ChannelLspTransport` (common).
 - Public ABI validation for all three libraries, with committed dumps under `*/api/`.
+- `com.aardarch:aardink-editor-web` (wasmJs), a browser bridge that mounts the editor into a DOM
+  element behind a flat `AardinkWeb` API (`mount`, `getValue`, `setValue`, `patchOptions`,
+  `onChange`, `setDiagnostics`, `dispose`, ...). It bundles JetBrains Mono (SIL OFL 1.1) for
+  the font-less browser canvas, and comes with a compiled `@JsExport` template for the app
+  module that builds the executable. See `docs/WEB_INTEGRATION.md`.
 - `IncrementalTokenizer.tokenizeFullCooperative` and `EditorLimits` — on a single-threaded
   host (wasmJs) documents over 64 KB are tokenized in chunks that yield to the event loop,
   and documents over 2 MB skip highlighting and folding. Both thresholds are configurable;

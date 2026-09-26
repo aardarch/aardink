@@ -40,7 +40,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Spotless check
-        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :sample:spotlessCheck
+        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck
 
       # Only :sample runs Android Lint. The three libraries are now
       # com.android.kotlin.multiplatform.library modules, and that plugin registers no `lint`
@@ -61,7 +61,7 @@ jobs:
       - name: wasmJs browser tests
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: ./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest
+        run: ./gradlew :editor:wasmJsBrowserTest :languages:wasmJsBrowserTest :languages-lsp:wasmJsBrowserTest :editor-web:wasmJsBrowserTest
 
       # verifyRoborazziDebug, not testDebugUnitTest: the plain test task re-renders the
       # screenshots but compares them against nothing. verifyRoborazziDebug runs the same
@@ -87,6 +87,7 @@ jobs:
             editor/build/reports/tests/
             languages/build/reports/tests/
             languages-lsp/build/reports/tests/
+            editor-web/build/reports/tests/
             sample/build/reports/tests/
 
       # Roborazzi writes the actual-vs-expected comparison images here when a screenshot

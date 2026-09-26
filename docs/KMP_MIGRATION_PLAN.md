@@ -33,8 +33,9 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | 6 | Done | `a887bab`. `:sample-desktop`, `EditorShortcuts`, `EditorScrollbars`, `platformDefault`, `CodeEditorLayoutUiTest`. |
 | — | Done | Build DSL moved to the current plugin APIs (CMP 1.12.1, AGP 9.4.1, vanniktech 0.37) — see §2.4b. **Every snippet in this document that predates it has been updated; follow §2.4b over any older example you find elsewhere.** |
 | 7 | Done | Cooperative tokenization + `EditorLimits`; see §5.4a for what differs from the sketch. |
-| 8 | **Next** | `:editor-web` (§6). |
-| 9–11 | Not started | |
+| 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
+| 9 | **Next** | `:sample-web` harness, npm packaging (§6.4), W-1…W-10 checklist. |
+| 10–11 | Not started | |
 
 ## 0. Executive summary and decisions
 
@@ -348,6 +349,11 @@ lockstep with the plugin; material3's separate version still needs a manual chec
 Add `kotlin.mpp.enableCInteropCommonization=false` (no native targets); raise
 `org.gradle.jvmargs` to `-Xmx6g` if the wasm link step needs it (verify during PR 3);
 commit the generated `kotlin-js-store/` lockfile once it appears.
+
+*As of PR 8:* `org.gradle.jvmargs` stayed at `-Xmx4g`, but `kotlin.daemon.jvmargs` had to go
+from `-Xmx2g` to `-Xmx4g`. Linking the four libraries' wasmJs test executables (each bundles
+Compose and Skiko) in one build ran the Kotlin daemon out of heap at 2g, even with
+`--no-parallel`.
 
 ## 3. Portability fixes in `commonMain`
 
@@ -1107,6 +1113,49 @@ folder verbatim into `aardflex-web-app`'s own Gradle project (§11).
 
 Browser requirements to document (Wasm GC + exception handling): Chrome/Edge 119+,
 Firefox 120+, Safari 18.2+.
+
+### 6.5 As implemented (PR 8)
+
+- **API differences from §6.2:** `showFind(handle)` has no `replace` flag, because
+  `FindReplaceState.show()` has none. `AardinkWeb.builtInThemes` replaces `EditorThemes.all`,
+  which does not exist; adding it would widen `:editor`'s public API for a web-only need.
+  Added: `currentOptions`, `patchOptions(json)` (Monaco-style partial update, so the template
+  needs no JSON merging), `parseOptions`, `setDiagnosticsJson`, `isDisposed`.
+- **Diagnostics** take a new `@Serializable WebDiagnostic` (Monaco-marker shape: 1-based, end
+  column exclusive) and convert to `Diagnostic`, whose `range` is *inclusive* of its last
+  character (that is how `SquiggleUnderline` reads it; `Diagnostic`'s KDoc saying "exclusive
+  end" is wrong).
+- **Language changes rebuild the `CodeEditorState`**, since its tokenizer is fixed at
+  construction. The text survives but undo history does not.
+- **Each editor gets its own `CoroutineScope(SupervisorJob() + Dispatchers.Main)`** passed to
+  `CodeEditorState`, because the default scope is never cancelled. `dispose()` cancels that
+  scope and drops the editor's composition (the viewport's content becomes empty).
+  **Compose 1.12.1 has no public API to tear down a `ComposeViewport`**, so the canvas and its
+  frame loop remain until the host removes the container. W-1 (PR 9) must measure what that
+  leaks.
+- **`ComposeViewport(element)`**, not the `viewportContainerId` overload. Neither is deprecated
+  in 1.12.1, and `@OptIn(ExperimentalComposeUiApi::class)` is still required (verified by
+  removing it).
+- **The font is loaded with `Res.readBytes` behind a fallback**, not `Font(Res.font...)`. The
+  latter throws inside composition when the file 404s, which kills the whole editor; that is
+  what happened under Karma, which does not serve `composeResources/`. Now a failed load logs one
+  line and keeps `FontFamily.Monospace`. It loads once per page. Only Regular is bundled (~270
+  KB); Skia synthesizes bold/italic.
+- **`onChange` compares against a version recorded when the state is created**, not the first
+  value the composition sees. Otherwise `mount()` followed immediately by `setValue()`, before
+  the first frame, is silently not reported.
+- **`@JsExport` re-export works** from a dependency klib into the consuming executable at
+  Kotlin 2.4.20, as checked with `:editor-web`'s test executable (main and test are separate
+  klibs). Confirm it with `:sample-web` in PR 9. The template (§6.3) is kept regardless, because
+  only the consumer knows its registry and themes. It is compiled in `editor-web/src/wasmJsTest/`
+  as `ExportsTemplate.kt` with `ExportsTemplateTest`, rather than shipped as a `.kt.txt`. Exports are
+  prefixed `aardink` (`aardinkCreate`, `aardinkGetValue`, ...) so they cannot collide with the
+  consumer's own. `docs/WEB_INTEGRATION.md` links the file instead of inlining a copy that could
+  drift. **§6.4's `index.js` must use these names.**
+- `compose.resources { generateResClass = Always }` is required: `Auto` only generates `Res` when
+  `components-resources` is a `commonMain` dependency, and here it is `wasmJsMain`-only.
+- `editor-web/karma.config.d/mocha-timeout.js` raises Mocha's 2 s per-test timeout: the first
+  mount in a page starts Skiko, which can outlast it on a cold headless Chrome.
 
 ## 7. Samples
 

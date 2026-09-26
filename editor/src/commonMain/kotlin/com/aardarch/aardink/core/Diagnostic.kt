@@ -22,7 +22,7 @@ package com.aardarch.aardink.core
  * beneath the exact offending token, rather than just a line number.
  */
 data class Diagnostic(
-    /** Document-absolute character range of the problematic text (exclusive end). */
+    /** Document-absolute character range of the problematic text, inclusive of its last character. */
     val range: IntRange,
     /** 0-based line number (derived from [range] for gutter display). */
     val lineNumber: Int,

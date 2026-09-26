@@ -102,6 +102,8 @@ try {
             (Join-Path $ProjectRoot 'editor' 'src'),
             (Join-Path $ProjectRoot 'languages' 'src'),
             (Join-Path $ProjectRoot 'languages-lsp' 'src'),
+            (Join-Path $ProjectRoot 'editor-web' 'src'),
+            (Join-Path $ProjectRoot 'sample-desktop' 'src'),
             (Join-Path $ProjectRoot 'sample' 'src'),
             (Join-Path $ProjectRoot 'tools' 'consumer-smoke' 'src')
         )
@@ -124,7 +126,10 @@ try {
     # ── 3. Spotless (format check or auto-fix) ─────────────────────────
     # Every published library, in one place so a new module only needs adding here.
     $Libs = @(':editor', ':languages', ':languages-lsp')
-    $SpotlessModules = $Libs + ':sample'
+    # wasmJs-only libraries: no JVM target, so they join the Spotless and browser-test steps
+    # but not the JVM one.
+    $WebLibs = @(':editor-web')
+    $SpotlessModules = $Libs + $WebLibs + ':sample'
     $SpotlessTasks = if ($NoFix) {
         $SpotlessModules | ForEach-Object { "${_}:spotlessCheck" }
     } else {
@@ -162,7 +167,7 @@ try {
 
         if (-not $SkipWasm) {
             Invoke-Check 'Unit tests (wasmJs browser)' {
-                $Tasks = $Libs | ForEach-Object { "${_}:wasmJsBrowserTest" }
+                $Tasks = ($Libs + $WebLibs) | ForEach-Object { "${_}:wasmJsBrowserTest" }
                 & $Gradlew @Tasks --quiet 2>&1 | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw 'wasmJs browser tests failed (is Chrome installed? set CHROME_BIN)' }
             }

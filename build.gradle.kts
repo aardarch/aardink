@@ -11,8 +11,8 @@ plugins {
     alias(libs.plugins.plugin.roborazzi) apply false
 }
 
-/** The three published Kotlin Multiplatform libraries. */
-val publishedLibraries = listOf(":editor", ":languages", ":languages-lsp")
+/** The published Kotlin Multiplatform libraries. */
+val publishedLibraries = listOf(":editor", ":languages", ":languages-lsp", ":editor-web")
 
 tasks.register("dokkaAll") {
     group = "documentation"
