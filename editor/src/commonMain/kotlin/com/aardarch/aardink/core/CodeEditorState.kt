@@ -428,6 +428,20 @@ class CodeEditorState(
      */
     var computeDispatcher: CoroutineDispatcher = EditorDispatchers.compute
 
+    /**
+     * Whether [computeDispatcher] shares a thread with the UI, which is what switches on the
+     * [EditorLimits] guards. Mirrors [EditorDispatchers.computeIsMainThread]; tests flip it to
+     * exercise the wasmJs paths on the JVM.
+     */
+    internal var computeOnMainThread: Boolean = EditorDispatchers.computeIsMainThread
+
+    /**
+     * True when the document is too large to tokenize or fold on this platform at all (see
+     * [EditorLimits.plainTextFallbackChars]); it then renders in the plain text colour.
+     */
+    internal val exceedsAnalysisLimit: Boolean
+        get() = computeOnMainThread && document.length > EditorLimits.plainTextFallbackChars
+
     private var tokenizationJob: Job? = null
     private val tokenizationScope = scope
 
@@ -450,8 +464,25 @@ class CodeEditorState(
     }
 
     private suspend fun runTokenization() {
+        if (exceedsAnalysisLimit) {
+            // Also clears dirtyLines, so shrinking back under the limit retokenizes from scratch.
+            tokenCache.reset(document, emptyList())
+            tokenVersion++
+            return
+        }
+
         val snapshot = document.text
         val dirty = document.dirtyLines
+
+        // On a single-threaded host a large document goes through the chunked full pass even when
+        // only a few lines changed: tokenizeLines cannot suspend, and the built-in tokenizers
+        // retokenize the whole text there anyway.
+        if (computeOnMainThread && snapshot.length > EditorLimits.cooperativeTokenizeThresholdChars) {
+            val allTokens = withContext(computeDispatcher) { tokenizer.tokenizeFullCooperative(snapshot) }
+            tokenCache.reset(document, allTokens)
+            tokenVersion++
+            return
+        }
 
         // Read the cache here, on the scope's dispatcher, not inside the withContext below.
         // TokenCache.tokens is a *mutating* getter: it rebuilds and caches a flattened list

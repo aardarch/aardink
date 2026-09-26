@@ -110,6 +110,10 @@ the consumer smoke test.
 - **Never reference `Dispatchers.Default` or `Dispatchers.IO` directly** in `:editor` or
   `:languages-lsp`. Use `EditorDispatchers`: `Dispatchers.IO` does not exist on wasmJs, and
   `Dispatchers.Default` there is the UI event loop, not a background pool.
+- **No lookbehind (`(?<=` / `(?<!`) in tokenizer rules.** Kotlin/wasm runs its own regex
+  engine, which evaluates a lookbehind at every candidate position — one such rule made a
+  3 KB Kotlin file take a second to highlight in the browser. Type tokens from their context
+  in `RegexTokenizer.refine` instead (see `KotlinTokenizer`).
 - **Do not add runtime dependencies without necessity** — `:editor` depends on Compose plus
   `kotlinx-serialization-json` (an agreed exception: `EditorThemeParser` needs it in place of
   the Android-only `org.json` so the module compiles as common Kotlin); `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.

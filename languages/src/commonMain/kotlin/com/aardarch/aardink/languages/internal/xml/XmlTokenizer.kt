@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages.internal.xml
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.CooperativePacer
 
 /**
  * XML tokenizer with an explicit state machine — regex on its own struggles to keep tag names,
@@ -34,11 +35,20 @@ import com.aardarch.aardink.core.TokenType
  */
 object XmlTokenizer : IncrementalTokenizer {
 
-    override fun tokenizeFull(text: String): List<Token> {
+    override fun tokenizeFull(text: String): List<Token> = scan(text) { }
+
+    override suspend fun tokenizeFullCooperative(text: String): List<Token> {
+        val pacer = CooperativePacer()
+        return scan(text) { tokenCount -> pacer.onProgress(tokenCount) }
+    }
+
+    /** The one scanner behind both entry points; [onStep] runs before each character is examined. */
+    private inline fun scan(text: String, onStep: (tokenCount: Int) -> Unit): List<Token> {
         val tokens = ArrayList<Token>(text.length / 8)
         var i = 0
         val n = text.length
         while (i < n) {
+            onStep(tokens.size)
             val c = text[i]
             // <!-- comment -->
             if (c == '<' && i + 3 < n && text[i + 1] == '!' && text[i + 2] == '-' && text[i + 3] == '-') {

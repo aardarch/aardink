@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.kotlin
 
+import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
@@ -40,14 +41,8 @@ object KotlinTokenizer : RegexTokenizer() {
         Regex("\"(?:\\\\.|[^\"\\\\\\n])*\"") to TokenType.StringLiteral,
         // Char literal: any single character, escape sequence, or 4-digit unicode escape
         Regex("'(?:\\\\u[0-9A-Fa-f]{4}|\\\\.|[^'\\\\\\n])'") to TokenType.StringLiteral,
-        // The next two rules use lookbehind, which compiles to a JS RegExp lookbehind on
-        // wasmJs. That is the narrowest browser requirement in the library: Safari only
-        // gained lookbehind support in 16.4. Still comfortably inside the WasmGC floor
-        // (Safari 18.2+) the editor already requires, so it costs nothing in practice.
-        // Function declaration: highlight the name immediately following `fun`
-        Regex("(?<=\\bfun\\s)[A-Za-z_][A-Za-z0-9_]*") to TokenType.FunctionCall,
-        // Class / object / interface declaration name
-        Regex("(?<=\\b(?:class|object|interface|enum)\\s)[A-Za-z_][A-Za-z0-9_]*") to TokenType.TypeName,
+        // Declaration names (`fun name`, `class Name`, ...) are typed in refine() below rather
+        // than by lookbehind rules here -- see refine() for why.
         Regex("@[A-Za-z_][A-Za-z0-9_]*") to TokenType.Annotation,
         Regex("\\b(?:0[xX][\\dA-Fa-f_]+|0[bB][01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d+)?[fFlLuU]*)\\b") to TokenType.Number,
         Regex("\\b(?:" + keywords.joinToString("|") + ")\\b") to TokenType.Keyword,
@@ -57,6 +52,42 @@ object KotlinTokenizer : RegexTokenizer() {
         Regex("[{}\\[\\]();,.:]") to TokenType.Punctuation,
         Regex("[+\\-*/%=!<>&|^~?]+") to TokenType.Operator,
     )
+
+    /**
+     * Highlights the name right after a declaration keyword: `fun name` as a function, `class`,
+     * `object`, `interface` or `enum` followed by a name as a type. These were lookbehind rules
+     * (`(?<=\bfun\s)...`), which Kotlin/wasm's regex engine evaluates at every candidate position
+     * -- the `class|object|...` one took seconds to tokenize a 3 KB file in the browser. The
+     * other rules already give the name its full `[A-Za-z_][A-Za-z0-9_]*` extent, so only its
+     * type needs changing.
+     */
+    override fun refine(text: String, tokens: MutableList<Token>) {
+        for (i in 1 until tokens.size) {
+            val keyword = tokens[i - 1]
+            val name = tokens[i]
+            if (keyword.type != TokenType.Keyword) continue
+            // Exactly one whitespace character between them, as `\s` in the old rules required.
+            if (name.start != keyword.end + 1 || text[keyword.end] !in REGEX_WHITESPACE) continue
+            if (!text[name.start].isAsciiIdentifierStart() || name.end != identifierEnd(text, name.start)) continue
+            val declared = when (text.substring(keyword.start, keyword.end)) {
+                "fun" -> TokenType.FunctionCall
+                "class", "object", "interface", "enum" -> TokenType.TypeName
+                else -> continue
+            }
+            tokens[i] = name.copy(type = declared)
+        }
+    }
+
+    // What `\s` matches in the JVM and Kotlin regex engines.
+    private const val REGEX_WHITESPACE = " \t\n\u000B\u000C\r"
+
+    private fun Char.isAsciiIdentifierStart(): Boolean = this == '_' || this in 'A'..'Z' || this in 'a'..'z'
+
+    private fun identifierEnd(text: String, start: Int): Int {
+        var end = start
+        while (end < text.length && text[end].let { it == '_' || it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' }) end++
+        return end
+    }
 
     override fun keyboardToolbarChars(): List<Char> = listOf('{', '}', '(', ')', '"', '$', '.', ':', '<', '>', '=')
 }

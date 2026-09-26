@@ -190,6 +190,15 @@ public abstract interface class com/aardarch/aardink/core/DiffProvider {
 	public abstract fun diff (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
 }
 
+public final class com/aardarch/aardink/core/EditorLimits {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorLimits;
+	public final fun getCooperativeTokenizeThresholdChars ()I
+	public final fun getPlainTextFallbackChars ()I
+	public final fun setCooperativeTokenizeThresholdChars (I)V
+	public final fun setPlainTextFallbackChars (I)V
+}
+
 public final class com/aardarch/aardink/core/EditorTheme {
 	public static final field $stable I
 	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -405,11 +414,13 @@ public abstract interface class com/aardarch/aardink/core/IncrementalTokenizer {
 	public abstract fun canSpanLines (ILjava/util/List;)Z
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public abstract fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
 }
 
 public final class com/aardarch/aardink/core/IncrementalTokenizer$DefaultImpls {
 	public static fun keyboardToolbarChars (Lcom/aardarch/aardink/core/IncrementalTokenizer;)Ljava/util/List;
+	public static fun tokenizeFullCooperative (Lcom/aardarch/aardink/core/IncrementalTokenizer;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class com/aardarch/aardink/core/LanguageService {
@@ -506,6 +517,7 @@ public final class com/aardarch/aardink/core/PlainTextTokenizer : com/aardarch/a
 	public fun canSpanLines (ILjava/util/List;)Z
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
 }
 

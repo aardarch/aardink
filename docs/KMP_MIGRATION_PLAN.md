@@ -24,6 +24,18 @@ and did not account for this repo's actual blockers. This document is written to
 executed directly by an implementation agent: every section gives concrete file paths,
 Gradle snippets, and Kotlin signatures rather than general guidance.
 
+## Progress
+
+| PR | State | Notes |
+| --- | --- | --- |
+| 0–5 | Done | Reviewed in `docs/KMP_MIGRATION_REVIEW.md`. |
+| 5.5 | Done | Review §E remediation: CI/scripts, ABI baseline, Dokka, `LspClient` fixes, §3.2–3.4 items, `WebSocketLspTransport`, PR 1's owed tests, docs. |
+| 6 | Done | `a887bab`. `:sample-desktop`, `EditorShortcuts`, `EditorScrollbars`, `platformDefault`, `CodeEditorLayoutUiTest`. |
+| — | Done | Build DSL moved to the current plugin APIs (CMP 1.12.1, AGP 9.4.1, vanniktech 0.37) — see §2.4b. **Every snippet in this document that predates it has been updated; follow §2.4b over any older example you find elsewhere.** |
+| 7 | Done | Cooperative tokenization + `EditorLimits`; see §5.4a for what differs from the sketch. |
+| 8 | **Next** | `:editor-web` (§6). |
+| 9–11 | Not started | |
+
 ## 0. Executive summary and decisions
 
 | Decision | Choice | Why |
@@ -173,6 +185,7 @@ needs to change per module.)
 ```kotlin
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.SourcesJar
 
 plugins {
     alias(libs.plugins.plugin.kotlin.multiplatform)
@@ -198,7 +211,7 @@ kotlin {
     jvm()
     wasmJs {
         browser {
-            testTask { useKarma { useChromeHeadless() } }
+            // No explicit useKarma { useChromeHeadless() } -- see §2.4a.
         }
         // No binaries.executable() — this module is a klib, consumed by :editor-web
         // or a downstream app module.
@@ -208,23 +221,25 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api(compose.runtime)
-            api(compose.foundation)
-            api(compose.material3)
-            api(compose.ui)
+            api(libs.compose.mp.runtime)
+            api(libs.compose.mp.foundation)
+            api(libs.compose.mp.material3)
+            api(libs.compose.mp.ui)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
-            implementation(compose.uiTest)
         }
-        jvmTest.dependencies {
-            implementation(libs.kotlin.test.junit5)
-            runtimeOnly(libs.junit.jupiter.engine)
-            runtimeOnly(libs.junit.platform.launcher)
-            implementation(compose.desktop.currentOs)
+        named("jvmTest") {
+            dependencies {
+                implementation(libs.kotlin.test.junit5)
+                runtimeOnly(libs.junit.jupiter.engine)
+                runtimeOnly(libs.junit.platform.launcher)
+                implementation(libs.compose.mp.ui.test)
+                implementation(compose.desktop.currentOs)
+            }
         }
     }
 }
@@ -239,7 +254,7 @@ mavenPublishing {
     configure(
         KotlinMultiplatform(
             javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
-            sourcesJar = true,
+            sourcesJar = SourcesJar.Sources(),
         ),
     )
     publishToMavenCentral(automaticRelease = true)
@@ -268,8 +283,8 @@ policy). Add the hand-created shared source set (§1):
 ```kotlin
 kotlin {
     sourceSets {
-        val jvmAndAndroidMain by creating { dependsOn(commonMain.get()) }
-        val jvmAndAndroidTest by creating { dependsOn(commonTest.get()) }
+        val jvmAndAndroidMain = create("jvmAndAndroidMain") { dependsOn(commonMain.get()) }
+        val jvmAndAndroidTest = create("jvmAndAndroidTest") { dependsOn(commonTest.get()) }
         jvmMain.get().dependsOn(jvmAndAndroidMain)
         androidMain.get().dependsOn(jvmAndAndroidMain)
         jvmTest.get().dependsOn(jvmAndAndroidTest)
@@ -309,6 +324,24 @@ These were deliberate and are load-bearing. Do not "fix" them back to what §2.4
 - **ABI task names are `checkKotlinAbi` / `updateKotlinAbi`** (§9.2's first guess), aggregated
   by root `checkAbiAll` / `updateAbiAll`. `checkLegacyAbi` / `updateLegacyAbi` also exist as
   aliases.
+
+### 2.4b Current build DSL — use this in every new or changed module
+
+Commits `00ec1d7` / `7f49676` (and the catalog fix after them) moved the build onto the
+non-deprecated APIs of Compose Multiplatform 1.12.1, AGP 9.4.1 and vanniktech 0.37. New
+modules (`:editor-web`, `:sample-web`, `aardflex-web-app`'s `editor-wasm/`) follow the same
+rules:
+
+| Instead of (deprecated) | Use |
+| --- | --- |
+| `compose.runtime`, `compose.foundation`, `compose.material3`, `compose.ui`, `compose.uiTest`, `compose.components.resources` | The `libs.compose.mp.*` catalog entries (`compose-mp-runtime`, `-foundation`, `-material3`, `-ui`, `-ui-test`; add `-components-resources` for §6). **These coordinates carry no implicit version** — the plugin is not a BOM, so a bare `"org.jetbrains.compose.ui:ui"` string fails resolution. Everything except material3 uses `version.ref = "plugin-compose-multiplatform"`; material3 has its own line (`compose-multiplatform-material3`), so read the CMP release notes for it on every bump. `compose.desktop.currentOs` is not deprecated and stays. |
+| `androidLibrary { }` | `android { }` inside `kotlin { }` |
+| `sourcesJar = true` | `sourcesJar = SourcesJar.Sources()` |
+| `val jvmTest by getting { }` | `named("jvmTest") { dependencies { } }` (`commonMain.dependencies { }` / `commonTest.dependencies { }` accessors are fine) |
+| `val x by creating { }` | `val x = create("x") { }` |
+
+Renovate groups `org.jetbrains.compose.*:**` with Kotlin, so the library coordinates move in
+lockstep with the plugin; material3's separate version still needs a manual check.
 
 ### 2.5 `gradle.properties`
 
@@ -408,9 +441,9 @@ val LocalEditorTypography: ProvidableCompositionLocal<EditorTypography> = static
 `EditorDefaults.fontSize`/`lineHeight`. Defaults are identical to today's constants, so
 Android output (and Roborazzi screenshots) is pixel-unchanged unless a host explicitly
 provides the local. **No font is bundled inside `:editor`** — that would add ~250 KB to
-every Android consumer and force `compose.components.resources` into the library's public
+every Android consumer and force `components-resources` into the library's public
 dependency graph for no Android benefit. `:editor-web` and `:sample-web` bundle JetBrains
-Mono (OFL license) via `compose.components.resources` and provide `LocalEditorTypography`
+Mono (OFL license) via `libs.compose.mp.components.resources` (§2.4b) and provide `LocalEditorTypography`
 themselves (§6).
 
 ### 3.5 `:languages-lsp` — `LspClient.kt`
@@ -804,6 +837,50 @@ as-is except for the same size guard. `SimpleDiffProvider.diff` runs per keystro
 when a host passes `savedText`; `:editor-web`/`:sample-web` do not pass it, so the diff
 lane is inert on web by default.
 
+### 5.4a As implemented (PR 7)
+
+- **Both limits apply only where `EditorDispatchers.computeIsMainThread` is true** (wasmJs).
+  Android and JVM never consult `EditorLimits`, which is what makes the "no Android behaviour
+  change" DoD hold exactly, including for multi-megabyte documents. `CodeEditorState` carries
+  an `internal var computeOnMainThread` (defaulting to the platform value) so JVM tests drive
+  the wasm paths.
+- **Above the cooperative threshold every pass is a full `tokenizeFullCooperative`**, even
+  when only a few lines are dirty: `tokenizeLines` cannot suspend, and every built-in
+  tokenizer's `tokenizeLines` is a full retokenize anyway. The result goes through
+  `TokenCache.reset`, not `merge`. Each edit cancels the pass in flight, so on wasm a stale
+  pass is abandoned at its next `yield()` instead of running to completion.
+- **Plain-text fallback resets the cache to empty**, so tokens from before the document grew
+  never outlive it, and shrinking back under the limit retokenizes from scratch. Folding gets
+  the same guard (`CodeEditorState.exceedsAnalysisLimit`). **Find is not guarded**: it is
+  user-initiated and dropping matches silently would look like a bug.
+- The helper is a small `internal class CooperativePacer` (yield every 2,000 tokens), not an
+  inline function. `RegexTokenizer` and `XmlTokenizer` share one `private inline fun scan`
+  between the blocking and cooperative entry points, so the two cannot drift;
+  `HtmlTokenizer` delegates.
+- **`RegexTokenizer` was quadratic**, and the cooperative tests exposed it: every rule ran
+  `find` from the cursor at every token and discarded the losers, so a rule with no nearby
+  match rescanned to the end of the document each time (~105 KB of Kotlin took over a minute
+  on the JVM). It now caches each rule's next match until the cursor passes it, which gives
+  identical tokens (`RegexTokenizerTest` pins it against the old algorithm) at 0.3 s for the
+  same input. The 2,000-token chunk size assumes this fix: before it, one chunk could take
+  seconds.
+- **Lookbehinds are poison on wasm.** Kotlin/wasm does not use the browser's `RegExp`: it ships
+  the pure-Kotlin `kotlin.text.regex` engine, which evaluates a lookbehind at every candidate
+  position. `KotlinTokenizer`'s `(?<=\b(?:class|object|interface|enum)\s)` rule took 4.7 s for
+  ten `find`s on 3 KB, and even a fixed-length `(?<=\bfun\s)` costs ~2.5 ms per `find`. Both
+  rules are gone. `RegexTokenizer` gained a `protected open fun refine(text, tokens)` pass and
+  `KotlinTokenizer` types declaration names there, pinned by the JVM-only
+  `KotlinTokenizerGoldenTest` against the old rules over every `.kt` file in the repo. Measured
+  in headless Chrome at 64 KB: Kotlin 170 ms, TypeScript 113 ms, TOML 78 ms, CSS 62 ms,
+  Markdown 58 ms, JSON 46 ms, XML/HTML 2 ms. **Do not add lookbehind rules to any tokenizer**;
+  use `refine`. (The old comment saying these compiled to a JS `RegExp` was wrong, and so is
+  review item B6's premise that browser lookbehind support is what matters.) Markdown's one
+  negative lookbehind is inside that 58 ms and was left alone.
+- wasm tests run under `runTest`, whose dispatcher never yields to the browser, so one test
+  that blocks for more than about 2 s makes Karma drop the page ("Disconnected ... ping timeout")
+  with no test named. If that happens, look at the first test class alphabetically after the
+  last `TEST-*.xml` that was written.
+
 ## 6. `:editor-web` bridge library and npm package
 
 ### 6.1 `editor-web/build.gradle.kts`
@@ -817,27 +894,43 @@ plugins {
     alias(libs.plugins.plugin.spotless)
 }
 kotlin {
+    jvmToolchain(libs.versions.jvm.get().toInt())
     wasmJs {
-        browser { testTask { useKarma { useChromeHeadless() } } }
-        // binaries.executable() intentionally OMITTED: :editor-web is a library klib.
-        // The consuming app module (:sample-web, or aardflex-web-app's own module) calls
-        // binaries.executable() and links this library plus its own LanguageDefinition.
+        browser()
+        // Still a library klib for publishing, but -- as in the other three libraries (§2.4a,
+        // CMP-4906) -- wasmJsBrowserTest needs an executable with the Skiko runtime to run any
+        // test at all. The consuming app module (:sample-web, or aardflex-web-app's own module)
+        // declares its own binaries.executable() and links this library plus its languages.
+        binaries.executable()
         generateTypeScriptDefinitions()
     }
     sourceSets {
-        wasmJsMain.dependencies {
-            api(project(":editor"))
-            api(project(":languages"))
-            implementation(compose.runtime); implementation(compose.foundation)
-            implementation(compose.material3); implementation(compose.ui)
-            implementation(compose.components.resources) // JetBrains Mono, bundled HERE not in :editor
-            implementation(libs.kotlinx.serialization.json) // WebEditorOptions / diagnostics JSON
+        named("wasmJsMain") {
+            dependencies {
+                api(project(":editor"))
+                api(project(":languages"))
+                // Compose itself arrives through :editor's api dependencies.
+                implementation(libs.compose.mp.components.resources) // JetBrains Mono, bundled HERE not in :editor
+                implementation(libs.kotlinx.serialization.json) // WebEditorOptions / diagnostics JSON
+            }
         }
-        wasmJsTest.dependencies { implementation(libs.kotlin.test) }
+        named("wasmJsTest") {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+            }
+        }
     }
 }
 compose.resources { packageOfResClass = "com.aardarch.aardink.web.res" }
 ```
+
+Catalog addition (§2.4b): `compose-mp-components-resources = { module =
+"org.jetbrains.compose.components:components-resources", version.ref =
+"plugin-compose-multiplatform" }`. Also wire `abiValidation { }`, Dokka and
+`mavenPublishing { configure(KotlinMultiplatform(javadocJar = JavadocJar.Dokka(...),
+sourcesJar = SourcesJar.Sources())) }` exactly as `:editor/build.gradle.kts` does, and add
+`:editor-web` to `checkAbiAll` / `updateAbiAll` / `dokkaAll` in the root build.
 
 ### 6.2 Kotlin API — `editor-web/src/wasmJsMain/kotlin/com/aardarch/aardink/web/AardinkWeb.kt`
 
@@ -881,6 +974,8 @@ object AardinkWeb {
         val language = registry.byId(options.language) ?: registry.byId("plaintext")!!
         val state = CodeEditorState(initialText, tokenizer = language.tokenizer)
         val handle = AardinkEditorHandle(scope, state, FindReplaceState(), FoldState(), mutableStateOf(options), mutableStateOf(emptyList()), null, null)
+        // CMP 1.12.1 ships both this id overload and ComposeViewport(viewportContainer: Element).
+        // Check which is non-deprecated (and whether the opt-in is still required) in PR 8.
         ComposeViewport(viewportContainerId = containerId) {
             CompositionLocalProvider(
                 LocalEditorTheme provides (themes[handle.options.value.theme] ?: EditorThemes.VsCodeDark),
@@ -1031,13 +1126,15 @@ wasmJs **executable** module (this is where `binaries.executable()` is actually 
 ```kotlin
 kotlin {
     wasmJs {
-        browser { testTask { useKarma { useChromeHeadless() } } }
+        browser()
         binaries.executable()
     }
     sourceSets {
-        wasmJsMain.dependencies {
-            implementation(project(":editor-web"))
-            implementation(project(":languages"))
+        named("wasmJsMain") {
+            dependencies {
+                implementation(project(":editor-web"))
+                implementation(project(":languages"))
+            }
         }
     }
 }

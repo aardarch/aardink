@@ -42,8 +42,10 @@ abstract class com.aardarch.aardink.languages.internal/RegexTokenizer : com.aard
         open fun <get-multiLineConstructs>(): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.multiLineConstructs.<get-multiLineConstructs>|<get-multiLineConstructs>(){}[0]
 
     open fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    open fun refine(kotlin/String, kotlin.collections/MutableList<com.aardarch.aardink.core/Token>) // com.aardarch.aardink.languages.internal/RegexTokenizer.refine|refine(kotlin.String;kotlin.collections.MutableList<com.aardarch.aardink.core.Token>){}[0]
     open fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     open fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    open suspend fun tokenizeFullCooperative(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeFullCooperative|tokenizeFullCooperative(kotlin.String){}[0]
 }
 
 final class com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages.internal.folding/BraceFoldingProvider|null[0]
@@ -123,6 +125,7 @@ final object com.aardarch.aardink.languages.internal.html/HtmlTokenizer : com.aa
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
     final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     final fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    final suspend fun tokenizeFullCooperative(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeFullCooperative|tokenizeFullCooperative(kotlin.String){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.json/JsonLanguageService : com.aardarch.aardink.languages.internal/BaseLanguageService { // com.aardarch.aardink.languages.internal.json/JsonLanguageService|null[0]
@@ -187,6 +190,7 @@ final object com.aardarch.aardink.languages.internal.xml/XmlTokenizer : com.aard
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
     final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     final fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    final suspend fun tokenizeFullCooperative(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeFullCooperative|tokenizeFullCooperative(kotlin.String){}[0]
 }
 
 final object com.aardarch.aardink.languages/BuiltInLanguages { // com.aardarch.aardink.languages/BuiltInLanguages|null[0]

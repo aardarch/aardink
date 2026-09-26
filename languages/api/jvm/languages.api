@@ -81,7 +81,9 @@ public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : c
 	protected fun getMultiLineConstructs ()Z
 	protected abstract fun getRules ()Ljava/util/List;
 	public fun keyboardToolbarChars ()Ljava/util/List;
+	protected fun refine (Ljava/lang/String;Ljava/util/List;)V
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
 }
 
@@ -125,6 +127,7 @@ public final class com/aardarch/aardink/languages/internal/html/HtmlTokenizer : 
 	public fun canSpanLines (ILjava/util/List;)Z
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
 }
 
@@ -218,6 +221,7 @@ public final class com/aardarch/aardink/languages/internal/xml/XmlTokenizer : co
 	public fun canSpanLines (ILjava/util/List;)Z
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
 }
 

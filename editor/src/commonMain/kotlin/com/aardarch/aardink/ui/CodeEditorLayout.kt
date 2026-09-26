@@ -364,8 +364,12 @@ fun CodeEditorLayout(
         LaunchedEffect(foldState, state, foldingProvider) {
             snapshotFlow { state.textVersion }.collect { _ ->
                 delay(200)
-                val ranges = withContext(state.computeDispatcher) {
-                    foldingProvider.foldableRanges(state.document)
+                val ranges = if (state.exceedsAnalysisLimit) {
+                    emptyList()
+                } else {
+                    withContext(state.computeDispatcher) {
+                        foldingProvider.foldableRanges(state.document)
+                    }
                 }
                 foldState.updateFoldableRanges(ranges)
             }

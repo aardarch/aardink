@@ -33,6 +33,23 @@ interface IncrementalTokenizer {
     fun tokenizeFull(text: String): List<Token>
 
     /**
+     * Like [tokenizeFull], but may suspend between chunks so a single-threaded host (wasmJs) keeps
+     * painting while a large document is tokenized.
+     *
+     * [CodeEditorState] calls this instead of [tokenizeFull] *and* [tokenizeLines] when
+     * [EditorDispatchers.computeIsMainThread][com.aardarch.aardink.platform.EditorDispatchers.computeIsMainThread]
+     * is true and the document is larger than [EditorLimits.cooperativeTokenizeThresholdChars].
+     * Every edit cancels the pass in flight, so a chunked pass also lets a stale tokenization be
+     * abandoned partway through instead of running to completion. On Android and JVM it is never
+     * called.
+     *
+     * The default delegates to [tokenizeFull] without suspending. Override it where tokenization
+     * can be split into chunks, calling `kotlinx.coroutines.yield()` between them; the result must
+     * equal [tokenizeFull]'s for the same [text].
+     */
+    suspend fun tokenizeFullCooperative(text: String): List<Token> = tokenizeFull(text)
+
+    /**
      * Incrementally re-tokenizes only the lines in [dirtyRange] (0-based, inclusive).
      * The implementation may expand [dirtyRange] if multi-line constructs (e.g. block comments)
      * require it — use [canSpanLines] to decide.

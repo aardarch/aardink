@@ -28,6 +28,8 @@ object HtmlTokenizer : IncrementalTokenizer {
 
     override fun tokenizeFull(text: String): List<Token> = XmlTokenizer.tokenizeFull(text)
 
+    override suspend fun tokenizeFullCooperative(text: String): List<Token> = XmlTokenizer.tokenizeFullCooperative(text)
+
     override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> =
         XmlTokenizer.tokenizeLines(text, dirtyRange, previousTokens)
 

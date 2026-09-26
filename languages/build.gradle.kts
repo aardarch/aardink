@@ -55,6 +55,9 @@ kotlin {
             // services are pure Kotlin), so unlike :editor it applies no Compose plugin here.
             // The `api` dependency still gives consumers Compose transitively via :editor.
             api(project(":editor"))
+            // yield() in the cooperative tokenizers. Already on the graph through :editor's
+            // Compose dependencies; declared because this module now calls it directly.
+            implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

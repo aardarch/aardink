@@ -103,6 +103,7 @@ abstract interface com.aardarch.aardink.core/IncrementalTokenizer { // com.aarda
     abstract fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/IncrementalTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     abstract fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/IncrementalTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
     open fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.core/IncrementalTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
+    open suspend fun tokenizeFullCooperative(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/IncrementalTokenizer.tokenizeFullCooperative|tokenizeFullCooperative(kotlin.String){}[0]
 }
 
 abstract interface com.aardarch.aardink.core/LanguageService { // com.aardarch.aardink.core/LanguageService|null[0]
@@ -817,6 +818,15 @@ final class com.aardarch.aardink.ui/KeyboardToolbarStyle { // com.aardarch.aardi
     final fun toString(): kotlin/String // com.aardarch.aardink.ui/KeyboardToolbarStyle.toString|toString(){}[0]
 }
 
+final object com.aardarch.aardink.core/EditorLimits { // com.aardarch.aardink.core/EditorLimits|null[0]
+    final var cooperativeTokenizeThresholdChars // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars|{}cooperativeTokenizeThresholdChars[0]
+        final fun <get-cooperativeTokenizeThresholdChars>(): kotlin/Int // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars.<get-cooperativeTokenizeThresholdChars>|<get-cooperativeTokenizeThresholdChars>(){}[0]
+        final fun <set-cooperativeTokenizeThresholdChars>(kotlin/Int) // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars.<set-cooperativeTokenizeThresholdChars>|<set-cooperativeTokenizeThresholdChars>(kotlin.Int){}[0]
+    final var plainTextFallbackChars // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars|{}plainTextFallbackChars[0]
+        final fun <get-plainTextFallbackChars>(): kotlin/Int // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars.<get-plainTextFallbackChars>|<get-plainTextFallbackChars>(){}[0]
+        final fun <set-plainTextFallbackChars>(kotlin/Int) // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars.<set-plainTextFallbackChars>|<set-plainTextFallbackChars>(kotlin.Int){}[0]
+}
+
 final object com.aardarch.aardink.core/FindEngine { // com.aardarch.aardink.core/FindEngine|null[0]
     final fun findAll(kotlin/String, kotlin/String, com.aardarch.aardink.core/FindEngine.Options = ...): kotlin.collections/List<kotlin.ranges/IntRange> // com.aardarch.aardink.core/FindEngine.findAll|findAll(kotlin.String;kotlin.String;com.aardarch.aardink.core.FindEngine.Options){}[0]
 
@@ -901,6 +911,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Na
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop|#static{}com_aardarch_aardink_core_CodeEditorState_Rename$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop|#static{}com_aardarch_aardink_core_CompletionItem$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Diagnostic$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Diagnostic$stableprop|#static{}com_aardarch_aardink_core_Diagnostic$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop|#static{}com_aardarch_aardink_core_EditorLimits$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop|#static{}com_aardarch_aardink_core_EditorTheme$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager$stableprop|#static{}com_aardarch_aardink_core_EditorUndoManager$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop|#static{}com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop[0]
@@ -955,6 +966,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Na
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter|com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop_getter|com_aardarch_aardink_core_CompletionItem$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Diagnostic$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Diagnostic$stableprop_getter|com_aardarch_aardink_core_Diagnostic$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop_getter|com_aardarch_aardink_core_EditorLimits$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop_getter|com_aardarch_aardink_core_EditorTheme$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager$stableprop_getter|com_aardarch_aardink_core_EditorUndoManager$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop_getter|com_aardarch_aardink_core_EditorUndoManager_EditOperation$stableprop_getter(){}[0]

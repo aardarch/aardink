@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WebSocketLspTransport` (wasmJs only) — a browser transport for `LspClient`, alongside the
   existing `StreamLspTransport` (JVM/Android) and `ChannelLspTransport` (common).
 - Public ABI validation for all three libraries, with committed dumps under `*/api/`.
+- `IncrementalTokenizer.tokenizeFullCooperative` and `EditorLimits` — on a single-threaded
+  host (wasmJs) documents over 64 KB are tokenized in chunks that yield to the event loop,
+  and documents over 2 MB skip highlighting and folding. Both thresholds are configurable;
+  Android and JVM tokenize off the UI thread and never consult them. The built-in tokenizers
+  implement the chunked pass. The default delegates to `tokenizeFull`, so custom tokenizers
+  need no change.
 
 ### Changed
 
@@ -106,6 +112,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field, so a freshly loaded document can no longer be undone back to the previous one.
 - Tokenization no longer reads the token cache from a background thread while the main thread
   may be mutating it.
+- The built-in regex tokenizers (Kotlin, TypeScript, JSON, TOML, CSS, Markdown) no longer take
+  time quadratic in document size. Every rule was searched again from the cursor at every
+  token, so a rule with no nearby match rescanned the rest of the document each time; one
+  ~105 KB Kotlin file took over a minute on the JVM. Rule matches are now reused until the
+  cursor passes them. Tokens are unchanged.
+- Kotlin highlighting no longer freezes the browser. Its `class`/`object`/`interface`/`enum`
+  declaration-name rule used a lookbehind, which Kotlin/wasm's regex engine evaluates at every
+  position: a 3 KB file took about a second, and cost grew quadratically. Declaration names are
+  now typed after scanning; 64 KB of Kotlin tokenizes in under 200 ms in the browser. Tokens
+  are unchanged except in two contrived cases, a name after an `@fun` annotation or after a
+  line comment ending in "fun", which were highlighted as functions and no longer are.
 
 ## [0.4.1] - 2026-09-12
 

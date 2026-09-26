@@ -16,6 +16,9 @@
 
 # Aardink KMP Migration Review (PRs 0–5)
 
+> **Status:** historical. Every §E remediation item landed as PR 5.5 before PR 6. Current
+> progress is tracked in the "Progress" table at the top of `docs/KMP_MIGRATION_PLAN.md`.
+
 ## Context
 
 `docs/KMP_MIGRATION_PLAN.md` defines a 12-PR migration. Commits `ab8305b` (PR 0) through
@@ -90,7 +93,9 @@ tells a JVM library consumer.
 **B6. `RegexOption.IGNORE_CASE` semantics differ JVM vs JS** (`FindEngine.kt:42-44`):
 non-ASCII case-insensitive find will behave differently on web. `KotlinTokenizer.kt:44,46`
 use lookbehind, which narrows the browser floor (Chrome 62+/Safari 16.4+) — fine, but
-undocumented.
+undocumented. *(Later correction, PR 7: the premise is wrong. Kotlin/wasm uses its own regex
+engine, not the browser's, so browser support is irrelevant. The real problem was speed, and
+the lookbehinds were removed; see plan §5.4a.)*
 
 **B7. CRLF normalisation** (§5.3) has no code and no tracking comment. Desktop (PR 6) will
 hit Windows CRLF paste before the web checklist (PR 9) does.
