@@ -22,14 +22,16 @@ Runs on Android, desktop (JVM) and the browser (Wasm) from one codebase.
 
 ## Modules
 
-Aardink publishes three artifacts on Maven Central:
+Aardink publishes four artifacts on Maven Central:
 
 - **`com.aardarch:aardink`** — the editor library: composables, state,
   theming, and the language-service interfaces.
 - **`com.aardarch:aardink-languages`** — built-in language definitions
-  (Kotlin, TypeScript, JSON, XML, HTML, CSS, Markdown, plain text).
+  (Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown, plain text).
 - **`com.aardarch:aardink-languages-lsp`** — a bridge to an external
-  Language Server over JSON-RPC.
+  Language Server over JSON-RPC (stream transport on JVM/Android, WebSocket in the browser).
+- **`com.aardarch:aardink-editor-web`** — browser only: mounts the editor into a DOM element
+  behind a small JavaScript-friendly API. See [Using Aardink in a web app](#using-aardink-in-a-web-app).
 
 The `editor` module is intentionally language-agnostic. Pull in
 `aardink-languages` for the bundled definitions, or implement your own via
@@ -99,6 +101,28 @@ fun MyEditor() {
 
 See the [`sample/`](sample/) module for a runnable example.
 
+## Using Aardink in a web app
+
+The browser build is a WebAssembly module. You build it from a small Gradle module of your own
+(depending on `aardink-editor-web` plus any languages you add), package it for npm, and use it
+from any web framework through a Monaco-shaped API:
+
+```ts
+import { createEditor } from '@aardarch/aardink-web';
+
+const editor = await createEditor(container, (text) => save(text), { value: source, language: 'xml' });
+```
+
+[`sample-web/`](sample-web/) is the reference module, and
+[`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md) walks through the whole set-up: the export
+template, npm packaging, Vite configuration, and a Monaco option mapping.
+
+> **Current limits on the web:** typing latency grows with document size, which is comfortable
+> for a few hundred lines and laggy beyond ~1,000 lines of highlighted code. A disposed editor
+> is not fully released, so reuse one editor rather than mounting a new one per view. Both are
+> upstream Compose constraints, measured and explained in
+> [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance).
+
 ## Theming
 
 Themes are plain data classes. Wrap your editor in a
@@ -119,13 +143,15 @@ To add a new language, implement these interfaces from the `editor` module:
 Bundle them as a `LanguageDefinition` and register with `LanguageRegistry`.
 The [`languages/`](languages/) module is a working reference.
 
-## Sample app
-
-A minimal Android app for manual testing lives under [`sample/`](sample/):
+## Sample apps
 
 ```pwsh
-./gradlew :sample:installDebug
+./gradlew :sample:installDebug                       # Android
+./gradlew :sample-desktop:run                        # Desktop (JVM)
+./gradlew :sample-web:wasmJsBrowserDevelopmentRun    # Browser
 ```
+
+Each GitHub release also attaches the Android APK and a static build of the browser sample.
 
 To render screenshots of the start screen and every sample page, in every bundled theme,
 into [`screenshots/`](screenshots/) (no device or emulator needed):
@@ -138,10 +164,11 @@ into [`screenshots/`](screenshots/) (no device or emulator needed):
 
 ```pwsh
 ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest    # JVM unit tests
-./gradlew :editor:wasmJsBrowserTest                                    # Browser tests (needs Chrome)
+./gradlew :editor:wasmJsBrowserTest :editor-web:wasmJsBrowserTest    # Browser tests (needs Chrome)
 ./gradlew checkAbiAll                                                  # Public ABI check
-./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply   # Auto-format
-./gradlew :editor:publishToMavenLocal :languages:publishToMavenLocal :languages-lsp:publishToMavenLocal   # Publish to ~/.m2
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply   # Auto-format
+./gradlew publishToMavenLocal                                          # Publish all libraries to ~/.m2
+./gradlew :sample-web:npmPackage                                       # Build the npm package
 ```
 
 For the full build/test/release workflow — including the `scripts/pre-push.ps1`

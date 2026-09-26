@@ -12,7 +12,7 @@
 
 ## Checklist
 
-- [ ] `./scripts/pre-push.ps1 -NoFix` passes (Spotless, lint, ABI, JVM + wasmJs tests, sample build, screenshots, consumer smoke)
+- [ ] `./scripts/pre-push.ps1 -NoFix` passes (Spotless, lint, ABI, JVM + wasmJs tests, Vite smoke, sample build, screenshots, consumer smoke)
 - [ ] If the public API changed, ran `./gradlew updateAbiAll` and committed the updated `*/api/` dumps
 - [ ] The ABI diff is purely additive (no removed or changed signatures before 0.5.0)
 - [ ] If the editor renders differently, re-recorded `screenshots/` and explained the visual diff above

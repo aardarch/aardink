@@ -26,9 +26,12 @@ with you on a coordinated disclosure timeline once the issue is confirmed.
 
 ## Scope
 
-In scope: code published as `com.aardarch:aardink` on Maven Central, and the
-sources in this repository that produce it.
+In scope: the libraries published on Maven Central (`com.aardarch:aardink`,
+`aardink-languages`, `aardink-languages-lsp`, `aardink-editor-web`), the
+`@aardarch/aardink-web` npm package built from `sample-web/`, and the sources in
+this repository that produce them.
 
-Out of scope: the `sample/` module (development-only), third-party
+Out of scope: the `sample/`, `sample-desktop/` and `tools/` modules (development-only;
+`sample-web/`'s harness page included), third-party
 dependencies (please report upstream), and issues that require physical
 access to a user's device or already-rooted devices.

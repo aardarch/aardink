@@ -35,8 +35,12 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | 7 | Done | Cooperative tokenization + `EditorLimits`; see §5.4a for what differs from the sketch. |
 | 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
 | 9 | Done | `:sample-web`, npm package, `tools/vite-smoke/`, checklist. See §7.4: W-1 leak and W-10 latency are open. |
-| 10 | **Next** | Release prep: README, remaining docs, dry-run tag. **Decide §7.4's open items first.** |
-| 11 | Not started | |
+| 10 | Done | 0.5.0 released as-is: §7.4's W-1 leak and W-10 latency ship as documented known issues (CHANGELOG, README, `docs/WEB_INTEGRATION.md`). Gradle 9.8.0. No `-rc1` dry run: an rc tag publishes to Maven Central just the same, so CI on `main` served as the dry run instead. |
+| 11 | **After the post-release plan** | `aardflex-web-app` switch-over (§11). Revisit once the post-release plan exists; see below. |
+
+**Post-release:** this plan is complete through 0.5.0. The next plan should start from §7.4's
+open items (text layout virtualisation, `ComposeViewport` teardown / upstream issue), the manual
+web checklist items W-2/W-4/W-5/W-6/W-9, and whether §11 should wait for them.
 
 ## 0. Executive summary and decisions
 

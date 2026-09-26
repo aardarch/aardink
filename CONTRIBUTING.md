@@ -1,7 +1,8 @@
 # Contributing to Aardink
 
-Thanks for your interest in contributing! Aardink is a Jetpack Compose-native code
-editor library, published as `com.aardarch:aardink` on Maven Central.
+Thanks for your interest in contributing! Aardink is a Compose Multiplatform code
+editor library for Android, desktop and the browser, published as `com.aardarch:aardink` on
+Maven Central.
 
 ## Getting started
 
@@ -20,11 +21,11 @@ Run the full check suite locally:
 ./scripts/pre-push.ps1 -NoFix
 ```
 
-That is the local equivalent of CI and covers all three libraries, not just `:editor`:
+That is the local equivalent of CI and covers every library, not just `:editor`:
 secret scan, Apache 2.0 headers, Spotless, lint, the public ABI check, JVM tests, wasmJs
-browser tests, the sample build, the Roborazzi screenshot check, and the consumer smoke
-test. Add `-SkipWasm` if you have no local Chrome, and drop `-NoFix` to let Spotless
-auto-format instead of just reporting.
+browser tests, the npm package and Vite smoke test, the sample build, the Roborazzi
+screenshot check, and the consumer smoke test. Add `-SkipWasm` if you have no local Chrome
+or pnpm, and drop `-NoFix` to let Spotless auto-format instead of just reporting.
 
 If you intentionally changed the public API surface, also run:
 
@@ -32,10 +33,10 @@ If you intentionally changed the public API surface, also run:
 ./gradlew updateAbiAll
 ```
 
-…and commit the updated dumps under `editor/api/`, `languages/api/` and
-`languages-lsp/api/` as part of your PR. Each module has one dump per target, so an API
-change normally touches three files per module. Until 0.5.0 ships, the diff must be purely
-additive — no removed or changed signatures.
+…and commit the updated dumps under `editor/api/`, `languages/api/`, `languages-lsp/api/`
+and `editor-web/api/` as part of your PR. Each module has one dump per target, so an API
+change normally touches three files per module (one for the wasm-only `editor-web`). Until
+0.5.0 ships, the diff must be purely additive — no removed or changed signatures.
 
 If your change alters how the editor renders, `:sample:verifyRoborazziDebug` will fail. Look
 at the comparison images under `sample/build/outputs/roborazzi/`, and if the change is

@@ -38,8 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Kotlin Multiplatform: `:editor`, `:languages` and `:languages-lsp` now build for
-  Android, JVM (desktop) and wasmJs (browser) in addition to Android.
+- Kotlin Multiplatform: `:editor`, `:languages` and `:languages-lsp` now build for JVM
+  (desktop) and wasmJs (browser) in addition to Android.
 - `CodeEditorState.textFieldState`, the `BasicTextField` interop point for the new
   `TextFieldState` input model.
 - `com.aardarch.aardink.platform.EditorDispatchers` — platform-appropriate `compute` and
@@ -48,13 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KeyboardToolbarPlacement.platformDefault`, so a host can take the toolbar placement and
   modifier-key convention that suit the platform.
 - `EditorTypography` and `LocalEditorTypography` — the editor's font family and metrics are
-  now provided rather than hardcoded. No font is bundled; the defaults are unchanged.
+  now provided rather than hardcoded. `:editor` bundles no font; the defaults are unchanged.
 - `CodeEditorLayout(onRequestGoToLine = ...)`, hardware-keyboard shortcuts (undo/redo,
   find, replace, go-to-line, Tab/Shift+Tab indent, Escape) and desktop/web scrollbars.
   `CodeEditorState.indentSelection()` / `outdentSelection()`.
 - `WebSocketLspTransport` (wasmJs only) — a browser transport for `LspClient`, alongside the
   existing `StreamLspTransport` (JVM/Android) and `ChannelLspTransport` (common).
-- Public ABI validation for all three libraries, with committed dumps under `*/api/`.
+- Public ABI validation for every library, with committed dumps under `*/api/`.
 - `com.aardarch:aardink-editor-web` (wasmJs), a browser bridge that mounts the editor into a DOM
   element behind a flat `AardinkWeb` API (`mount`, `getValue`, `setValue`, `patchOptions`,
   `onChange`, `setDiagnostics`, `dispose`, ...). It bundles JetBrains Mono (SIL OFL 1.1) for
@@ -78,7 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aardink-android`, `aardink-jvm` or `aardink-wasm-js` automatically. Existing Android
   consumers keep writing `implementation("com.aardarch:aardink:<version>")` unchanged — the
   mechanism is the one `kotlinx.coroutines` already relies on. A consumer that pinned the
-  `.aar` classifier explicitly would need to stop doing so.
+  `.aar` classifier explicitly would need to stop doing so. Compose itself now arrives through
+  Compose Multiplatform 1.12.1, which resolves to the matching AndroidX Compose artifacts on
+  Android.
 - The editor's text input moved from the deprecated `BasicTextField(TextFieldValue)` +
   `VisualTransformation` to `BasicTextField(TextFieldState)` + `InputTransformation` /
   `OutputTransformation`. `CodeEditorState`'s public surface is unchanged.
@@ -90,6 +92,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `:languages` no longer applies the Compose compiler plugin — it contains no Compose code.
 - The gutter sizes its line-number column by measuring the digits rather than assuming a
   fixed 0.7 em advance. The gutter is slightly narrower at the default font size.
+
+### Known issues
+
+- **Web: typing latency grows with document size.** Comfortable for a few hundred lines,
+  noticeably laggy beyond ~1,000 lines of highlighted code (~1 s per keystroke at 5,000
+  lines). Compose lays out the whole text field as one paragraph on every change. Measurements
+  are in `docs/WEB_INTEGRATION.md#performance`.
+- **Web: a disposed editor is not fully released** (~275 KB each), because Compose
+  Multiplatform 1.12.1 offers no way to tear down a `ComposeViewport`. Reuse one editor with
+  `setValue`/`updateOptions` rather than mounting one per view.
+- Several browser checks (IME composition, touch selection, mobile soft keyboard, some
+  browser shortcuts) have not yet been run on real devices; see the checklist in
+  `docs/WEB_INTEGRATION.md`.
 
 ### Binary compatibility
 
