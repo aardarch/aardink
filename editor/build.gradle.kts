@@ -51,10 +51,10 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api("org.jetbrains.compose.runtime:runtime")
-            api("org.jetbrains.compose.foundation:foundation")
-            api("org.jetbrains.compose.material3:material3")
-            api("org.jetbrains.compose.ui:ui")
+            api(libs.compose.mp.runtime)
+            api(libs.compose.mp.foundation)
+            api(libs.compose.mp.material3)
+            api(libs.compose.mp.ui)
             implementation(libs.kotlinx.coroutines.core)
             // The only non-Compose runtime dependency in :editor — EditorThemeParser.kt uses it
             // instead of the Android-only org.json, so the module compiles as common Kotlin.
@@ -71,7 +71,7 @@ kotlin {
                 runtimeOnly(libs.junit.platform.launcher)
                 // Compose UI tests run on the desktop target: runComposeUiTest needs a real
                 // renderer, and the JVM one is the only headless-capable target here.
-                implementation("org.jetbrains.compose.ui:ui-test")
+                implementation(libs.compose.mp.ui.test)
                 implementation(compose.desktop.currentOs)
                 // CodeEditorState defaults its scope to Dispatchers.Main, which the JVM
                 // has no implementation for until a UI dispatcher is on the classpath --

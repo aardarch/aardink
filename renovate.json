@@ -19,7 +19,8 @@
         "org.jetbrains.kotlin:**",
         "org.jetbrains.kotlin.multiplatform",
         "org.jetbrains.compose",
-        "org.jetbrains.compose:**"
+        "org.jetbrains.compose:**",
+        "org.jetbrains.compose.*:**"
       ],
       "groupName": "kotlin and compose multiplatform",
       "groupSlug": "kotlin-cmp"

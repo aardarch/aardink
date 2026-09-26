@@ -11,6 +11,9 @@ plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
 plugin-roborazzi = "1.75.0" # https://github.com/takahirom/roborazzi/releases
 plugin-compose-multiplatform = "1.12.1" # https://github.com/JetBrains/compose-multiplatform/releases
+# Material 3 for Compose Multiplatform has its own version line; this is the one CMP 1.12.1's
+# (deprecated) compose.material3 accessor resolved to. Check the CMP release notes when bumping.
+compose-multiplatform-material3 = "1.9.0"
 
 # Major version definitions
 jvm = "21"
@@ -52,6 +55,14 @@ androidx-compose-ui-ui-unit = { module = "androidx.compose.ui:ui-unit" }
 androidx-compose-ui-ui-util = { module = "androidx.compose.ui:ui-util" }
 androidx-compose-ui-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 androidx-compose-ui-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+
+# COMPOSE MULTIPLATFORM (KMP libraries) — replaces the deprecated compose.* plugin accessors,
+# which are no BOM: these coordinates need explicit versions.
+compose-mp-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "plugin-compose-multiplatform" }
+compose-mp-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "plugin-compose-multiplatform" }
+compose-mp-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-multiplatform-material3" }
+compose-mp-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "plugin-compose-multiplatform" }
+compose-mp-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "plugin-compose-multiplatform" }
 
 # Activity / Lifecycle (sample app only)
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
@@ -130,8 +141,8 @@ plugin-kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", versi
 # Android KMP library (AGP 9's replacement for com.android.library inside a KMP module)
 plugin-android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "plugin-agp" }
 
-# Compose Multiplatform (adds jvm/wasmJs targets to the compose.* accessors already used via
-# the AndroidX Compose BOM on androidTarget)
+# Compose Multiplatform (jvm/wasmJs Compose runtime; library coordinates are the compose-mp-*
+# entries above)
 plugin-compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "plugin-compose-multiplatform" }
 
 # Code formatting
