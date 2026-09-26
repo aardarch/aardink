@@ -30,6 +30,12 @@ jobs:
         id: setup-chrome
         uses: browser-actions/setup-chrome@v2
 
+      # Ubuntu 24.04 runners block unprivileged user namespaces through AppArmor, so Chrome
+      # aborts with "No usable sandbox!". Lifting the restriction keeps Chrome's sandbox on,
+      # unlike launching it with --no-sandbox.
+      - name: Allow the Chrome sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
         with:
