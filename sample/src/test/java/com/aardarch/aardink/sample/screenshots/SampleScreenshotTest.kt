@@ -24,6 +24,8 @@ import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.sample.SampleAppContent
 import com.aardarch.aardink.sample.themeChoices
 import com.aardarch.aardink.sample.ui.SampleThemeChoice
+import com.dropbox.differ.SimpleImageComparator
+import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Rule
@@ -69,6 +71,18 @@ class SampleScreenshotTest {
          */
         private val isRecording: Boolean
             get() = System.getProperty("roborazzi.test.record")?.toBoolean() == true
+
+        /**
+         * The baselines are recorded on Windows and CI verifies on Linux. Robolectric's native
+         * graphics anti-alias the mascot a few colour units differently per OS (at most 5 of 255,
+         * on under 0.05% of pixels), so allow that per-pixel noise. A layout or glyph change
+         * still fails: it differs by far more than this.
+         */
+        private val compareOptions = RoborazziOptions(
+            compareOptions = RoborazziOptions.CompareOptions(
+                imageComparator = SimpleImageComparator(maxDistance = 0.04f),
+            ),
+        )
 
         /** Page id `null` renders the start screen; every other id renders that sample's editor. */
         private val pageIds: List<String?> = listOf(null) + LanguageRegistry.withBuiltIns().all.map { it.id }
@@ -140,7 +154,10 @@ class SampleScreenshotTest {
 
             val pageName = pageId ?: "main"
             composeTestRule.onRoot()
-                .captureRoboImage(filePath = "$OUTPUT_DIR/${themeChoice.id}-$pageName.png")
+                .captureRoboImage(
+                    filePath = "$OUTPUT_DIR/${themeChoice.id}-$pageName.png",
+                    roborazziOptions = compareOptions,
+                )
         }
     }
 }
