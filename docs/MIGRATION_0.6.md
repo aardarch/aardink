@@ -37,7 +37,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | --- | --- | --- |
 | `textFieldState` | Removed. Read `text`, `selection` / `selections`; edit with `applyEdit` / `applyTextEdits` | *pending* (PR 7) |
 | `undoManager: EditorUndoManager` | Removed. Use `undo()`, `redo()`, `canUndo`, `canRedo`, `pushUndoStop()` | *pending* (PR 4) |
-| `tokenCache: TokenCache` | Removed. Use `tokensForLine(line)` | *pending* (PR 2) |
+| `tokenCache: TokenCache` | Removed. Use `tokensForLine(line)`; a token that spans lines comes back as one token per line | PR 2 |
 | `tokenizer` (`val`) | `var`: assigning it re-highlights and keeps undo history | *pending* (PR 3) |
 | `selection` (read-only) | Settable; setting it collapses to one cursor | *pending* (PR 4) |
 
@@ -50,14 +50,16 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | `annotateTokens(...)` | Internal | *pending* (PR 7) |
 | `applyFolding(...)` (deprecated in 0.5) | Removed. `FoldState` drives folding | *pending* (PR 7) |
 | `EditorTheme.fontFamily`, `fontSize`, `lineHeight` (deprecated in 0.5) | Removed. Provide `LocalEditorTypography` | *pending* (PR 7) |
-| `TokenCache`, `EditorUndoManager`, `EditOperation` | Internal | *pending* (PR 2, PR 4) |
+| `TokenCache` | Removed; the editor keeps its tokens internally. Read them with `CodeEditorState.tokensForLine` | PR 2 |
+| `EditorUndoManager`, `EditOperation` | Internal | *pending* (PR 4) |
 
 ## Changed behaviour
 
 | Area | 0.5 | 0.6 | Landed in |
 | --- | --- | --- | --- |
 | `FindReplaceState.show()` | Find only | `show(replace = false)`; Ctrl+H opens replace | *pending* (PR 3) |
-| Language services | Called with the live `CodeDocument` | Called with an immutable snapshot of it | *pending* (PR 2) |
+| Language services and folding providers | Called with the live `CodeDocument`, which could change under a service running on another thread | Called with a read-only snapshot taken when the request was made; editing it throws `IllegalStateException` | PR 2 |
+| `CodeDocument` | A plain class | A `CharSequence`: index it, slice it with `subSequence`, and run a `Regex` over it without copying `text`. `text` is built once per edit and shared | PR 2 |
 | Web `updateOptions({ language })` | Rebuilt the editor state and lost undo history | Keeps undo history | *pending* (PR 3) |
 
 ## Example: an Android host

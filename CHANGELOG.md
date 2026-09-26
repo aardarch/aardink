@@ -41,6 +41,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@aardarch/aardink-web` is published to npm with every release, through npm trusted
   publishing with provenance: `pnpm add @aardarch/aardink-web`. Pre-release versions go to the
   `next` dist-tag.
+- `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
+  `tokenCache`.
+
+### Changed
+
+- **Breaking:** `CodeDocument` implements `CharSequence` and keeps its text in a gap buffer with a
+  line index updated edit by edit, so a keystroke costs the size of the edit instead of a copy
+  and a rescan of the whole document (10,000 keystrokes into 2 MB take ~20 ms on the JVM).
+  `text` is built once per edit and shared.
+- Language services and folding providers receive a read-only snapshot of the document, taken
+  when the request was made, instead of the live document that a service running on the compute
+  dispatcher could see change mid-request.
+
+### Removed
+
+- **Breaking:** `TokenCache` and `CodeEditorState.tokenCache`. Use
+  `CodeEditorState.tokensForLine`. See `docs/MIGRATION_0.6.md`.
+
+### Fixed
+
+- After a line was inserted or removed, lines below it could show the previous line's syntax
+  colours until the next tokenization pass, because cached tokens stayed keyed to their old line
+  numbers. Colours now move with their text.
 
 ## [0.5.0] - 2026-09-27
 

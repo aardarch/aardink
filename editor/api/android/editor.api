@@ -26,23 +26,28 @@ public final class com/aardarch/aardink/core/CodeActionKind : java/lang/Enum {
 	public static fun values ()[Lcom/aardarch/aardink/core/CodeActionKind;
 }
 
-public final class com/aardarch/aardink/core/CodeDocument {
+public final class com/aardarch/aardink/core/CodeDocument : java/lang/CharSequence {
 	public static final field $stable I
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun charAt (I)C
 	public final fun delete (II)V
+	public fun get (I)C
 	public final fun getDirtyLines ()Lkotlin/ranges/IntRange;
-	public final fun getLength ()I
+	public fun getLength ()I
 	public final fun getLineCount ()I
 	public final fun getText ()Ljava/lang/String;
 	public final fun insert (ILjava/lang/String;)V
+	public final fun length ()I
 	public final fun lineColToOffset (II)I
 	public final fun lineEnd (I)I
 	public final fun lineStart (I)I
 	public final fun lineText (I)Ljava/lang/String;
 	public final fun offsetToLineCol (I)Lkotlin/Pair;
 	public final fun replaceAll (Ljava/lang/String;)V
+	public fun subSequence (II)Ljava/lang/CharSequence;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/core/CodeEditorState {
@@ -66,7 +71,6 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun getText ()Ljava/lang/String;
 	public final fun getTextFieldState ()Landroidx/compose/foundation/text/input/TextFieldState;
 	public final fun getTextVersion ()I
-	public final fun getTokenCache ()Lcom/aardarch/aardink/core/TokenCache;
 	public final fun getTokenVersion ()I
 	public final fun getTokenizeDebounceMs ()J
 	public final fun getTokenizer ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
@@ -81,6 +85,7 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public static synthetic fun requestRename$default (Lcom/aardarch/aardink/core/CodeEditorState;IILjava/lang/Object;)V
 	public final fun scheduleTokenization ()V
 	public final fun setComputeDispatcher (Lkotlinx/coroutines/CoroutineDispatcher;)V
+	public final fun tokensForLine (I)Ljava/util/List;
 	public final fun undo ()Ljava/lang/String;
 }
 
@@ -591,17 +596,6 @@ public final class com/aardarch/aardink/core/Token {
 	public fun hashCode ()I
 	public final fun isEmpty ()Z
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class com/aardarch/aardink/core/TokenCache {
-	public static final field $stable I
-	public fun <init> ()V
-	public final fun clear ()V
-	public final fun getTokens ()Ljava/util/List;
-	public final fun merge (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Ljava/util/List;)V
-	public final fun pruneLines (I)V
-	public final fun reset (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;)V
-	public final fun tokensForLine (I)Ljava/util/List;
 }
 
 public abstract interface class com/aardarch/aardink/core/TokenType {

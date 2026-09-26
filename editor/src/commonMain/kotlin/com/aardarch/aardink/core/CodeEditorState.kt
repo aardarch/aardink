@@ -70,7 +70,7 @@ class CodeEditorState(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) {
     val document = CodeDocument(initialText)
-    val tokenCache = TokenCache()
+    internal val tokenStore = TokenStore(document)
     val undoManager = EditorUndoManager()
 
     /**
@@ -165,6 +165,14 @@ class CodeEditorState(
     // ── Convenience reads ─────────────────────────────────────────────────────
 
     /**
+     * The syntax tokens on [line] (0-based), with document-absolute offsets, as of the last
+     * tokenization pass. Read [tokenVersion] to recompose when they change. Between an edit and the
+     * next pass the tokens of the edited lines are shifted to follow the text, so they may briefly
+     * miss a character or two. A token that spans lines is returned as one token per line.
+     */
+    fun tokensForLine(line: Int): List<Token> = tokenStore.tokensForLine(line)
+
+    /**
      * Current document text. Calls [CodeDocument.text] which copies the internal buffer — prefer
      * reading [document] fields directly in tight loops.
      */
@@ -207,7 +215,7 @@ class CodeEditorState(
         val deletedText = if (deleteLength > 0) {
             val start = deleteOffset.coerceIn(0, document.length)
             val end = (deleteOffset + deleteLength).coerceIn(start, document.length)
-            document.text.substring(start, end)
+            document.subSequence(start, end).toString()
         } else {
             ""
         }
@@ -262,7 +270,7 @@ class CodeEditorState(
             val deletedText = when {
                 deleteLen == 0 -> ""
                 end <= untouchedBelow -> snapshot.substring(start, end)
-                else -> document.text.substring(start, end) // overlapping edits: fall back to live text
+                else -> document.subSequence(start, end).toString() // overlapping edits: fall back to live text
             }
             untouchedBelow = minOf(untouchedBelow, start)
 
@@ -466,12 +474,13 @@ class CodeEditorState(
     private suspend fun runTokenization() {
         if (exceedsAnalysisLimit) {
             // Also clears dirtyLines, so shrinking back under the limit retokenizes from scratch.
-            tokenCache.reset(document, emptyList())
+            tokenStore.replaceAll(emptyList())
             tokenVersion++
             return
         }
 
         val snapshot = document.text
+        val version = document.version
         val dirty = document.dirtyLines
 
         // On a single-threaded host a large document goes through the chunked full pass even when
@@ -479,40 +488,39 @@ class CodeEditorState(
         // retokenize the whole text there anyway.
         if (computeOnMainThread && snapshot.length > EditorLimits.cooperativeTokenizeThresholdChars) {
             val allTokens = withContext(computeDispatcher) { tokenizer.tokenizeFullCooperative(snapshot) }
-            tokenCache.reset(document, allTokens)
+            // Every edit schedules a new pass and cancels this one; the version check covers an
+            // edit made straight through the public CodeDocument, which schedules nothing.
+            if (document.version != version) return
+            tokenStore.replaceAll(allTokens)
             tokenVersion++
             return
         }
 
-        // Read the cache here, on the scope's dispatcher, not inside the withContext below.
-        // TokenCache.tokens is a *mutating* getter: it rebuilds and caches a flattened list
-        // behind non-volatile fields, while reset/merge/pruneLines run on this dispatcher.
-        // Touching it from the compute thread is a data race on Android and JVM (benign on
-        // wasmJs, which is single-threaded). The tokenizer only needs the previous tokens as
-        // an immutable input, so one snapshot before the hop is enough.
-        val previousTokens = tokenCache.tokens
+        // Read on the scope's dispatcher, not inside the withContext below: the store is only ever
+        // touched from here and from the document's change events, which run on this dispatcher.
+        // The tokenizer gets one immutable list.
+        val previousTokens = tokenStore.allTokens()
+        val tokenizedLines = when {
+            dirty == null || previousTokens.isEmpty() -> null
+            tokenizer.canSpanLines(dirty.first, previousTokens) -> 0..dirty.last
+            else -> dirty
+        }
 
         val updatedTokens = withContext(computeDispatcher) {
-            if (dirty == null || previousTokens.isEmpty()) {
+            if (tokenizedLines == null) {
                 tokenizer.tokenizeFull(snapshot)
             } else {
-                val expandedDirty = if (tokenizer.canSpanLines(dirty.first, previousTokens)) {
-                    0..dirty.last
-                } else {
-                    dirty
-                }
-                tokenizer.tokenizeLines(snapshot, expandedDirty, previousTokens)
+                tokenizer.tokenizeLines(snapshot, tokenizedLines, previousTokens)
             }
         }
 
         // Resumed on the scope's dispatcher (Dispatchers.Main in prod, testDispatcher in tests)
-        val dirty2 = document.dirtyLines
-        if (dirty2 == null) {
-            tokenCache.reset(document, updatedTokens)
+        if (document.version != version) return
+        if (tokenizedLines == null) {
+            tokenStore.replaceAll(updatedTokens)
         } else {
-            tokenCache.merge(document, dirty2, updatedTokens)
+            tokenStore.merge(tokenizedLines, updatedTokens)
         }
-        tokenCache.pruneLines(document.lineCount - 1)
         tokenVersion++
     }
 

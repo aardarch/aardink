@@ -223,7 +223,7 @@ final class com.aardarch.aardink.core/CodeAction { // com.aardarch.aardink.core/
     final fun toString(): kotlin/String // com.aardarch.aardink.core/CodeAction.toString|toString(){}[0]
 }
 
-final class com.aardarch.aardink.core/CodeDocument { // com.aardarch.aardink.core/CodeDocument|null[0]
+final class com.aardarch.aardink.core/CodeDocument : kotlin/CharSequence { // com.aardarch.aardink.core/CodeDocument|null[0]
     constructor <init>(kotlin/String = ...) // com.aardarch.aardink.core/CodeDocument.<init>|<init>(kotlin.String){}[0]
 
     final val length // com.aardarch.aardink.core/CodeDocument.length|{}length[0]
@@ -237,6 +237,7 @@ final class com.aardarch.aardink.core/CodeDocument { // com.aardarch.aardink.cor
         final fun <get-dirtyLines>(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/CodeDocument.dirtyLines.<get-dirtyLines>|<get-dirtyLines>(){}[0]
 
     final fun delete(kotlin/Int, kotlin/Int) // com.aardarch.aardink.core/CodeDocument.delete|delete(kotlin.Int;kotlin.Int){}[0]
+    final fun get(kotlin/Int): kotlin/Char // com.aardarch.aardink.core/CodeDocument.get|get(kotlin.Int){}[0]
     final fun insert(kotlin/Int, kotlin/String) // com.aardarch.aardink.core/CodeDocument.insert|insert(kotlin.Int;kotlin.String){}[0]
     final fun lineColToOffset(kotlin/Int, kotlin/Int): kotlin/Int // com.aardarch.aardink.core/CodeDocument.lineColToOffset|lineColToOffset(kotlin.Int;kotlin.Int){}[0]
     final fun lineEnd(kotlin/Int): kotlin/Int // com.aardarch.aardink.core/CodeDocument.lineEnd|lineEnd(kotlin.Int){}[0]
@@ -244,6 +245,8 @@ final class com.aardarch.aardink.core/CodeDocument { // com.aardarch.aardink.cor
     final fun lineText(kotlin/Int): kotlin/String // com.aardarch.aardink.core/CodeDocument.lineText|lineText(kotlin.Int){}[0]
     final fun offsetToLineCol(kotlin/Int): kotlin/Pair<kotlin/Int, kotlin/Int> // com.aardarch.aardink.core/CodeDocument.offsetToLineCol|offsetToLineCol(kotlin.Int){}[0]
     final fun replaceAll(kotlin/String) // com.aardarch.aardink.core/CodeDocument.replaceAll|replaceAll(kotlin.String){}[0]
+    final fun subSequence(kotlin/Int, kotlin/Int): kotlin/CharSequence // com.aardarch.aardink.core/CodeDocument.subSequence|subSequence(kotlin.Int;kotlin.Int){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/CodeDocument.toString|toString(){}[0]
 }
 
 final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.core/CodeEditorState|null[0]
@@ -261,8 +264,6 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
         final fun <get-text>(): kotlin/String // com.aardarch.aardink.core/CodeEditorState.text.<get-text>|<get-text>(){}[0]
     final val textFieldState // com.aardarch.aardink.core/CodeEditorState.textFieldState|{}textFieldState[0]
         final fun <get-textFieldState>(): androidx.compose.foundation.text.input/TextFieldState // com.aardarch.aardink.core/CodeEditorState.textFieldState.<get-textFieldState>|<get-textFieldState>(){}[0]
-    final val tokenCache // com.aardarch.aardink.core/CodeEditorState.tokenCache|{}tokenCache[0]
-        final fun <get-tokenCache>(): com.aardarch.aardink.core/TokenCache // com.aardarch.aardink.core/CodeEditorState.tokenCache.<get-tokenCache>|<get-tokenCache>(){}[0]
     final val tokenizeDebounceMs // com.aardarch.aardink.core/CodeEditorState.tokenizeDebounceMs|{}tokenizeDebounceMs[0]
         final fun <get-tokenizeDebounceMs>(): kotlin/Long // com.aardarch.aardink.core/CodeEditorState.tokenizeDebounceMs.<get-tokenizeDebounceMs>|<get-tokenizeDebounceMs>(){}[0]
     final val tokenizer // com.aardarch.aardink.core/CodeEditorState.tokenizer|{}tokenizer[0]
@@ -297,6 +298,7 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
     final fun redo(): kotlin/String? // com.aardarch.aardink.core/CodeEditorState.redo|redo(){}[0]
     final fun requestRename(kotlin/Int = ...) // com.aardarch.aardink.core/CodeEditorState.requestRename|requestRename(kotlin.Int){}[0]
     final fun scheduleTokenization() // com.aardarch.aardink.core/CodeEditorState.scheduleTokenization|scheduleTokenization(){}[0]
+    final fun tokensForLine(kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/CodeEditorState.tokensForLine|tokensForLine(kotlin.Int){}[0]
     final fun undo(): kotlin/String? // com.aardarch.aardink.core/CodeEditorState.undo|undo(){}[0]
 
     final class Navigation { // com.aardarch.aardink.core/CodeEditorState.Navigation|null[0]
@@ -737,19 +739,6 @@ final class com.aardarch.aardink.core/Token { // com.aardarch.aardink.core/Token
     final fun toString(): kotlin/String // com.aardarch.aardink.core/Token.toString|toString(){}[0]
 }
 
-final class com.aardarch.aardink.core/TokenCache { // com.aardarch.aardink.core/TokenCache|null[0]
-    constructor <init>() // com.aardarch.aardink.core/TokenCache.<init>|<init>(){}[0]
-
-    final val tokens // com.aardarch.aardink.core/TokenCache.tokens|{}tokens[0]
-        final fun <get-tokens>(): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/TokenCache.tokens.<get-tokens>|<get-tokens>(){}[0]
-
-    final fun clear() // com.aardarch.aardink.core/TokenCache.clear|clear(){}[0]
-    final fun merge(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>) // com.aardarch.aardink.core/TokenCache.merge|merge(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
-    final fun pruneLines(kotlin/Int) // com.aardarch.aardink.core/TokenCache.pruneLines|pruneLines(kotlin.Int){}[0]
-    final fun reset(com.aardarch.aardink.core/CodeDocument, kotlin.collections/List<com.aardarch.aardink.core/Token>) // com.aardarch.aardink.core/TokenCache.reset|reset(com.aardarch.aardink.core.CodeDocument;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
-    final fun tokensForLine(kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/TokenCache.tokensForLine|tokensForLine(kotlin.Int){}[0]
-}
-
 final class com.aardarch.aardink.ui/EditorTypography { // com.aardarch.aardink.ui/EditorTypography|null[0]
     constructor <init>(androidx.compose.ui.text.font/FontFamily = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ...) // com.aardarch.aardink.ui/EditorTypography.<init>|<init>(androidx.compose.ui.text.font.FontFamily;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit){}[0]
 
@@ -933,7 +922,6 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformati
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop|#static{}com_aardarch_aardink_core_SimpleDiffProvider$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop|#static{}com_aardarch_aardink_core_TextEdit$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop|#static{}com_aardarch_aardink_core_Token$stableprop[0]
-final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenCache$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenCache$stableprop|#static{}com_aardarch_aardink_core_TokenCache$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop|#static{}com_aardarch_aardink_core_TokenType_Annotation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop|#static{}com_aardarch_aardink_core_TokenType_Comment$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop|#static{}com_aardarch_aardink_core_TokenType_Default$stableprop[0]
@@ -988,7 +976,6 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformati
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter|com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter|com_aardarch_aardink_core_TextEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter|com_aardarch_aardink_core_Token$stableprop_getter(){}[0]
-final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenCache$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenCache$stableprop_getter|com_aardarch_aardink_core_TokenCache$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter|com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop_getter|com_aardarch_aardink_core_TokenType_Comment$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop_getter|com_aardarch_aardink_core_TokenType_Default$stableprop_getter(){}[0]

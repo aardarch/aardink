@@ -10,7 +10,8 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 | 0 | Not started | Spike: IME on three platforms, virtualised drawing on wasm. Gate for PR 5 onward. |
 | 1 | Done | Branch `v0.6-uplift`. Dependencies already current (§3); `0.6.0-SNAPSHOT`; canary workflow; `perf.mjs` + 0.5 baseline; CDP IME check; CMP 1.13 findings (W-1 fixed upstream). |
 | 15 | Done (code) | npm job in `release.yml`, package metadata, LICENSE and README in the package, publint + attw in CI. **Waiting on the manual bootstrap** in `docs/NPM_BOOTSTRAP.md`. |
-| 2–14, 16, 17 | Not started | See §6. |
+| 2 | Done | `core/text/{GapBuffer,LineIndex,DocumentChange}`, `CodeDocument` as a `CharSequence` with snapshots, internal `TokenStore` (line-aligned, shifted by change events, fixes stale colours after inserted lines), `tokensForLine`, language services get snapshots. 10k keystrokes into 2 MB: ~17 ms (JVM). |
+| 3–14, 16, 17 | Not started | See §6. |
 | A1–A3 | Not started | `aardflex-web-app` switch-over (§7.1). |
 | B1 | Not started | `aardflex` Android upgrade 0.4.0 → 0.6.0 (§7.2). |
 

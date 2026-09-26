@@ -62,7 +62,7 @@ internal class EditorInputTransformation(
         changes.forEachChangeReversed { range, originalRange ->
             val deleteLen = originalRange.length
             if (deleteLen > 0) {
-                val deletedText = state.document.text.substring(originalRange.min, originalRange.max)
+                val deletedText = state.document.subSequence(originalRange.min, originalRange.max).toString()
                 state.document.delete(originalRange.min, deleteLen)
                 state.undoManager.recordDelete(originalRange.min, deleteLen, deletedText)
             }

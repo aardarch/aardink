@@ -58,13 +58,13 @@ interface IncrementalTokenizer {
      * @param dirtyRange Lines that have changed since the last tokenization pass.
      * @param previousTokens The token list from the previous pass (may be empty).
      * @return Updated tokens for the affected lines, sorted by [Token.start].
-     *         The caller ([TokenCache]) merges these into the full token set.
+     *         The editor replaces the tokens of the lines they cover (at least [dirtyRange]) with them.
      */
     fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token>
 
     /**
      * Returns true if a change on [lineIndex] can affect tokenization of subsequent lines.
-     * Used by [TokenCache] to expand the dirty range before calling [tokenizeLines].
+     * The editor uses it to expand the dirty range before calling [tokenizeLines].
      *
      * Typical triggers: an unclosed block comment or multi-line string literal that starts on
      * [lineIndex].

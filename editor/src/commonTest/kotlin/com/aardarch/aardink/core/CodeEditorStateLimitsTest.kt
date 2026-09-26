@@ -119,7 +119,7 @@ class CodeEditorStateLimitsTest {
         state.applyEdit(0, 0, "x", TextRange(1))
 
         assertEquals(listOf("cooperative"), tokenizer.calls)
-        assertEquals(4, state.tokenCache.tokens.size)
+        assertEquals(4, state.tokenStore.allTokens().size)
     }
 
     @Test
@@ -142,18 +142,18 @@ class CodeEditorStateLimitsTest {
 
         assertTrue(state.exceedsAnalysisLimit)
         assertEquals(emptyList(), tokenizer.calls)
-        assertTrue(state.tokenCache.tokens.isEmpty())
+        assertTrue(state.tokenStore.allTokens().isEmpty())
     }
 
     @Test
     fun `highlighting returns once the document shrinks under the fallback limit`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
         val tokenizer = RecordingTokenizer()
         val state = testState(mediumText, tokenizer, mainThread = true)
-        assertEquals(4, state.tokenCache.tokens.size)
+        assertEquals(4, state.tokenStore.allTokens().size)
 
         state.applyEdit(state.document.length, 0, largeText, TextRange(state.document.length + largeText.length))
         assertTrue(state.exceedsAnalysisLimit)
-        assertTrue(state.tokenCache.tokens.isEmpty(), "stale tokens must not outlive the fallback")
+        assertTrue(state.tokenStore.allTokens().isEmpty(), "stale tokens must not outlive the fallback")
 
         val versionBefore = state.tokenVersion
         tokenizer.calls.clear()
@@ -161,7 +161,7 @@ class CodeEditorStateLimitsTest {
 
         assertFalse(state.exceedsAnalysisLimit)
         assertEquals(listOf("full"), tokenizer.calls)
-        assertEquals(3, state.tokenCache.tokens.size)
+        assertEquals(3, state.tokenStore.allTokens().size)
         assertTrue(state.tokenVersion > versionBefore)
     }
 }

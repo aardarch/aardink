@@ -142,7 +142,7 @@ fun CodeEditorLayout(
     // a stale token list (one tokenization tick behind an edit) is safe.
     val effectiveAnnotatedText: AnnotatedString? = remember(annotatedText, tokenVersion, textVersion, theme) {
         if (annotatedText != null) return@remember annotatedText
-        val cachedTokens = state.tokenCache.tokens
+        val cachedTokens = state.tokenStore.allTokens()
         if (cachedTokens.isEmpty()) return@remember null
         annotateTokens(state.document.text, cachedTokens, theme)
     }
@@ -203,11 +203,14 @@ fun CodeEditorLayout(
             if (request == null) return@collect
             state.clearRename()
             val text = state.document.text
+            // Taken here, on the main thread: the service runs on the compute dispatcher and must
+            // not see the document change under it.
+            val document = state.document.snapshot()
             // Same guard the rename itself has: the server answers later, and a range measured
             // against the older text would be sliced from a document that has since changed.
             val requestedVersion = state.textVersion
             val range = withContext(state.computeDispatcher) {
-                languageService?.prepareRename(state.document, request.offset)
+                languageService?.prepareRename(document, request.offset)
             } ?: return@collect
             if (range.isEmpty() || state.textVersion != requestedVersion) return@collect
             if (range.first < 0 || range.last >= text.length) return@collect
@@ -232,7 +235,7 @@ fun CodeEditorLayout(
         // Keep asking while the cursor sits inside the argument list, not just right after
         // '(' or ',' — otherwise the popup vanishes on the first character of an argument.
         // The service decides when the context has stopped being valid by returning null.
-        if (!isInsideCallArguments(state.document.text, offset)) {
+        if (!isInsideCallArguments(state.document, offset)) {
             showSignatureHelp = false
             currentSignatureHelp = null
             return@LaunchedEffect
@@ -240,8 +243,9 @@ fun CodeEditorLayout(
         // Debounced like the find and folding passes: a language server should not field a
         // request per keystroke.
         delay(SIGNATURE_HELP_DEBOUNCE_MS)
+        val document = state.document.snapshot()
         val sig = withContext(state.computeDispatcher) {
-            languageService.signatureHelp(state.document, offset)
+            languageService.signatureHelp(document, offset)
         }
         currentSignatureHelp = sig
         showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
@@ -260,8 +264,9 @@ fun CodeEditorLayout(
         tooltipCodeActions = emptyList()
         val tooltip = tooltipDiagnostic ?: return@LaunchedEffect
         if (languageService == null) return@LaunchedEffect
+        val document = state.document.snapshot()
         tooltipCodeActions = withContext(state.computeDispatcher) {
-            languageService.codeActions(state.document, tooltip.range)
+            languageService.codeActions(document, tooltip.range)
         }
     }
 
@@ -367,8 +372,9 @@ fun CodeEditorLayout(
                 val ranges = if (state.exceedsAnalysisLimit) {
                     emptyList()
                 } else {
+                    val document = state.document.snapshot()
                     withContext(state.computeDispatcher) {
-                        foldingProvider.foldableRanges(state.document)
+                        foldingProvider.foldableRanges(document)
                     }
                 }
                 foldState.updateFoldableRanges(ranges)
@@ -431,7 +437,7 @@ fun CodeEditorLayout(
                 completionItems = carried
                 completionJob?.cancel()
                 completionJob = coroutineScope.launch {
-                    val items = service.completions(state.document, cursor)
+                    val items = service.completions(state.document.snapshot(), cursor)
                     completionItems = items
                     showCompletion = items.isNotEmpty()
                 }
@@ -441,7 +447,7 @@ fun CodeEditorLayout(
                 completionItems = carried
                 completionJob?.cancel()
                 completionJob = coroutineScope.launch {
-                    val items = service.completions(state.document, cursor)
+                    val items = service.completions(state.document.snapshot(), cursor)
                     completionItems = items
                     if (items.isEmpty()) showCompletion = false
                 }
@@ -611,8 +617,9 @@ fun CodeEditorLayout(
                     showRenameDialog = false
                     if (state.textVersion != requestedVersion) return@RenameDialog
                     coroutineScope.launch {
+                        val document = state.document.snapshot()
                         val edits = withContext(state.computeDispatcher) {
-                            languageService?.rename(state.document, target, newName)
+                            languageService?.rename(document, target, newName)
                         } ?: emptyList()
                         if (edits.isNotEmpty() && state.textVersion == requestedVersion) {
                             state.applyTextEdits(edits)
@@ -793,7 +800,7 @@ fun CodeEditorLayout(
 
 private fun applyCompletion(state: CodeEditorState, item: CompletionItem) {
     val cursor = state.selection.start
-    val target = completionReplaceRange(state.document.text, cursor, item)
+    val target = completionReplaceRange(state.document, cursor, item)
 
     if (item.additionalEdits.isEmpty()) {
         val newSelection = TextRange(target.first + item.insertText.length)
@@ -827,7 +834,7 @@ private val COMPLETION_BOUNDARY_CHARS =
  * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
  * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
  */
-internal fun completionReplaceRange(text: String, cursorPos: Int, item: CompletionItem): IntRange {
+internal fun completionReplaceRange(text: CharSequence, cursorPos: Int, item: CompletionItem): IntRange {
     val cursor = cursorPos.coerceIn(0, text.length)
     item.replaceRange?.let { provided ->
         val start = provided.first.coerceIn(0, text.length)
@@ -878,7 +885,7 @@ private const val CALL_SCAN_LIMIT = 2000
  * literal and misjudge; that only costs one extra signature-help request, which the language service
  * answers with null.
  */
-internal fun isInsideCallArguments(text: String, offset: Int): Boolean {
+internal fun isInsideCallArguments(text: CharSequence, offset: Int): Boolean {
     val cursor = offset.coerceIn(0, text.length)
     var i = (cursor - CALL_SCAN_LIMIT).coerceAtLeast(0)
     var depth = 0
@@ -913,7 +920,7 @@ internal fun isInsideCallArguments(text: String, offset: Int): Boolean {
 }
 
 /** Index just past the literal opened by the quote at [start], bounded by [limit]. */
-private fun endOfLiteral(text: String, start: Int, limit: Int): Int {
+private fun endOfLiteral(text: CharSequence, start: Int, limit: Int): Int {
     val quote = text[start]
     var i = start + 1
     while (i < limit) {
