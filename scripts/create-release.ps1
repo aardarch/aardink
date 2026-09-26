@@ -118,6 +118,15 @@ try {
     if (git ls-remote --tags origin "refs/tags/$tag") {
         throw "Tag $tag already exists on origin."
     }
+    # The release workflow's npm job skips a version npm already has, so the tag would publish to
+    # Maven Central only. Say so now rather than after the push. Skipped when npm is not installed.
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        $onNpm = npm view "@aardarch/aardink-web@$Version" version 2>$null
+        if ($LASTEXITCODE -eq 0 -and $onNpm) {
+            Write-Warning "@aardarch/aardink-web@$Version is already on npm; the release will not republish it."
+        }
+        $global:LASTEXITCODE = 0
+    }
 
     # --- Pre-push checks ---
     if (-not $SkipPrePush) {

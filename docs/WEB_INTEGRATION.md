@@ -37,11 +37,18 @@ your web app (Svelte/React/...)  ── calls ──▶  your JS exports  (aardi
                                           CodeEditorLayout + languages (:editor, :languages)
 ```
 
-Aardink publishes libraries only. **You** build the executable: a small Gradle wasmJs module that
-depends on `aardink-editor-web`, adds any languages and themes of your own, and declares the
-`@JsExport` functions your page calls. That is what lets a product ship its own grammar without
-Aardink knowing about it. `:sample-web` in this repository is exactly such a module, and it is
-the one to copy.
+There are two ways in:
+
+- **Use the ready-built package.** `pnpm add @aardarch/aardink-web` installs `:sample-web`'s
+  build from npm, released with every Aardink version. It has the built-in languages and themes
+  and the Monaco-shaped API below, and needs no Gradle or JDK. Start with
+  [Building an npm package](#building-an-npm-package) for the API and
+  [Vite](#vite) for the bundler set-up; skip the Gradle parts.
+- **Build your own executable** when you need a grammar or language service of your own written
+  in Kotlin: a small Gradle wasmJs module that depends on `aardink-editor-web`, adds your
+  languages and themes, and declares the `@JsExport` functions your page calls. That is what lets
+  a product ship its own grammar without Aardink knowing about it. `:sample-web` in this
+  repository is exactly such a module, and it is the one to copy.
 
 ## The Kotlin API: `AardinkWeb`
 

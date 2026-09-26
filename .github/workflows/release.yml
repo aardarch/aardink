@@ -112,13 +112,127 @@ jobs:
           fi
           echo "file=$notes_file" >> "$GITHUB_OUTPUT"
 
+      # A tag with a pre-release suffix (v0.6.0-rc1) becomes a GitHub pre-release, matching the
+      # `next` dist-tag it gets on npm.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease";; esac
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file "${{ steps.notes.outputs.file }}" \
             --verify-tag \
+            $prerelease \
             "${{ steps.docs.outputs.archive }}" \
-            "${{ steps.apk.outputs.apk }}#Sample app (APK, debug-signed)"             "${{ steps.web.outputs.archive }}#Web sample (static files)"
+            "${{ steps.apk.outputs.apk }}#Sample app (APK, debug-signed)" \
+            "${{ steps.web.outputs.archive }}#Web sample (static files)"
+
+  # The @aardarch/aardink-web npm package, published through npm trusted publishing (OIDC): no
+  # token is stored anywhere. The one-time set-up is in docs/NPM_BOOTSTRAP.md; the trusted
+  # publisher on npmjs.com names this workflow file and the `npm` environment, so renaming either
+  # breaks publishing. Runs after Maven Central, so both registries carry the same version.
+  publish-npm:
+    name: Publish to npm
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: npm
+
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm exchanges for a short-lived publish credential
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+
+      # See ci.yml: Ubuntu 24.04 blocks the namespaces Chrome's sandbox needs.
+      - name: Allow the Chrome sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-provider: basic # MIT-licensed
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build the npm package
+        run: ./gradlew :sample-web:npmPackage
+
+      - name: Verify the package version matches the tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          package_version="$(node -p "require('./sample-web/build/npm/package.json').version")"
+          if [ "$tag_version" != "$package_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $package_version."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm 11.5.1 or later; take the newest rather than whatever the
+      # runner's Node bundles (the same step as sjohansson/astro-components' release workflow).
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Vite smoke test against the package
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm smoke
+
+      - name: Check the package
+        working-directory: sample-web/build/npm
+        run: |
+          npm pack --dry-run
+          npx --yes publint@0.3 --strict
+          npx --yes @arethetypeswrong/cli@0.18 --pack --profile esm-only
+
+      # Idempotent: re-running a release after npm already has the version is a no-op. A
+      # pre-release version goes to the `next` dist-tag and never moves `latest`. Setting the
+      # repository variable NPM_PUBLISH_MODE=stage stages the version instead, for a maintainer
+      # to approve with `npm stage approve` (docs/NPM_BOOTSTRAP.md).
+      - name: Publish
+        working-directory: sample-web/build/npm
+        env:
+          PUBLISH_MODE: ${{ vars.NPM_PUBLISH_MODE }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if npm view "@aardarch/aardink-web@$version" version >/dev/null 2>&1; then
+            echo "@aardarch/aardink-web@$version is already on npm; nothing to do."
+            exit 0
+          fi
+          tag=latest
+          case "$version" in *-*) tag=next;; esac
+          if [ "$PUBLISH_MODE" = "stage" ]; then
+            npm stage publish --access public --tag "$tag"
+            echo "Staged @aardarch/aardink-web@$version ($tag); approve it with npm stage approve." >> "$GITHUB_STEP_SUMMARY"
+          else
+            npm publish --access public --tag "$tag"
+            echo "Published @aardarch/aardink-web@$version ($tag)." >> "$GITHUB_STEP_SUMMARY"
+          fi

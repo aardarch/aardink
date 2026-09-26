@@ -188,7 +188,7 @@ Two scripts handle the release flow; nothing should be done by hand:
 ./scripts/update-changelog.ps1   # (optional) auto-fill [Unreleased] from commits since last tag
 ./scripts/create-release.ps1     # bump VERSION_NAME, cut CHANGELOG, commit + tag (no push)
 git show vX.Y.Z                  # review the staged release
-./scripts/release.ps1            # push main + tag → triggers Maven Central publish + GH Release
+./scripts/release.ps1            # push main + tag → Maven Central, npm and the GitHub Release
 ```
 
 `scripts/create-release.ps1` runs `scripts/pre-push.ps1 -NoFix` as a gate, prompts for the next version
@@ -197,10 +197,23 @@ proceed if the tag exists or if `[Unreleased]` is empty (override with
 `-AllowEmptyChangelog`). `scripts/release.ps1` only pushes if HEAD is a `chore(release): vX.Y.Z`
 commit whose tag matches `VERSION_NAME`.
 
-The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
-verifies the tag matches `VERSION_NAME`, publishes all three artifacts, builds the sample app,
-and creates a GitHub Release with the matching `## [X.Y.Z]` CHANGELOG section as the body
-and two assets: the API docs tarball and `aardink-sample-vX.Y.Z.apk`.
+The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) has two
+jobs:
+
+- **`publish`** verifies the tag matches `VERSION_NAME` and publishes the four libraries to Maven
+  Central. It then creates a GitHub Release whose body is the matching `## [X.Y.Z]` CHANGELOG
+  section, with three assets: the API docs tarball, `aardink-sample-vX.Y.Z.apk` and the web
+  sample zip. A tag with a suffix (`v0.6.0-rc1`) becomes a GitHub pre-release.
+- **`publish-npm`** runs after it, in the GitHub environment `npm` (tags `v*` only). It publishes
+  `@aardarch/aardink-web` through npm trusted publishing (OIDC): no token exists anywhere, and
+  npmjs.com only accepts a publish from this workflow file in that environment. A suffixed
+  version goes to the `next` dist-tag, so `latest` only ever moves on a final release, and a
+  version npm already has is skipped. The repository variable `NPM_PUBLISH_MODE=stage` stages
+  the version instead, for approval with `npm stage approve`.
+
+The one-time npm set-up (org, first publish, trusted publisher) is in
+[docs/NPM_BOOTSTRAP.md](docs/NPM_BOOTSTRAP.md). Never rename `release.yml` or the `npm`
+environment without updating the trusted publisher on npmjs.com first.
 
 The sample APK is signed with the default debug key (no private keystore is needed) and
 reads its `versionName`/`versionCode` from `VERSION_NAME`. CI also uploads debug and release

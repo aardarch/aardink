@@ -2,10 +2,26 @@
   "name": "@aardarch/aardink-web",
   "version": "@VERSION@",
   "description": "The Aardink code editor for the browser: Compose Multiplatform on WebAssembly behind a Monaco-shaped API.",
+  "keywords": [
+    "code-editor",
+    "editor",
+    "syntax-highlighting",
+    "monaco",
+    "webassembly",
+    "wasm",
+    "kotlin",
+    "compose-multiplatform"
+  ],
+  "homepage": "https://aardarch.github.io/aardink/",
+  "bugs": {
+    "url": "https://github.com/aardarch/aardink/issues"
+  },
   "license": "Apache-2.0",
+  "author": "Aardarch",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aardarch/aardink.git"
+    "url": "git+https://github.com/aardarch/aardink.git",
+    "directory": "sample-web"
   },
   "type": "module",
   "main": "index.js",
@@ -20,8 +36,17 @@
     "index.js",
     "index.d.ts",
     "kotlin/",
+    "README.md",
+    "LICENSE",
     "JETBRAINS_MONO_OFL.txt"
   ],
   "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": "@DEPENDENCIES@"
 }

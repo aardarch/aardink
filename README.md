@@ -33,6 +33,9 @@ Aardink publishes four artifacts on Maven Central:
 - **`com.aardarch:aardink-editor-web`** — browser only: mounts the editor into a DOM element
   behind a small JavaScript-friendly API. See [Using Aardink in a web app](#using-aardink-in-a-web-app).
 
+and one package on npm, **`@aardarch/aardink-web`**: the ready-built browser editor for any
+JavaScript app, with the same version number.
+
 The `editor` module is intentionally language-agnostic. Pull in
 `aardink-languages` for the bundled definitions, or implement your own via
 `LanguageDefinition` + `LanguageRegistry`.
@@ -103,9 +106,13 @@ See the [`sample/`](sample/) module for a runnable example.
 
 ## Using Aardink in a web app
 
-The browser build is a WebAssembly module. You build it from a small Gradle module of your own
-(depending on `aardink-editor-web` plus any languages you add), package it for npm, and use it
-from any web framework through a Monaco-shaped API:
+The browser build is a WebAssembly module behind a Monaco-shaped API, published on npm as
+[`@aardarch/aardink-web`](https://www.npmjs.com/package/@aardarch/aardink-web) with the built-in
+languages and themes:
+
+```sh
+pnpm add @aardarch/aardink-web
+```
 
 ```ts
 import { createEditor } from '@aardarch/aardink-web';
@@ -113,15 +120,18 @@ import { createEditor } from '@aardarch/aardink-web';
 const editor = await createEditor(container, (text) => save(text), { value: source, language: 'xml' });
 ```
 
-[`sample-web/`](sample-web/) is the reference module, and
-[`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md) walks through the whole set-up: the export
-template, npm packaging, Vite configuration, and a Monaco option mapping.
+For a grammar or language service of your own written in Kotlin, build the module yourself
+instead: a small Gradle wasmJs module that depends on `aardink-editor-web`, with
+[`sample-web/`](sample-web/) as the reference. [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md)
+covers both routes: the export template, npm packaging, Vite configuration, and a Monaco option
+mapping.
 
-> **Current limits on the web:** typing latency grows with document size, which is comfortable
-> for a few hundred lines and laggy beyond ~1,000 lines of highlighted code. A disposed editor
-> is not fully released, so reuse one editor rather than mounting a new one per view. Both are
-> upstream Compose constraints, measured and explained in
-> [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance).
+> **Current limits on the web (0.5):** typing cost grows with document size. It is comfortable
+> for a few hundred lines, but past that each keystroke keeps the editor busy longer and fast
+> typing can lose keys. A disposed editor is not fully released, so reuse one editor rather than
+> mounting a new one per view. Both are measured in
+> [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance); 0.6.0's virtualised renderer
+> fixes the first, and Compose Multiplatform 1.13 the second.
 
 ## Theming
 

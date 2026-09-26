@@ -118,6 +118,7 @@ val npmPackage by tasks.registering(Sync::class) {
         }
     }
     from(rootProject.file("editor-web/JETBRAINS_MONO_OFL.txt"))
+    from(rootProject.file("LICENSE"))
     into("kotlin") {
         // Already holds skiko.mjs/skiko.wasm next to the module, which is where it imports them.
         from(kotlinOutput) {

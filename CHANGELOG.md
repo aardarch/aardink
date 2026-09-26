@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@aardarch/aardink-web` is published to npm with every release, through npm trusted
+  publishing with provenance: `pnpm add @aardarch/aardink-web`. Pre-release versions go to the
+  `next` dist-tag.
+
 ## [0.5.0] - 2026-09-27
 
 ### Added

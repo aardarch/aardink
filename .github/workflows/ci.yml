@@ -100,6 +100,15 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm smoke
 
+      # What npm and bundlers will see: the file list, package.json correctness (publint) and
+      # that the types resolve for ESM consumers (arethetypeswrong). The release job runs the same.
+      - name: Check the npm package
+        working-directory: sample-web/build/npm
+        run: |
+          npm pack --dry-run
+          npx --yes publint@0.3 --strict
+          npx --yes @arethetypeswrong/cli@0.18 --pack --profile esm-only
+
       # Latency on the 5,000-line reference document (docs/AARDINK_0.6_PLAN.md section 6). It only
       # reports until the virtualised renderer lands; PR 7 turns on --gate.
       - name: Web performance

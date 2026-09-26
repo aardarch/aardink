@@ -185,6 +185,15 @@ try {
                     if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed (is pnpm installed?)' }
                     pnpm smoke 2>&1 | Out-Host
                     if ($LASTEXITCODE -ne 0) { throw 'Vite smoke test failed - see tools/vite-smoke/dist/smoke.png' }
+                    # The file list npm would publish; CI and the release job also run publint and
+                    # arethetypeswrong, which need a network fetch this script avoids.
+                    Push-Location (Join-Path $ProjectRoot 'sample-web' 'build' 'npm')
+                    try {
+                        npm pack --dry-run 2>&1 | Out-Host
+                        if ($LASTEXITCODE -ne 0) { throw 'npm pack --dry-run failed for sample-web/build/npm' }
+                    } finally {
+                        Pop-Location
+                    }
                 } finally {
                     Pop-Location
                 }
