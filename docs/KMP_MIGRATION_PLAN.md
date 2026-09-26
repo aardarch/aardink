@@ -36,11 +36,10 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
 | 9 | Done | `:sample-web`, npm package, `tools/vite-smoke/`, checklist. See §7.4: W-1 leak and W-10 latency are open. |
 | 10 | Done | 0.5.0 released as-is: §7.4's W-1 leak and W-10 latency ship as documented known issues (CHANGELOG, README, `docs/WEB_INTEGRATION.md`). Gradle 9.8.0. No `-rc1` dry run: an rc tag publishes to Maven Central just the same, so CI on `main` served as the dry run instead. |
-| 11 | **After the post-release plan** | `aardflex-web-app` switch-over (§11). Revisit once the post-release plan exists; see below. |
+| 11 | **Superseded** | Replaced by `docs/AARDINK_0.6_PLAN.md` §7.1: aardflex-web-app consumes `@aardarch/aardink-web` from npmjs instead of building its own wasm executable. |
 
-**Post-release:** this plan is complete through 0.5.0. The next plan should start from §7.4's
-open items (text layout virtualisation, `ComposeViewport` teardown / upstream issue), the manual
-web checklist items W-2/W-4/W-5/W-6/W-9, and whether §11 should wait for them.
+**Post-release:** this plan is complete through 0.5.0 and is now a historical record. Work continues
+in `docs/AARDINK_0.6_PLAN.md`, which covers §7.4's open items, the manual web checklist and §11.
 
 ## 0. Executive summary and decisions
 
