@@ -84,10 +84,11 @@ data class NamedTokenType(val name: String) : TokenType {
  * - **Rules:** `[regex, action]` or `[regex, action, next]`, or `{ "regex", "action", "next" }`,
  *   or `{ "include": "@state" }` for another state's rules. The first rule whose regex matches at
  *   the current position wins. Regexes see one line at a time.
- * - **Actions:** a token name; an array of token names, one per capture group; `{ "token",
- *   "next" }`; or `{ "cases": { guard: action } }`, where a guard is `@name` (the match is in the
- *   array `name`), `@default`, `@eos` (the match ends the line), or a regex the whole match must
- *   match. The token `@rematch` consumes nothing and matches again in the next state.
+ * - **Actions:** a token name; `{ "token", "next" }`; `{ "cases": { guard: action } }`, where a
+ *   guard is `@name` (the match is in the array `name`), `@default`, `@eos` (the match ends the
+ *   line), or a regex the whole match must match; or an array with an action per capture group,
+ *   any of those three, whose cases test the group's own text and whose `next`s apply in order.
+ *   The token `@rematch` (not in a group) consumes nothing and matches again in the next state.
  * - **Next:** a state name to enter (pushed on the state stack), `@pop`, `@push` (the current
  *   state again) or `@popall`.
  * - **Top level:** `defaultToken` for text no rule matches, `ignoreCase`, `tokenPostfix` added to
@@ -108,7 +109,9 @@ class DeclarativeGrammar internal constructor(
 ) {
     internal sealed interface Action {
         data class Token(val type: TokenType, val next: Next?, val rematch: Boolean) : Action
-        data class Groups(val types: List<TokenType>, val next: Next?) : Action
+
+        /** One action per capture group, each a [Token] or [Cases]; their `next`s step in order, then [next]. */
+        data class Groups(val actions: List<Action>, val next: Next?) : Action
         data class Cases(val cases: List<Pair<Guard, Action>>) : Action
     }
 
@@ -237,13 +240,10 @@ private class GrammarReader(private val json: JsonObject) {
                 }
             }
 
-            is JsonArray -> {
-                val groups = json.mapIndexed { index, element ->
-                    (element as? JsonPrimitive)?.contentOrNull
-                        ?: fail("$path[$index]", "a group's action is a token name")
-                }
-                DeclarativeGrammar.Action.Groups(groups.map(::type), ruleNext)
-            }
+            is JsonArray -> DeclarativeGrammar.Action.Groups(
+                json.mapIndexed { index, element -> groupAction(element, "$path[$index]", regex) },
+                ruleNext,
+            )
 
             is JsonObject -> {
                 val cases = json["cases"] as? JsonObject
@@ -267,6 +267,21 @@ private class GrammarReader(private val json: JsonObject) {
                 }
             }
         }
+
+    /**
+     * A capture group's action: a token name, `{ "token", "next" }`, or `{ "cases" }` over the
+     * group's own text. Not another array, and not `@rematch`.
+     */
+    private fun groupAction(json: JsonElement, path: String, regex: Regex): DeclarativeGrammar.Action =
+        action(json, path, ruleNext = null, regex).also { checkGroupAction(it, path) }
+
+    private fun checkGroupAction(action: DeclarativeGrammar.Action, path: String) {
+        when (action) {
+            is DeclarativeGrammar.Action.Token -> if (action.rematch) fail(path, "a group's action cannot be @rematch")
+            is DeclarativeGrammar.Action.Groups -> fail(path, "a group's action is a token name, { token, next } or { cases }")
+            is DeclarativeGrammar.Action.Cases -> action.cases.forEach { checkGroupAction(it.second, path) }
+        }
+    }
 
     private fun guard(key: String, path: String): DeclarativeGrammar.Guard = when {
         key == "@default" -> DeclarativeGrammar.Guard.Default
@@ -298,9 +313,12 @@ private class GrammarReader(private val json: JsonObject) {
                     ?: fail(path, "enters an unknown state: ${it.state}")
             }
 
-            is DeclarativeGrammar.Action.Groups -> (action.next as? DeclarativeGrammar.Next.Enter)?.let {
-                stateOf(it.state, states)
-                    ?: fail(path, "enters an unknown state: ${it.state}")
+            is DeclarativeGrammar.Action.Groups -> {
+                action.actions.forEach { checkNext(it, path, states) }
+                (action.next as? DeclarativeGrammar.Next.Enter)?.let {
+                    stateOf(it.state, states)
+                        ?: fail(path, "enters an unknown state: ${it.state}")
+                }
             }
 
             is DeclarativeGrammar.Action.Cases -> action.cases.forEach { checkNext(it.second, path, states) }

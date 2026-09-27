@@ -186,6 +186,7 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
             }
             val length = match.value.length
             val action = resolve(matched.action, match.value, pos + length == content.length)
+            val before = current
             val next: DeclarativeGrammar.Next?
             var rematch = false
             when (action) {
@@ -196,7 +197,7 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
                 }
 
                 is DeclarativeGrammar.Action.Groups -> {
-                    addGroups(builder, match, pos, action.types)
+                    current = addGroups(builder, match, pos, action.actions, current, content.length)
                     next = action.next
                 }
 
@@ -206,7 +207,6 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
                     next = null
                 }
             }
-            val before = current
             current = step(current, next)
             val consumed = if (rematch) 0 else length
             if (consumed == 0) {
@@ -240,21 +240,37 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
         return action
     }
 
-    /** Each capture group of [match] its own token; text between groups the default token. */
-    private fun addGroups(builder: LineBuilder, match: MatchResult, pos: Int, types: List<TokenType>) {
+    /**
+     * Each capture group of [match] its own token, by its own action (whose cases test the group's
+     * text); text between groups the default token. Returns [stack] after the groups' `next`s.
+     */
+    private fun addGroups(
+        builder: LineBuilder,
+        match: MatchResult,
+        pos: Int,
+        actions: List<DeclarativeGrammar.Action>,
+        stack: Stack,
+        lineLength: Int,
+    ): Stack {
         var at = pos
+        var current = stack
         val end = pos + match.value.length
-        for (group in 1..minOf(types.size, match.groups.size - 1)) {
+        for (group in 1..minOf(actions.size, match.groups.size - 1)) {
             val value = match.groups[group]?.value ?: continue
             // Groups follow each other in the match: find this one from where the last ended.
             val index = match.value.indexOf(value, at - pos)
-            if (index < 0 || value.isEmpty()) continue
+            if (index < 0) continue
             val groupStart = pos + index
+            // A group's case that does not apply leaves it the default token, as for a whole match.
+            val action = resolve(actions[group - 1], value, groupStart + value.length == lineLength) as? DeclarativeGrammar.Action.Token
+            current = step(current, action?.next)
+            if (value.isEmpty()) continue
             if (groupStart > at) builder.add(at, groupStart, grammar.defaultToken)
-            builder.add(groupStart, groupStart + value.length, types[group - 1])
+            builder.add(groupStart, groupStart + value.length, action?.type ?: grammar.defaultToken)
             at = groupStart + value.length
         }
         if (at < end) builder.add(at, end, grammar.defaultToken)
+        return current
     }
 
     private fun step(stack: Stack, next: DeclarativeGrammar.Next?): Stack = when (next) {
