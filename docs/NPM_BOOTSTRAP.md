@@ -1,5 +1,9 @@
 # npm bootstrap for `@aardarch/aardink-web` (one time, manual)
 
+**Status: done (2026-09-27).** `@aardarch/aardink-web@0.5.0` is on npm as `latest`, the trusted
+publisher is configured, and the `npm` environment deploys `v*` tags only. Kept as the record of
+how it was set up, and for setting up another package the same way.
+
 Written for: the owner of the npm account that will own the `@aardarch` scope. Run these steps
 once, in order, on the Windows dev machine (PowerShell 7). Everything after this is automated:
 from `v0.6.0-rc1` on, a release tag publishes to npm from `.github/workflows/release.yml`
