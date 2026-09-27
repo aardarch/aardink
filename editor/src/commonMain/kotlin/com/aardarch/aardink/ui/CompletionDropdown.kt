@@ -73,17 +73,6 @@ fun CompletionDropdown(items: List<CompletionItem>, visible: Boolean, onAccept: 
 
 @Composable
 private fun CompletionChip(item: CompletionItem, onClick: () -> Unit) {
-    val (badgeLabel, badgeColor) = when (item.kind) {
-        CompletionKind.Element -> "E" to MaterialTheme.colorScheme.primary
-        CompletionKind.Attribute -> "A" to MaterialTheme.colorScheme.secondary
-        CompletionKind.Value -> "V" to MaterialTheme.colorScheme.tertiary
-        CompletionKind.Snippet -> "S" to MaterialTheme.colorScheme.error
-        CompletionKind.Module -> "M" to MaterialTheme.colorScheme.primary
-        CompletionKind.Property -> "P" to MaterialTheme.colorScheme.secondary
-        CompletionKind.Transform -> "T" to MaterialTheme.colorScheme.tertiary
-        CompletionKind.ColorRef -> "C" to MaterialTheme.colorScheme.error
-    }
-
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -94,26 +83,40 @@ private fun CompletionChip(item: CompletionItem, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Kind badge
-            Surface(
-                shape = RoundedCornerShape(3.dp),
-                color = badgeColor.copy(alpha = 0.15f),
-                modifier = Modifier.size(18.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = badgeLabel,
-                        fontSize = 9.sp,
-                        color = badgeColor,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
-
+            CompletionKindBadge(item.kind)
             Text(
                 text = item.label,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+/** A completion's kind, as a letter in a tinted square. */
+@Composable
+internal fun CompletionKindBadge(kind: CompletionKind) {
+    val (badgeLabel, badgeColor) = when (kind) {
+        CompletionKind.Element -> "E" to MaterialTheme.colorScheme.primary
+        CompletionKind.Attribute -> "A" to MaterialTheme.colorScheme.secondary
+        CompletionKind.Value -> "V" to MaterialTheme.colorScheme.tertiary
+        CompletionKind.Snippet -> "S" to MaterialTheme.colorScheme.error
+        CompletionKind.Module -> "M" to MaterialTheme.colorScheme.primary
+        CompletionKind.Property -> "P" to MaterialTheme.colorScheme.secondary
+        CompletionKind.Transform -> "T" to MaterialTheme.colorScheme.tertiary
+        CompletionKind.ColorRef -> "C" to MaterialTheme.colorScheme.error
+    }
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = badgeColor.copy(alpha = 0.15f),
+        modifier = Modifier.size(18.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = badgeLabel,
+                fontSize = 9.sp,
+                color = badgeColor,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }

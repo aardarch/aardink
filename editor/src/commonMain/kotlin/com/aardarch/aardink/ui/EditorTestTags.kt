@@ -31,4 +31,10 @@ internal object EditorTestTags {
 
     /** A touch selection handle of the editor's own renderer; the name of the handle follows. */
     const val HANDLE = "aardink.handle."
+
+    /** The completion list at the caret (desktop and the web). */
+    const val COMPLETION_LIST = "aardink.completionList"
+
+    /** The menu over a touch selection. */
+    const val TOUCH_MENU = "aardink.touchMenu"
 }

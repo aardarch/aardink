@@ -46,44 +46,50 @@ fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Mod
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = false),
     ) {
-        Surface(
-            modifier = modifier
-                .widthIn(max = 360.dp)
-                .shadow(8.dp, RoundedCornerShape(10.dp)),
-            shape = RoundedCornerShape(10.dp),
-            tonalElevation = 4.dp,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        HoverDocCard(doc, modifier)
+    }
+}
+
+/** The popup's card: title, content and an optional example. */
+@Composable
+internal fun HoverDocCard(doc: HoverDoc, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .widthIn(max = 360.dp)
+            .shadow(8.dp, RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        tonalElevation = 4.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = doc.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                HorizontalDivider(thickness = 0.5.dp)
-                Text(
-                    text = doc.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (doc.example != null) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = doc.example,
-                            modifier = Modifier.padding(8.dp),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = LocalEditorTypography.current.fontFamily,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+            Text(
+                text = doc.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            HorizontalDivider(thickness = 0.5.dp)
+            Text(
+                text = doc.content,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (doc.example != null) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = doc.example,
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = LocalEditorTypography.current.fontFamily,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         }

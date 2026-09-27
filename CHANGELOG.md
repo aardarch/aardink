@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EditorOptions`, passed as `CodeEditorLayout(options = …)`: read-only, soft wrap and the gutter
   switches, plus `highlightCurrentLine`, `matchBrackets`, `bracketPairColorization`,
   `stickyScroll`, `showMinimap`, `tabSize` and `insertSpaces`.
+- Popups where the work is. With a hardware keyboard, completions open as a list at the caret
+  (Ctrl+Space asks for them; the arrows move through them, Enter or Tab takes one, Escape closes
+  it); touch devices keep the strip above the keyboard. Signature help sits above the caret,
+  quick fixes at their diagnostic, and all of them flip to the other side of the line or move
+  sideways to stay inside the window. Hover documentation (`LanguageService.hoverDoc`, which the
+  editor never showed before) appears when the mouse rests on a symbol for half a second, and
+  from the touch menu's "Info".
 - Editor chrome, each switchable in `EditorOptions`: the caret's line is highlighted in
   `EditorTheme.lineHighlight`; the bracket pair the caret touches is boxed; and brackets are
   coloured by nesting depth from the new `EditorTheme.bracketPairColors` (VS Code's colours by
@@ -109,6 +116,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new `CodeEditorState` starts with the caret at the start of the text, as after `loadText`,
   instead of at its end.
 - Replace All is one undo step instead of one per match.
+- A touch selection gets the editor's own menu (cut, copy, paste, select all, and "Info" with a
+  language service) instead of the platform's text toolbar, which cannot take items of an app's
+  own.
 - Selections are drawn in `EditorTheme.selectionColor` and find matches in
   `EditorTheme.findMatchColor` (the current one stronger), neither of which was used before; a
   find match inside a selection stays visible.

@@ -31,6 +31,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.areAnyPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -56,7 +61,7 @@ import com.aardarch.aardink.ui.view.EditorGutterView
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
 import com.aardarch.aardink.ui.view.EditorSelectionHandles
-import com.aardarch.aardink.ui.view.EditorTextToolbar
+import com.aardarch.aardink.ui.view.EditorTouchMenu
 import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.ViewStyle
@@ -82,6 +87,7 @@ internal fun VirtualizedEditorBody(
     options: EditorOptions,
     textColor: Color,
     modifier: Modifier = Modifier,
+    popups: @Composable () -> Unit = {},
 ) {
     val view = controller.view
     val density = LocalDensity.current
@@ -156,7 +162,6 @@ internal fun VirtualizedEditorBody(
         onCut = { controller.cutText() },
         onPaste = { controller.pasteText(it) },
     )
-    EditorTextToolbar(controller)
 
     val colors = EditorColors(
         selection = theme.selectionColor,
@@ -210,7 +215,10 @@ internal fun VirtualizedEditorBody(
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },
                 colors = colors,
                 softWrap = softWrap,
-                modifier = Modifier.fillMaxSize().testTag(EditorTestTags.EDITOR),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(EditorTestTags.EDITOR)
+                    .pointerInput(controller) { trackHover(controller) },
                 inputModifier = Modifier
                     .then(EditorInputElement(controller))
                     .focusRequester(focusRequester)
@@ -219,11 +227,34 @@ internal fun VirtualizedEditorBody(
                 overlay = {
                     EditorSelectionHandles(controller, theme.cursorColor)
                     EditorContextMenu(controller)
+                    EditorTouchMenu(controller)
+                    popups()
                 },
             )
         },
         scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
     )
+}
+
+/**
+ * Where a mouse rests over the text, for hover documentation: [EditorController.hoverAt] follows a
+ * mouse that moves with no button down, and clears when it leaves, presses, or is a touch. Only
+ * looks; the events go on to selection and scrolling untouched.
+ */
+private suspend fun PointerInputScope.trackHover(controller: EditorController) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull() ?: continue
+            controller.hoverAt = when {
+                change.type != PointerType.Mouse -> null
+                event.type == PointerEventType.Exit || event.type == PointerEventType.Press -> null
+                event.buttons.areAnyPressed -> null
+                event.type == PointerEventType.Move || event.type == PointerEventType.Enter -> change.position
+                else -> controller.hoverAt
+            }
+        }
+    }
 }
 
 /** Half a caret blink: VS Code's default, 1.06 s a cycle. */

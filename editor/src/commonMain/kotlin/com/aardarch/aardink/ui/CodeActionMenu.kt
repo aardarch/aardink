@@ -42,53 +42,63 @@ import com.aardarch.aardink.core.CodeActionKind
 @Composable
 fun CodeActionMenu(actions: List<CodeAction>, onSelectAction: (CodeAction) -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     if (actions.isEmpty()) return
-
     Popup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Surface(
-            modifier = modifier
-                .widthIn(min = 220.dp, max = 340.dp)
-                .shadow(8.dp, RoundedCornerShape(10.dp)),
-            shape = RoundedCornerShape(10.dp),
-            tonalElevation = 8.dp,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        ) {
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                Text(
-                    text = "Quick Fixes & Actions",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-                HorizontalDivider(thickness = 0.5.dp)
+        CodeActionCard(actions, onSelectAction, onDismiss, modifier)
+    }
+}
 
-                actions.forEach { action ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onSelectAction(action)
-                                onDismiss()
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = action.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (action.kind != CodeActionKind.QuickFix) {
-                            Text(
-                                text = action.kind.name,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
+/** The menu's card: a header and one row per action. */
+@Composable
+internal fun CodeActionCard(
+    actions: List<CodeAction>,
+    onSelectAction: (CodeAction) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .widthIn(min = 220.dp, max = 340.dp)
+            .shadow(8.dp, RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        tonalElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            Text(
+                text = "Quick Fixes & Actions",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            HorizontalDivider(thickness = 0.5.dp)
+
+            actions.forEach { action ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onSelectAction(action)
+                            onDismiss()
                         }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = action.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (action.kind != CodeActionKind.QuickFix) {
+                        Text(
+                            text = action.kind.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
             }

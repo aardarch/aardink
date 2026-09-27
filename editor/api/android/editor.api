@@ -744,6 +744,12 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt {
 	public final fun getLambda$326984996$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 
+public final class com/aardarch/aardink/ui/ComposableSingletons$VirtualizedEditorBodyKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$VirtualizedEditorBodyKt;
+	public fun <init> ()V
+	public final fun getLambda$-1980058608$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+}
+
 public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
 	public static final fun EditorAttributionBadge (Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
@@ -925,9 +931,14 @@ public final class com/aardarch/aardink/ui/SignatureHelpPopupKt {
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt;
 	public fun <init> ()V
+	public final fun getLambda$-1958007258$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1424247831$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1478940575$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1489167759$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1739269038$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1989370317$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$2072429246$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$644504353$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$885451904$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 

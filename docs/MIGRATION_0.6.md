@@ -75,6 +75,8 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | `EditorThemeParser`, 8-digit colours | Read as `#AARRGGBB` | Read as VS Code writes them, `#RRGGBBAA` | PR 8 |
 | Carets | The text field's caret, blinking while focused | One caret per selection, blinking while the editor has focus, hidden without it | PR 7 |
 | Mouse and touch | The text field's | Click, Shift+click, Alt+click (another caret), double and triple click, drag; touch tap, long press, selection handles with the platform's text toolbar; a right-click menu on desktop and the web | PR 7 |
+| Popups | Signature help and hover at the top of the editor; completions only as a strip | Next to the caret or the symbol, flipping above or below to stay in the window. With a hardware keyboard completions are a list at the caret (Ctrl+Space; arrows, Enter or Tab, Escape); touch devices keep the strip. `HoverDocPopup`, `SignatureHelpPopup` and `CodeActionMenu` keep their signatures for hosts that show them themselves | PR 9 |
+| Touch selection menu | The platform's text toolbar | The editor's own menu: cut, copy, paste, select all, and "Info" with a language service | PR 9 |
 | Keyboard toolbar | Inserted the character as is | Types it through the typing rules, as a key: `(` gets its `)` | PR 7 |
 | Web clipboard | The text field's | Ctrl/Cmd+C, X and V are left to the browser, whose clipboard events carry the text without a permission prompt | PR 7 |
 

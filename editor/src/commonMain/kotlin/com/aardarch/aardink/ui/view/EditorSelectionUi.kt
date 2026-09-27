@@ -19,20 +19,22 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -41,13 +43,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalTextToolbar
-import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.ui.EditorAnchoredPopup
 import com.aardarch.aardink.ui.EditorTestTags
 import kotlin.math.roundToInt
 
@@ -153,71 +154,70 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.rotateSquareCorner(
 }
 
 /**
- * The platform's text toolbar (copy, cut, paste, select all) over a touch selection, and over the
- * caret after its handle is tapped. Hidden while a handle is dragged.
+ * The menu over a touch selection (and over the caret after its handle is tapped): cut, copy,
+ * paste, select all, and "Info" (the documentation of the symbol there) when the host offers it.
+ * The editor's own rather than the platform's text toolbar, which takes no items of an app's own.
+ * Hidden while a handle is dragged.
  */
 @Composable
-internal fun EditorTextToolbar(controller: EditorController) {
-    val toolbar = LocalTextToolbar.current
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(controller, toolbar) {
-        snapshotFlow {
-            val selection = controller.state.selection
-            val wanted = controller.touchMode && controller.focused && controller.draggingHandle == null &&
-                (!selection.collapsed || controller.showToolbarAtCaret)
-            if (wanted) toolbarRect(controller, selection) else null
-        }.collect { rect ->
-            if (rect == null) {
-                if (shown && toolbar.status == TextToolbarStatus.Shown) toolbar.hide()
-                shown = false
-                return@collect
-            }
-            shown = true
-            val editable = !controller.readOnly
-            val hasSelection = !controller.state.selection.collapsed
-            toolbar.showMenu(
-                rect = rect,
-                onCopyRequested = if (hasSelection) {
-                    {
-                        controller.copyToClipboard()
-                        controller.showToolbarAtCaret = false
-                    }
-                } else {
-                    null
-                },
-                onPasteRequested = if (editable) {
-                    {
-                        controller.pasteFromClipboard()
-                        controller.showToolbarAtCaret = false
-                    }
-                } else {
-                    null
-                },
-                onCutRequested = if (editable && hasSelection) {
-                    {
-                        controller.cutToClipboard()
-                        controller.showToolbarAtCaret = false
-                    }
-                } else {
-                    null
-                },
-                onSelectAllRequested = { controller.state.selectAll() },
-            )
-        }
-    }
-    DisposableEffect(toolbar) {
-        onDispose { if (shown && toolbar.status == TextToolbarStatus.Shown) toolbar.hide() }
-    }
-}
-
-/** The selection's (or caret's) bounds in root coordinates, where the toolbar is placed. */
-private fun toolbarRect(controller: EditorController, selection: TextRange): Rect? {
-    val coordinates = controller.coordinates?.takeIf { it.isAttached } ?: return null
+internal fun EditorTouchMenu(controller: EditorController) {
+    val state = controller.state
+    val selection = state.selection
+    val wanted = controller.touchMode && controller.focused && controller.draggingHandle == null &&
+        (!selection.collapsed || controller.showToolbarAtCaret)
+    if (!wanted) return
     controller.view.scroll.scrollY
     val start = controller.view.caretRect(selection.min)
     val end = controller.view.caretRect(selection.max)
-    val origin = coordinates.localToRoot(Offset.Zero)
-    return Rect(minOf(start.left, end.left), start.top, maxOf(start.right, end.right, start.left + 1f), end.bottom).translate(origin)
+    // Down to the bottom of the handles: when there is no room above, the menu goes below them.
+    val handles = with(LocalDensity.current) { HANDLE_SIZE.toPx() }
+    val anchor = Rect(minOf(start.left, end.left), start.top, maxOf(start.right, end.right, start.left + 1f), end.bottom + handles)
+    fun done() {
+        controller.showToolbarAtCaret = false
+    }
+    EditorAnchoredPopup(anchor = anchor, preferAbove = true, onDismiss = ::done) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            tonalElevation = 6.dp,
+            shadowElevation = 4.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.testTag(EditorTestTags.TOUCH_MENU),
+        ) {
+            Row {
+                val editable = !controller.readOnly
+                val hasSelection = !selection.collapsed
+                if (editable && hasSelection) {
+                    TextButton(onClick = {
+                        done()
+                        controller.cutToClipboard()
+                    }) { Text("Cut") }
+                }
+                if (hasSelection) {
+                    TextButton(onClick = {
+                        done()
+                        controller.copyToClipboard()
+                    }) { Text("Copy") }
+                }
+                if (editable) {
+                    TextButton(onClick = {
+                        done()
+                        controller.pasteFromClipboard()
+                    }) { Text("Paste") }
+                }
+                TextButton(onClick = {
+                    done()
+                    state.selectAll()
+                }) { Text("Select all") }
+                val showInfo = controller.actions.onShowInfo
+                if (showInfo != null) {
+                    TextButton(onClick = {
+                        done()
+                        showInfo(selection.min)
+                    }) { Text("Info") }
+                }
+            }
+        }
+    }
 }
 
 /** The right-click menu: cut, copy, paste and select all, at the pointer. */

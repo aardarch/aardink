@@ -57,6 +57,10 @@ internal class EditorHostActions(
     val onGoToDefinition: () -> Boolean = { false },
     val onFindReferences: () -> Boolean = { false },
     val onFormat: () -> Boolean = { false },
+    /** Sees every key first, for a popup that takes keys while it is up; returns whether it took it. */
+    val onPopupKey: (KeyEvent) -> Boolean = { false },
+    /** Show the documentation of the symbol at an offset (the touch menu's "Info"). Null: no such item. */
+    val onShowInfo: ((Int) -> Unit)? = null,
 )
 
 /**
@@ -90,8 +94,11 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     /** Where the magnifier looks, in viewport coordinates, while a handle is dragged. */
     var magnifierCenter by mutableStateOf<Offset?>(null)
 
-    /** The caret's handle was tapped: the text toolbar shows over the caret, for pasting. */
+    /** The caret's handle was tapped: the touch menu shows over the caret, for pasting. */
     var showToolbarAtCaret by mutableStateOf(false)
+
+    /** Where a mouse rests over the text, in viewport coordinates; null when it is elsewhere or pressed. */
+    var hoverAt by mutableStateOf<Offset?>(null)
 
     /** The text area's layout coordinates, from the input node. */
     var coordinates: LayoutCoordinates? = null
@@ -123,6 +130,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         }
         pointer.onPress = { touch ->
             touchMode = touch
+            hoverAt = null
             contextMenuAt = null
             showToolbarAtCaret = false
             preferredX = null
@@ -150,6 +158,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         showToolbarAtCaret = false
+        if (actions.onPopupKey(event)) return true
         val binding = EditorKeyBindings.resolve(event, PlatformInfo.isMacOs)
         if (binding != null && execute(binding)) {
             touchMode = false

@@ -42,10 +42,16 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Token
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,6 +69,7 @@ class CodeEditorLayoutUiTest {
         findReplaceState: FindReplaceState? = null,
         onRequestGoToLine: () -> Unit = {},
         readOnly: Boolean = false,
+        languageService: LanguageService? = null,
     ) {
         setContent {
             CodeEditorLayout(
@@ -70,6 +77,7 @@ class CodeEditorLayoutUiTest {
                 findReplaceState = findReplaceState,
                 onRequestGoToLine = onRequestGoToLine,
                 options = EditorOptions(readOnly = readOnly),
+                languageService = languageService,
                 modifier = Modifier.size(600.dp, 400.dp),
             )
         }
@@ -263,6 +271,72 @@ class CodeEditorLayoutUiTest {
         waitForIdle()
         assertEquals(TextRange(0), state.selection)
         onNodeWithTag(EditorTestTags.HANDLE + "Insertion").assertExists()
+    }
+
+    /** Offers three completions anywhere, and documentation for any word. */
+    private object Words : LanguageService {
+        override val supportsRename: Boolean = false
+        override val triggerCharacters: Set<Char> = emptySet()
+
+        override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> =
+            listOf("alpha", "beta", "gamma").map { CompletionItem(label = it, kind = CompletionKind.Property, insertText = it) }
+
+        override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = emptyList()
+
+        override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc =
+            HoverDoc(title = "Docs for a word", content = "What it does.")
+
+        override suspend fun format(document: CodeDocument): String = document.text
+
+        override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
+
+        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+    }
+
+    @Test
+    fun `ctrl space opens completions at the caret, the arrows pick one and enter takes it`() = runComposeUiTest {
+        val state = CodeEditorState("")
+        show(state, languageService = Words)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
+        onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertExists()
+        keys { pressKey(Key.DirectionDown) }
+        keys { pressKey(Key.Enter) }
+        assertEquals("beta", state.document.text)
+        onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertDoesNotExist()
+    }
+
+    @Test
+    fun `escape closes the completion list without typing`() = runComposeUiTest {
+        val state = CodeEditorState("x")
+        show(state, languageService = Words)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
+        keys { pressKey(Key.Escape) }
+        onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertDoesNotExist()
+        assertEquals("x", state.document.text)
+    }
+
+    @Test
+    fun `a resting mouse shows the symbol's documentation`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        show(state, languageService = Words)
+        mainClock.autoAdvance = false
+        editor().performMouseInput { moveTo(Offset(8.dp.toPx() + 10f, 8.dp.toPx() + 10.dp.toPx())) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `the touch menu offers info on the selected symbol`() = runComposeUiTest {
+        val state = CodeEditorState("alpha beta")
+        show(state, languageService = Words)
+        editor().performTouchInput { longClick(Offset(8.dp.toPx() + 4f, 8.dp.toPx() + 10.dp.toPx())) }
+        waitForIdle()
+        onNodeWithTag(EditorTestTags.TOUCH_MENU).assertExists()
+        onNodeWithText("Info").performClick()
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertExists()
     }
 
     private object SlashComments : IncrementalTokenizer {

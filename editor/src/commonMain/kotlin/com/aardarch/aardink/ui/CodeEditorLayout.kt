@@ -34,6 +34,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
@@ -45,6 +54,7 @@ import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
+import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.NoOpFoldingProvider
@@ -52,6 +62,8 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
@@ -73,7 +85,8 @@ import kotlinx.coroutines.withContext
  *   - [FindReplacePanel], while [findReplaceState] is visible
  *   - [AnnotationTooltip], after a tap on a gutter dot
  *   - the gutter and the text
- *   - [CompletionDropdown] strip
+ *   - [CompletionDropdown] strip, on touch devices (elsewhere completions, signature help, hover
+ *     documentation and code actions pop up next to the caret or the symbol)
  *   - [KeyboardToolbarRow]
  *
  * @param options How the editor looks and behaves; see [EditorOptions].
@@ -113,10 +126,18 @@ fun CodeEditorLayout(
     val textVersion = state.textVersion
     val shownDiagnostics = diagnostics.orEmpty()
 
-    // Completion state
+    // Completion state. With a hardware keyboard the list sits at the caret and the arrows move
+    // its selection; on a touch device it is a strip above the keyboard.
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
     var showCompletion by remember { mutableStateOf(false) }
     var completionJob by remember { mutableStateOf<Job?>(null) }
+    var completionSelected by remember { mutableIntStateOf(0) }
+    val completionAtCaret = !PlatformInfo.hasSoftKeyboard
+    LaunchedEffect(completionItems) { completionSelected = 0 }
+
+    // Hover documentation: after the mouse rests on a symbol, or from the touch menu's "Info".
+    var hover by remember { mutableStateOf<HoverShown?>(null) }
+    var hoverJob by remember { mutableStateOf<Job?>(null) }
 
     // Code actions, Signature help & Rename state
     var showCodeActionsMenu by remember { mutableStateOf(false) }
@@ -320,6 +341,30 @@ fun CodeEditorLayout(
         }
     }
 
+    // ── Hover: the documentation of the symbol under a resting mouse ─────────
+    val showHover: suspend (Int) -> Unit = hover@{ offset ->
+        val service = languageService ?: return@hover
+        val word = TextNavigator.wordAt(state.document, offset)
+        if (word.isEmpty()) return@hover
+        val version = state.textVersion
+        val document = state.document.snapshot()
+        val doc = withContext(state.computeDispatcher) { service.hoverDoc(document, offset) } ?: return@hover
+        if (state.textVersion != version) return@hover
+        hover = HoverShown(doc, word.first, word.last + 1)
+    }
+    LaunchedEffect(controller, languageService) {
+        snapshotFlow { controller.hoverAt }.collectLatest { at ->
+            hover = null
+            if (at == null || languageService == null) return@collectLatest
+            delay(HOVER_DELAY_MS)
+            showHover(view.offsetAt(at).offset)
+        }
+    }
+    // Typing or scrolling takes it down: it describes where the mouse was.
+    LaunchedEffect(state, view) {
+        snapshotFlow { state.textVersion to view.scroll.scrollY }.collect { hover = null }
+    }
+
     // ── Pending navigation: select the target and scroll it to the middle of the view ─
     LaunchedEffect(state, view) {
         snapshotFlow { state.pendingNavigation }.collect { nav ->
@@ -397,6 +442,27 @@ fun CodeEditorLayout(
             }
         }
     }
+    // The completion list takes the arrows, Enter, Tab and Escape while it is up at the caret.
+    val completionKey: (KeyEvent) -> Boolean = key@{ event ->
+        if (!completionAtCaret || !showCompletion || completionItems.isEmpty() || event.type != KeyEventType.KeyDown) return@key false
+        if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return@key false
+        when (event.key) {
+            Key.DirectionDown -> completionSelected = (completionSelected + 1) % completionItems.size
+
+            Key.DirectionUp -> completionSelected = (completionSelected - 1).mod(completionItems.size)
+
+            Key.Enter, Key.NumPadEnter, Key.Tab -> {
+                completionItems.getOrNull(completionSelected)?.let { applyCompletion(state, it) }
+                showCompletion = false
+                completionItems = emptyList()
+            }
+
+            Key.Escape -> showCompletion = false
+
+            else -> return@key false
+        }
+        true
+    }
     SideEffect {
         state.indentUnit = if (options.insertSpaces) " ".repeat(options.tabSize) else "\t"
         controller.readOnly = options.readOnly
@@ -425,6 +491,15 @@ fun CodeEditorLayout(
             },
             onTriggerSuggest = requestCompletions,
             onInput = onInput,
+            onPopupKey = completionKey,
+            onShowInfo = if (languageService != null) {
+                { offset ->
+                    hoverJob?.cancel()
+                    hoverJob = coroutineScope.launch { showHover(offset) }
+                }
+            } else {
+                null
+            },
         )
     }
 
@@ -514,26 +589,7 @@ fun CodeEditorLayout(
             )
         }
 
-        // ── Signature help, Code action popups & Rename Dialog ────────────────
-        val signatureHelp = currentSignatureHelp
-        if (showSignatureHelp && signatureHelp != null) {
-            SignatureHelpPopup(
-                help = signatureHelp,
-                onDismiss = { showSignatureHelp = false },
-            )
-        }
-
-        if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
-            CodeActionMenu(
-                actions = tooltipCodeActions,
-                onSelectAction = { action ->
-                    state.applyTextEdits(action.edits)
-                    showCodeActionsMenu = false
-                },
-                onDismiss = { showCodeActionsMenu = false },
-            )
-        }
-
+        // ── Rename Dialog ────────────────────────────────────────────────────
         if (showRenameDialog && renameTargetName.isNotEmpty()) {
             RenameDialog(
                 currentName = renameTargetName,
@@ -594,19 +650,70 @@ fun CodeEditorLayout(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            // ── Popups at the caret (or the symbol, or the diagnostic) ───────
+            popups = {
+                if (completionAtCaret && showCompletion && completionItems.isNotEmpty()) {
+                    EditorAnchoredPopup(anchor = view.caretRect(state.selection.end), onDismiss = { showCompletion = false }) {
+                        CompletionList(
+                            items = completionItems,
+                            selected = completionSelected,
+                            onAccept = { item ->
+                                applyCompletion(state, item)
+                                showCompletion = false
+                                completionItems = emptyList()
+                            },
+                        )
+                    }
+                }
+                val signatureHelp = currentSignatureHelp
+                if (showSignatureHelp && signatureHelp != null) {
+                    EditorAnchoredPopup(
+                        anchor = view.caretRect(state.selection.end),
+                        preferAbove = true,
+                        onDismiss = { showSignatureHelp = false },
+                    ) { SignatureHelpCard(signatureHelp) }
+                }
+                hover?.let { shown ->
+                    val start = view.caretRect(shown.start)
+                    val end = view.caretRect(shown.end)
+                    EditorAnchoredPopup(
+                        anchor = Rect(start.left, start.top, maxOf(end.right, start.left + 1f), start.bottom),
+                        onDismiss = { hover = null },
+                    ) { HoverDocCard(shown.doc) }
+                }
+                val tooltipTarget = tooltipDiagnostic
+                if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
+                    EditorAnchoredPopup(
+                        anchor = view.caretRect(tooltipTarget?.range?.first ?: state.selection.end),
+                        focusable = true,
+                        onDismiss = { showCodeActionsMenu = false },
+                    ) {
+                        CodeActionCard(
+                            actions = tooltipCodeActions,
+                            onSelectAction = { action ->
+                                state.applyTextEdits(action.edits)
+                                showCodeActionsMenu = false
+                            },
+                            onDismiss = { showCodeActionsMenu = false },
+                        )
+                    }
+                }
+            },
         )
 
-        // ── Completion strip ─────────────────────────────────────────────────
-        CompletionDropdown(
-            items = completionItems,
-            visible = showCompletion,
-            onAccept = { item ->
-                applyCompletion(state, item)
-                showCompletion = false
-                completionItems = emptyList()
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // ── Completion strip (touch devices) ─────────────────────────────────
+        if (!completionAtCaret) {
+            CompletionDropdown(
+                items = completionItems,
+                visible = showCompletion,
+                onAccept = { item ->
+                    applyCompletion(state, item)
+                    showCompletion = false
+                    completionItems = emptyList()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         // ── Keyboard toolbar (when placed at bottom) ─────────────────────────
         if (keyboardToolbarPlacement == KeyboardToolbarPlacement.BottomHover ||
@@ -616,6 +723,12 @@ fun CodeEditorLayout(
         }
     }
 }
+
+/** Hover documentation on screen, for the symbol from [start] to [end]. */
+private class HoverShown(val doc: HoverDoc, val start: Int, val end: Int)
+
+/** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
+private const val HOVER_DELAY_MS = 500L
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
