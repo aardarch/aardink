@@ -123,9 +123,10 @@ export interface AardinkLanguageDefinition {
   id: string;
   /**
    * A subset of Monaco's Monarch: states in `tokenizer` (`root` first), rules of
-   * `[regex, action, next?]`, `cases` with `@array`/`@default`/`@eos`, capture groups,
-   * `include`, `@rematch`, `defaultToken`, `ignoreCase`, `tokenPostfix`. RegExp literals are
-   * fine. Lookbehind is not supported, and is refused.
+   * `[regex, action, next?]`, `cases` with `@array`/`@default`/`@eos`, capture groups (each
+   * with a token name, `{ token, next }` or `cases` of its own), `include`, `@rematch`,
+   * `defaultToken`, `ignoreCase`, `tokenPostfix`. RegExp literals are fine. Lookbehind is not
+   * supported, and is refused.
    */
   grammar: object;
   /** A built-in or registered language whose completions, diagnostics, hover and folding this one takes too, e.g. `'xml'`. */
@@ -159,11 +160,15 @@ export interface AardinkLanguageProviders {
 /** Adds a language for `createEditor`'s `language` option. Rejects with what is wrong with the definition. */
 export function registerLanguage(definition: AardinkLanguageDefinition, providers?: AardinkLanguageProviders): Promise<void>;
 
-/** Monaco's `defineTheme` data. Token rules name a grammar's tokens; `tag` also colours `tag.aardflex`. */
+/**
+ * Monaco's `defineTheme` data. Token rules name a grammar's tokens; `tag` also colours
+ * `tag.aardflex`. Themes are colours only: a rule's `fontStyle` and `background` are accepted, so
+ * Monaco theme data passes as it is, and ignored.
+ */
 export interface AardinkThemeData {
   base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
   inherit?: boolean;
-  rules: { token: string; foreground?: string }[];
+  rules: { token: string; foreground?: string; fontStyle?: string; background?: string }[];
   colors?: Record<string, string>;
 }
 

@@ -148,4 +148,18 @@ class WebEditorApiTest {
         val second = lines[1].jsonArray.map { it.jsonObject["offset"]!!.jsonPrimitive.int to it.jsonObject["type"]!!.jsonPrimitive.content }
         assertEquals(listOf(0 to "number"), second)
     }
+
+    @Test
+    fun `tokenize names comments, strings and the built-in types as Monaco does`() {
+        AardinkWeb.registerLanguage(
+            """{ "id": "tokenize-names", "grammar": { "tokenPostfix": ".toy", "tokenizer": { "root": [ ["#.*", "comment"], ["'[^']*'", "string.quoted"], ["\\w+", "word"] ] } } }""",
+        )
+        val types = { languageId: String, text: String ->
+            Json.parseToJsonElement(AardinkWeb.tokenize(languageId, text)).jsonArray.single().jsonArray.map {
+                it.jsonObject["type"]!!.jsonPrimitive.content
+            }
+        }
+        assertEquals(listOf("word.toy", "", "string", "", "comment"), types("tokenize-names", "go 'x' # note"))
+        assertEquals("keyword", types("kotlin", "val x = 1").first())
+    }
 }

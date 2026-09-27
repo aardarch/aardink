@@ -491,7 +491,9 @@ object AardinkWeb {
     /**
      * For debugging a grammar: the tokens [languageId]'s tokenizer gives [text], as JSON in the shape
      * of Monaco's `tokenize`: an array per line of `{ offset, type }`, where `type` is the token's
-     * name (`""` for text no token covers).
+     * name (`""` for text no token covers). A grammar's comments and strings are the editor's own,
+     * so they come back as Monaco's standard `comment` and `string`, as the built-in languages'
+     * tokens do (`keyword`, `delimiter`, ...).
      */
     fun tokenize(languageId: String, text: String): String {
         val language = resolveLanguage(registry, languageId)
@@ -501,9 +503,35 @@ object AardinkWeb {
         return lines.build()
     }
 
+    /** A grammar's own name for its tokens; Monaco's standard name for the editor's own types. */
     private fun nameOf(type: TokenType): String = when (type) {
         is NamedTokenType -> type.name
+
         TokenType.Default -> ""
+
+        TokenType.Comment -> "comment"
+
+        TokenType.StringLiteral -> "string"
+
+        TokenType.Keyword -> "keyword"
+
+        TokenType.Number -> "number"
+
+        TokenType.Identifier -> "identifier"
+
+        TokenType.TypeName -> "type"
+
+        TokenType.Operator -> "operator"
+
+        TokenType.Punctuation -> "delimiter"
+
+        TokenType.Annotation -> "annotation"
+
+        TokenType.FunctionCall -> "function"
+
+        TokenType.Invalid -> "invalid"
+
+        // A type of the host's own.
         else -> type.toString().replaceFirstChar { it.lowercase() }
     }
 
