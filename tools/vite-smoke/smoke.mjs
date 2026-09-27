@@ -20,11 +20,21 @@
 //
 //   pnpm install && pnpm smoke          # CHROME_BIN overrides the Chrome location
 
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { MOUNT, startHarness } from './harness.mjs';
+
+// Which binaries ran, so a failure on CI can be compared with a local build of the same commit.
+for (const file of readdirSync('dist/assets').filter((f) => f.endsWith('.wasm'))) {
+  console.log(`${file} sha256 ${createHash('sha256').update(readFileSync(`dist/assets/${file}`)).digest('hex').slice(0, 16)}`);
+}
 
 const harness = await startHarness();
 const { browser, url } = harness;
 const failures = [];
+// The step under way, so a page error says what set it off: an uncaught error reaches the page
+// on its own schedule, and the list of failures is only printed at the end.
+let phase = 'loading';
 const notices = [];
 
 // Upstream console output we cannot fix here. Printed, not fatal; revisit on each Compose/Kotlin bump.
@@ -53,6 +63,7 @@ async function interactionChecks(page) {
 
   // Touch first: once a (synthetic) mouse has been over the page, Compose's web input no longer
   // delivers Puppeteer's taps at all, for its own text field as much as for this editor.
+  phase = 'touch tap';
   await mountEditor('line one\nline two');
   await page.touchscreen.tap(150, 36); // the second line
   await settle();
@@ -63,6 +74,7 @@ async function interactionChecks(page) {
   const [first, second] = (await value()).split('\n');
   checks['touch tap places the caret'] = first.includes('!') && !second.includes('!');
 
+  phase = 'typing';
   await mountEditor('');
   await page.mouse.click(300, 20);
   await page.keyboard.type('abc');
@@ -70,12 +82,14 @@ async function interactionChecks(page) {
   checks['typing'] = (await value()) === 'abc';
 
   const cdp = await page.createCDPSession();
+  phase = 'IME composition';
   await cdp.send('Input.imeSetComposition', { text: 'に', selectionStart: 1, selectionEnd: 1 });
   await settle();
   await cdp.send('Input.insertText', { text: '日' });
   await settle();
   checks['IME composition'] = (await value()) === 'abc日';
 
+  phase = 'paste';
   await page.evaluate(() => {
     const data = new DataTransfer();
     data.setData('text/plain', 'X\r\nY');
@@ -84,6 +98,7 @@ async function interactionChecks(page) {
   await settle();
   checks['paste (CRLF to LF)'] = (await value()) === 'abc日X\nY';
 
+  phase = 'backspace';
   await page.keyboard.press('Backspace');
   await settle();
   checks['backspace'] = (await value()) === 'abc日X\n';
@@ -95,6 +110,7 @@ async function interactionChecks(page) {
  * keyword `shout` in the theme's magenta, counted by pixel in a screenshot of the editor.
  */
 async function grammarCheck(page) {
+  phase = 'registered grammar';
   await page.evaluate(async (mount) => {
     window.__smokeEditor?.dispose();
     document.getElementById('check')?.remove();
@@ -127,17 +143,19 @@ try {
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
   page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
   page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
-  page.on('pageerror', (e) => failures.push(`page error: ${e.message}`));
+  page.on('pageerror', (e) => failures.push(`page error during ${phase}: ${e.stack || e.message}`));
   page.on('console', (m) => {
     if (m.type() !== 'error' && !m.text().startsWith('Aardink:')) return;
     (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
   });
 
+  phase = 'in-page checks';
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
   const report = await page.evaluate(() => window.__aardinkSmoke);
   // A few frames so the light theme and the diagnostic are painted before the screenshot.
   await new Promise((resolve) => setTimeout(resolve, 1000));
+  phase = 'screenshot of the in-page checks';
   await page.screenshot({ path: 'dist/smoke.png' });
 
   console.log(`@aardarch/aardink-web ${report.version}`);
