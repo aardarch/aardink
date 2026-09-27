@@ -397,6 +397,8 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 showGutter = options.showGutter,
                 showLineNumbers = options.showLineNumbers,
                 showFoldMarkers = options.showFoldMarkers,
+                showMinimap = options.minimap,
+                stickyScroll = options.stickyScroll,
             ),
             onRequestGoToLine = { showGoToLine = true },
         )

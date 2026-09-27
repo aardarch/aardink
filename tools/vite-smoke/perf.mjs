@@ -39,6 +39,9 @@ const LIMITS = {
   keyToChangeP95Ms: { target: 20, gate: null },
   setValueToIdleMs: { target: 150, gate: null },
   scrollFrameP95Ms: { target: 20, gate: null }, // 60 Hz with jitter, no dropped frames
+  // Main-thread time per frame the minimap adds while scrolling (Chrome's TaskDuration, with minus without).
+  minimapFrameCostMs: { target: 2, gate: 2 },
+  minimapScrollFrameP95Ms: { target: 20, gate: null },
   droppedKeysSequential: { target: 0, gate: 0, unit: 'keys' },
   droppedKeysAtBurst: { target: 0, gate: 0, unit: 'keys' },
 };
@@ -167,26 +170,43 @@ try {
   await new Promise((r) => setTimeout(r, 3000));
 
   // ── Scrolling: frame intervals while wheeling through the document ──────────
-  await page.evaluate(() => {
-    window.__perf.frames = [];
-    let last = performance.now();
-    window.__perf.recording = true;
-    (function tick(now) {
-      window.__perf.frames.push(now - last);
-      last = now;
-      if (window.__perf.recording) requestAnimationFrame(tick);
-    })(last);
-  });
-  await page.mouse.move(400, 300);
-  for (let i = 0; i < 90; i++) {
-    await page.mouse.wheel({ deltaY: 120 });
-    await new Promise((r) => setTimeout(r, 16));
-  }
-  const frames = await page.evaluate(() => {
-    window.__perf.recording = false;
-    return window.__perf.frames.slice(1); // the first delta is the loop's start
-  });
-  results.scrollFrameP95Ms = percentile([...frames].sort((a, b) => a - b), 95);
+  // Also the main thread's busy time per frame (Chrome's TaskDuration), to weigh the minimap.
+  const cdp = await page.createCDPSession();
+  await cdp.send('Performance.enable');
+  const taskSeconds = async () => (await cdp.send('Performance.getMetrics')).metrics.find((m) => m.name === 'TaskDuration').value;
+  const scrollThrough = async () => {
+    await page.evaluate(() => {
+      window.__perf.frames = [];
+      let last = performance.now();
+      window.__perf.recording = true;
+      (function tick(now) {
+        window.__perf.frames.push(now - last);
+        last = now;
+        if (window.__perf.recording) requestAnimationFrame(tick);
+      })(last);
+    });
+    const busyBefore = await taskSeconds();
+    await page.mouse.move(400, 300);
+    for (let i = 0; i < 90; i++) {
+      await page.mouse.wheel({ deltaY: 120 });
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    const frames = await page.evaluate(() => {
+      window.__perf.recording = false;
+      return window.__perf.frames.slice(1); // the first delta is the loop's start
+    });
+    return { frames, busyPerFrameMs: ((await taskSeconds()) - busyBefore) * 1000 / frames.length };
+  };
+  const plain = await scrollThrough();
+  results.scrollFrameP95Ms = percentile([...plain.frames].sort((a, b) => a - b), 95);
+
+  // ── The minimap: what it adds to each frame of the same scroll ──────────────
+  await page.evaluate(() => window.__perfEditor.revealPosition(1, 1));
+  await page.evaluate(() => window.__perfEditor.updateOptions({ minimap: { enabled: true } }));
+  await new Promise((r) => setTimeout(r, 1500));
+  const withMinimap = await scrollThrough();
+  results.minimapFrameCostMs = Math.max(0, withMinimap.busyPerFrameMs - plain.busyPerFrameMs);
+  results.minimapScrollFrameP95Ms = percentile([...withMinimap.frames].sort((a, b) => a - b), 95);
   results.longestTaskMs = await page.evaluate(() => Math.max(0, ...window.__perf.longTasks));
   await page.close();
 } finally {

@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +28,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
@@ -69,7 +72,12 @@ import com.aardarch.aardink.ui.view.EditorSelectionHandles
 import com.aardarch.aardink.ui.view.EditorTouchMenu
 import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
+import com.aardarch.aardink.ui.view.MinimapView
+import com.aardarch.aardink.ui.view.StickyLine
 import com.aardarch.aardink.ui.view.ViewStyle
+import com.aardarch.aardink.ui.view.drawStickyLines
+import com.aardarch.aardink.ui.view.stickyLineAt
+import com.aardarch.aardink.ui.view.stickyLines
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -92,6 +100,8 @@ internal fun VirtualizedEditorBody(
     options: EditorOptions,
     textColor: Color,
     modifier: Modifier = Modifier,
+    /** The ranges sticky scroll pins the first lines of, sorted by start line, outer ones first. */
+    stickyRanges: List<FoldRange> = emptyList(),
     popups: @Composable () -> Unit = {},
 ) {
     val view = controller.view
@@ -192,6 +202,9 @@ internal fun VirtualizedEditorBody(
         }
     }
     val highlightCaretLines = options.highlightCurrentLine
+    val currentStickyRanges = rememberUpdatedState(stickyRanges)
+    val sticky: () -> List<StickyLine> = { view.stickyLines(currentStickyRanges.value) }
+    SideEffect { controller.pointer.stickyLineAt = { position -> view.stickyLineAt(currentStickyRanges.value, position) } }
     val lineCount = remember(state.textVersion) { state.document.lineCount }
 
     EditorBody(
@@ -199,7 +212,7 @@ internal fun VirtualizedEditorBody(
         modifier = modifier,
         gutter = {
             if (gutter != null) {
-                EditorGutterView(view, lineCount, theme.gutterBackground, theme.gutterForeground, gutter)
+                EditorGutterView(view, lineCount, theme.gutterBackground, theme.gutterForeground, gutter, sticky = sticky)
             }
         },
         viewport = {
@@ -232,6 +245,12 @@ internal fun VirtualizedEditorBody(
                     .focusTarget()
                     .editorMagnifier { controller.magnifierCenter },
                 overlay = {
+                    // Over the text and the carets, as VS Code's sticky widget is.
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .drawBehind { drawStickyLines(view, sticky(), theme.background, textColor.copy(alpha = 0.12f)) },
+                    )
                     EditorSelectionHandles(controller, theme.cursorColor)
                     EditorContextMenu(controller)
                     EditorTouchMenu(controller)
@@ -240,6 +259,18 @@ internal fun VirtualizedEditorBody(
             )
         },
         scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        minimap = {
+            if (options.showMinimap) {
+                val tokenColors = theme.tokenColors
+                MinimapView(
+                    view = view,
+                    tokenColor = { type -> (tokenColors[type] ?: textColor).copy(alpha = 0.7f) },
+                    background = theme.background,
+                    slider = textColor.copy(alpha = 0.12f),
+                    tabSize = options.tabSize,
+                )
+            }
+        },
     )
 }
 

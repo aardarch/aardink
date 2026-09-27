@@ -26,6 +26,9 @@ import kotlinx.serialization.Serializable
  * @property theme A key in the theme map passed to [AardinkWeb.mount] (by default
  *   [AardinkWeb.builtInThemes]); an unknown key falls back to `vscode-dark`.
  * @property fontSize In CSS pixels. Line height scales with it at the editor's default 20:14 ratio.
+ * @property minimap A picture of the whole text at the side, with a slider over what is shown.
+ * @property stickyScroll Keeps the first lines of the blocks the top of the view is inside pinned
+ *   at the top.
  */
 @Serializable
 data class WebEditorOptions(
@@ -37,6 +40,8 @@ data class WebEditorOptions(
     val showGutter: Boolean = true,
     val showLineNumbers: Boolean = true,
     val showFoldMarkers: Boolean = true,
+    val minimap: Boolean = false,
+    val stickyScroll: Boolean = false,
 )
 
 /**

@@ -74,6 +74,7 @@ internal fun EditorGutterView(
     foreground: Color,
     content: GutterContent,
     modifier: Modifier = Modifier,
+    sticky: () -> List<StickyLine> = { emptyList() },
 ) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -162,6 +163,22 @@ internal fun EditorGutterView(
                     val annotation = shown.annotations[line.line]
                     if (annotation != null && annotationLane > 0f) {
                         drawAnnotationDot(annotation, centerX = diffLane + foldLane + annotationLane / 2f, centerY = top + lineHeight / 2f)
+                    }
+                }
+                // Sticky scroll's lines, with their numbers, over the rows at the top.
+                for (stuck in sticky().asReversed()) {
+                    drawRect(background, Offset(0f, stuck.top), Size(size.width, lineHeight))
+                    if (shown.showLineNumbers) {
+                        val number = numbers.getOrPut((stuck.line + 1).toString()) {
+                            measurer.measure((stuck.line + 1).toString(), textStyle)
+                        }
+                        drawText(
+                            number,
+                            topLeft = Offset(
+                                size.width - padding - number.size.width,
+                                stuck.top + (lineHeight - number.size.height) / 2f,
+                            ),
+                        )
                     }
                 }
             },

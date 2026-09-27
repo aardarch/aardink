@@ -53,6 +53,7 @@ import com.aardarch.aardink.core.DiagnosticsTracker
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.HoverDoc
@@ -406,6 +407,26 @@ fun CodeEditorLayout(
             }
         }
     }
+
+    // ── Sticky scroll: the first lines of the ranges the top of the view is inside ─
+    // The host's foldable ranges; without a fold state, ranges asked of the folding provider for
+    // sticky scroll alone, on the same schedule as folding.
+    var ownStickyRanges by remember { mutableStateOf<List<FoldRange>>(emptyList()) }
+    if (options.stickyScroll && foldState == null) {
+        LaunchedEffect(state, foldingProvider) {
+            snapshotFlow { state.textVersion }.collectLatest {
+                delay(200)
+                ownStickyRanges = if (state.exceedsAnalysisLimit) {
+                    emptyList()
+                } else {
+                    val document = state.document.snapshot()
+                    withContext(state.computeDispatcher) { foldingProvider.foldableRanges(document) }
+                }
+            }
+        }
+    }
+    val stickySource = if (options.stickyScroll) foldState?.foldableRanges ?: ownStickyRanges else emptyList()
+    val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
 
     // ── Hover: the documentation of the symbol under a resting mouse ─────────
     val showHover: suspend (Int) -> Unit = hover@{ offset ->
@@ -815,6 +836,7 @@ fun CodeEditorLayout(
             },
             options = options,
             textColor = textColor,
+            stickyRanges = stickyRanges,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),

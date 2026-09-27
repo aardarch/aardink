@@ -29,6 +29,10 @@ export interface AardinkOptions {
   showGutter?: boolean;
   showLineNumbers?: boolean;
   showFoldMarkers?: boolean;
+  /** A picture of the whole text at the side, with a slider over what is shown. Off by default. */
+  minimap?: { enabled?: boolean } | boolean;
+  /** The first lines of the blocks the top of the view is inside stay pinned at the top. Off by default. */
+  stickyScroll?: { enabled?: boolean } | boolean;
 }
 
 /** Monaco-marker shape: 1-based line and columns, `endColumn` exclusive. */

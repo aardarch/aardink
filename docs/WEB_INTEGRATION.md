@@ -67,7 +67,7 @@ There are two ways in:
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
-`showGutter`, `showLineNumbers`, `showFoldMarkers`. An unknown `language` falls back to plain
+`showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
 `AardinkWeb.builtInThemes`. Changing `language` keeps the text but starts a new undo history.
 
@@ -154,7 +154,9 @@ Chrome, failing on any failed check or failed request.
 | `lineNumbers` (`'on'` / `'off'`) | `showLineNumbers` | Boolean. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
-| `minimap`, `bracketPairColorization` | — | Not supported. |
+| `minimap: { enabled }` | `minimap` | The same object, or a boolean. Blocks rather than characters, as with Monaco's `renderCharacters: false`. |
+| `stickyScroll: { enabled }` | `stickyScroll` | The same object, or a boolean. |
+| `bracketPairColorization` | — | Always on for now. |
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame. |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
@@ -201,13 +203,18 @@ document, and the first highlighting pass over a large document runs in slices o
 frames keep coming while it works. No main-thread task over 50 ms occurs while mounting or typing
 in the 5,000-line document.
 
+The minimap (`minimap: { enabled: true }`) adds 0.1 to 0.5 ms of main-thread work per frame while
+scrolling the 5,000-line document, and scrolling stays at 60 frames a second: it draws the text as
+blocks into tiles of 256 lines, kept until a line in them changes, and draws only the tiles on
+screen.
+
 For comparison, 0.5 (one `BasicTextField` holding the whole document) took 3.2 s to settle after
 mounting the same 5,000 lines, 3.7 s after each keystroke, and lost 15 to 29 of 30 keys typed at
 10 keys a second.
 
 CI runs `perf.mjs --gate` on every push; a measurement past its gate fails the build. The gates
-(400 ms to mount, 50 ms p95 per key, no lost keys) are looser than the targets above to absorb
-shared-runner noise.
+(400 ms to mount, 50 ms p95 per key, no lost keys, 2 ms per frame for the minimap) are looser
+than the targets above to absorb shared-runner noise.
 
 ## Verification checklist
 

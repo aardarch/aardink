@@ -62,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sideways to stay inside the window. Hover documentation (`LanguageService.hoverDoc`, which the
   editor never showed before) appears when the mouse rests on a symbol for half a second, and
   from the touch menu's "Info".
+- Sticky scroll (`EditorOptions.stickyScroll`): the first lines of the blocks the top of the view
+  is inside (up to five, from the folding provider's ranges) stay pinned at the top, each pushed
+  up as its block ends; a click scrolls to it.
+- A minimap (`EditorOptions.showMinimap`): the whole text in small at the side, as blocks in its
+  token colours, with a slider over what is shown; a press jumps there and dragging scrolls. It
+  adds under half a millisecond per frame while scrolling 5,000 lines on the web.
+- On the web, the `minimap` and `stickyScroll` options, in Monaco's shape (`{ enabled: true }`)
+  or as booleans.
 - Go to definition, references and format, which language services offered but the editor never
   used. F12 or Ctrl/Cmd+click goes to the definition of the symbol there (holding Ctrl/Cmd
   underlines a symbol that has one); a definition in another file goes to the new

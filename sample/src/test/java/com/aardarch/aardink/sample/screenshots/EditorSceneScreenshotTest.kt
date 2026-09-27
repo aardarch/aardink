@@ -49,8 +49,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The editor's rendering of the things a sample screen does not show: soft wrap, a closed fold,
- * squiggles, a selection with find matches, a matched bracket pair, and several carets with a
- * column selection, under
+ * squiggles, a selection with find matches, a matched bracket pair, several carets with a column
+ * selection, sticky scroll and the minimap, under
  * `screenshots/scene-<scene>.png`.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -86,6 +86,58 @@ class EditorSceneScreenshotTest {
         |}
     """.trimMargin()
 
+    // Longer than a screen, for the scenes that scroll.
+    private val longCode = """
+        |package demo
+        |
+        |/** Keeps a list of shapes and answers questions about them. */
+        |class ShapeCatalog(private val shapes: MutableList<Shape> = mutableListOf()) {
+        |    fun add(shape: Shape) {
+        |        require(shape.area() >= 0) { "negative area" }
+        |        shapes += shape
+        |    }
+        |
+        |    fun largest(): Shape? {
+        |        var best: Shape? = null
+        |        for (shape in shapes) {
+        |            if (best == null || shape.area() > best.area()) {
+        |                best = shape
+        |            }
+        |        }
+        |        return best
+        |    }
+        |
+        |    fun describe(): String {
+        |        val builder = StringBuilder()
+        |        for ((index, shape) in shapes.withIndex()) {
+        |            builder.append(index + 1)
+        |            builder.append(". ")
+        |            builder.append(shape.name)
+        |            builder.append(" with an area of ")
+        |            builder.append(shape.area())
+        |            builder.append('\n')
+        |        }
+        |        return builder.toString()
+        |    }
+        |
+        |    fun byName(): Map<String, List<Shape>> {
+        |        val groups = mutableMapOf<String, MutableList<Shape>>()
+        |        for (shape in shapes) {
+        |            groups.getOrPut(shape.name) { mutableListOf() } += shape
+        |        }
+        |        return groups
+        |    }
+        |
+        |    fun totalArea(): Double {
+        |        var total = 0.0
+        |        for (shape in shapes) {
+        |            total += shape.area()
+        |        }
+        |        return total
+        |    }
+        |}
+    """.trimMargin()
+
     private fun stateOf(text: String) = CodeEditorState(initialText = text, tokenizer = kotlin.tokenizer, tokenizeDebounceMs = 0).apply {
         computeDispatcher = Dispatchers.Unconfined
     }
@@ -97,6 +149,7 @@ class EditorSceneScreenshotTest {
         findReplaceState: FindReplaceState? = null,
         diagnostics: List<Diagnostic> = emptyList(),
         softWrap: Boolean = false,
+        editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
@@ -108,7 +161,7 @@ class EditorSceneScreenshotTest {
                         foldingProvider = kotlin.foldingProvider,
                         findReplaceState = findReplaceState,
                         diagnostics = diagnostics,
-                        options = EditorOptions(softWrap = softWrap),
+                        options = editorOptions,
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -190,6 +243,21 @@ class EditorSceneScreenshotTest {
             val carets = (13..14).map { line -> TextRange(document.lineColToOffset(line, 4)) }
             state.setSelections(listOf(box.last()) + box.dropLast(1) + carets)
         }
+    }
+
+    @Test
+    fun sticky() {
+        // Scrolled into describe(): the class and the function stay pinned at the top.
+        val state = stateOf(longCode)
+        state.navigateTo(state.document.lineStart(40))
+        capture("sticky", state, editorOptions = EditorOptions(stickyScroll = true))
+    }
+
+    @Test
+    fun minimap() {
+        val state = stateOf(longCode)
+        state.navigateTo(state.document.lineStart(30))
+        capture("minimap", state, editorOptions = EditorOptions(showMinimap = true))
     }
 
     @Test

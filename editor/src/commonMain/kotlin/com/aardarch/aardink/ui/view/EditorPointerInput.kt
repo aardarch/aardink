@@ -63,6 +63,9 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** A Ctrl (Cmd) click, after it placed the caret: go to the definition there; true when it went. */
     var onLinkClick: () -> Boolean = { false }
 
+    /** The sticky scroll line at a point (viewport coordinates), if there is one there. */
+    var stickyLineAt: (Offset) -> StickyLine? = { null }
+
     private enum class SelectionUnit { Character, Word, Line, Column }
 
     private var unit = SelectionUnit.Character
@@ -80,6 +83,16 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false, link: Boolean = false) {
         onPress(touch)
+        if (clicks == 1 && !shift && !alt) {
+            val sticky = stickyLineAt(position)
+            if (sticky != null) {
+                view.openStickyLine(sticky)
+                origin = null
+                kept = null
+                box = null
+                return
+            }
+        }
         val hit = view.offsetAt(position)
         if (hit.onFoldPlaceholder && clicks == 1 && !shift) {
             foldState?.toggle(hit.line)

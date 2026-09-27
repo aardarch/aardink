@@ -40,13 +40,20 @@ export function preloadAardink() {
 
 let generatedIds = 0;
 
-/** Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap 'on'/'off'. */
+/**
+ * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap 'on'/'off' and its
+ * { enabled } objects for minimap and stickyScroll (a plain boolean works too).
+ */
 function toKotlinOptions(options) {
   const out = {};
   for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers']) {
     if (options[key] !== undefined) out[key] = options[key];
   }
   if (options.wordWrap !== undefined) out.wordWrap = options.wordWrap === 'on';
+  for (const key of ['minimap', 'stickyScroll']) {
+    const value = options[key];
+    if (value !== undefined) out[key] = typeof value === 'object' && value !== null ? value.enabled !== false : !!value;
+  }
   return out;
 }
 

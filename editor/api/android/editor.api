@@ -747,7 +747,7 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt {
 public final class com/aardarch/aardink/ui/ComposableSingletons$VirtualizedEditorBodyKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$VirtualizedEditorBodyKt;
 	public fun <init> ()V
-	public final fun getLambda$-1980058608$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1193580654$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
@@ -948,6 +948,7 @@ public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelec
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorViewportKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/view/ComposableSingletons$EditorViewportKt;
 	public fun <init> ()V
+	public final fun getLambda$-135048956$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$2033591960$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 
