@@ -41,14 +41,18 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorRenderer
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.EditorTypography
+import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LocalEditorRenderer
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
 import com.aardarch.aardink.web.res.Res
 import kotlinx.browser.document
+import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -329,9 +333,11 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         lineHeight = (options.fontSize * 20f / 14f).sp,
     )
 
+    @OptIn(ExperimentalAardinkRenderer::class)
     CompositionLocalProvider(
         LocalEditorTheme provides (handle.themes[options.theme] ?: EditorThemes.VsCodeDark),
         LocalEditorTypography provides typography,
+        LocalEditorRenderer provides previewRenderer,
     ) {
         CodeEditorLayout(
             state = state,
@@ -362,6 +368,16 @@ private fun EditorContent(handle: AardinkEditorHandle) {
             onDismiss = { showGoToLine = false },
         )
     }
+}
+
+/**
+ * The editor's own renderer, for trying it before 0.6.0 makes it the only one: add
+ * `?aardinkRenderer=virtualized` to the page's URL. Not an option on purpose: it is gone again
+ * when the text field is.
+ */
+@OptIn(ExperimentalAardinkRenderer::class)
+private val previewRenderer: EditorRenderer by lazy {
+    if (window.location.search.contains("aardinkRenderer=virtualized")) EditorRenderer.Virtualized else EditorRenderer.TextField
 }
 
 /** JetBrains Mono, once loaded; shared by every editor on the page so it is fetched once. */

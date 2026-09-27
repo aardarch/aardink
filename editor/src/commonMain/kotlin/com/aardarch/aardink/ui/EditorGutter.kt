@@ -288,7 +288,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGutterLines(
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFoldTriangle(
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFoldTriangle(
     centerX: Float,
     centerY: Float,
     expanded: Boolean,
@@ -310,7 +310,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFoldTriangle(
     drawPath(path, color = color.copy(alpha = 0.7f))
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(
     kind: GutterAnnotationKind,
     centerX: Float,
     centerY: Float,
@@ -320,9 +320,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(
 
 // ── Width calculation ─────────────────────────────────────────────────────────
 
-private val DIFF_LANE_WIDTH = 4.dp
-private val FOLD_LANE_WIDTH = 16.dp
-private val ANNOTATION_LANE_WIDTH = 12.dp
+internal val DIFF_LANE_WIDTH = 4.dp
+internal val FOLD_LANE_WIDTH = 16.dp
+internal val ANNOTATION_LANE_WIDTH = 12.dp
 
 /** Breathing room between the rightmost lane and the start of the line-number text. */
 private val LANE_TO_NUMBER_GAP = 2.dp
@@ -341,7 +341,7 @@ private val LANE_TO_NUMBER_GAP = 2.dp
  * "0" scaled up, so letter spacing between digits is included.
  */
 @Composable
-private fun rememberGutterWidth(
+internal fun rememberGutterWidth(
     lineCount: Int,
     hasDiffLane: Boolean,
     hasFoldLane: Boolean,

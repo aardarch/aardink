@@ -33,11 +33,13 @@ import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.edit.AppliedChange
 import com.aardarch.aardink.core.edit.CommandEdit
 import com.aardarch.aardink.core.edit.EditKind
+import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.OccurrenceFinder
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextChange
 import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.core.edit.TypingRules
 import com.aardarch.aardink.core.edit.UndoHistory
 import com.aardarch.aardink.core.edit.applyChanges
 import com.aardarch.aardink.core.edit.mapOffset
@@ -136,7 +138,7 @@ class CodeEditorState(
      * every selection with this one.
      */
     var selection: TextRange
-        get() = textFieldState.selection
+        get() = currentSelections().primary
         set(value) = setSelections(listOf(value))
 
     /**
@@ -163,13 +165,34 @@ class CodeEditorState(
     private var extraSelections by mutableStateOf<List<TextRange>>(emptyList())
     private var extrasPrimary: TextRange? = null
 
+    /**
+     * Whether [textFieldState] mirrors the document, for the text-field renderer. The editor's own
+     * renderer turns it off: it draws [document] directly, and copying the whole text into the
+     * field after every edit is one of the costs it exists to remove. The selections then live in
+     * this class alone. Goes away with [textFieldState] when the text field does.
+     */
+    internal var fieldMirror: Boolean = true
+        set(value) {
+            if (field == value) return
+            val current = currentSelections()
+            field = value
+            if (value) syncFieldToDocument(current) else ownSelections = current
+        }
+
+    private var ownSelections by mutableStateOf(SelectionSet.caret(0))
+
     internal fun currentSelections(): SelectionSet {
+        if (!fieldMirror) return ownSelections
         val primary = textFieldState.selection
         val extras = extraSelections
         return if (extras.isEmpty() || primary != extrasPrimary) SelectionSet.single(primary) else SelectionSet.of(listOf(primary) + extras)
     }
 
     private fun applySelections(set: SelectionSet) {
+        if (!fieldMirror) {
+            ownSelections = set
+            return
+        }
         extraSelections = set.ranges.drop(1)
         extrasPrimary = set.primary
         if (textFieldState.selection != set.primary) textFieldState.edit { selection = set.primary }
@@ -432,7 +455,12 @@ class CodeEditorState(
      * [selectionsAfter] gives (evaluated once the document has changed), and schedules tokenization.
      * Returns whether the text changed.
      */
-    private fun applyChanges(changes: List<TextChange>, kind: EditKind, selectionsAfter: () -> SelectionSet): Boolean {
+    private fun applyChanges(
+        changes: List<TextChange>,
+        kind: EditKind,
+        external: Boolean = true,
+        selectionsAfter: () -> SelectionSet,
+    ): Boolean {
         val before = currentSelections()
         val applied = document.applyChanges(changes)
         val after = selectionsAfter().clampedTo(document.length)
@@ -441,12 +469,152 @@ class CodeEditorState(
             return false
         }
         history.record(kind, applied, before, after)
-        syncFieldToDocument(after)
+        afterEdit(after, external)
+        return true
+    }
+
+    /** What every edit ends with: the selections placed, history state and versions updated, tokenization scheduled. */
+    private fun afterEdit(selections: SelectionSet, external: Boolean) {
+        syncFieldToDocument(selections, external)
         lastChangeKind = EditChangeKind.Edit
         refreshHistoryState()
         textVersion++
         scheduleTokenization()
-        return true
+    }
+
+    // ── Input (the editor's own renderer) ────────────────────────────────────
+
+    /** A character [applyInput] typed at [offset], and how many characters were auto-closed after it. */
+    internal class TypedInput(val offset: Int, val char: Char, val autoCloseLength: Int)
+
+    /**
+     * Text from the keyboard or an input method: replaces [start, end) with [text] and places the
+     * primary caret at [selectionAfter] (after the text when null). Typing over the primary
+     * selection is repeated at every other selection, as with several cursors in VS Code. A
+     * single character typed at a caret gets the typing rules ([TypingRules]: smart indent,
+     * auto-close) from [service], except while [composing].
+     *
+     * Not an external edit: popups that follow typing stay up. Returns the character when one was
+     * typed at a caret, for the completion trigger; null for anything else.
+     */
+    internal fun applyInput(
+        start: Int,
+        end: Int,
+        text: String,
+        selectionAfter: TextRange? = null,
+        composing: Boolean = false,
+        service: LanguageService? = null,
+    ): TypedInput? {
+        val normalized = TypingRules.normalizeLineEndings(text)
+        val from = start.coerceIn(0, document.length)
+        val to = end.coerceIn(from, document.length)
+        val before = currentSelections()
+        val primary = before.primary
+        val mirrored = !composing && !before.isSingle && from == primary.min && to == primary.max
+        val changes = if (mirrored) {
+            before.inDocumentOrder.map { TextChange(it.min, it.max, normalized) }
+        } else {
+            listOf(TextChange(from, to, normalized))
+        }
+        val applied = document.applyChanges(changes).toMutableList()
+        // A caret the input method placed means nothing once normalisation changed the text's length.
+        val primaryAfter = selectionAfter?.takeIf { normalized.length == text.length } ?: TextRange(from + normalized.length)
+        var after = if (mirrored) {
+            SelectionSet.of(before.ranges.map { TextRange(mapOffset(it.max, changes)) })
+        } else {
+            SelectionSet.of(
+                listOf(primaryAfter) + before.ranges.drop(1).map {
+                    TextRange(mapOffset(it.start, changes), mapOffset(it.end, changes))
+                },
+            )
+        }.clampedTo(document.length)
+        if (applied.isEmpty()) {
+            applySelections(after)
+            return null
+        }
+        val typed = normalized.singleOrNull()?.takeIf { changes.all { it.start == it.end } }
+        var autoCloseLength = 0
+        if (typed != null && service != null && !composing) {
+            // The follow-up at each caret the character was typed at, in document order; every
+            // insertion moves the carets after it.
+            val carets = after.ranges.withIndex().filter { mirrored || it.index == 0 }.sortedBy { it.value.end }
+            val placed = after.ranges.toMutableList()
+            var shift = 0
+            for ((index, caret) in carets) {
+                val position = caret.end + shift
+                placed[index] = TextRange(position)
+                if (position == 0 || document[position - 1] != typed) continue
+                val followUp = TypingRules.afterTyping(document, service, position - 1, typed) ?: continue
+                applied += document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
+                placed[index] = TextRange(followUp.caret)
+                shift += followUp.text.length
+                if (index == 0 && typed != '\n') autoCloseLength = followUp.text.length
+            }
+            after = SelectionSet.of(placed).clampedTo(document.length)
+        }
+        val primaryChange = changes.firstOrNull { it.start == primary.min && it.end == primary.max } ?: changes.first()
+        val kind = if (composing) EditKind.Composing else kindOfInput(primaryChange, before)
+        history.record(kind, applied, before, after)
+        afterEdit(after, external = false)
+        return typed?.let { TypedInput(from, it, autoCloseLength) }
+    }
+
+    /** How the undo history groups an input edit: typing, backspace, forward delete, or anything else. */
+    private fun kindOfInput(change: TextChange, before: SelectionSet): EditKind {
+        val primary = before.primary
+        return when {
+            change.text.isNotEmpty() -> TypingRules.kindOfTyping(change.text, change.end - change.start)
+            primary.collapsed && primary.start == change.end -> EditKind.DeletingLeft
+            primary.collapsed && primary.start == change.start -> EditKind.DeletingRight
+            else -> EditKind.Other
+        }
+    }
+
+    /** Backspace, or Ctrl+Backspace with [word], at every selection. */
+    internal fun deleteLeft(word: Boolean = false): Boolean {
+        val before = currentSelections()
+        val edit = EditingCommands.deleteLeft(document, before, word) ?: return false
+        val kind = if (!word && before.ranges.all { it.collapsed }) EditKind.DeletingLeft else EditKind.Other
+        return applyChanges(edit.changes, kind) { edit.selectionsAfter }
+    }
+
+    /** Delete, or Ctrl+Delete with [word], at every selection. */
+    internal fun deleteRight(word: Boolean = false): Boolean {
+        val before = currentSelections()
+        val edit = EditingCommands.deleteRight(document, before, word) ?: return false
+        val kind = if (!word && before.ranges.all { it.collapsed }) EditKind.DeletingRight else EditKind.Other
+        return applyChanges(edit.changes, kind) { edit.selectionsAfter }
+    }
+
+    /** What copying the selections puts on the clipboard (their lines, when all are carets). */
+    internal fun copySelections(): EditingCommands.Copied = EditingCommands.copy(document, currentSelections())
+
+    /** Cuts the selections (their lines, when all are carets) and returns what to put on the clipboard. */
+    internal fun cutSelections(): EditingCommands.Copied? {
+        val (copied, edit) = EditingCommands.cut(document, currentSelections()) ?: return null
+        applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }
+        return copied
+    }
+
+    /** Pastes [text] at every selection; see [EditingCommands.paste] for [wholeLines] and spreading lines. */
+    internal fun paste(text: String, wholeLines: Boolean = false): Boolean {
+        val edit = EditingCommands.paste(document, currentSelections(), text, wholeLines) ?: return false
+        return applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }
+    }
+
+    /** Ctrl+A. */
+    internal fun selectAll() {
+        applySelections(SelectionSet.single(TextRange(0, document.length)))
+    }
+
+    /** Moves every caret to [target] of its selection; with [extend], the anchors stay (Shift+arrows). */
+    internal fun moveSelections(extend: Boolean, target: (TextRange) -> Int) {
+        applySelections(EditingCommands.move(currentSelections(), extend, target).clampedTo(document.length))
+    }
+
+    /** Replaces the selections, clamped to the document. */
+    internal fun replaceSelections(set: SelectionSet) {
+        applySelections(set.clampedTo(document.length))
     }
 
     // ── Tokenization scheduling ───────────────────────────────────────────────
@@ -583,19 +751,23 @@ class CodeEditorState(
     /**
      * Replaces [textFieldState]'s entire content with [document]'s current text and places its
      * selection at the primary one of [selections], in one atomic edit so the selection is never
-     * validated against stale text. Bumps [externalEditVersion]. Called by every mutation method
-     * above — never by the field's own `InputTransformation`, which is already editing
-     * [textFieldState] directly.
+     * validated against stale text. Bumps [externalEditVersion] when [external]. Called by every
+     * mutation method above — never by the field's own `InputTransformation`, which is already
+     * editing [textFieldState] directly. Without [fieldMirror] it only places the selections.
      */
-    private fun syncFieldToDocument(selections: SelectionSet) {
-        val newText = document.text
-        textFieldState.edit {
-            replace(0, length, newText)
-            selection = selections.primary
+    private fun syncFieldToDocument(selections: SelectionSet, external: Boolean = true) {
+        if (fieldMirror) {
+            val newText = document.text
+            textFieldState.edit {
+                replace(0, length, newText)
+                selection = selections.primary
+            }
+            extraSelections = selections.ranges.drop(1)
+            extrasPrimary = selections.primary
+        } else {
+            ownSelections = selections
         }
-        extraSelections = selections.ranges.drop(1)
-        extrasPrimary = selections.primary
-        externalEditVersion++
+        if (external) externalEditVersion++
     }
 
     /**

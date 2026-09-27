@@ -26,4 +26,7 @@ internal object EditorTestTags {
     const val TEXT_FIELD = "aardink.textField"
     const val FIND_PANEL = "aardink.find"
     const val GUTTER = "aardink.gutter"
+
+    /** The text area of the editor's own renderer. */
+    const val EDITOR = "aardink.editor"
 }

@@ -18,6 +18,7 @@ package com.aardarch.aardink.platform
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.aardarch.aardink.ui.view.EditorScrollController
 
 /**
  * Draws scrollbars for the editor's scroll containers, where the platform expects them.
@@ -31,3 +32,10 @@ import androidx.compose.ui.Modifier
  */
 @Composable
 internal expect fun EditorScrollbars(vertical: ScrollState, horizontal: ScrollState?, modifier: Modifier)
+
+/**
+ * The scrollbars of the editor's own renderer, over its text area: the same platform rules as
+ * [EditorScrollbars], reading the view's own scroll position. [horizontal] is false with soft wrap.
+ */
+@Composable
+internal expect fun EditorViewScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier)

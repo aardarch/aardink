@@ -65,7 +65,7 @@ fun DrawScope.drawSquiggles(
     }
 }
 
-private fun DrawScope.drawSquiggleLine(xStart: Float, xEnd: Float, y: Float, color: Color) {
+internal fun DrawScope.drawSquiggleLine(xStart: Float, xEnd: Float, y: Float, color: Color) {
     if (xEnd <= xStart) return
     val amplitude = 2.dp.toPx()
     val halfPeriod = 4.dp.toPx()

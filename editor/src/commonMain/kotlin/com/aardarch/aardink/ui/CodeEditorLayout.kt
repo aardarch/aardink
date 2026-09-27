@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalAardinkRenderer::class)
 
 package com.aardarch.aardink.ui
 
@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,6 +74,9 @@ import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.platform.EditorScrollbars
+import com.aardarch.aardink.ui.view.EditorPointerHandler
+import com.aardarch.aardink.ui.view.EditorView
+import com.aardarch.aardink.ui.view.GutterContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -136,6 +140,21 @@ fun CodeEditorLayout(
     val gutterForeground = theme.gutterForeground
     val cursorColor = theme.cursorColor
 
+    // The editor's own renderer, when the host opted in: it draws the document itself and keeps the
+    // text field out of the way (no copy of the whole text into it after every edit).
+    val view = if (LocalEditorRenderer.current == EditorRenderer.Virtualized) remember(state) { EditorView(state) } else null
+    if (view != null) {
+        DisposableEffect(view) {
+            state.fieldMirror = false
+            view.attach()
+            onDispose {
+                view.detach()
+                state.fieldMirror = true
+            }
+        }
+    }
+    val pointer = remember(view) { view?.let { EditorPointerHandler(it) } }
+
     val textVersion = state.textVersion
     val tokenVersion = state.tokenVersion
     val documentLineCount = remember(textVersion) { state.document.lineCount }
@@ -143,8 +162,10 @@ fun CodeEditorLayout(
     // Auto-derive an AnnotatedString from the token cache + theme when the consumer didn't pass
     // one explicitly. Recomputed on token-cache or theme changes; clamped to the current text so
     // a stale token list (one tokenization tick behind an edit) is safe.
-    val effectiveAnnotatedText: AnnotatedString? = remember(annotatedText, tokenVersion, textVersion, theme) {
+    val effectiveAnnotatedText: AnnotatedString? = remember(annotatedText, tokenVersion, textVersion, theme, view) {
         if (annotatedText != null) return@remember annotatedText
+        // The editor's own renderer colours each line from the token store as it lays it out.
+        if (view != null) return@remember null
         val cachedTokens = state.tokenStore.allTokens()
         if (cachedTokens.isEmpty()) return@remember null
         annotateTokens(state.document.text, cachedTokens, theme)
@@ -339,7 +360,7 @@ fun CodeEditorLayout(
 
     // Report cursor position changes upward
     LaunchedEffect(state) {
-        snapshotFlow { state.textFieldState.selection }.collect { sel ->
+        snapshotFlow { state.selection }.collect { sel ->
             val (line, col) = state.document.offsetToLineCol(sel.start)
             onCursorChange(line + 1, col + 1)
         }
@@ -399,31 +420,45 @@ fun CodeEditorLayout(
     // ── Visible lines, for the tokenizer to highlight first ────────────────────
     // Approximate (folds and wrapped rows are ignored): it only decides which lines of a large
     // document get coloured before the rest.
-    LaunchedEffect(state, lineHeightPx, topPaddingPx) {
-        snapshotFlow { verticalScrollState.value to viewportHeightPx }.collect { (scroll, height) ->
-            val first = ((scroll - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
-            state.visibleLines = first..(first + (height / lineHeightPx).toInt() + 1)
+    // The editor's own renderer reports them from its layout pass instead.
+    if (view == null) {
+        LaunchedEffect(state, lineHeightPx, topPaddingPx) {
+            snapshotFlow { verticalScrollState.value to viewportHeightPx }.collect { (scroll, height) ->
+                val first = ((scroll - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
+                state.visibleLines = first..(first + (height / lineHeightPx).toInt() + 1)
+            }
         }
     }
 
     // ── Pending navigation: scroll to target offset and update selection ─────
-    LaunchedEffect(state) {
-        snapshotFlow { state.pendingNavigation }.collect { nav ->
-            if (nav == null) return@collect
-            val tlr = textLayoutResult
-            val targetY = if (tlr != null) {
-                val transformedLength = tlr.layoutInput.text.length
-                val offset = nav.targetOffset.coerceIn(0, transformedLength)
-                val visualRow = tlr.getLineForOffset(offset)
-                    .coerceIn(0, (tlr.lineCount - 1).coerceAtLeast(0))
-                (topPaddingPx + tlr.getLineTop(visualRow) - lineHeightPx * 3).coerceAtLeast(0f).toInt()
-            } else {
-                val (line, _) = state.document.offsetToLineCol(nav.targetOffset)
-                (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+    if (view != null) {
+        LaunchedEffect(state, view) {
+            snapshotFlow { state.pendingNavigation }.collect { nav ->
+                if (nav == null) return@collect
+                state.selection = nav.select ?: TextRange(nav.targetOffset)
+                view.requestReveal(nav.targetOffset, center = true)
+                state.clearNavigation()
             }
-            verticalScrollState.animateScrollTo(targetY)
-            state.selection = nav.select ?: TextRange(nav.targetOffset)
-            state.clearNavigation()
+        }
+    } else {
+        LaunchedEffect(state) {
+            snapshotFlow { state.pendingNavigation }.collect { nav ->
+                if (nav == null) return@collect
+                val tlr = textLayoutResult
+                val targetY = if (tlr != null) {
+                    val transformedLength = tlr.layoutInput.text.length
+                    val offset = nav.targetOffset.coerceIn(0, transformedLength)
+                    val visualRow = tlr.getLineForOffset(offset)
+                        .coerceIn(0, (tlr.lineCount - 1).coerceAtLeast(0))
+                    (topPaddingPx + tlr.getLineTop(visualRow) - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+                } else {
+                    val (line, _) = state.document.offsetToLineCol(nav.targetOffset)
+                    (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
+                }
+                verticalScrollState.animateScrollTo(targetY)
+                state.selection = nav.select ?: TextRange(nav.targetOffset)
+                state.clearNavigation()
+            }
         }
     }
 
@@ -659,144 +694,176 @@ fun CodeEditorLayout(
         }
 
         // ── Editor body: gutter + text area ──────────────────────────────────
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
-            if (showGutter) {
-                // Use the document's logical line count as the source of truth and ask the
-                // text layout where each line actually sits. This keeps the gutter aligned
-                // with what BasicTextField rendered, regardless of trailing-newline phantom
-                // lines, soft wrap, or folds. NaN entries mark logical lines that collapsed
-                // onto the previous visual row (a phantom trailing line not rendered by
-                // Compose) and are skipped by the gutter renderer.
-                val gutterLineCount = documentLineCount
-                val lineTops: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
-                    val tlr = textLayoutResult ?: return@remember null
-                    val transformedLength = tlr.layoutInput.text.length
-                    val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
-                    var prevRow = -1
-                    FloatArray(documentLineCount) { i ->
-                        val origOffset = state.document.lineStart(i)
-                        val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
-                            .coerceIn(0, transformedLength)
-                        val visualRow = tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
-                        if (visualRow == prevRow) {
-                            Float.NaN
-                        } else {
-                            prevRow = visualRow
-                            topPaddingPx + tlr.getLineTop(visualRow)
-                        }
-                    }
-                }
-                val lineBottoms: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
-                    val tlr = textLayoutResult ?: return@remember null
-                    val transformedLength = tlr.layoutInput.text.length
-                    val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
-                    fun visualRowOf(line: Int): Int {
-                        val origOffset = state.document.lineStart(line)
-                        val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
-                            .coerceIn(0, transformedLength)
-                        return tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
-                    }
-                    FloatArray(documentLineCount) { i ->
-                        // The bottom of a logical line = top of the next non-collapsed logical
-                        // line, or the last visual row's bottom for the final one.
-                        val thisRow = visualRowOf(i)
-                        var nextI = i + 1
-                        var bottom = Float.NaN
-                        while (nextI < documentLineCount) {
-                            val nextRow = visualRowOf(nextI)
-                            if (nextRow != thisRow) {
-                                bottom = topPaddingPx + tlr.getLineTop(nextRow)
-                                break
-                            }
-                            nextI++
-                        }
-                        if (bottom.isNaN()) topPaddingPx + tlr.getLineBottom(maxRow) else bottom
-                    }
-                }
-                val lineTopProvider: ((Int) -> Float)? = lineTops?.let { tops -> { i -> tops.getOrElse(i) { Float.NaN } } }
-                val lineBottomProvider: ((Int) -> Float)? = lineBottoms?.let { bottoms -> { i -> bottoms.getOrElse(i) { 0f } } }
-                EditorGutter(
-                    lineCount = gutterLineCount,
-                    scrollState = verticalScrollState,
-                    lineHeightPx = lineHeightPx,
-                    topPaddingPx = topPaddingPx,
-                    background = gutterBackground,
-                    foreground = gutterForeground,
-                    annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
-                    foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
-                    foldedRanges = foldedRanges,
-                    onToggleFold = { line -> foldState?.toggle(line) },
-                    diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
-                    onAnnotationTap = { lineIndex ->
-                        tooltipDiagnostic = diagnostics
-                            .filter { it.lineNumber == lineIndex }
-                            .maxByOrNull { it.severity.ordinal }
-                    },
-                    showLineNumbers = showLineNumbers,
-                    lineTopProvider = lineTopProvider,
-                    lineBottomProvider = lineBottomProvider,
-                )
-            }
-
-            // Outer box exists so the scrollbars can overlay the scrolling content rather
-            // than take layout space from it. On Android EditorScrollbars draws nothing, so
-            // this costs one empty Box and changes no pixels.
-            Box(
+        if (view != null && pointer != null) {
+            VirtualizedEditorBody(
+                state = state,
+                view = view,
+                pointer = pointer,
+                foldState = foldState,
+                diagnostics = diagnostics,
+                findReplaceState = findReplaceState,
+                gutter = if (showGutter) {
+                    GutterContent(
+                        annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
+                        foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
+                        diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
+                        showLineNumbers = showLineNumbers,
+                        onToggleFold = { line -> foldState?.toggle(line) },
+                        onAnnotationTap = { lineIndex ->
+                            tooltipDiagnostic = diagnostics
+                                .filter { it.lineNumber == lineIndex }
+                                .maxByOrNull { it.severity.ordinal }
+                        },
+                    )
+                } else {
+                    null
+                },
+                softWrap = softWrap,
+                textColor = textColor,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .onSizeChanged { viewportHeightPx = it.height },
+                    .fillMaxWidth(),
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(verticalScrollState)
-                        .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
-                        .padding(
-                            start = EditorDefaults.contentPaddingHorizontal,
-                            top = EditorDefaults.contentPaddingTop,
-                            end = EditorDefaults.contentPaddingHorizontal,
-                        )
-                        .drawBehind {
-                            drawSquiggles(
-                                diagnostics = diagnostics,
-                                textLayoutResult = textLayoutResult,
-                                errorColor = theme.errorColor,
-                                warningColor = theme.warningColor,
-                                infoColor = theme.infoColor,
-                            )
+                if (showGutter) {
+                    // Use the document's logical line count as the source of truth and ask the
+                    // text layout where each line actually sits. This keeps the gutter aligned
+                    // with what BasicTextField rendered, regardless of trailing-newline phantom
+                    // lines, soft wrap, or folds. NaN entries mark logical lines that collapsed
+                    // onto the previous visual row (a phantom trailing line not rendered by
+                    // Compose) and are skipped by the gutter renderer.
+                    val gutterLineCount = documentLineCount
+                    val lineTops: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
+                        val tlr = textLayoutResult ?: return@remember null
+                        val transformedLength = tlr.layoutInput.text.length
+                        val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
+                        var prevRow = -1
+                        FloatArray(documentLineCount) { i ->
+                            val origOffset = state.document.lineStart(i)
+                            val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
+                                .coerceIn(0, transformedLength)
+                            val visualRow = tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
+                            if (visualRow == prevRow) {
+                                Float.NaN
+                            } else {
+                                prevRow = visualRow
+                                topPaddingPx + tlr.getLineTop(visualRow)
+                            }
+                        }
+                    }
+                    val lineBottoms: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
+                        val tlr = textLayoutResult ?: return@remember null
+                        val transformedLength = tlr.layoutInput.text.length
+                        val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
+                        fun visualRowOf(line: Int): Int {
+                            val origOffset = state.document.lineStart(line)
+                            val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
+                                .coerceIn(0, transformedLength)
+                            return tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
+                        }
+                        FloatArray(documentLineCount) { i ->
+                            // The bottom of a logical line = top of the next non-collapsed logical
+                            // line, or the last visual row's bottom for the final one.
+                            val thisRow = visualRowOf(i)
+                            var nextI = i + 1
+                            var bottom = Float.NaN
+                            while (nextI < documentLineCount) {
+                                val nextRow = visualRowOf(nextI)
+                                if (nextRow != thisRow) {
+                                    bottom = topPaddingPx + tlr.getLineTop(nextRow)
+                                    break
+                                }
+                                nextI++
+                            }
+                            if (bottom.isNaN()) topPaddingPx + tlr.getLineBottom(maxRow) else bottom
+                        }
+                    }
+                    val lineTopProvider: ((Int) -> Float)? = lineTops?.let { tops -> { i -> tops.getOrElse(i) { Float.NaN } } }
+                    val lineBottomProvider: ((Int) -> Float)? = lineBottoms?.let { bottoms -> { i -> bottoms.getOrElse(i) { 0f } } }
+                    EditorGutter(
+                        lineCount = gutterLineCount,
+                        scrollState = verticalScrollState,
+                        lineHeightPx = lineHeightPx,
+                        topPaddingPx = topPaddingPx,
+                        background = gutterBackground,
+                        foreground = gutterForeground,
+                        annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
+                        foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
+                        foldedRanges = foldedRanges,
+                        onToggleFold = { line -> foldState?.toggle(line) },
+                        diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
+                        onAnnotationTap = { lineIndex ->
+                            tooltipDiagnostic = diagnostics
+                                .filter { it.lineNumber == lineIndex }
+                                .maxByOrNull { it.severity.ordinal }
                         },
-                ) {
-                    BasicTextField(
-                        state = state.textFieldState,
-                        inputTransformation = inputTransformation,
-                        outputTransformation = outputTransformation,
-                        onTextLayout = { getResult -> textLayoutResult = getResult() },
-                        lineLimits = TextFieldLineLimits.MultiLine(),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag(EditorTestTags.TEXT_FIELD)
-                            .editorKeyboardShortcuts(shortcutActions),
-                        textStyle = TextStyle(
-                            fontFamily = typography.fontFamily,
-                            fontSize = typography.fontSize,
-                            lineHeight = typography.lineHeight,
-                            color = textColor,
-                        ),
-                        cursorBrush = SolidColor(cursorColor),
-                        readOnly = readOnly,
+                        showLineNumbers = showLineNumbers,
+                        lineTopProvider = lineTopProvider,
+                        lineBottomProvider = lineBottomProvider,
                     )
                 }
 
-                EditorScrollbars(
-                    vertical = verticalScrollState,
-                    horizontal = if (softWrap) null else horizontalScrollState,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                // Outer box exists so the scrollbars can overlay the scrolling content rather
+                // than take layout space from it. On Android EditorScrollbars draws nothing, so
+                // this costs one empty Box and changes no pixels.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .onSizeChanged { viewportHeightPx = it.height },
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(verticalScrollState)
+                            .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
+                            .padding(
+                                start = EditorDefaults.contentPaddingHorizontal,
+                                top = EditorDefaults.contentPaddingTop,
+                                end = EditorDefaults.contentPaddingHorizontal,
+                            )
+                            .drawBehind {
+                                drawSquiggles(
+                                    diagnostics = diagnostics,
+                                    textLayoutResult = textLayoutResult,
+                                    errorColor = theme.errorColor,
+                                    warningColor = theme.warningColor,
+                                    infoColor = theme.infoColor,
+                                )
+                            },
+                    ) {
+                        BasicTextField(
+                            state = state.textFieldState,
+                            inputTransformation = inputTransformation,
+                            outputTransformation = outputTransformation,
+                            onTextLayout = { getResult -> textLayoutResult = getResult() },
+                            lineLimits = TextFieldLineLimits.MultiLine(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag(EditorTestTags.TEXT_FIELD)
+                                .editorKeyboardShortcuts(shortcutActions),
+                            textStyle = TextStyle(
+                                fontFamily = typography.fontFamily,
+                                fontSize = typography.fontSize,
+                                lineHeight = typography.lineHeight,
+                                color = textColor,
+                            ),
+                            cursorBrush = SolidColor(cursorColor),
+                            readOnly = readOnly,
+                        )
+                    }
+
+                    EditorScrollbars(
+                        vertical = verticalScrollState,
+                        horizontal = if (softWrap) null else horizontalScrollState,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
 

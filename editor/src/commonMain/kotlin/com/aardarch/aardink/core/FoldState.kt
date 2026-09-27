@@ -70,6 +70,33 @@ class FoldState {
     }
 
     /**
+     * Moves the ranges along with an edit that merged [removedLines] lines into [line] and added
+     * [addedLines] lines after it, so what is folded stays folded, over the same text, until the
+     * next [updateFoldableRanges]. A range whose first line was merged into another is dropped; one
+     * the edit happened inside grows or shrinks with it.
+     */
+    internal fun onLinesChanged(line: Int, removedLines: Int, addedLines: Int) {
+        val delta = addedLines - removedLines
+        if (delta == 0) return
+        fun shift(range: FoldRange): FoldRange? = when {
+            range.endLine < line -> range
+
+            range.startLine > line + removedLines -> range.copy(startLine = range.startLine + delta, endLine = range.endLine + delta)
+
+            range.startLine > line -> null
+
+            else -> {
+                val end = if (range.endLine <= line + removedLines) line else range.endLine + delta
+                if (end <= range.startLine) null else range.copy(endLine = end)
+            }
+        }
+        foldableRanges = foldableRanges.mapNotNull(::shift)
+        val folded = foldedMap.values.mapNotNull(::shift)
+        foldedMap.clear()
+        folded.forEach { foldedMap[it.startLine] = it }
+    }
+
+    /**
      * Replaces the foldable-ranges list and prunes stale folded entries.
      * Call this from a [LaunchedEffect] watching the document's textVersion.
      */

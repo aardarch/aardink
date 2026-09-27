@@ -757,6 +757,18 @@ public final class com/aardarch/aardink/ui/EditorGutterKt {
 	public static final fun EditorGutter-ip_dT8w (ILandroidx/compose/foundation/ScrollState;FFJJLandroidx/compose/ui/Modifier;Ljava/util/Map;Ljava/util/Set;Ljava/util/List;Lkotlin/jvm/functions/Function1;Ljava/util/Map;Lkotlin/jvm/functions/Function1;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
 }
 
+public final class com/aardarch/aardink/ui/EditorRenderer : java/lang/Enum {
+	public static final field TextField Lcom/aardarch/aardink/ui/EditorRenderer;
+	public static final field Virtualized Lcom/aardarch/aardink/ui/EditorRenderer;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/EditorRenderer;
+	public static fun values ()[Lcom/aardarch/aardink/ui/EditorRenderer;
+}
+
+public final class com/aardarch/aardink/ui/EditorRendererKt {
+	public static final fun getLocalEditorRenderer ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
 public final class com/aardarch/aardink/ui/EditorThemeParser {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorThemeParser;
@@ -794,6 +806,9 @@ public final class com/aardarch/aardink/ui/EditorTypography {
 
 public final class com/aardarch/aardink/ui/EditorTypographyKt {
 	public static final fun getLocalEditorTypography ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public abstract interface annotation class com/aardarch/aardink/ui/ExperimentalAardinkRenderer : java/lang/annotation/Annotation {
 }
 
 public final class com/aardarch/aardink/ui/FindReplacePanelKt {

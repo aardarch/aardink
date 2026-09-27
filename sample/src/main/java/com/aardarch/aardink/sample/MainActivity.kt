@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,8 +71,11 @@ import com.aardarch.aardink.sample.ui.SampleThemeChoice
 import com.aardarch.aardink.sample.ui.ThemePicker
 import com.aardarch.aardink.sample.ui.WelcomeCard
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorRenderer
 import com.aardarch.aardink.ui.EditorThemes
+import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LocalEditorRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -305,6 +309,7 @@ private fun EditorScreen(
     var showDiagnosticDots by rememberSaveable { mutableStateOf(true) }
     var showDiffMarkers by rememberSaveable { mutableStateOf(true) }
     var softWrap by rememberSaveable { mutableStateOf(false) }
+    var ownRenderer by rememberSaveable { mutableStateOf(false) }
 
     var diagnostics by remember(language.id) { mutableStateOf<List<Diagnostic>>(emptyList()) }
     val service = language.languageService
@@ -379,6 +384,8 @@ private fun EditorScreen(
                         onShowDiffMarkersChange = { showDiffMarkers = it },
                         softWrap = softWrap,
                         onSoftWrapChange = { softWrap = it },
+                        ownRenderer = ownRenderer,
+                        onOwnRendererChange = { ownRenderer = it },
                         canRenameSymbol = language.languageService?.supportsRename == true,
                         onRenameSymbol = { state.requestRename() },
                     )
@@ -387,24 +394,27 @@ private fun EditorScreen(
         },
         modifier = Modifier.fillMaxSize(),
     ) { innerPadding ->
-        CodeEditorLayout(
-            state = state,
-            foldState = foldState,
-            findReplaceState = findReplaceState,
-            foldingProvider = language.foldingProvider,
-            languageService = language.languageService,
-            diagnostics = diagnostics,
-            keyboardToolbarPlacement = toolbarPlacement,
-            showGutter = showGutter,
-            showLineNumbers = showLineNumbers,
-            showFoldMarkers = showFoldMarkers,
-            showDiagnosticAnnotations = showDiagnosticDots,
-            showDiffMarkers = showDiffMarkers,
-            softWrap = softWrap,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        )
+        @OptIn(ExperimentalAardinkRenderer::class)
+        CompositionLocalProvider(LocalEditorRenderer provides if (ownRenderer) EditorRenderer.Virtualized else EditorRenderer.TextField) {
+            CodeEditorLayout(
+                state = state,
+                foldState = foldState,
+                findReplaceState = findReplaceState,
+                foldingProvider = language.foldingProvider,
+                languageService = language.languageService,
+                diagnostics = diagnostics,
+                keyboardToolbarPlacement = toolbarPlacement,
+                showGutter = showGutter,
+                showLineNumbers = showLineNumbers,
+                showFoldMarkers = showFoldMarkers,
+                showDiagnosticAnnotations = showDiagnosticDots,
+                showDiffMarkers = showDiffMarkers,
+                softWrap = softWrap,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            )
+        }
     }
 }
 
@@ -424,6 +434,8 @@ private fun SampleOptionsMenu(
     onShowDiffMarkersChange: (Boolean) -> Unit,
     softWrap: Boolean,
     onSoftWrapChange: (Boolean) -> Unit,
+    ownRenderer: Boolean,
+    onOwnRendererChange: (Boolean) -> Unit,
     canRenameSymbol: Boolean,
     onRenameSymbol: () -> Unit,
 ) {
@@ -489,6 +501,12 @@ private fun SampleOptionsMenu(
             label = "Soft wrap",
             checked = softWrap,
             onChange = onSoftWrapChange,
+        )
+        // Aardink 0.6's own renderer, while it is still opt-in.
+        ToggleItem(
+            label = "Own renderer (preview)",
+            checked = ownRenderer,
+            onChange = onOwnRendererChange,
         )
 
         HorizontalDivider()

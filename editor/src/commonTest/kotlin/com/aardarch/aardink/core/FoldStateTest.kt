@@ -84,4 +84,21 @@ class FoldStateTest {
         state.unfoldAll()
         assertEquals(0, state.foldedCount)
     }
+
+    @Test
+    fun `folds follow lines added or removed above and inside them`() {
+        val state = FoldState()
+        state.updateFoldableRanges(listOf(FoldRange(2, 5), FoldRange(10, 15)))
+        state.toggle(10)
+        // Two lines inserted after line 0: both ranges move down.
+        state.onLinesChanged(line = 0, removedLines = 0, addedLines = 2)
+        assertEquals(listOf(FoldRange(4, 7), FoldRange(12, 17)), state.foldableRanges)
+        assertTrue(state.isFolded(12))
+        // A line added inside the first range grows it.
+        state.onLinesChanged(line = 5, removedLines = 0, addedLines = 1)
+        assertEquals(FoldRange(4, 8), state.foldableRanges[0])
+        // The folded range's first line merged into the line above: it is gone.
+        state.onLinesChanged(line = 12, removedLines = 1, addedLines = 0)
+        assertEquals(0, state.foldedCount)
+    }
 }

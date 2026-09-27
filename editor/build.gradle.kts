@@ -49,6 +49,18 @@ kotlin {
         binaries.executable()
     }
 
+    // `skikoMain` is shared by the targets Compose draws with Skiko (desktop JVM and wasmJs). The
+    // editor's own text-input request lives there: Compose's skiko `PlatformTextInputMethodRequest`
+    // is one interface for both, different from Android's.
+    applyDefaultHierarchyTemplate {
+        common {
+            group("skiko") {
+                withJvm()
+                withWasmJs()
+            }
+        }
+    }
+
     sourceSets {
         commonMain.dependencies {
             api(libs.compose.mp.runtime)
@@ -126,6 +138,9 @@ composeCompiler {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Screenshots from EditorViewUiTest, for looking at the renderer while working on it:
+    // -Paardink.viewShots=<directory>.
+    providers.gradleProperty("aardink.viewShots").orNull?.let { systemProperty("aardink.viewShots", it) }
 }
 
 spotless {

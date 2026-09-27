@@ -29,6 +29,12 @@ internal enum class EditKind {
     /** Forward delete. */
     DeletingRight,
 
+    /**
+     * Input-method composition, from the first composing text to the commit: one entry, however
+     * often the input method rewrites the word on the way.
+     */
+    Composing,
+
     /** Everything else: paste, completion, format, replace, an IME commit, line operations. */
     Other,
 }
@@ -98,6 +104,7 @@ internal class UndoHistory(private val capacity: Int = DEFAULT_CAPACITY) {
             EditKind.TypingSpace -> top.kind == EditKind.TypingSpace
             EditKind.DeletingLeft -> top.kind == EditKind.DeletingLeft
             EditKind.DeletingRight -> top.kind == EditKind.DeletingRight
+            EditKind.Composing -> top.kind == EditKind.Composing
             EditKind.Other -> false
         }
     }

@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@aardarch/aardink-web` is published to npm with every release, through npm trusted
   publishing with provenance: `pnpm add @aardarch/aardink-web`. Pre-release versions go to the
   `next` dist-tag.
+- A preview of the editor's own renderer, which lays out and draws only the lines on screen:
+  `CompositionLocalProvider(LocalEditorRenderer provides EditorRenderer.Virtualized)` around
+  `CodeEditorLayout`, opted in with `@ExperimentalAardinkRenderer`; on the web, add
+  `?aardinkRenderer=virtualized` to the page URL. It draws folds, soft wrap, squiggles, find
+  matches, selections and carets, and selects with mouse and touch; typing arrives with the next
+  preview step. The switch is removed again before 0.6.0, which renders only this way.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its

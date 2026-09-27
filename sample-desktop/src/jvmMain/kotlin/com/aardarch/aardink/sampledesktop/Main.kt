@@ -43,9 +43,12 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorRenderer
 import com.aardarch.aardink.ui.EditorThemes
+import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LocalEditorRenderer
 import com.aardarch.aardink.ui.LocalEditorTheme
 
 private val SAMPLE = """
@@ -88,6 +91,20 @@ private fun SampleWindow() {
     var themeName by remember { mutableStateOf("VS Code Dark") }
     var showGoToLine by remember { mutableStateOf(false) }
 
+    // Aardink 0.6's own renderer, while it is still opt-in; -Daardink.renderer=virtualized starts with it.
+    @OptIn(ExperimentalAardinkRenderer::class)
+    var renderer by remember {
+        mutableStateOf(
+            if (System.getProperty("aardink.renderer") ==
+                "virtualized"
+            ) {
+                EditorRenderer.Virtualized
+            } else {
+                EditorRenderer.TextField
+            },
+        )
+    }
+
     val themes = remember {
         linkedMapOf(
             "VS Code Dark" to EditorThemes.VsCodeDark,
@@ -117,13 +134,22 @@ private fun SampleWindow() {
                 themeName = themes.keys.toList()[index]
             }
 
+            @OptIn(ExperimentalAardinkRenderer::class)
+            PickerButton(label = "Renderer: ${renderer.name}", options = EditorRenderer.entries.map { it.name }) { index ->
+                renderer = EditorRenderer.entries[index]
+            }
+
             Text(
                 text = "Ctrl/Cmd+Z/Y undo/redo · +F find · +G go to line · Tab / Shift+Tab indent",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
-        CompositionLocalProvider(LocalEditorTheme provides (themes[themeName] ?: EditorThemes.VsCodeDark)) {
+        @OptIn(ExperimentalAardinkRenderer::class)
+        CompositionLocalProvider(
+            LocalEditorTheme provides (themes[themeName] ?: EditorThemes.VsCodeDark),
+            LocalEditorRenderer provides renderer,
+        ) {
             CodeEditorLayout(
                 state = state,
                 languageService = language.languageService,
