@@ -69,6 +69,8 @@ internal data class ViewStyle(
     val placeholderStyle: SpanStyle,
     val metrics: EditorMetrics,
     val softWrap: Boolean,
+    /** Bracket colours by nesting depth, repeating; null leaves brackets their token colour. */
+    val bracketStyles: List<SpanStyle>? = null,
 )
 
 /** One line on screen: its layout, and where it starts in the document and in the content. */
@@ -480,12 +482,26 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val text = document.subSequence(start, start + shown).toString()
         val tokens = if (state.exceedsAnalysisLimit) null else state.tokenStore.lineTokens(line)
         val fold = folds.startingAt(line)
-        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, fold?.placeholder)) {
-            measureLine(style, text, tokens, fold)
+        // Bracket colours depend on the depth the line starts at: part of what the layout shows.
+        val bracketStyles = style.bracketStyles?.takeIf { tokens != null && it.isNotEmpty() }
+        val depth = if (bracketStyles != null) state.brackets.depthAtLineStart(line) % bracketStyles.size else -1
+        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth))) {
+            measureLine(style, line, text, tokens, fold, bracketStyles, depth)
         }
     }
 
-    private fun measureLine(style: ViewStyle, text: String, tokens: TokenStore.LineTokens?, fold: FoldRange?): TextLayoutResult {
+    /** What a line's layout shows besides its text and tokens. */
+    private data class LineDecoration(val placeholder: String?, val bracketDepth: Int)
+
+    private fun measureLine(
+        style: ViewStyle,
+        line: Int,
+        text: String,
+        tokens: TokenStore.LineTokens?,
+        fold: FoldRange?,
+        bracketStyles: List<SpanStyle>?,
+        startDepth: Int,
+    ): TextLayoutResult {
         val builder = AnnotatedString.Builder(text.length + 4)
         builder.append(text)
         if (tokens != null) {
@@ -494,6 +510,23 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 val from = tokens.start(i).coerceIn(0, text.length)
                 val to = tokens.end(i).coerceIn(from, text.length)
                 if (to > from) builder.addStyle(spanStyle, from, to)
+            }
+        }
+        if (bracketStyles != null) {
+            // A pair shares a colour: an opening bracket takes the colour of the depth it opens,
+            // its closing one the colour of the depth it closes. Only the depth modulo the
+            // palette matters, so that is all the key and this count keep.
+            val colours = bracketStyles.size
+            var depth = startDepth
+            state.brackets.forEachBracket(line) { column, open ->
+                if (column >= text.length) return@forEachBracket
+                if (open) {
+                    builder.addStyle(bracketStyles[depth], column, column + 1)
+                    depth = (depth + 1) % colours
+                } else {
+                    depth = (depth - 1).mod(colours)
+                    builder.addStyle(bracketStyles[depth], column, column + 1)
+                }
             }
         }
         if (fold != null) {

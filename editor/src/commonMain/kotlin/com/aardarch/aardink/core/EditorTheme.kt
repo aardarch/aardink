@@ -42,4 +42,17 @@ data class EditorTheme(
     val errorColor: Color,
     val warningColor: Color,
     val infoColor: Color,
+
+    // ── Brackets ──────────────────────────────────────────────────────────────
+    /**
+     * Colours of bracket pairs by nesting depth, repeating: the outermost pair gets the first.
+     * Shown with `EditorOptions.bracketPairColorization`. VS Code's dark-theme colours by default.
+     */
+    val bracketPairColors: List<Color> = DefaultBracketPairColors,
 )
+
+/** VS Code's bracket-pair colours for dark themes: gold, orchid, blue. */
+internal val DefaultBracketPairColors = listOf(Color(0xFFFFD700), Color(0xFFDA70D6), Color(0xFF179FFF))
+
+/** VS Code's bracket-pair colours for light themes. */
+internal val LightBracketPairColors = listOf(Color(0xFF0431FA), Color(0xFF319331), Color(0xFF7B3814))

@@ -70,6 +70,9 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | Initial caret | At the end of `initialText` | At the start, as after `loadText` and in Monaco | PR 7 |
 | Replace all | One undo step per match | One undo step for all of them | PR 7 |
 | Selection colour | Material's text-selection colour | `EditorTheme.selectionColor` | PR 7 |
+| Find match colour | Material's tertiary colour | `EditorTheme.findMatchColor`, the current match stronger | PR 8 |
+| Look | Plain text on the theme background | The caret's line highlighted, the bracket pair at the caret boxed, brackets coloured by depth. Each can be turned off in `EditorOptions`; the colours are `EditorTheme.lineHighlight` and the new `EditorTheme.bracketPairColors` | PR 8 |
+| `EditorThemeParser`, 8-digit colours | Read as `#AARRGGBB` | Read as VS Code writes them, `#RRGGBBAA` | PR 8 |
 | Carets | The text field's caret, blinking while focused | One caret per selection, blinking while the editor has focus, hidden without it | PR 7 |
 | Mouse and touch | The text field's | Click, Shift+click, Alt+click (another caret), double and triple click, drag; touch tap, long press, selection handles with the platform's text toolbar; a right-click menu on desktop and the web | PR 7 |
 | Keyboard toolbar | Inserted the character as is | Types it through the typing rules, as a key: `(` gets its `)` | PR 7 |

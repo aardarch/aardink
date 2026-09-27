@@ -16,13 +16,14 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -78,7 +79,7 @@ internal fun VirtualizedEditorBody(
     diagnostics: List<Diagnostic>,
     findReplaceState: FindReplaceState?,
     gutter: GutterContent?,
-    softWrap: Boolean,
+    options: EditorOptions,
     textColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -113,7 +114,11 @@ internal fun VirtualizedEditorBody(
     }
     val tokenStyles = remember(theme) { theme.tokenColors.mapValues { SpanStyle(color = it.value) } }
     val placeholderStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.4f), fontStyle = FontStyle.Italic) }
-    val style = ViewStyle(measurer, textStyle, tokenStyles, placeholderStyle, metrics, softWrap)
+    val softWrap = options.softWrap
+    val bracketStyles = remember(theme, options.bracketPairColorization) {
+        if (options.bracketPairColorization) theme.bracketPairColors.map { SpanStyle(color = it) } else null
+    }
+    val style = ViewStyle(measurer, textStyle, tokenStyles, placeholderStyle, metrics, softWrap, bracketStyles)
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current
     SideEffect {
@@ -153,17 +158,30 @@ internal fun VirtualizedEditorBody(
     )
     EditorTextToolbar(controller)
 
-    val tertiary = MaterialTheme.colorScheme.tertiary
     val colors = EditorColors(
         selection = theme.selectionColor,
-        findMatch = tertiary.copy(alpha = 0.35f),
-        currentFindMatch = tertiary.copy(alpha = 0.7f),
+        findMatch = theme.findMatchColor,
+        // The current match stands out from the others as VS Code's does: the same colour, stronger.
+        currentFindMatch = theme.findMatchColor.copy(alpha = (theme.findMatchColor.alpha * 2f).coerceAtMost(1f)),
         error = theme.errorColor,
         warning = theme.warningColor,
         info = theme.infoColor,
         caret = theme.cursorColor,
         text = textColor,
+        lineHighlight = theme.lineHighlight,
+        bracketMatch = textColor.copy(alpha = 0.18f),
     )
+    // The pair the caret touches, worked out when the caret, the text or its tokens change, not
+    // on every frame the content draws (scrolling redraws it every frame).
+    val matchBrackets = rememberUpdatedState(options.matchBrackets)
+    val bracketMatch by remember(state) {
+        derivedStateOf {
+            state.textVersion
+            state.tokenVersion
+            if (matchBrackets.value) state.matchingBracket()?.let { it.open to it.close } else null
+        }
+    }
+    val highlightCaretLines = options.highlightCurrentLine
     val lineCount = remember(state.textVersion) { state.document.lineCount }
 
     EditorBody(
@@ -185,6 +203,8 @@ internal fun VirtualizedEditorBody(
                         currentFindMatch = findReplaceState?.currentMatchIndex ?: -1,
                         diagnostics = diagnostics,
                         composition = controller.ime.composition,
+                        highlightCaretLines = highlightCaretLines,
+                        bracketMatch = bracketMatch,
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },

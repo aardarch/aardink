@@ -97,6 +97,17 @@ class CodeEditorState(
 
     val document = CodeDocument(initialText)
     internal val tokenStore = TokenStore(document)
+
+    /** Bracket depth per line, for bracket-pair colours; kept in step with edits and passes. */
+    internal val brackets = BracketIndex(document, tokenStore).also { index ->
+        tokenStore.onRetokenized = { lines -> if (lines == null) index.invalidateAll() else index.invalidate(lines.first, lines.last) }
+    }
+
+    /**
+     * What Tab inserts and one indentation step is: [EditorOptions.tabSize][com.aardarch.aardink.ui.EditorOptions]
+     * spaces, or a tab without `insertSpaces`. Set by the layout from its options.
+     */
+    internal var indentUnit: String = LineCommands.INDENT
     private val history = UndoHistory()
 
     // ── Snapshot-backed observable state ──────────────────────────────────────
@@ -340,7 +351,7 @@ class CodeEditorState(
      */
     fun indentSelection() {
         val before = currentSelections()
-        val edit = LineCommands.indent(document, before)
+        val edit = LineCommands.indent(document, before, indentUnit)
         if (before.ranges.all { it.collapsed }) applyCommand(edit) else applyKeepingLinesSelected(edit.changes, before)
     }
 
@@ -350,8 +361,29 @@ class CodeEditorState(
      */
     fun outdentSelection() {
         val before = currentSelections()
-        val edit = LineCommands.outdent(document, before) ?: return
+        val edit = LineCommands.outdent(document, before, indentUnit) ?: return
         if (before.ranges.all { it.collapsed }) applyCommand(edit) else applyKeepingLinesSelected(edit.changes, before)
+    }
+
+    /** Whether [offset] is code rather than inside a string or a comment, as the tokens have it. */
+    internal fun isCode(offset: Int): Boolean {
+        val (line, column) = document.offsetToLineCol(offset)
+        val runs = tokenStore.lineTokens(line)
+        for (i in 0 until runs.size) {
+            if (runs.start(i) > column) break
+            if (column < runs.end(i)) {
+                val type = runs.types[i]
+                return type != TokenType.StringLiteral && type != TokenType.Comment
+            }
+        }
+        return true
+    }
+
+    /** The bracket pair the primary caret touches, or null. */
+    internal fun matchingBracket(): BracketMatcher.Match? {
+        val primary = selection
+        if (!primary.collapsed) return null
+        return BracketMatcher.find(document, primary.end, ::isCode)
     }
 
     /** Ctrl+/: toggles line comments (or a block comment) per [IncrementalTokenizer.commentSyntax]. */

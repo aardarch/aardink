@@ -46,7 +46,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The editor's rendering of the things a sample screen does not show: soft wrap, a closed fold,
- * squiggles, and a selection with find matches, under `screenshots/scene-<scene>.png`.
+ * squiggles, a selection with find matches, and a matched bracket pair, under
+ * `screenshots/scene-<scene>.png`.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -164,5 +165,14 @@ class EditorSceneScreenshotTest {
             query = "name"
         }
         capture("selection", state, findReplaceState = find)
+    }
+
+    @Test
+    fun brackets() {
+        val state = stateOf(code)
+        // Just after the { that opens greetAll: its pair is boxed, the caret's line highlighted.
+        val open = state.document.text.indexOf("Int {") + 4
+        state.selection = TextRange(open + 1)
+        capture("brackets", state)
     }
 }

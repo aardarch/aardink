@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
@@ -41,6 +42,9 @@ internal data class EditorColors(
     val info: Color,
     val caret: Color,
     val text: Color,
+    val lineHighlight: Color,
+    /** The fill of a matched bracket's box; its outline is the same colour, stronger. */
+    val bracketMatch: Color,
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -50,16 +54,33 @@ internal class EditorDecorations(
     val currentFindMatch: Int,
     val diagnostics: List<Diagnostic>,
     val composition: TextRange?,
+    /** Highlight the line of every caret without a selection. */
+    val highlightCaretLines: Boolean = false,
+    /** The bracket pair to box, as document offsets of the two characters. */
+    val bracketMatch: Pair<Int, Int>? = null,
 )
 
 /**
- * The viewport's content for [frame]: selections and find matches under the text, the text, then
- * squiggles and the input-method composition underline. Carets are drawn separately
+ * The viewport's content for [frame]: the caret lines' highlight, selections, find matches and a
+ * matched bracket pair's boxes under the text, the text, then squiggles and the input-method
+ * composition underline. Carets are drawn separately
  * ([drawCarets]), so their blinking does not redraw the rest.
  */
 internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDecorations, colors: EditorColors) {
     val left = frame.textLeft
     val charWidth = frame.metrics.charWidth
+    if (decorations.highlightCaretLines) {
+        for (line in frame.lines) {
+            val caretHere = decorations.selections.any { it.collapsed && it.end in line.start..line.end }
+            if (!caretHere) continue
+            val rows = line.layout.lineCount * frame.metrics.lineHeight
+            drawRect(colors.lineHighlight, Offset(0f, line.top - frame.scrollY), Size(size.width, rows))
+        }
+    }
+    decorations.bracketMatch?.let { (open, close) ->
+        drawBracketBox(frame, open, colors, left)
+        drawBracketBox(frame, close, colors, left)
+    }
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         for (selection in decorations.selections) {
@@ -155,6 +176,21 @@ private fun DrawScope.drawComposition(line: VisibleLine, composition: TextRange,
         val y = top + layout.getLineBaseline(row) + 2.dp.toPx()
         drawLine(color, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = stroke)
     }
+}
+
+/** A faint box with an outline around the character at [offset], when it is on screen. */
+private fun DrawScope.drawBracketBox(frame: ViewFrame, offset: Int, colors: EditorColors, left: Float) {
+    val line = frame.lineContaining(offset) ?: return
+    val column = offset - line.start
+    if (column >= line.shownLength) return
+    val box = line.layout.getBoundingBox(column).translate(left, line.top - frame.scrollY)
+    drawRect(colors.bracketMatch, box.topLeft, box.size)
+    drawRect(
+        colors.bracketMatch.copy(alpha = (colors.bracketMatch.alpha * 3f).coerceAtMost(1f)),
+        box.topLeft,
+        box.size,
+        style = Stroke(1.dp.toPx()),
+    )
 }
 
 /** The line of [frame] that holds [offset], or null when it is not on screen. */

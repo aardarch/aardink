@@ -117,27 +117,31 @@ internal object LineCommands {
     }
 
     /**
-     * Tab with a selection: indents every covered line. With carets only it inserts [INDENT] at
-     * each caret, as Tab does anywhere.
+     * Tab with a selection: indents every covered line by [unit]. With carets only it inserts
+     * [unit] at each caret, as Tab does anywhere.
      */
-    fun indent(document: CodeDocument, selections: SelectionSet): CommandEdit {
+    fun indent(document: CodeDocument, selections: SelectionSet, unit: String = INDENT): CommandEdit {
         if (selections.ranges.all { it.collapsed }) {
-            val changes = selections.ranges.map { TextChange(it.start, it.start, INDENT) }
+            val changes = selections.ranges.map { TextChange(it.start, it.start, unit) }
             return CommandEdit(changes, selections.map { mapOffset(it, changes) })
         }
         val changes = lineBlocks(document, selections).flatMap { block ->
-            block.map { line -> document.lineStart(line).let { TextChange(it, it, INDENT) } }
+            block.map { line -> document.lineStart(line).let { TextChange(it, it, unit) } }
         }
         // A selection starting at column 0 keeps covering the whole line, indent included.
         return CommandEdit(changes, selections.map { mapOffset(it, changes, stickToEnd = false) })
     }
 
-    /** Shift+Tab: removes up to one indentation step (or one tab) from every covered line. */
-    fun outdent(document: CodeDocument, selections: SelectionSet): CommandEdit? {
+    /**
+     * Shift+Tab: removes up to one indentation step from every covered line: a tab, or up to as
+     * many spaces as [unit] is wide (a tab [unit] counts as [INDENT]'s width).
+     */
+    fun outdent(document: CodeDocument, selections: SelectionSet, unit: String = INDENT): CommandEdit? {
+        val spaces = if (unit == "\t") INDENT.length else unit.length
         val changes = lineBlocks(document, selections).flatMap { block ->
             block.mapNotNull { line ->
                 val text = document.lineText(line)
-                val width = if (text.startsWith('\t')) 1 else text.takeWhile { it == ' ' }.length.coerceAtMost(INDENT.length)
+                val width = if (text.startsWith('\t')) 1 else text.takeWhile { it == ' ' }.length.coerceAtMost(spaces)
                 if (width == 0) null else document.lineStart(line).let { TextChange(it, it + width, "") }
             }
         }

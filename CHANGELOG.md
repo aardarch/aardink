@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EditorOptions`, passed as `CodeEditorLayout(options = …)`: read-only, soft wrap and the gutter
   switches, plus `highlightCurrentLine`, `matchBrackets`, `bracketPairColorization`,
   `stickyScroll`, `showMinimap`, `tabSize` and `insertSpaces`.
+- Editor chrome, each switchable in `EditorOptions`: the caret's line is highlighted in
+  `EditorTheme.lineHighlight`; the bracket pair the caret touches is boxed; and brackets are
+  coloured by nesting depth from the new `EditorTheme.bracketPairColors` (VS Code's colours by
+  default; `EditorThemeParser` reads `editorBracketHighlight.foreground1` to `6`). Brackets in
+  strings and comments are left alone. Tab and Shift+Tab indent by `tabSize` spaces, or by a tab
+  without `insertSpaces`.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
 - The keyboard toolbar types through the typing rules, as a key does: its `(` gets a `)`.
@@ -103,8 +109,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new `CodeEditorState` starts with the caret at the start of the text, as after `loadText`,
   instead of at its end.
 - Replace All is one undo step instead of one per match.
-- Selections are drawn in `EditorTheme.selectionColor`, which was not used before, and a find
-  match inside a selection stays visible.
+- Selections are drawn in `EditorTheme.selectionColor` and find matches in
+  `EditorTheme.findMatchColor` (the current one stronger), neither of which was used before; a
+  find match inside a selection stays visible.
 - The first highlighting pass over a new document or language starts at once instead of after the
   typing debounce, and on the web a large document's pass runs in slices of about 8 ms, so frames
   keep coming while it works.
@@ -133,6 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anything above them was folded; each is now drawn on its own line.
 - Closed folds now follow edits above them instead of hiding the wrong lines until the next
   folding pass.
+- `EditorThemeParser` read an 8-digit colour as `#AARRGGBB`; VS Code themes write `#RRGGBBAA`,
+  so translucent colours such as a line highlight came out wrong. It also reads `#RGB` and
+  `#RGBA` now.
 - A touch tap in the web editor did nothing once a mouse had been over the page (a hovering mouse
   pointer never lifts, and the tap waited for it).
 

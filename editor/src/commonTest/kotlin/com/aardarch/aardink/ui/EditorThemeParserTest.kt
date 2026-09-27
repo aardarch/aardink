@@ -53,10 +53,29 @@ class EditorThemeParserTest {
     }
 
     @Test
-    fun `8-digit hex colors include alpha`() {
-        val json = """{ "colors": { "editor.background": "#80101010" } }"""
+    fun `8-digit hex colors carry alpha last, as VS Code writes them`() {
+        val json = """{ "colors": { "editor.background": "#10203080" } }"""
         val theme = EditorThemeParser.fromJson(json)
-        assertEquals(Color(0x10, 0x10, 0x10, 0x80), theme?.background)
+        assertEquals(Color(0x10, 0x20, 0x30, 0x80), theme?.background)
+    }
+
+    @Test
+    fun `short hex colors expand each digit`() {
+        assertEquals(Color(0xFF, 0x00, 0xAA), EditorThemeParser.parseHex("#f0a"))
+        assertEquals(Color(0xFF, 0x00, 0xAA, 0x88), EditorThemeParser.parseHex("#f0a8"))
+    }
+
+    @Test
+    fun `bracket pair colours come from editorBracketHighlight`() {
+        val json = """{ "colors": { "editorBracketHighlight.foreground1": "#111111", "editorBracketHighlight.foreground2": "#222222" } }"""
+        val theme = EditorThemeParser.fromJson(json)
+        assertEquals(listOf(Color(0xFF111111), Color(0xFF222222)), theme?.bracketPairColors)
+    }
+
+    @Test
+    fun `a light theme without bracket colours gets the light defaults`() {
+        val json = """{ "colors": { "editor.background": "#ffffff" } }"""
+        assertEquals(EditorThemes.VsCodeLight.bracketPairColors, EditorThemeParser.fromJson(json)?.bracketPairColors)
     }
 
     @Test

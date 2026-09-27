@@ -17,6 +17,7 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.LightBracketPairColors
 import com.aardarch.aardink.core.TokenType
 
 /**
@@ -83,6 +84,7 @@ object EditorThemes {
         errorColor = Color(0xFFCD3131),
         warningColor = Color(0xFF8B6914),
         infoColor = Color(0xFF316BCD),
+        bracketPairColors = LightBracketPairColors,
     )
 
     val MaterialDark: EditorTheme = EditorTheme(
@@ -137,6 +139,7 @@ object EditorThemes {
         errorColor = Color(0xFFB3261E),
         warningColor = Color(0xFF7E5700),
         infoColor = Color(0xFF006874),
+        bracketPairColors = LightBracketPairColors,
     )
 
     /** Deep navy + teal/cyan — the marketing screenshot theme. */

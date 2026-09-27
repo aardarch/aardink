@@ -38,6 +38,9 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
     }
 
     private val lines = ArrayList<LineTokens>()
+
+    /** Told after a pass replaces lines' tokens: the lines, or null for all of them. */
+    var onRetokenized: ((IntRange?) -> Unit)? = null
     private var flat: List<Token>? = null
 
     init {
@@ -67,6 +70,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
         val built = bucket(tokens, 0, document.lineCount - 1)
         lines.clear()
         lines.addAll(built)
+        onRetokenized?.invoke(null)
         flat = null
         document.dirtyLines = null
     }
@@ -87,6 +91,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
         to = to.coerceIn(from, last)
         val built = bucket(tokens, from, to)
         for (line in from..to) lines[line] = built[line - from]
+        onRetokenized?.invoke(from..to)
         flat = null
         document.dirtyLines = null
     }

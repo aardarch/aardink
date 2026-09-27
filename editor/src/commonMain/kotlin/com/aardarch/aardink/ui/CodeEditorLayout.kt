@@ -398,6 +398,7 @@ fun CodeEditorLayout(
         }
     }
     SideEffect {
+        state.indentUnit = if (options.insertSpaces) " ".repeat(options.tabSize) else "\t"
         controller.readOnly = options.readOnly
         controller.scope = coroutineScope
         controller.languageService = { currentLanguageService.value }
@@ -588,7 +589,7 @@ fun CodeEditorLayout(
             } else {
                 null
             },
-            softWrap = options.softWrap,
+            options = options,
             textColor = textColor,
             modifier = Modifier
                 .weight(1f)

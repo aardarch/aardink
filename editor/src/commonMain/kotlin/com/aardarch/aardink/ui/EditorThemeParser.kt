@@ -16,7 +16,10 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import com.aardarch.aardink.core.DefaultBracketPairColors
 import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.LightBracketPairColors
 import com.aardarch.aardink.core.TokenType
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -72,6 +75,9 @@ object EditorThemeParser {
         val selection = colors.hexColor("editor.selectionBackground") ?: fallback.selectionColor
         val findMatch = colors.hexColor("editor.findMatchHighlightBackground") ?: fallback.findMatchColor
         val cursor = colors.hexColor("editorCursor.foreground") ?: fallback.cursorColor
+        // editorBracketHighlight.foreground1..6, as many as the theme sets, in order.
+        val bracketColors = (1..6).mapNotNull { colors.hexColor("editorBracketHighlight.foreground$it") }
+            .ifEmpty { if (background.luminance() > 0.5f) LightBracketPairColors else DefaultBracketPairColors }
 
         // ── Token colors ──────────────────────────────────────────────────────
         val tokenColors = buildTokenColors(root, foreground, fallback.tokenColors)
@@ -88,6 +94,7 @@ object EditorThemeParser {
             errorColor = fallback.errorColor,
             warningColor = fallback.warningColor,
             infoColor = fallback.infoColor,
+            bracketPairColors = bracketColors,
         )
     }
 
@@ -152,26 +159,19 @@ object EditorThemeParser {
         return parseHex(hex)
     }
 
-    private fun parseHex(hex: String): Color? {
+    /** VS Code's colour forms: `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA` (alpha last). */
+    internal fun parseHex(hex: String): Color? {
         val clean = hex.removePrefix("#")
-        return when (clean.length) {
-            6 -> {
-                val r = clean.substring(0, 2).toIntOrNull(16) ?: return null
-                val g = clean.substring(2, 4).toIntOrNull(16) ?: return null
-                val b = clean.substring(4, 6).toIntOrNull(16) ?: return null
-                Color(r, g, b)
-            }
-
-            8 -> {
-                val a = clean.substring(0, 2).toIntOrNull(16) ?: return null
-                val r = clean.substring(2, 4).toIntOrNull(16) ?: return null
-                val g = clean.substring(4, 6).toIntOrNull(16) ?: return null
-                val b = clean.substring(6, 8).toIntOrNull(16) ?: return null
-                Color(r, g, b, a)
-            }
-
-            else -> null
+        val full = when (clean.length) {
+            3, 4 -> clean.map { "$it$it" }.joinToString("")
+            6, 8 -> clean
+            else -> return null
         }
+        val r = full.substring(0, 2).toIntOrNull(16) ?: return null
+        val g = full.substring(2, 4).toIntOrNull(16) ?: return null
+        val b = full.substring(4, 6).toIntOrNull(16) ?: return null
+        val a = if (full.length == 8) full.substring(6, 8).toIntOrNull(16) ?: return null else 255
+        return Color(r, g, b, a)
     }
 
     private fun Color.darken(fraction: Float): Color = Color(
