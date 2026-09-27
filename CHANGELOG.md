@@ -69,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Lookbehind is refused when the grammar is read, with where it is. Tokens get a
   `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`); comments and strings get the
   editor's own types.
+- More of Monaco's editor API on the web: `getSelections` / `setSelections`, `canUndo`, `canRedo`,
+  `pushUndoStop`, `getAlternativeVersionId`, `format()`, `focus()`, `setBaseline(text)` for the
+  diff lane, a second `onDidChangeContent` argument (`{ versionId, isUndoing, isRedoing, isFlush }`),
+  the options `tabSize`, `insertSpaces`, `renderLineHighlight` and `bracketPairColorization`, and
+  `tokenize(text, languageId)` for debugging a grammar.
 - On the web, languages and themes of your own without building a wasm executable:
   `registerLanguage` takes a Monarch grammar (with `extends: "xml"` to keep a built-in language's
   service) and JavaScript functions for completions, hover and diagnostics, answered at once or

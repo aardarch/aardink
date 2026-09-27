@@ -60,18 +60,26 @@ There are two ways in:
 | `getValue` / `setValue` | Read or replace the whole text. `setValue` clears undo history, like Monaco's, and keeps the text exactly as given (CR LF included). |
 | `updateOptions(options)` / `patchOptions(json)` / `currentOptions` | Replace all options, or apply only the JSON keys given (Monaco's `updateOptions(partial)`). |
 | `onChange(callback)` | Full text after each change, typed or programmatic; at most once per frame. One listener; `null` removes it. |
+| `onContentChange(callback)` | Like `onChange`, with the text's version and what the change was: `"edit"`, `"undo"`, `"redo"` or `"flush"`. |
 | `onCursorChange(callback)` | 1-based line and column. |
 | `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. They replace the language's own diagnostics, which show until then; `null` (`"null"` in JSON) goes back to those. Either way they move with the text as it is edited. |
 | `onDiagnosticsChange(callback)` | The language's own diagnostics, as a JSON array in the same shape, each time they are collected: 500 ms after the editor appears, and after each pause in typing. Not called while the host's list is shown. One listener; `null` removes it. |
 | `navigateTo(line, column)` | Scroll to and place the caret at a 1-based position, clamped to the document. |
 | `showFind`, `undo`, `redo` | As named. `undo`/`redo` return whether anything changed. |
+| `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | Monaco's undo surface. Keep the alternative version id when saving: the text is unsaved while it differs, and undo brings it back. |
+| `getSelections` / `setSelections` (and `…Json`) | Every selection in Monaco's `Selection` shape, the primary one first. |
+| `setBaseline(text)` | The text the gutter's diff lane compares with, typically what was last saved; `""` turns it off. |
+| `format(then)` | The language's formatter, as one undo step changing only what differs; `then` gets whether anything changed. |
+| `focus` | Moves the keyboard focus to the editor. |
+| `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. |
 | `dispose` / `isDisposed` | Remove the editor's composition and stop its work. Idempotent. The container element is left for you to remove or reuse. **See W-1 below: memory is not fully released.** |
 | `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
-`showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`. An unknown `language` falls back to plain
+`showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`,
+`bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
 `AardinkWeb.builtInThemes`. Changing `language` keeps the text but starts a new undo history.
 
@@ -206,9 +214,15 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
 | `minimap: { enabled }` | `minimap` | The same object, or a boolean. Blocks rather than characters, as with Monaco's `renderCharacters: false`. |
 | `stickyScroll: { enabled }` | `stickyScroll` | The same object, or a boolean. |
-| `bracketPairColorization` | — | Always on for now. |
+| `bracketPairColorization: { enabled }` | `bracketPairColorization` | The same object, or a boolean. |
+| `renderLineHighlight` | `renderLineHighlight` / `highlightCurrentLine` | Anything but `'none'` highlights each caret's line. |
+| `tabSize`, `insertSpaces` | `tabSize`, `insertSpaces` | |
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
-| `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame. |
+| `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush }`. |
+| `getSelections` / `setSelections` | The same | Monaco's `Selection` fields. |
+| `model.canUndo`, `canRedo`, `pushStackElement`, `getAlternativeVersionId` | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | |
+| `getAction('editor.action.formatDocument').run()` | `format()` | Resolves with whether anything changed. |
+| `monaco.editor.tokenize` | `tokenize` | Same arguments and shape. |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
 | `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. |

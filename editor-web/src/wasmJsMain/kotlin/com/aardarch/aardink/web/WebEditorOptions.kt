@@ -29,6 +29,10 @@ import kotlinx.serialization.Serializable
  * @property minimap A picture of the whole text at the side, with a slider over what is shown.
  * @property stickyScroll Keeps the first lines of the blocks the top of the view is inside pinned
  *   at the top.
+ * @property bracketPairColorization Colours brackets by how deeply they are nested.
+ * @property highlightCurrentLine Highlights the line of each caret.
+ * @property tabSize The width of an indent, in spaces.
+ * @property insertSpaces Tab indents with [tabSize] spaces rather than a tab character.
  */
 @Serializable
 data class WebEditorOptions(
@@ -42,6 +46,23 @@ data class WebEditorOptions(
     val showFoldMarkers: Boolean = true,
     val minimap: Boolean = false,
     val stickyScroll: Boolean = false,
+    val bracketPairColorization: Boolean = true,
+    val highlightCurrentLine: Boolean = true,
+    val tabSize: Int = 4,
+    val insertSpaces: Boolean = true,
+)
+
+/**
+ * A selection as a web host describes it: Monaco's `Selection`, 1-based. It runs from where it
+ * started ([selectionStartLineNumber], [selectionStartColumn]) to where the caret is
+ * ([positionLineNumber], [positionColumn]); a caret has both the same.
+ */
+@Serializable
+data class WebSelection(
+    val selectionStartLineNumber: Int,
+    val selectionStartColumn: Int,
+    val positionLineNumber: Int,
+    val positionColumn: Int,
 )
 
 /**

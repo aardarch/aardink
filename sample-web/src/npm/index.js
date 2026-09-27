@@ -40,6 +40,25 @@ export function preloadAardink() {
 
 let generatedIds = 0;
 
+/** A selection with Monaco's range fields too: start is whichever end comes first. */
+function withRange(s) {
+  const forward = s.selectionStartLineNumber < s.positionLineNumber ||
+    (s.selectionStartLineNumber === s.positionLineNumber && s.selectionStartColumn <= s.positionColumn);
+  return {
+    ...s,
+    startLineNumber: forward ? s.selectionStartLineNumber : s.positionLineNumber,
+    startColumn: forward ? s.selectionStartColumn : s.positionColumn,
+    endLineNumber: forward ? s.positionLineNumber : s.selectionStartLineNumber,
+    endColumn: forward ? s.positionColumn : s.selectionStartColumn,
+  };
+}
+
+/** For debugging a grammar: the tokens of `text` in `languageId`, per line, as Monaco's tokenize gives them. */
+export async function tokenize(text, languageId) {
+  const k = await load();
+  return JSON.parse(k.aardinkTokenize(languageId, text));
+}
+
 /**
  * A Monarch grammar as JSON: RegExp literals (/.../) become their source, as the Kotlin side reads
  * regexes from strings; everything else is kept.
@@ -114,11 +133,12 @@ export const defineTheme = registerTheme;
  */
 function toKotlinOptions(options) {
   const out = {};
-  for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers']) {
+  for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers', 'tabSize', 'insertSpaces', 'highlightCurrentLine']) {
     if (options[key] !== undefined) out[key] = options[key];
   }
   if (options.wordWrap !== undefined) out.wordWrap = options.wordWrap === 'on';
-  for (const key of ['minimap', 'stickyScroll']) {
+  if (options.renderLineHighlight !== undefined) out.highlightCurrentLine = options.renderLineHighlight !== 'none';
+  for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];
     if (value !== undefined) out[key] = typeof value === 'object' && value !== null ? value.enabled !== false : !!value;
   }
@@ -134,7 +154,10 @@ export async function createEditor(container, onChange, options = {}) {
   const contentListeners = new Set();
   const cursorListeners = new Set();
   const diagnosticsListeners = new Set();
-  k.aardinkOnChange(id, (text) => contentListeners.forEach((listener) => listener(text)));
+  k.aardinkOnContentChange(id, (text, versionId, kind) => {
+    const event = { versionId, isUndoing: kind === 'undo', isRedoing: kind === 'redo', isFlush: kind === 'flush' };
+    contentListeners.forEach((listener) => listener(text, event));
+  });
   k.aardinkOnCursorChange(id, (line, column) => cursorListeners.forEach((listener) => listener(line, column)));
   k.aardinkOnDiagnosticsChange(id, (json) => {
     if (diagnosticsListeners.size === 0) return;
@@ -163,6 +186,24 @@ export async function createEditor(container, onChange, options = {}) {
       return () => diagnosticsListeners.delete(listener);
     },
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),
+    setBaseline: (text) => k.aardinkSetBaseline(id, text ?? ''),
+    format: () => new Promise((resolve) => k.aardinkFormat(id, resolve)),
+    focus: () => k.aardinkFocus(id),
+    getSelections: () => JSON.parse(k.aardinkGetSelections(id)).map(withRange),
+    setSelections: (selections) =>
+      k.aardinkSetSelections(
+        id,
+        JSON.stringify(selections.map((s) => ({
+          selectionStartLineNumber: s.selectionStartLineNumber,
+          selectionStartColumn: s.selectionStartColumn,
+          positionLineNumber: s.positionLineNumber,
+          positionColumn: s.positionColumn,
+        }))),
+      ),
+    canUndo: () => k.aardinkCanUndo(id),
+    canRedo: () => k.aardinkCanRedo(id),
+    pushUndoStop: () => k.aardinkPushUndoStop(id),
+    getAlternativeVersionId: () => k.aardinkGetAlternativeVersionId(id),
     showFind: () => k.aardinkShowFind(id),
     undo: () => k.aardinkUndo(id),
     redo: () => k.aardinkRedo(id),

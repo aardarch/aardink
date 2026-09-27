@@ -28,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
@@ -41,8 +43,11 @@ import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.NamedTokenType
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
@@ -58,11 +63,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonArray
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
 
@@ -99,8 +110,15 @@ class AardinkEditorHandle internal constructor(
     internal var reportedTextVersion: Int = initialState.textVersion
 
     internal var onChange: ((String) -> Unit)? = null
+    internal var onContentChange: ((String, Int, String) -> Unit)? = null
     internal var onCursorChange: ((Int, Int) -> Unit)? = null
     internal var onDiagnosticsChange: ((String) -> Unit)? = null
+
+    /** What the diff lane compares the text with; "" for no diff lane. */
+    internal val baseline: MutableState<String> = mutableStateOf("")
+
+    /** Counts [AardinkWeb.focus] calls, for the composition to act on. */
+    internal val focusRequests = mutableIntStateOf(0)
 }
 
 /**
@@ -260,6 +278,16 @@ object AardinkWeb {
         handle.onChange = callback
     }
 
+    /**
+     * Registers the single detailed content listener, replacing any previous one; `null` removes it.
+     * Called with the full text after every change, as [onChange] is, with the text's version
+     * (Monaco's `versionId`: it goes up with every change) and what the change was: `"edit"`,
+     * `"undo"`, `"redo"` or `"flush"` (the whole text replaced, as by [setValue]).
+     */
+    fun onContentChange(handle: AardinkEditorHandle, callback: ((text: String, versionId: Int, kind: String) -> Unit)?) {
+        handle.onContentChange = callback
+    }
+
     /** Registers the single caret listener (1-based line and column), replacing any previous one. */
     fun onCursorChange(handle: AardinkEditorHandle, callback: ((line: Int, column: Int) -> Unit)?) {
         handle.onCursorChange = callback
@@ -348,6 +376,117 @@ object AardinkWeb {
         handle.findReplaceState.show()
     }
 
+    /** The text the diff lane compares with (typically what was last saved); "" turns the lane off. */
+    fun setBaseline(handle: AardinkEditorHandle, text: String) {
+        handle.baseline.value = text
+    }
+
+    /**
+     * Formats the document with its language's formatter, as one undo step that changes only what
+     * differs, so carets elsewhere stay where they are; then calls [then] with whether anything
+     * changed. Nothing changes in a read-only editor, for a language with no formatter, or when
+     * the text changed while the formatter worked.
+     */
+    fun format(handle: AardinkEditorHandle, then: (Boolean) -> Unit = {}) {
+        val state = handle.state.value
+        val service = handle.language.value.languageService
+        if (service == null || handle.options.value.readOnly) return then(false)
+        handle.scope.launch {
+            val version = state.textVersion
+            val text = state.document.text
+            val formatted = withContext(state.computeDispatcher) { service.format(CodeDocument(text)) }
+            val edit = changeBetween(text, formatted)
+            if (state.textVersion != version || edit == null) return@launch then(false)
+            state.applyTextEdits(listOf(edit))
+            then(true)
+        }
+    }
+
+    /** The one edit that turns [old] into [new]: what lies between the parts they share at either end. */
+    internal fun changeBetween(old: String, new: String): TextEdit? {
+        if (old == new) return null
+        val limit = minOf(old.length, new.length)
+        var prefix = 0
+        while (prefix < limit && old[prefix] == new[prefix]) prefix++
+        var suffix = 0
+        while (suffix < limit - prefix && old[old.length - 1 - suffix] == new[new.length - 1 - suffix]) suffix++
+        return TextEdit(prefix until old.length - suffix, new.substring(prefix, new.length - suffix))
+    }
+
+    /** Moves the keyboard focus to the editor. */
+    fun focus(handle: AardinkEditorHandle) {
+        handle.focusRequests.intValue++
+    }
+
+    /** Every selection, the primary one first, as Monaco's `getSelections`. */
+    fun getSelections(handle: AardinkEditorHandle): List<WebSelection> {
+        val state = handle.state.value
+        val document = state.document
+        return state.selections.map { range ->
+            val (anchorLine, anchorColumn) = document.offsetToLineCol(range.start)
+            val (line, column) = document.offsetToLineCol(range.end)
+            WebSelection(anchorLine + 1, anchorColumn + 1, line + 1, column + 1)
+        }
+    }
+
+    /** Replaces the selections, the first becoming the primary one, clamped to the document; none is ignored. */
+    fun setSelections(handle: AardinkEditorHandle, selections: List<WebSelection>) {
+        if (selections.isEmpty()) return
+        val state = handle.state.value
+        val document = state.document
+        fun offset(line: Int, column: Int) =
+            document.lineColToOffset((line - 1).coerceIn(0, document.lineCount - 1), (column - 1).coerceAtLeast(0))
+        state.setSelections(
+            selections.map {
+                TextRange(offset(it.selectionStartLineNumber, it.selectionStartColumn), offset(it.positionLineNumber, it.positionColumn))
+            },
+        )
+    }
+
+    /** [getSelections] as a JSON array. */
+    fun getSelectionsJson(handle: AardinkEditorHandle): String = json.encodeToString(selectionsJsonSerializer, getSelections(handle))
+
+    /** [setSelections] from a JSON array. */
+    fun setSelectionsJson(handle: AardinkEditorHandle, selectionsJson: String) {
+        setSelections(handle, json.decodeFromString(selectionsJsonSerializer, selectionsJson))
+    }
+
+    /** Whether there is an edit to undo. */
+    fun canUndo(handle: AardinkEditorHandle): Boolean = handle.state.value.canUndo
+
+    /** Whether there is an undone edit to redo. */
+    fun canRedo(handle: AardinkEditorHandle): Boolean = handle.state.value.canRedo
+
+    /** Ends the current undo step, so the next edit starts a new one, as Monaco's `pushUndoStop`. */
+    fun pushUndoStop(handle: AardinkEditorHandle) {
+        handle.state.value.pushUndoStop()
+    }
+
+    /**
+     * A number that comes back when undo returns the text to an earlier state, as Monaco's
+     * `getAlternativeVersionId`: keep it when saving, and the text is unsaved while it differs.
+     */
+    fun getAlternativeVersionId(handle: AardinkEditorHandle): Long = handle.state.value.alternativeVersionId
+
+    /**
+     * For debugging a grammar: the tokens [languageId]'s tokenizer gives [text], as JSON in the shape
+     * of Monaco's `tokenize`: an array per line of `{ offset, type }`, where `type` is the token's
+     * name (`""` for text no token covers).
+     */
+    fun tokenize(languageId: String, text: String): String {
+        val language = resolveLanguage(registry, languageId)
+        val tokens = language.tokenizer.tokenizeFull(text).filter { it.end > it.start }
+        val lines = JsonArrayBuilderLines(text)
+        for (token in tokens) lines.add(token.start, token.end, nameOf(token.type))
+        return lines.build()
+    }
+
+    private fun nameOf(type: TokenType): String = when (type) {
+        is NamedTokenType -> type.name
+        TokenType.Default -> ""
+        else -> type.toString().replaceFirstChar { it.lowercase() }
+    }
+
     /** Undoes the last edit; false when there was nothing to undo. */
     fun undo(handle: AardinkEditorHandle): Boolean = handle.state.value.undo() != null
 
@@ -363,6 +502,7 @@ object AardinkWeb {
         if (handle.disposed.value) return
         handle.disposed.value = true
         handle.onChange = null
+        handle.onContentChange = null
         handle.onCursorChange = null
         handle.onDiagnosticsChange = null
         handle.scope.cancel()
@@ -400,6 +540,7 @@ object AardinkWeb {
     fun isDisposed(handle: AardinkEditorHandle): Boolean = handle.disposed.value
 
     private val diagnosticsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebDiagnostic.serializer())
+    private val selectionsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebSelection.serializer())
 
     private fun resolveLanguage(registry: LanguageRegistry, id: String): LanguageDefinition =
         registry.byId(id) ?: registry.byId("plaintext") ?: registry.all.first()
@@ -417,7 +558,9 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         snapshotFlow { state.textVersion }.collect { version ->
             if (version != handle.reportedTextVersion) {
                 handle.reportedTextVersion = version
-                handle.onChange?.invoke(state.document.text)
+                val text = state.document.text
+                handle.onChange?.invoke(text)
+                handle.onContentChange?.invoke(text, version, state.lastChangeKind.name.lowercase())
             }
         }
     }
@@ -435,18 +578,25 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         themeWithNames(baseTheme, AardinkWeb.namedColors[options.theme].orEmpty(), AardinkWeb.grammarNames[language.id].orEmpty())
     }
 
+    val focusRequester = remember { FocusRequester() }
+    val focusRequests = handle.focusRequests.intValue
+    LaunchedEffect(focusRequests) {
+        if (focusRequests > 0) runCatching { focusRequester.requestFocus() }
+    }
+
     CompositionLocalProvider(
         LocalEditorTheme provides theme,
         LocalEditorTypography provides typography,
     ) {
         CodeEditorLayout(
             state = state,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
             languageService = language.languageService,
             findReplaceState = handle.findReplaceState,
             foldState = handle.foldState,
             foldingProvider = language.foldingProvider,
             diagnostics = handle.diagnostics.value,
+            savedText = handle.baseline.value,
             onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
             onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
             keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
@@ -458,6 +608,10 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 showFoldMarkers = options.showFoldMarkers,
                 showMinimap = options.minimap,
                 stickyScroll = options.stickyScroll,
+                bracketPairColorization = options.bracketPairColorization,
+                highlightCurrentLine = options.highlightCurrentLine,
+                tabSize = options.tabSize.coerceIn(1, 16),
+                insertSpaces = options.insertSpaces,
             ),
             onRequestGoToLine = { showGoToLine = true },
         )
@@ -503,4 +657,50 @@ private fun rememberBundledMonoFont(): FontFamily {
         }
     }
     return family
+}
+
+/** Builds [AardinkWeb.tokenize]'s JSON: tokens by line, with the gaps between them as `""`. */
+private class JsonArrayBuilderLines(private val text: String) {
+    private val lineStarts: IntArray = run {
+        val starts = ArrayList<Int>().apply { add(0) }
+        for (i in text.indices) if (text[i] == '\n') starts += i + 1
+        starts.toIntArray()
+    }
+    private val lines = Array(lineStarts.size) { mutableListOf<Pair<Int, String>>() }
+    private val covered = IntArray(lineStarts.size)
+
+    private fun lineEnd(line: Int) = if (line + 1 < lineStarts.size) lineStarts[line + 1] - 1 else text.length
+
+    fun add(start: Int, end: Int, type: String) {
+        var line = lineStarts.indexOfLast { it <= start }
+        var from = start
+        while (line in lines.indices && from < end) {
+            val column = from - lineStarts[line]
+            if (column > covered[line]) lines[line] += covered[line] to ""
+            lines[line] += column to type
+            covered[line] = minOf(end, lineEnd(line)) - lineStarts[line]
+            line++
+            from = if (line < lineStarts.size) lineStarts[line] else end
+        }
+    }
+
+    fun build(): String = buildJsonArray {
+        for (line in lines.indices) {
+            addJsonArray {
+                val tokens = lines[line]
+                for ((offset, type) in tokens) {
+                    addJsonObject {
+                        put("offset", offset)
+                        put("type", type)
+                    }
+                }
+                if (tokens.isEmpty() || covered[line] < lineEnd(line) - lineStarts[line]) {
+                    addJsonObject {
+                        put("offset", covered[line])
+                        put("type", "")
+                    }
+                }
+            }
+        }
+    }.toString()
 }

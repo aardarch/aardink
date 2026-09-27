@@ -106,6 +106,34 @@ fun aardinkRegisterTheme(name: String, themeJson: String): String = try {
     e.message ?: "not a theme"
 }
 
+/** Full text, the text's version and what the change was ("edit", "undo", "redo", "flush"), after each change. */
+@JsExport
+fun aardinkOnContentChange(id: Int, callback: (String, Int, String) -> Unit) = AardinkWeb.onContentChange(handle(id), callback)
+
+/** The text the diff lane compares with; "" turns it off. */
+@JsExport fun aardinkSetBaseline(id: Int, text: String) = AardinkWeb.setBaseline(handle(id), text)
+
+/** Formats the document; [done] gets whether anything changed. */
+@JsExport fun aardinkFormat(id: Int, done: (Boolean) -> Unit) = AardinkWeb.format(handle(id), done)
+
+@JsExport fun aardinkFocus(id: Int) = AardinkWeb.focus(handle(id))
+
+/** A JSON array of Monaco-shaped selections, the primary one first. */
+@JsExport fun aardinkGetSelections(id: Int): String = AardinkWeb.getSelectionsJson(handle(id))
+
+@JsExport fun aardinkSetSelections(id: Int, selectionsJson: String) = AardinkWeb.setSelectionsJson(handle(id), selectionsJson)
+
+@JsExport fun aardinkCanUndo(id: Int): Boolean = AardinkWeb.canUndo(handle(id))
+
+@JsExport fun aardinkCanRedo(id: Int): Boolean = AardinkWeb.canRedo(handle(id))
+
+@JsExport fun aardinkPushUndoStop(id: Int) = AardinkWeb.pushUndoStop(handle(id))
+
+@JsExport fun aardinkGetAlternativeVersionId(id: Int): Double = AardinkWeb.getAlternativeVersionId(handle(id)).toDouble()
+
+/** For debugging a grammar: Monaco's tokenize shape, as JSON. */
+@JsExport fun aardinkTokenize(languageId: String, text: String): String = AardinkWeb.tokenize(languageId, text)
+
 @JsExport fun aardinkRevealPosition(id: Int, line: Int, column: Int) = AardinkWeb.navigateTo(handle(id), line, column)
 
 @JsExport fun aardinkShowFind(id: Int) = AardinkWeb.showFind(handle(id))

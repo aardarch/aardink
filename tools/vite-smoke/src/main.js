@@ -16,7 +16,7 @@
 
 // Uses the package exactly as aardflex-web-app's EditorPane will, and reports the outcome on
 // window.__aardinkSmoke for smoke.mjs to assert on.
-import { createEditor, defineTheme, registerLanguage, version } from '@aardarch/aardink-web';
+import { createEditor, defineTheme, registerLanguage, tokenize, version } from '@aardarch/aardink-web';
 
 const report = (window.__aardinkSmoke = { done: false, checks: {}, error: null, version });
 // checklist.mjs drives further editors through the same public API.
@@ -44,9 +44,21 @@ try {
 
   report.checks.initialValue = editor.getValue().startsWith('fun main()');
 
+  const events = [];
+  editor.onDidChangeContent((text, change) => events.push(change));
   editor.setValue('val answer = 42\n');
   await waitFor(() => changes.length > 0);
   report.checks.onChangeFired = changes.at(-1) === 'val answer = 42\n';
+  report.checks.changeEventSaysFlush = events.at(-1)?.isFlush === true && typeof events.at(-1)?.versionId === 'number';
+
+  editor.setSelections([{ selectionStartLineNumber: 1, selectionStartColumn: 5, positionLineNumber: 1, positionColumn: 1 }]);
+  const [selection] = editor.getSelections();
+  report.checks.selectionsRoundTrip = selection.positionColumn === 1 && selection.startColumn === 1 && selection.endColumn === 5;
+  report.checks.undoState = editor.canUndo() === false && typeof editor.getAlternativeVersionId() === 'number';
+  report.checks.tokenizeExport = (await tokenize('val x = 1\nx', 'kotlin')).length === 2;
+  editor.focus();
+  await waitFor(() => document.activeElement && document.activeElement !== document.body, 3000).catch(() => {});
+  report.checks.focus = !!document.activeElement && document.activeElement !== document.body;
   report.checks.getValueAfterSet = editor.getValue() === 'val answer = 42\n';
 
   const unsubscribe = editor.onDidChangeContent(() => {});
