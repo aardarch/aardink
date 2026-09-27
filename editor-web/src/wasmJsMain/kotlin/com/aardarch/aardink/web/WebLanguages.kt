@@ -85,7 +85,9 @@ internal class WebLanguageService(private val base: LanguageService?, private va
     }
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
-        val own = asked { providers.diagnostics?.invoke(document.text) }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
+        val own = asked {
+            providers.diagnostics?.invoke(document.text)
+        }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
         return own + base?.diagnostics(document).orEmpty()
     }
 
@@ -95,7 +97,8 @@ internal class WebLanguageService(private val base: LanguageService?, private va
 
     override suspend fun format(document: CodeDocument): String = base?.format(document) ?: document.text
 
-    override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> = base?.codeActions(document, range).orEmpty()
+    override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> =
+        base?.codeActions(document, range).orEmpty()
 
     override suspend fun definition(document: CodeDocument, offset: Int): Location? = base?.definition(document, offset)
 
@@ -105,7 +108,8 @@ internal class WebLanguageService(private val base: LanguageService?, private va
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = base?.prepareRename(document, offset)
 
-    override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> = base?.rename(document, offset, newName).orEmpty()
+    override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> =
+        base?.rename(document, offset, newName).orEmpty()
 
     override suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> = base?.formatRange(document, range).orEmpty()
 
@@ -155,7 +159,11 @@ private fun parsed(json: String): JsonElement? = try {
 private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
 /** The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. */
-internal fun languageFrom(definitionJson: String, providers: WebLanguageProviders, registry: LanguageRegistry): Pair<LanguageDefinition, Set<String>> {
+internal fun languageFrom(
+    definitionJson: String,
+    providers: WebLanguageProviders,
+    registry: LanguageRegistry,
+): Pair<LanguageDefinition, Set<String>> {
     val root = parsed(definitionJson) as? JsonObject ?: throw IllegalArgumentException("a language is a JSON object")
     val id = root.string("id")?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("id: a language needs an id")
     val base = root.string("extends")?.let { registry.byId(it) ?: throw IllegalArgumentException("extends: no language with id '$it'") }
@@ -192,10 +200,20 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Pai
     val colors = root["colors"] as? JsonObject
     fun <T> pick(key: String, own: T, fromBase: T): T = if (colors?.get(key) != null) own else fromBase
     val tokenColors = base.tokenColors.toMutableMap()
-    for ((type, color) in parsed.tokenColors) if (dark.tokenColors[type] != color || type == TokenType.Default && colors?.get("editor.foreground") != null) tokenColors[type] = color
+    val ownForeground = colors?.get("editor.foreground") != null
+    for ((type, color) in parsed.tokenColors) {
+        // A colour the theme set: one that is not the parser's fill-in (or the foreground it set).
+        if (dark.tokenColors[type] != color || (type == TokenType.Default && ownForeground)) tokenColors[type] = color
+    }
     val theme = parsed.copy(
         background = pick("editor.background", parsed.background, base.background),
-        gutterBackground = if (colors?.get("editorGutter.background") != null || colors?.get("editor.background") != null) parsed.gutterBackground else base.gutterBackground,
+        gutterBackground = if (colors?.get("editorGutter.background") != null ||
+            colors?.get("editor.background") != null
+        ) {
+            parsed.gutterBackground
+        } else {
+            base.gutterBackground
+        },
         gutterForeground = pick("editorLineNumber.foreground", parsed.gutterForeground, base.gutterForeground),
         lineHighlight = pick("editor.lineHighlightBackground", parsed.lineHighlight, base.lineHighlight),
         selectionColor = pick("editor.selectionBackground", parsed.selectionColor, base.selectionColor),
