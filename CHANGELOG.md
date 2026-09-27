@@ -84,8 +84,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text, selection and undo history. On the web, `updateOptions({ language })` now does this too.
 - Multiple selections: `CodeEditorState.selections` and `setSelections` (the first is the primary
   one, as in Monaco), and a settable `selection`. Ctrl/Cmd+D adds the next occurrence, Ctrl+Shift+L
-  selects them all, Alt+click and Ctrl+Alt+Up/Down add carets, and typing, deleting and pasting
-  work at every one.
+  selects them all, Alt+click and Ctrl+Alt+Up/Down add carets (Alt+click on a caret removes it,
+  Alt+drag adds a selection), and typing, deleting, pasting, commenting and moving lines work at
+  every one, each as one undo step that brings every selection back.
+- Column (box) selection, as in VS Code: Shift+Alt+click or Shift+Alt+drag from the caret, a
+  middle-button drag from where it starts, or Ctrl+Shift+Alt+arrows and PageUp/PageDown
+  (Cmd+Shift+Option on macOS). Rows are the ones on screen, so wrapped rows count and folded lines
+  do not; a row whose text ends before the box is left out.
+- An input method composing with several carets composes at the primary one and, when the
+  composition ends, puts the result at every other caret in the same undo step; an input method's
+  own backspace and corrections of the word before the caret happen at every caret too.
 - A Monaco-style undo surface: `canUndo`, `canRedo`, `pushUndoStop()`, `alternativeVersionId`
   (compare it with the value stored at save time to know whether the document is dirty) and
   `lastChangeKind` (`EditChangeKind.Edit`, `Undo`, `Redo`, `Flush`).

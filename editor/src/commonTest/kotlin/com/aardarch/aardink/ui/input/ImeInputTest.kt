@@ -253,6 +253,66 @@ class EditorImeAdapterTest {
         assertEquals("hello", state.text)
     }
 
+    @Test
+    fun `with several carets a composition happens at the primary one, and its commit at all of them`() {
+        val state = stateOf("x\ny")
+        state.setSelections(listOf(TextRange(1), TextRange(3)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(SetComposingTextCommand("n", 1)))
+        adapter.apply(listOf(SetComposingTextCommand("ni", 1)))
+        assertEquals("xni\ny", state.text, "composing only at the primary caret")
+        adapter.apply(listOf(CommitTextCommand("你", 1)))
+        assertEquals("x你\ny你", state.text)
+        assertEquals(listOf(TextRange(2), TextRange(5)), state.selections)
+        state.undo()
+        assertEquals("x\ny", state.text, "the composition and its copies are one undo step")
+        assertEquals(listOf(TextRange(1), TextRange(3)), state.selections)
+    }
+
+    @Test
+    fun `a composition finished where it stands is repeated at the other carets too`() {
+        val state = stateOf("a\nb\nc")
+        state.setSelections(listOf(TextRange(3), TextRange(1), TextRange(5)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(SetComposingTextCommand("ok", 1)))
+        adapter.apply(listOf(FinishComposingTextCommand()))
+        assertEquals("aok\nbok\ncok", state.text)
+        assertEquals(TextRange(7), state.selection, "the primary caret stays after its own text")
+    }
+
+    @Test
+    fun `a correction of the word before the caret is made before every caret`() {
+        val state = stateOf("teh\nteh")
+        state.setSelections(listOf(TextRange(3), TextRange(7)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        // Autocorrect, as Android keyboards do it: the word becomes the composition, then is replaced.
+        adapter.apply(listOf(SetComposingRegionCommand(0, 3)))
+        adapter.apply(listOf(CommitTextCommand("the", 1)))
+        assertEquals("the\nthe", state.text)
+    }
+
+    @Test
+    fun `an input method's backspace deletes before every caret`() {
+        val state = stateOf("ab\ncd")
+        state.setSelections(listOf(TextRange(2), TextRange(5)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(BackspaceCommand()))
+        assertEquals("a\nc", state.text)
+        assertEquals(listOf(TextRange(1), TextRange(3)), state.selections)
+    }
+
+    @Test
+    fun `a click during a composition ends it without copying it anywhere`() {
+        val state = stateOf("x\ny")
+        state.setSelections(listOf(TextRange(1), TextRange(3)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(SetComposingTextCommand("n", 1)))
+        state.selection = TextRange(0)
+        adapter.onEditorChanged()
+        assertNull(adapter.composition)
+        assertEquals("xn\ny", state.text)
+    }
+
     private object AutoCloseParens : com.aardarch.aardink.core.LanguageService {
         override val supportsRename: Boolean = false
         override val triggerCharacters: Set<Char> = emptySet()

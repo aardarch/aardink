@@ -471,10 +471,12 @@ class CodeEditorState(
 
     /**
      * Text from the keyboard or an input method: replaces [start, end) with [text] and places the
-     * primary caret at [selectionAfter] (after the text when null). Typing over the primary
-     * selection is repeated at every other selection, as with several cursors in VS Code. A
-     * single character typed at a caret gets the typing rules ([TypingRules]: smart indent,
-     * auto-close) from [service], except while [composing].
+     * primary caret at [selectionAfter] (after the text when null). An edit around the primary
+     * selection (typing over it, or an input method's backspace replacing a character before it)
+     * is repeated at every other selection, as with several cursors in VS Code; while [composing],
+     * only when the composition ends ([endComposition]). A single character typed at a caret gets
+     * the typing rules ([TypingRules]: smart indent, auto-close) from [service], except while
+     * [composing].
      *
      * Not an external edit: popups that follow typing stay up. Returns the character when one was
      * typed at a caret, for the completion trigger; null for anything else.
@@ -492,12 +494,18 @@ class CodeEditorState(
         val to = end.coerceIn(from, document.length)
         val before = currentSelections()
         val primary = before.primary
-        val mirrored = !composing && !before.isSingle && from == primary.min && to == primary.max
+        // How far the edit reaches past the primary selection on either side: an input method's
+        // backspace takes one character before it, typing none.
+        val reachBefore = primary.min - from
+        val reachAfter = to - primary.max
+        val aroundPrimary = !before.isSingle && reachBefore >= 0 && reachAfter >= 0
+        val mirrored = !composing && aroundPrimary
         val changes = if (mirrored) {
-            before.inDocumentOrder.map { TextChange(it.min, it.max, normalized) }
+            mirroredChanges(before.inDocumentOrder, reachBefore, reachAfter, normalized)
         } else {
             listOf(TextChange(from, to, normalized))
         }
+        if (composing) trackComposition(from, to, normalized.length, before, aroundPrimary)
         val applied = document.applyChanges(changes).toMutableList()
         // A caret the input method placed means nothing once normalisation changed the text's length.
         val primaryAfter = selectionAfter?.takeIf { normalized.length == text.length } ?: TextRange(from + normalized.length)
@@ -534,11 +542,91 @@ class CodeEditorState(
             }
             after = SelectionSet.of(placed).clampedTo(document.length)
         }
-        val primaryChange = changes.firstOrNull { it.start == primary.min && it.end == primary.max } ?: changes.first()
+        val primaryChange = changes.firstOrNull { it.start <= primary.min && it.end >= primary.max } ?: changes.first()
         val kind = if (composing) EditKind.Composing else kindOfInput(primaryChange, before)
         history.record(kind, applied, before, after)
         afterEdit(after, external = false)
+        compositionMirror?.let {
+            it.selections = currentSelections()
+            it.version = textVersion
+        }
         return typed?.let { TypedInput(from, it, autoCloseLength) }
+    }
+
+    /**
+     * [text] in place of each of [ranges] (in document order), reaching [before] characters
+     * before each and [after] after it. Replacements that would overlap merge into one.
+     */
+    private fun mirroredChanges(ranges: List<TextRange>, before: Int, after: Int, text: String): List<TextChange> {
+        val changes = ArrayList<TextChange>(ranges.size)
+        for (range in ranges) {
+            val start = (range.min - before).coerceAtLeast(0)
+            val end = (range.max + after).coerceAtMost(document.length)
+            val last = changes.lastOrNull()
+            if (last != null && start < last.end) {
+                changes[changes.size - 1] = TextChange(last.start, maxOf(last.end, end), text)
+            } else {
+                changes.add(TextChange(start, end, text))
+            }
+        }
+        return changes
+    }
+
+    /**
+     * An input method composing while there are several selections: the composition happens at
+     * the primary one only, and when it ends its net edit is repeated at the others, as in VS
+     * Code. The composition has replaced the primary selection, with [reachBefore] characters
+     * before it and [reachAfter] after it, by the text now at [start, end).
+     */
+    private class CompositionMirror(var start: Int, var end: Int, var reachBefore: Int, var reachAfter: Int) {
+        /** What the composition's last step left; anything else changing them cancels the mirror. */
+        var selections: SelectionSet? = null
+        var version: Int = -1
+    }
+
+    private var compositionMirror: CompositionMirror? = null
+
+    /** Follows a composing edit of [from, to) to [inserted] characters, for [endComposition]. */
+    private fun trackComposition(from: Int, to: Int, inserted: Int, before: SelectionSet, aroundPrimary: Boolean) {
+        val mirror = compositionMirror
+        if (mirror == null || mirror.version != textVersion || mirror.selections != before) {
+            // The composition's first step (or the first since something else happened).
+            compositionMirror = if (aroundPrimary) {
+                CompositionMirror(from, from + inserted, before.primary.min - from, to - before.primary.max)
+            } else {
+                null
+            }
+            return
+        }
+        // A later step may reach into text on either side that the composition had not touched.
+        if (from < mirror.start) mirror.reachBefore += mirror.start - from
+        if (to > mirror.end) mirror.reachAfter += to - mirror.end
+        val start = minOf(mirror.start, from)
+        mirror.end = maxOf(mirror.end, to) - (to - from) + inserted
+        mirror.start = start
+    }
+
+    /**
+     * An input method's composition ended, committed or left as it stands: what it did at the
+     * primary selection is repeated at the others, in the same undo step. Nothing with one
+     * selection, or when anything else has changed the text or the selections since.
+     */
+    internal fun endComposition() {
+        val mirror = compositionMirror ?: return
+        compositionMirror = null
+        val current = currentSelections()
+        if (current.isSingle || mirror.version != textVersion || mirror.selections != current) return
+        val text = document.subSequence(mirror.start, mirror.end).toString()
+        val others = current.ranges.drop(1).sortedBy { it.min }
+        val changes = mirroredChanges(others, mirror.reachBefore, mirror.reachAfter, text)
+            .filter { it.end <= mirror.start || it.start >= mirror.end }
+        if (changes.isEmpty()) return
+        applyChanges(changes, EditKind.Composing, external = false) {
+            SelectionSet.of(
+                listOf(TextRange(mapOffset(current.primary.start, changes), mapOffset(current.primary.end, changes))) +
+                    current.ranges.drop(1).map { TextRange(mapOffset(it.max, changes)) },
+            )
+        }
     }
 
     /** How the undo history groups an input edit: typing, backspace, forward delete, or anything else. */

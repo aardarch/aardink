@@ -283,6 +283,7 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     fun finishComposition() {
         if (composition == null) return
         composition = null
+        state.endComposition()
         state.pushUndoStop()
     }
 
@@ -306,7 +307,11 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
             state.replaceSelections(SelectionSet.single(selection))
         }
         composition = newComposition?.takeIf { it.max <= state.document.length }
-        if (wasComposing && composition == null) state.pushUndoStop()
+        if (wasComposing && composition == null) {
+            // Repeated at the other selections now, then closed as one undo step.
+            state.endComposition()
+            state.pushUndoStop()
+        }
         ownVersion = state.textVersion
         lastSelection = state.selection
         // The typing rules can change more than the input method asked for (an auto-closed

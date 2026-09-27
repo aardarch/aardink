@@ -19,8 +19,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Diagnostic
@@ -46,7 +49,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The editor's rendering of the things a sample screen does not show: soft wrap, a closed fold,
- * squiggles, a selection with find matches, and a matched bracket pair, under
+ * squiggles, a selection with find matches, a matched bracket pair, and several carets with a
+ * column selection, under
  * `screenshots/scene-<scene>.png`.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -93,6 +97,7 @@ class EditorSceneScreenshotTest {
         findReplaceState: FindReplaceState? = null,
         diagnostics: List<Diagnostic> = emptyList(),
         softWrap: Boolean = false,
+        focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
             MaterialTheme {
@@ -113,6 +118,14 @@ class EditorSceneScreenshotTest {
         // Past the find and folding debounces, which run on the test clock.
         composeTestRule.mainClock.advanceTimeBy(1_000)
         composeTestRule.waitForIdle()
+        if (focused != null) {
+            // Carets show only while the editor has focus, and blink: the clock stops so the
+            // picture is taken while they are on (they are, for a moment after the selections change).
+            composeTestRule.mainClock.autoAdvance = false
+            composeTestRule.onNode(hasSetTextAction()).performSemanticsAction(SemanticsActions.RequestFocus)
+            focused()
+            composeTestRule.mainClock.advanceTimeBy(100)
+        }
         composeTestRule.onRoot().captureRoboImage("../screenshots/scene-$scene.png", roborazziOptions = options)
     }
 
@@ -165,6 +178,18 @@ class EditorSceneScreenshotTest {
             query = "name"
         }
         capture("selection", state, findReplaceState = find)
+    }
+
+    @Test
+    fun multicursor() {
+        val state = stateOf(code)
+        val document = state.document
+        capture("multicursor", state) {
+            // A column selection over five lines of greetAll, and a caret at the start of each line of main.
+            val box = (4..8).map { line -> TextRange(document.lineColToOffset(line, 8), document.lineColToOffset(line, 12)) }
+            val carets = (13..14).map { line -> TextRange(document.lineColToOffset(line, 4)) }
+            state.setSelections(listOf(box.last()) + box.dropLast(1) + carets)
+        }
     }
 
     @Test

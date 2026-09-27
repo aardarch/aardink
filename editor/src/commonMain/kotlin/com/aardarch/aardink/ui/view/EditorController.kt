@@ -73,7 +73,10 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     val ime = EditorImeAdapter(state, editorImeWindowed)
 
-    val pointer = EditorPointerHandler(view)
+    /** Column selections, from the keys and the mouse alike, so one carries on from the other. */
+    val columns = ColumnSelector(view)
+
+    val pointer = EditorPointerHandler(view, columns)
 
     private val decoder = TypedTextDecoder()
 
@@ -269,6 +272,18 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
             EditorCommand.AddCursorBelow -> addCursor(1)
 
+            EditorCommand.ColumnSelectLeft -> columnSelect(rows = 0, columns = -1)
+
+            EditorCommand.ColumnSelectRight -> columnSelect(rows = 0, columns = 1)
+
+            EditorCommand.ColumnSelectUp -> columnSelect(rows = -1, columns = 0)
+
+            EditorCommand.ColumnSelectDown -> columnSelect(rows = 1, columns = 0)
+
+            EditorCommand.ColumnSelectPageUp -> columnSelect(rows = -(view.visibleRows - 1).coerceAtLeast(1), columns = 0)
+
+            EditorCommand.ColumnSelectPageDown -> columnSelect(rows = (view.visibleRows - 1).coerceAtLeast(1), columns = 0)
+
             EditorCommand.Escape -> escape()
 
             EditorCommand.TriggerSuggest -> !readOnly && true.also { actions.onTriggerSuggest() }
@@ -326,6 +341,24 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         val added = current.ranges.map { TextRange(view.verticalMove(it.end, direction, view.caretX(it.end))) }
         state.replaceSelections(SelectionSet.of(current.ranges + added))
         view.requestReveal(added.first().end)
+        return true
+    }
+
+    /**
+     * Grows or shrinks the column selection by [rows] rows and [columns] characters at its active
+     * corner; the first press starts one from the primary selection.
+     */
+    private fun columnSelect(rows: Int, columns: Int): Boolean {
+        val charWidth = view.style?.metrics?.charWidth ?: return true
+        if (view.totalRows == 0) return true
+        val box = this.columns.current()
+        this.columns.select(
+            box.copy(
+                activeRow = (box.activeRow + rows).coerceIn(0, view.totalRows - 1),
+                activeX = (box.activeX + columns * charWidth).coerceAtLeast(0f),
+            ),
+        )
+        revealCaret()
         return true
     }
 

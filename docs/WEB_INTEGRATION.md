@@ -154,7 +154,8 @@ Chrome, failing on any failed check or failed request.
 | `lineNumbers` (`'on'` / `'off'`) | `showLineNumbers` | Boolean. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
-| `minimap`, `bracketPairColorization`, multi-cursor | — | Not supported. |
+| `minimap`, `bracketPairColorization` | — | Not supported. |
+| Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame. |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |

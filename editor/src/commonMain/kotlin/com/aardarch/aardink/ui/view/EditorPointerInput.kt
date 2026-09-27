@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.edit.SelectionSet
@@ -37,13 +38,15 @@ import com.aardarch.aardink.core.edit.TextNavigator
 /**
  * What pressing, dragging and tapping in the text do to the selections.
  *
- * Mouse: a click places the caret, Shift+click extends the selection, Alt+click adds a caret; a
- * double click selects a word and a triple click a line, and dragging after either extends the
- * selection by words or lines. Touch: a tap places the caret, a double tap selects a word, and a
- * long press selects one and extends by words as the finger moves. Clicking a fold's placeholder
- * opens the fold.
+ * Mouse: a click places the caret, Shift+click extends the selection, Alt+click adds a caret (or
+ * removes the one clicked) and Alt+drag a selection; a double click selects a word and a triple
+ * click a line, and dragging after either extends the selection by words or lines. Shift+Alt+click
+ * and Shift+Alt+drag make a column selection from the primary selection's anchor, and dragging
+ * with the middle button one from where it was pressed, as in VS Code. Touch: a tap places the
+ * caret, a double tap selects a word, and a long press selects one and extends by words as the
+ * finger moves. Clicking a fold's placeholder opens the fold.
  */
-internal class EditorPointerHandler(private val view: EditorView) {
+internal class EditorPointerHandler(private val view: EditorView, private val columns: ColumnSelector = ColumnSelector(view)) {
 
     /** The host's folds, for opening one from its placeholder. */
     var foldState: FoldState? = null
@@ -54,12 +57,18 @@ internal class EditorPointerHandler(private val view: EditorView) {
     /** A right click at a point (viewport coordinates): open the context menu there. */
     var onContextMenu: (Offset) -> Unit = {}
 
-    private enum class SelectionUnit { Character, Word, Line }
+    private enum class SelectionUnit { Character, Word, Line, Column }
 
     private var unit = SelectionUnit.Character
 
     /** What the gesture selected first: dragging extends from it. */
     private var origin: TextRange? = null
+
+    /** The selections an Alt+drag keeps beside the one it makes. */
+    private var kept: List<TextRange>? = null
+
+    /** The column selection a Shift+Alt or middle-button drag is making. */
+    private var box: ColumnBox? = null
 
     private val state get() = view.state
 
@@ -72,7 +81,17 @@ internal class EditorPointerHandler(private val view: EditorView) {
             return
         }
         val current = state.currentSelections()
+        kept = null
+        box = null
         when {
+            clicks == 1 && shift && alt -> {
+                unit = SelectionUnit.Column
+                origin = null
+                val next = columns.current().copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+                box = next
+                columns.select(next)
+            }
+
             clicks == 1 && shift -> {
                 unit = SelectionUnit.Character
                 val anchor = current.primary.start
@@ -82,8 +101,16 @@ internal class EditorPointerHandler(private val view: EditorView) {
 
             clicks == 1 && alt -> {
                 unit = SelectionUnit.Character
-                origin = null
-                state.replaceSelections(SelectionSet.of(current.ranges + TextRange(hit.offset)))
+                val clicked = current.ranges.firstOrNull { hit.offset in it.min..it.max }
+                if (clicked != null && !current.isSingle) {
+                    // Alt+click on a caret (or in a selection) removes it.
+                    origin = null
+                    state.replaceSelections(SelectionSet.of(current.ranges - clicked))
+                } else {
+                    origin = TextRange(hit.offset)
+                    kept = current.ranges
+                    state.replaceSelections(SelectionSet.of(current.ranges + TextRange(hit.offset)))
+                }
             }
 
             clicks == 1 -> {
@@ -108,18 +135,41 @@ internal class EditorPointerHandler(private val view: EditorView) {
         }
     }
 
+    /** A press with the middle button: a column selection starting where it was pressed. */
+    fun columnPress(position: Offset) {
+        onPress(false)
+        unit = SelectionUnit.Column
+        origin = null
+        kept = null
+        val row = view.rowAt(position.y)
+        val x = columns.columnX(position.x)
+        val next = ColumnBox(row, x, row, x)
+        box = next
+        columns.select(next)
+    }
+
     /** The pointer moved to [position] with the button held (or the finger down after a long press). */
     fun drag(position: Offset) {
+        box?.let { current ->
+            val next = current.copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+            if (next != current) {
+                box = next
+                columns.select(next)
+            }
+            if (position.y < 0f || position.y > view.scroll.viewportHeight) view.requestReveal(state.selection.end)
+            return
+        }
         val from = origin ?: return
         val hit = view.offsetAt(position)
         val target = when (unit) {
-            SelectionUnit.Character -> TextRange(hit.offset)
+            SelectionUnit.Character, SelectionUnit.Column -> TextRange(hit.offset)
             SelectionUnit.Word -> wordRange(hit.offset)
             SelectionUnit.Line -> lineRange(hit.line)
         }
         // The anchor is the end of the first unit that is furthest from the pointer.
         val selection = if (target.min < from.min) TextRange(from.max, target.min) else TextRange(from.min, target.max)
-        state.replaceSelections(SelectionSet.single(selection))
+        val others = kept
+        state.replaceSelections(if (others != null) SelectionSet.of(others + selection) else SelectionSet.single(selection))
         // Dragging past the top or bottom scrolls the text along.
         if (position.y < 0f || position.y > view.scroll.viewportHeight || position.x < 0f || position.x > view.scroll.viewportWidth) {
             view.requestReveal(hit.offset)
@@ -128,6 +178,8 @@ internal class EditorPointerHandler(private val view: EditorView) {
 
     fun release() {
         origin = null
+        kept = null
+        box = null
     }
 
     /** A right click: the caret moves there unless it is inside a selection, then the menu opens. */
@@ -199,6 +251,16 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             if (currentEvent.buttons.isSecondaryPressed) {
                 handler.secondaryPress(down.position)
                 down.consume()
+                return@awaitEachGesture
+            }
+            if (currentEvent.buttons.isTertiaryPressed) {
+                handler.columnPress(down.position)
+                down.consume()
+                drag(down.id) { change ->
+                    handler.drag(change.position)
+                    change.consume()
+                }
+                handler.release()
                 return@awaitEachGesture
             }
             if (!currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture

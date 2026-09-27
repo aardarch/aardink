@@ -614,6 +614,59 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         return document.lineStart(targetLine) + targetColumn
     }
 
+    // ── Rows, for column selections ──────────────────────────────────────────
+
+    /** Rows on screen in the whole document: wrapped rows count, folded lines do not. */
+    val totalRows: Int get() = lineMap.totalRows
+
+    /** The row on screen the caret at [offset] is on. */
+    fun rowOf(offset: Int): Int {
+        if (style == null || lineMap.totalRows == 0) return 0
+        val (line, column) = document.offsetToLineCol(offset)
+        val shownLine = lineMap.visibleLineAtOrBefore(line)
+        val layout = layoutFor(shownLine)
+        val shown = min(lineLength(shownLine), MAX_RENDERED_LINE_CHARS)
+        val col = if (shownLine == line) column.coerceAtMost(shown) else shown
+        return lineMap.firstRowOf(shownLine) + layout.getLineForOffset(col)
+    }
+
+    /** The row on screen at viewport y [y], clamped to the document's rows. */
+    fun rowAt(y: Float): Int {
+        val metrics = style?.metrics ?: return 0
+        if (lineMap.totalRows == 0) return 0
+        return floor((y + scroll.scrollY - metrics.paddingTop) / metrics.lineHeight).toInt().coerceIn(0, lineMap.totalRows - 1)
+    }
+
+    /** Viewport x [x] in text coordinates, as [caretX] and [verticalMove] take it. */
+    fun textX(x: Float): Float = x + scroll.scrollX - (style?.metrics?.paddingStart ?: 0f)
+
+    /** The offset on [row] closest to [x] (text coordinates); past the row's end, its end. */
+    fun offsetOnRow(row: Int, x: Float): Int {
+        if (style == null || lineMap.totalRows == 0) return 0
+        val (line, layout, rowInLine) = rowLayout(row)
+        val y = (layout.getLineTop(rowInLine) + layout.getLineBottom(rowInLine)) / 2f
+        val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
+        return document.lineStart(line) + layout.getOffsetForPosition(Offset(x, y)).coerceAtMost(shown)
+    }
+
+    /** Where the text on [row] ends, in text coordinates (a closed fold's placeholder not included). */
+    fun rowEndX(row: Int): Float {
+        if (style == null || lineMap.totalRows == 0) return 0f
+        val (line, layout, rowInLine) = rowLayout(row)
+        val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
+        val end = min(layout.getLineEnd(rowInLine), shown)
+        return layout.getHorizontalPosition(end, usePrimaryDirection = true)
+    }
+
+    private data class RowLayout(val line: Int, val layout: TextLayoutResult, val rowInLine: Int)
+
+    private fun rowLayout(row: Int): RowLayout {
+        val target = row.coerceIn(0, lineMap.totalRows - 1)
+        val line = lineMap.lineAtRow(target)
+        val layout = layoutFor(line)
+        return RowLayout(line, layout, (target - lineMap.firstRowOf(line)).coerceIn(0, layout.lineCount - 1))
+    }
+
     companion object {
         /**
          * Characters of one line that are laid out and drawn. A longer line (minified code, a data

@@ -66,6 +66,12 @@ internal enum class EditorCommand {
     SelectAllOccurrences,
     AddCursorAbove,
     AddCursorBelow,
+    ColumnSelectLeft,
+    ColumnSelectRight,
+    ColumnSelectUp,
+    ColumnSelectDown,
+    ColumnSelectPageUp,
+    ColumnSelectPageDown,
     Escape,
     TriggerSuggest,
     GoToDefinition,
@@ -97,6 +103,19 @@ internal object EditorKeyBindings {
         val plain = !alt && !ctrl && !meta
 
         fun move(command: EditorCommand) = KeyBinding(command, select = shift)
+
+        // Ctrl+Shift+Alt (Cmd+Shift+Option on macOS) with an arrow or page key: a column selection.
+        if (primary && shift && alt) {
+            return when (event.key) {
+                Key.DirectionLeft -> KeyBinding(EditorCommand.ColumnSelectLeft)
+                Key.DirectionRight -> KeyBinding(EditorCommand.ColumnSelectRight)
+                Key.DirectionUp -> KeyBinding(EditorCommand.ColumnSelectUp)
+                Key.DirectionDown -> KeyBinding(EditorCommand.ColumnSelectDown)
+                Key.PageUp -> KeyBinding(EditorCommand.ColumnSelectPageUp)
+                Key.PageDown -> KeyBinding(EditorCommand.ColumnSelectPageDown)
+                else -> null
+            }
+        }
 
         return when (event.key) {
             Key.DirectionLeft -> when {

@@ -226,6 +226,46 @@ class CodeEditorLayoutUiTest {
     }
 
     @Test
+    fun `ctrl shift alt arrows make a column selection that typing replaces on every row`() = runComposeUiTest {
+        val state = CodeEditorState("abcd\nabcd\nabcd")
+        show(state)
+        state.selection = TextRange(1)
+        keys {
+            withKeyDown(Key.CtrlLeft) {
+                withKeyDown(Key.ShiftLeft) {
+                    withKeyDown(Key.AltLeft) {
+                        pressKey(Key.DirectionDown)
+                        pressKey(Key.DirectionDown)
+                        pressKey(Key.DirectionRight)
+                        pressKey(Key.DirectionRight)
+                    }
+                }
+            }
+        }
+        assertEquals(3, state.selections.size)
+        editor().performTextInput("X")
+        waitForIdle()
+        assertEquals("aXd\naXd\naXd", state.document.text)
+    }
+
+    @Test
+    fun `carets added with ctrl alt down type together and undo together`() = runComposeUiTest {
+        val state = CodeEditorState("a\nb\nc")
+        show(state)
+        state.selection = TextRange(1)
+        keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) } } }
+        keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) } } }
+        editor().performTextInput("!")
+        waitForIdle()
+        assertEquals("a!\nb!\nc!", state.document.text)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+        assertEquals("a\nb\nc", state.document.text)
+        assertEquals(3, state.selections.size, "undo brings every caret back")
+        keys { pressKey(Key.Escape) }
+        assertEquals(listOf(TextRange(1)), state.selections)
+    }
+
+    @Test
     fun `read-only keeps the text but still moves the caret`() = runComposeUiTest {
         val state = CodeEditorState("abc")
         show(state, readOnly = true)
