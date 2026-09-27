@@ -11,7 +11,8 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 | 1 | Done | Branch `v0.6-uplift`. Dependencies already current (§3); `0.6.0-SNAPSHOT`; canary workflow; `perf.mjs` + 0.5 baseline; CDP IME check; CMP 1.13 findings (W-1 fixed upstream). |
 | 15 | Done (code) | npm job in `release.yml`, package metadata, LICENSE and README in the package, publint + attw in CI. **Waiting on the manual bootstrap** in `docs/NPM_BOOTSTRAP.md`. |
 | 2 | Done | `core/text/{GapBuffer,LineIndex,DocumentChange}`, `CodeDocument` as a `CharSequence` with snapshots, internal `TokenStore` (line-aligned, shifted by change events, fixes stale colours after inserted lines), `tokensForLine`, language services get snapshots. 10k keystrokes into 2 MB: ~17 ms (JVM). |
-| 3–14, 16, 17 | Not started | See §6. |
+| 3 | Done | Incremental `RegexTokenizer` and `XmlTokenizer` (restart + convergence, scan cache keyed by the identity of the tokenizer's last result, zero-length markers for the covered span), golden test over every built-in language; viewport-first on single-threaded hosts, with a learned fallback for slow partial passes; `tokenizer` var; chunked, capped, cancellable find; replace mode; debounced, prefix/suffix-trimmed diff lane. |
+| 4–14, 16, 17 | Not started | See §6. |
 | A1–A3 | Not started | `aardflex-web-app` switch-over (§7.1). |
 | B1 | Not started | `aardflex` Android upgrade 0.4.0 → 0.6.0 (§7.2). |
 
@@ -910,8 +911,10 @@ Monaco's on the fixtures, and bundle size recorded.
 - `ui/screen/XmlEditorScreen.kt:195`: move to `EditorOptions` if decision 1 is A. Its explicit
   `diagnostics` list keeps its host-supplied meaning.
 - `ui/theme/AardflexEditorTheme.kt`: drop any `fontFamily`/`fontSize`/`lineHeight` arguments.
-- `service/XmlIncrementalTokenizer.kt` still compiles. Optionally replace it with
-  `DeclarativeTokenizer` over the web app's grammar JSON, so there is one grammar.
+- `service/XmlIncrementalTokenizer.kt` still compiles and stays correct: it passes its own augmented
+  list back as `previousTokens`, which the built-in XML tokenizer does not recognise, so every
+  pass is a full scan (as in 0.5). Replace it with `DeclarativeTokenizer` over the web app's
+  grammar JSON, so there is one grammar and it is incremental.
 - Re-run its screenshots, plus a manual IME and TalkBack pass. This upgrade is also the proof of
   the migration guide.
 

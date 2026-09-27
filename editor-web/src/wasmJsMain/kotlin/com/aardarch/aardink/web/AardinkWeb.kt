@@ -173,11 +173,9 @@ object AardinkWeb {
         if (options.language != handle.options.value.language) {
             val language = resolveLanguage(handle.registry, options.language)
             if (language.id != handle.language.value.id) {
-                val text = handle.state.value.document.text
-                val state = CodeEditorState(text, tokenizer = language.tokenizer, scope = handle.scope)
-                handle.reportedTextVersion = state.textVersion
+                // The same state with a new tokenizer: text, selection and undo history survive.
+                handle.state.value.tokenizer = language.tokenizer
                 handle.language.value = language
-                handle.state.value = state
                 handle.foldState.unfoldAll()
             }
         }

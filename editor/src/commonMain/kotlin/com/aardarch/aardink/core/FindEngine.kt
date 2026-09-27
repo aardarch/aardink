@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.core
 
+import kotlinx.coroutines.yield
+
 /**
  * Stateless search engine producing match ranges for the find/replace UI.
  *
@@ -38,6 +40,34 @@ object FindEngine {
         val pattern = buildPattern(query, options) ?: return emptyList()
         return pattern.findAll(text).map { it.range }.toList()
     }
+
+    /** What [findAllCooperatively] found, and whether it stopped at its limit. */
+    internal class Result(val matches: List<IntRange>, val capped: Boolean)
+
+    /**
+     * [findAll] for the editor's find panel: stops after [limit] matches, and yields every
+     * [YIELD_EVERY_CHARS] characters of progress, which on the single-threaded web host keeps the
+     * page responsive through a large document and lets a newer query cancel this one.
+     */
+    internal suspend fun findAllCooperatively(text: String, query: String, options: Options, limit: Int): Result {
+        if (query.isEmpty() || text.isEmpty()) return Result(emptyList(), capped = false)
+        val pattern = buildPattern(query, options) ?: return Result(emptyList(), capped = false)
+        val matches = ArrayList<IntRange>()
+        var nextYield = YIELD_EVERY_CHARS
+        var match = pattern.find(text)
+        while (match != null) {
+            if (matches.size >= limit) return Result(matches, capped = true)
+            matches.add(match.range)
+            if (match.range.last >= nextYield) {
+                yield()
+                nextYield = match.range.last + YIELD_EVERY_CHARS
+            }
+            match = match.next()
+        }
+        return Result(matches, capped = false)
+    }
+
+    private const val YIELD_EVERY_CHARS = 64 * 1024
 
     private fun buildPattern(query: String, options: Options): Regex? {
         val raw = if (options.useRegex) query else Regex.escape(query)

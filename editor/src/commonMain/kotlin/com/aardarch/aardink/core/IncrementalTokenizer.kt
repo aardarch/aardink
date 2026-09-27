@@ -50,15 +50,26 @@ interface IncrementalTokenizer {
     suspend fun tokenizeFullCooperative(text: String): List<Token> = tokenizeFull(text)
 
     /**
-     * Incrementally re-tokenizes only the lines in [dirtyRange] (0-based, inclusive).
-     * The implementation may expand [dirtyRange] if multi-line constructs (e.g. block comments)
-     * require it — use [canSpanLines] to decide.
+     * Incrementally re-tokenizes the lines in [dirtyRange] (0-based, inclusive), and any later
+     * lines the change affects (a block comment opened or closed by it).
+     *
+     * The editor replaces every line from the line of the first returned token to the line of the
+     * last one, and every line in [dirtyRange], with the returned tokens, and keeps the tokens of all
+     * other lines, moved along with their text. So return every token on each line you cover, and
+     * cover every line whose tokens changed. A zero-length token (any type) marks how far the
+     * result reaches without colouring anything: use one to clear lines whose tokens all went away.
+     *
+     * The built-in tokenizers return only the lines they rescanned. A tokenizer that wraps one and
+     * post-processes its result must not assume the whole document comes back.
      *
      * @param text The full updated document text.
      * @param dirtyRange Lines that have changed since the last tokenization pass.
-     * @param previousTokens The token list from the previous pass (may be empty).
-     * @return Updated tokens for the affected lines, sorted by [Token.start].
-     *         The editor replaces the tokens of the lines they cover (at least [dirtyRange]) with them.
+     * @param previousTokens The list this tokenizer returned from its previous pass over this
+     *   document, passed back unchanged, so an implementation can recognise its own earlier
+     *   result (by identity) and rescan only what changed. Empty when the editor wants a quick
+     *   provisional result for just [dirtyRange] before a full pass: on a single-threaded host it
+     *   asks that way for the visible lines of a large document.
+     * @return Tokens for the lines this pass covered, sorted by [Token.start].
      */
     fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token>
 

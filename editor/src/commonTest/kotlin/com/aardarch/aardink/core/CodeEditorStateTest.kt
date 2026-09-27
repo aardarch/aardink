@@ -29,11 +29,14 @@ import kotlin.test.assertNull
 class CodeEditorStateTest {
 
     private fun testState(text: String): CodeEditorState = CodeEditorState(
-        initialText = text,
+        initialText = "",
         tokenizeDebounceMs = 0,
         scope = CoroutineScope(Dispatchers.Unconfined),
     ).apply {
         computeDispatcher = Dispatchers.Unconfined
+        // Loaded only now: the constructor's first tokenization pass would otherwise start on the
+        // default background dispatcher and resume there, racing the test's own edits.
+        loadText(text)
     }
 
     @Test

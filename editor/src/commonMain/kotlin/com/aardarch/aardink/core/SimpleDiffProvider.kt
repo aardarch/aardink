@@ -17,11 +17,23 @@ package com.aardarch.aardink.core
 
 object SimpleDiffProvider : DiffProvider {
     override fun diff(baseLines: List<String>, currentLines: List<String>): List<LineDiff> {
+        // Lines the two texts share at the start and at the end are unchanged; only the span
+        // between them is compared, line by line. Comparing every line by position instead marked
+        // each line below an inserted one as modified.
+        val limit = minOf(baseLines.size, currentLines.size)
+        var prefix = 0
+        while (prefix < limit && baseLines[prefix] == currentLines[prefix]) prefix++
+        var suffix = 0
+        while (suffix < limit - prefix && baseLines[baseLines.size - 1 - suffix] == currentLines[currentLines.size - 1 - suffix]) {
+            suffix++
+        }
+        val baseMiddle = baseLines.size - prefix - suffix
         val result = mutableListOf<LineDiff>()
-        for (i in currentLines.indices) {
+        for (i in 0 until currentLines.size - prefix - suffix) {
+            val line = prefix + i
             when {
-                i >= baseLines.size -> result.add(LineDiff(i, LineDiffKind.Added))
-                currentLines[i] != baseLines[i] -> result.add(LineDiff(i, LineDiffKind.Modified))
+                i >= baseMiddle -> result.add(LineDiff(line, LineDiffKind.Added))
+                currentLines[line] != baseLines[prefix + i] -> result.add(LineDiff(line, LineDiffKind.Modified))
             }
         }
         return result

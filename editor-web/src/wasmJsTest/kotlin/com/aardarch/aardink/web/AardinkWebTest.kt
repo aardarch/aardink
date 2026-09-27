@@ -128,6 +128,19 @@ class AardinkWebTest {
     }
 
     @Test
+    fun `changing language keeps undo history`() {
+        val handle = mount("val x = 1", WebEditorOptions(language = "plaintext"))
+        val state = handle.state.value
+        state.applyEdit(9, 0, "0", androidx.compose.ui.text.TextRange(10))
+
+        AardinkWeb.updateOptions(handle, WebEditorOptions(language = "kotlin"))
+
+        assertSame(state, handle.state.value, "the same editor state, not a rebuilt one")
+        assertTrue(AardinkWeb.undo(handle))
+        assertEquals("val x = 1", AardinkWeb.getValue(handle))
+    }
+
+    @Test
     fun `an unknown language falls back to plain text`() {
         val handle = mount(options = WebEditorOptions(language = "cobol"))
 

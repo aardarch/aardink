@@ -42,16 +42,27 @@ class FindReplaceState {
     var matches by mutableStateOf<List<IntRange>>(emptyList())
         internal set
 
+    /** Whether the search stopped at [EditorLimits.maxFindMatches], so [matches] is not all of them. */
+    internal var matchesCapped by mutableStateOf(false)
+
+    /**
+     * Whether the panel shows its replace row. Set by [show]; the panel has a toggle for it too.
+     */
+    var replaceMode by mutableStateOf(false)
+
     var currentMatchIndex by mutableIntStateOf(-1)
         internal set
 
-    fun show() {
+    /** Opens the panel: find only, or with the replace row when [replace] (Ctrl+H). */
+    fun show(replace: Boolean = false) {
         visible = true
+        replaceMode = replace
     }
 
     fun hide() {
         visible = false
         matches = emptyList()
+        matchesCapped = false
         currentMatchIndex = -1
     }
 

@@ -38,7 +38,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | `textFieldState` | Removed. Read `text`, `selection` / `selections`; edit with `applyEdit` / `applyTextEdits` | *pending* (PR 7) |
 | `undoManager: EditorUndoManager` | Removed. Use `undo()`, `redo()`, `canUndo`, `canRedo`, `pushUndoStop()` | *pending* (PR 4) |
 | `tokenCache: TokenCache` | Removed. Use `tokensForLine(line)`; a token that spans lines comes back as one token per line | PR 2 |
-| `tokenizer` (`val`) | `var`: assigning it re-highlights and keeps undo history | *pending* (PR 3) |
+| `tokenizer` (`val`) | `var`: assigning it re-highlights and keeps text, selection and undo history | PR 3 |
 | `selection` (read-only) | Settable; setting it collapses to one cursor | *pending* (PR 4) |
 
 ## Other removed symbols
@@ -57,10 +57,14 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 
 | Area | 0.5 | 0.6 | Landed in |
 | --- | --- | --- | --- |
-| `FindReplaceState.show()` | Find only | `show(replace = false)`; Ctrl+H opens replace | *pending* (PR 3) |
+| `FindReplaceState.show()` | Opened the panel with its replace row always shown | `show(replace = false)`: the replace row shows only with `replace = true` (Ctrl+H) or the panel's new toggle; `replaceMode` holds it | PR 3 |
+| Find panel | Every match | At most `EditorLimits.maxFindMatches` (10,000), shown as "N+"; a new query cancels a running search | PR 3 |
+| Built-in tokenizers' `tokenizeLines` | Returned tokens for the whole document | Returns only the lines it rescanned, with zero-length tokens marking the span, and expects `previousTokens` to be its own last result. A wrapper that passes its *own* earlier result back as `previousTokens` (as aardflex's `XmlIncrementalTokenizer` does) is not recognised, so the built-in one answers with a full scan: still correct, just not incremental. To get the speed-up, return the built-in tokenizer's list unchanged or pass that list back | PR 3 |
+| `CodeDocument.dirtyLines` after a delete that joins lines | Ran to the end of the document | Just the line the delete started on: lines below keep their text and their tokens move with them | PR 3 |
+| `SimpleDiffProvider` | Compared lines by position, so every line below an inserted one showed as modified | Trims the shared leading and trailing lines first | PR 3 |
 | Language services and folding providers | Called with the live `CodeDocument`, which could change under a service running on another thread | Called with a read-only snapshot taken when the request was made; editing it throws `IllegalStateException` | PR 2 |
 | `CodeDocument` | A plain class | A `CharSequence`: index it, slice it with `subSequence`, and run a `Regex` over it without copying `text`. `text` is built once per edit and shared | PR 2 |
-| Web `updateOptions({ language })` | Rebuilt the editor state and lost undo history | Keeps undo history | *pending* (PR 3) |
+| Web `updateOptions({ language })` | Rebuilt the editor state and lost undo history | Keeps undo history | PR 3 |
 
 ## Example: an Android host
 

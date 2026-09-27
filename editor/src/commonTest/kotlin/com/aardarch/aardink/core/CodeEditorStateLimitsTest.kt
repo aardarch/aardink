@@ -32,8 +32,10 @@ import kotlin.test.assertTrue
 class CodeEditorStateLimitsTest {
 
     /** Records which entry point each tokenization pass used. */
-    private class RecordingTokenizer : IncrementalTokenizer {
+    private open class RecordingTokenizer : IncrementalTokenizer {
         val calls = mutableListOf<String>()
+        val previousTokensSeen = mutableListOf<List<Token>>()
+        var lastResult: List<Token>? = null
 
         // One token per line start, so the cache has something to hold.
         private fun tokens(text: String): List<Token> {
@@ -44,17 +46,23 @@ class CodeEditorStateLimitsTest {
 
         override fun tokenizeFull(text: String): List<Token> {
             calls += "full"
-            return tokens(text)
+            return tokens(text).also { lastResult = it }
         }
 
         override suspend fun tokenizeFullCooperative(text: String): List<Token> {
             calls += "cooperative"
-            return tokens(text)
+            return tokens(text).also { lastResult = it }
         }
 
         override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
-            calls += "lines"
-            return tokens(text).filter { it.start in lineStartOffsets(text, dirtyRange) }
+            calls += if (previousTokens.isEmpty()) "visible lines" else "lines"
+            previousTokensSeen += previousTokens
+            return tokens(text).filter { it.start in lineStartOffsets(text, dirtyRange) }.also {
+                if (previousTokens.isNotEmpty()) {
+                    lastResult =
+                        it
+                }
+            }
         }
 
         override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
@@ -109,17 +117,65 @@ class CodeEditorStateLimitsTest {
     }
 
     @Test
-    fun `large document on a main-thread host always takes the cooperative pass`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
-        val tokenizer = RecordingTokenizer()
+    fun `large document on a main-thread host is highlighted visible lines first, then in chunks`() =
+        withLimits(cooperativeAt = 10, fallbackAt = 100) {
+            val tokenizer = RecordingTokenizer()
+            val state = testState(mediumText, tokenizer, mainThread = true)
+            assertEquals(listOf("visible lines", "cooperative"), tokenizer.calls)
+            assertEquals(4, state.tokenStore.allTokens().size)
+
+            // An edit then takes a partial pass, handed the tokenizer's own last result.
+            tokenizer.calls.clear()
+            val fullResult = tokenizer.lastResult
+            state.applyEdit(0, 0, "x", TextRange(1))
+
+            assertEquals(listOf("lines"), tokenizer.calls)
+            assertTrue(tokenizer.previousTokensSeen.last() === fullResult)
+            assertEquals(4, state.tokenStore.allTokens().size)
+        }
+
+    @Test
+    fun `a slow partial pass sends a large document back to chunked full passes`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
+        // What a tokenizer whose tokenizeLines rescans everything looks like on the web.
+        val tokenizer = object : RecordingTokenizer() {
+            override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
+                val started = kotlin.time.TimeSource.Monotonic.markNow()
+                while (started.elapsedNow().inWholeMilliseconds < 80) { /* a slow scan */ }
+                return super.tokenizeLines(text, dirtyRange, previousTokens)
+            }
+        }
         val state = testState(mediumText, tokenizer, mainThread = true)
-        assertEquals(listOf("cooperative"), tokenizer.calls)
-
-        // An edit that dirties one line still goes through the chunked full pass.
         tokenizer.calls.clear()
-        state.applyEdit(0, 0, "x", TextRange(1))
 
-        assertEquals(listOf("cooperative"), tokenizer.calls)
-        assertEquals(4, state.tokenStore.allTokens().size)
+        state.applyEdit(0, 0, "x", TextRange(1))
+        state.applyEdit(0, 0, "y", TextRange(1))
+
+        assertEquals(listOf("cooperative", "cooperative"), tokenizer.calls)
+    }
+
+    @Test
+    fun `each partial pass is handed the previous pass's result`() = withLimits(cooperativeAt = 1000, fallbackAt = 10_000) {
+        val tokenizer = RecordingTokenizer()
+        val state = testState(mediumText, tokenizer, mainThread = false)
+        state.applyEdit(0, 0, "x", TextRange(1))
+        val afterFirst = tokenizer.lastResult
+        state.applyEdit(0, 0, "y", TextRange(1))
+        assertTrue(tokenizer.previousTokensSeen.last() === afterFirst)
+    }
+
+    @Test
+    fun `a new tokenizer re-highlights and keeps text and undo`() = withLimits(cooperativeAt = 1000, fallbackAt = 10_000) {
+        val first = RecordingTokenizer()
+        val state = testState(mediumText, first, mainThread = false)
+        state.applyEdit(0, 0, "x", TextRange(1))
+        val second = RecordingTokenizer()
+
+        state.tokenizer = second
+
+        assertEquals(listOf("full"), second.calls)
+        assertEquals("x$mediumText", state.text)
+        state.undo()
+        assertEquals(mediumText, state.text)
     }
 
     @Test

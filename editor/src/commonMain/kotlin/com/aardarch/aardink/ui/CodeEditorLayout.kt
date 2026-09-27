@@ -45,6 +45,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -59,6 +60,7 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
@@ -74,6 +76,7 @@ import com.aardarch.aardink.platform.EditorScrollbars
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -148,6 +151,7 @@ fun CodeEditorLayout(
     }
 
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var viewportHeightPx by remember { mutableIntStateOf(0) }
 
     // Completion state
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
@@ -160,7 +164,7 @@ fun CodeEditorLayout(
             onUndo = { state.undo() },
             onRedo = { state.redo() },
             onFind = { findReplaceState?.show() },
-            onReplace = { findReplaceState?.show() },
+            onReplace = { findReplaceState?.show(replace = true) },
             onGoToLine = onRequestGoToLine,
             onIndent = { state.indentSelection() },
             onOutdent = { state.outdentSelection() },
@@ -277,6 +281,9 @@ fun CodeEditorLayout(
             diffAnnotations = emptyMap()
             return@LaunchedEffect
         }
+        // Debounced like find and folding: the lane can lag typing by a moment, and a burst of
+        // keystrokes costs one diff rather than one each.
+        delay(DIFF_DEBOUNCE_MS)
         val current = state.document.text
         if (current == savedText) {
             diffAnnotations = emptyMap()
@@ -346,20 +353,23 @@ fun CodeEditorLayout(
                     findReplaceState.useRegex,
                     state.textVersion,
                 )
-            }.collect { _ ->
+            }.collectLatest { _ ->
+                // collectLatest: a newer query or edit cancels a search still running.
                 if (!findReplaceState.visible || findReplaceState.query.isEmpty()) {
                     findReplaceState.matches = emptyList()
+                    findReplaceState.matchesCapped = false
                     findReplaceState.currentMatchIndex = -1
-                    return@collect
+                    return@collectLatest
                 }
                 delay(200)
                 val text = state.document.text
                 val opts = findReplaceState.toOptions()
-                val matches = withContext(state.computeDispatcher) {
-                    FindEngine.findAll(text, findReplaceState.query, opts)
+                val found = withContext(state.computeDispatcher) {
+                    FindEngine.findAllCooperatively(text, findReplaceState.query, opts, EditorLimits.maxFindMatches)
                 }
-                findReplaceState.matches = matches
-                findReplaceState.currentMatchIndex = if (matches.isEmpty()) -1 else 0
+                findReplaceState.matches = found.matches
+                findReplaceState.matchesCapped = found.capped
+                findReplaceState.currentMatchIndex = if (found.matches.isEmpty()) -1 else 0
             }
         }
     }
@@ -379,6 +389,16 @@ fun CodeEditorLayout(
                 }
                 foldState.updateFoldableRanges(ranges)
             }
+        }
+    }
+
+    // ── Visible lines, for the tokenizer to highlight first ────────────────────
+    // Approximate (folds and wrapped rows are ignored): it only decides which lines of a large
+    // document get coloured before the rest.
+    LaunchedEffect(state, lineHeightPx, topPaddingPx) {
+        snapshotFlow { verticalScrollState.value to viewportHeightPx }.collect { (scroll, height) ->
+            val first = ((scroll - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
+            state.visibleLines = first..(first + (height / lineHeightPx).toInt() + 1)
         }
     }
 
@@ -724,7 +744,8 @@ fun CodeEditorLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .onSizeChanged { viewportHeightPx = it.height },
             ) {
                 Box(
                     modifier = Modifier
@@ -870,6 +891,9 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
 }
 
 // ── Signature help context ─────────────────────────────────────────────────────
+
+/** Delay before the diff lane is recomputed after an edit. */
+private const val DIFF_DEBOUNCE_MS = 300L
 
 /** Delay before a signature-help request, so a language server isn't asked per keystroke. */
 private const val SIGNATURE_HELP_DEBOUNCE_MS = 200L

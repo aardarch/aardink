@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `next` dist-tag.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
+- `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
+  text, selection and undo history. On the web, `updateOptions({ language })` now does this too.
+- Find and replace: `FindReplaceState.show(replace)` and `replaceMode`, Ctrl+H opens the panel in
+  replace mode, and the panel has a toggle for the replace row. Searches stop at
+  `EditorLimits.maxFindMatches` (10,000, shown as "10000+"), run in chunks on the web, and a new
+  query cancels one still running.
 
 ### Changed
 
@@ -53,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Language services and folding providers receive a read-only snapshot of the document, taken
   when the request was made, instead of the live document that a service running on the compute
   dispatcher could see change mid-request.
+- **Incremental tokenization.** The built-in tokenizers remember their last scan and, after an
+  edit, rescan only from just before the change until the scan is back in step with the old one,
+  so a keystroke in a large file costs a few lines instead of the whole document. On the web a
+  large document now gets its visible lines highlighted first. `tokenizeLines` of a built-in
+  tokenizer returns only the lines it rescanned, and recognises its own previous result as
+  `previousTokens`; see `IncrementalTokenizer.tokenizeLines`. A wrapper that post-processes the
+  list keeps working, with full scans.
+- The find panel shows its replace row only in replace mode.
+- The diff lane is recomputed 300 ms after the last edit rather than on every keystroke.
 
 ### Removed
 
@@ -64,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a line was inserted or removed, lines below it could show the previous line's syntax
   colours until the next tokenization pass, because cached tokens stayed keyed to their old line
   numbers. Colours now move with their text.
+- The diff lane marked every line below an inserted line as modified; it now marks just the
+  inserted one.
 
 ## [0.5.0] - 2026-09-27
 

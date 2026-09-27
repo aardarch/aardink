@@ -182,13 +182,9 @@ class CodeDocument(initialText: String = "") : CharSequence {
         val oldTailColumn = end - lines.lineStart(lines.lineOf(end))
         val (startLine, removedLines) = lines.onDelete(start, end)
         buffer.delete(start, end)
-        // After deletion the dirty range is just the start line (collapsed lines are gone)
+        // After deletion the dirty range is just the start line: the collapsed lines are gone, and
+        // the lines below kept their text, just further up.
         markDirty(startLine, startLine)
-        // If lines were removed, the dirty range extends from startLine to the end of the document
-        // so the tokenizer revisits every line whose position moved.
-        if (removedLines > 0) {
-            markDirty(startLine, lineCount - 1)
-        }
         changed(
             DocumentChange(
                 offset = start,

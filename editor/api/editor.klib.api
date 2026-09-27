@@ -266,8 +266,6 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
         final fun <get-textFieldState>(): androidx.compose.foundation.text.input/TextFieldState // com.aardarch.aardink.core/CodeEditorState.textFieldState.<get-textFieldState>|<get-textFieldState>(){}[0]
     final val tokenizeDebounceMs // com.aardarch.aardink.core/CodeEditorState.tokenizeDebounceMs|{}tokenizeDebounceMs[0]
         final fun <get-tokenizeDebounceMs>(): kotlin/Long // com.aardarch.aardink.core/CodeEditorState.tokenizeDebounceMs.<get-tokenizeDebounceMs>|<get-tokenizeDebounceMs>(){}[0]
-    final val tokenizer // com.aardarch.aardink.core/CodeEditorState.tokenizer|{}tokenizer[0]
-        final fun <get-tokenizer>(): com.aardarch.aardink.core/IncrementalTokenizer // com.aardarch.aardink.core/CodeEditorState.tokenizer.<get-tokenizer>|<get-tokenizer>(){}[0]
     final val undoManager // com.aardarch.aardink.core/CodeEditorState.undoManager|{}undoManager[0]
         final fun <get-undoManager>(): com.aardarch.aardink.core/EditorUndoManager // com.aardarch.aardink.core/CodeEditorState.undoManager.<get-undoManager>|<get-undoManager>(){}[0]
 
@@ -286,6 +284,9 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
         final fun <get-textVersion>(): kotlin/Int // com.aardarch.aardink.core/CodeEditorState.textVersion.<get-textVersion>|<get-textVersion>(){}[0]
     final var tokenVersion // com.aardarch.aardink.core/CodeEditorState.tokenVersion|{}tokenVersion[0]
         final fun <get-tokenVersion>(): kotlin/Int // com.aardarch.aardink.core/CodeEditorState.tokenVersion.<get-tokenVersion>|<get-tokenVersion>(){}[0]
+    final var tokenizer // com.aardarch.aardink.core/CodeEditorState.tokenizer|{}tokenizer[0]
+        final fun <get-tokenizer>(): com.aardarch.aardink.core/IncrementalTokenizer // com.aardarch.aardink.core/CodeEditorState.tokenizer.<get-tokenizer>|<get-tokenizer>(){}[0]
+        final fun <set-tokenizer>(com.aardarch.aardink.core/IncrementalTokenizer) // com.aardarch.aardink.core/CodeEditorState.tokenizer.<set-tokenizer>|<set-tokenizer>(com.aardarch.aardink.core.IncrementalTokenizer){}[0]
 
     final fun applyEdit(kotlin/Int, kotlin/Int, kotlin/String, androidx.compose.ui.text/TextRange) // com.aardarch.aardink.core/CodeEditorState.applyEdit|applyEdit(kotlin.Int;kotlin.Int;kotlin.String;androidx.compose.ui.text.TextRange){}[0]
     final fun applyTextEdits(kotlin.collections/List<com.aardarch.aardink.core/TextEdit>) // com.aardarch.aardink.core/CodeEditorState.applyTextEdits|applyTextEdits(kotlin.collections.List<com.aardarch.aardink.core.TextEdit>){}[0]
@@ -523,6 +524,9 @@ final class com.aardarch.aardink.core/FindReplaceState { // com.aardarch.aardink
     final var query // com.aardarch.aardink.core/FindReplaceState.query|{}query[0]
         final fun <get-query>(): kotlin/String // com.aardarch.aardink.core/FindReplaceState.query.<get-query>|<get-query>(){}[0]
         final fun <set-query>(kotlin/String) // com.aardarch.aardink.core/FindReplaceState.query.<set-query>|<set-query>(kotlin.String){}[0]
+    final var replaceMode // com.aardarch.aardink.core/FindReplaceState.replaceMode|{}replaceMode[0]
+        final fun <get-replaceMode>(): kotlin/Boolean // com.aardarch.aardink.core/FindReplaceState.replaceMode.<get-replaceMode>|<get-replaceMode>(){}[0]
+        final fun <set-replaceMode>(kotlin/Boolean) // com.aardarch.aardink.core/FindReplaceState.replaceMode.<set-replaceMode>|<set-replaceMode>(kotlin.Boolean){}[0]
     final var replacement // com.aardarch.aardink.core/FindReplaceState.replacement|{}replacement[0]
         final fun <get-replacement>(): kotlin/String // com.aardarch.aardink.core/FindReplaceState.replacement.<get-replacement>|<get-replacement>(){}[0]
         final fun <set-replacement>(kotlin/String) // com.aardarch.aardink.core/FindReplaceState.replacement.<set-replacement>|<set-replacement>(kotlin.String){}[0]
@@ -539,7 +543,7 @@ final class com.aardarch.aardink.core/FindReplaceState { // com.aardarch.aardink
     final fun hide() // com.aardarch.aardink.core/FindReplaceState.hide|hide(){}[0]
     final fun nextMatch(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/FindReplaceState.nextMatch|nextMatch(){}[0]
     final fun prevMatch(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/FindReplaceState.prevMatch|prevMatch(){}[0]
-    final fun show() // com.aardarch.aardink.core/FindReplaceState.show|show(){}[0]
+    final fun show(kotlin/Boolean = ...) // com.aardarch.aardink.core/FindReplaceState.show|show(kotlin.Boolean){}[0]
     final fun toOptions(): com.aardarch.aardink.core/FindEngine.Options // com.aardarch.aardink.core/FindReplaceState.toOptions|toOptions(){}[0]
 }
 
@@ -811,6 +815,9 @@ final object com.aardarch.aardink.core/EditorLimits { // com.aardarch.aardink.co
     final var cooperativeTokenizeThresholdChars // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars|{}cooperativeTokenizeThresholdChars[0]
         final fun <get-cooperativeTokenizeThresholdChars>(): kotlin/Int // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars.<get-cooperativeTokenizeThresholdChars>|<get-cooperativeTokenizeThresholdChars>(){}[0]
         final fun <set-cooperativeTokenizeThresholdChars>(kotlin/Int) // com.aardarch.aardink.core/EditorLimits.cooperativeTokenizeThresholdChars.<set-cooperativeTokenizeThresholdChars>|<set-cooperativeTokenizeThresholdChars>(kotlin.Int){}[0]
+    final var maxFindMatches // com.aardarch.aardink.core/EditorLimits.maxFindMatches|{}maxFindMatches[0]
+        final fun <get-maxFindMatches>(): kotlin/Int // com.aardarch.aardink.core/EditorLimits.maxFindMatches.<get-maxFindMatches>|<get-maxFindMatches>(){}[0]
+        final fun <set-maxFindMatches>(kotlin/Int) // com.aardarch.aardink.core/EditorLimits.maxFindMatches.<set-maxFindMatches>|<set-maxFindMatches>(kotlin.Int){}[0]
     final var plainTextFallbackChars // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars|{}plainTextFallbackChars[0]
         final fun <get-plainTextFallbackChars>(): kotlin/Int // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars.<get-plainTextFallbackChars>|<get-plainTextFallbackChars>(){}[0]
         final fun <set-plainTextFallbackChars>(kotlin/Int) // com.aardarch.aardink.core/EditorLimits.plainTextFallbackChars.<set-plainTextFallbackChars>|<set-plainTextFallbackChars>(kotlin.Int){}[0]

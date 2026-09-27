@@ -37,6 +37,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.TimeSource
 
 /** One indentation step. Spaces, not a tab, to match what smartIndent already inserts. */
 private const val INDENT: String = "    "
@@ -53,7 +54,7 @@ private const val INDENT: String = "    "
  * in composition.
  *
  * @param initialText The document content to load on creation.
- * @param tokenizer The tokenizer used for syntax highlighting. Defaults to [PlainTextTokenizer].
+ * @param tokenizer The tokenizer used for syntax highlighting; see the [tokenizer] property.
  * @param tokenizeDebounceMs Delay (ms) after the last keystroke before incremental tokenization
  *   runs. A 0 value tokenizes synchronously (use only for tests or small documents).
  * @param scope The scope tokenization is scheduled on. Defaults to `Dispatchers.Main`, which
@@ -65,10 +66,26 @@ private const val INDENT: String = "    "
 @Stable
 class CodeEditorState(
     initialText: String = "",
-    val tokenizer: IncrementalTokenizer = PlainTextTokenizer,
+    tokenizer: IncrementalTokenizer = PlainTextTokenizer,
     val tokenizeDebounceMs: Long = 150L,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) {
+    /**
+     * The tokenizer used for syntax highlighting. Defaults to [PlainTextTokenizer].
+     *
+     * Assigning a different one re-highlights the document with it and keeps everything else:
+     * text, selection, and undo history. That is how a host switches the language of an open
+     * document.
+     */
+    var tokenizer: IncrementalTokenizer = tokenizer
+        set(value) {
+            if (value === field) return
+            field = value
+            lastTokenizerResult = null
+            tokenizerIsIncremental = null
+            scheduleTokenization()
+        }
+
     val document = CodeDocument(initialText)
     internal val tokenStore = TokenStore(document)
     val undoManager = EditorUndoManager()
@@ -189,6 +206,8 @@ class CodeEditorState(
      */
     fun loadText(newText: String) {
         document.replaceAll(newText)
+        // A new document, not an edit: highlight it with a full pass.
+        lastTokenizerResult = null
         undoManager.clear()
         syncFieldToDocument(TextRange(0))
         // After the sync, not before: syncFieldToDocument edits the field, and that edit pushes
@@ -453,6 +472,27 @@ class CodeEditorState(
     private var tokenizationJob: Job? = null
     private val tokenizationScope = scope
 
+    /**
+     * The list the tokenizer returned from its last pass over this document, passed back to it as
+     * `previousTokens`: the built-in tokenizers recognise their own result and rescan only what
+     * changed since. Null until a pass completes, and after [loadText] or a new [tokenizer].
+     */
+    private var lastTokenizerResult: List<Token>? = null
+
+    /**
+     * On a single-threaded host, whether [IncrementalTokenizer.tokenizeLines] is cheap for this
+     * tokenizer (null until a call shows it). A tokenizer whose partial pass is really a full scan
+     * blocks the UI for as long as that scan takes, so once one call takes longer than
+     * [SLOW_PARTIAL_PASS_MS] the editor goes back to chunked full passes for it.
+     */
+    private var tokenizerIsIncremental: Boolean? = null
+
+    /**
+     * The document lines on screen, reported by the layout. Highlighted first when a large
+     * document is tokenized from scratch on a single-threaded host.
+     */
+    internal var visibleLines: IntRange? = null
+
     init {
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
@@ -475,6 +515,7 @@ class CodeEditorState(
         if (exceedsAnalysisLimit) {
             // Also clears dirtyLines, so shrinking back under the limit retokenizes from scratch.
             tokenStore.replaceAll(emptyList())
+            lastTokenizerResult = null
             tokenVersion++
             return
         }
@@ -482,45 +523,52 @@ class CodeEditorState(
         val snapshot = document.text
         val version = document.version
         val dirty = document.dirtyLines
+        val previous = lastTokenizerResult
+        val large = computeOnMainThread && snapshot.length > EditorLimits.cooperativeTokenizeThresholdChars
 
-        // On a single-threaded host a large document goes through the chunked full pass even when
-        // only a few lines changed: tokenizeLines cannot suspend, and the built-in tokenizers
-        // retokenize the whole text there anyway.
-        if (computeOnMainThread && snapshot.length > EditorLimits.cooperativeTokenizeThresholdChars) {
-            val allTokens = withContext(computeDispatcher) { tokenizer.tokenizeFullCooperative(snapshot) }
+        // A partial pass: only what changed since the last one, when there is a last one.
+        if (dirty != null && previous != null && !(large && tokenizerIsIncremental == false)) {
+            val lines = if (tokenizer.canSpanLines(dirty.first, previous)) 0..dirty.last else dirty
+            val started = TimeSource.Monotonic.markNow()
+            val updated = withContext(computeDispatcher) { tokenizer.tokenizeLines(snapshot, lines, previous) }
+            if (large) tokenizerIsIncremental = started.elapsedNow().inWholeMilliseconds < SLOW_PARTIAL_PASS_MS
             // Every edit schedules a new pass and cancels this one; the version check covers an
             // edit made straight through the public CodeDocument, which schedules nothing.
             if (document.version != version) return
-            tokenStore.replaceAll(allTokens)
+            tokenStore.merge(lines, updated)
+            lastTokenizerResult = updated
             tokenVersion++
             return
         }
 
-        // Read on the scope's dispatcher, not inside the withContext below: the store is only ever
-        // touched from here and from the document's change events, which run on this dispatcher.
-        // The tokenizer gets one immutable list.
-        val previousTokens = tokenStore.allTokens()
-        val tokenizedLines = when {
-            dirty == null || previousTokens.isEmpty() -> null
-            tokenizer.canSpanLines(dirty.first, previousTokens) -> 0..dirty.last
-            else -> dirty
-        }
-
-        val updatedTokens = withContext(computeDispatcher) {
-            if (tokenizedLines == null) {
-                tokenizer.tokenizeFull(snapshot)
-            } else {
-                tokenizer.tokenizeLines(snapshot, tokenizedLines, previousTokens)
-            }
-        }
-
-        // Resumed on the scope's dispatcher (Dispatchers.Main in prod, testDispatcher in tests)
-        if (document.version != version) return
-        if (tokenizedLines == null) {
-            tokenStore.replaceAll(updatedTokens)
+        // A full pass. On a single-threaded host a large document is tokenized in chunks that
+        // yield to the UI, after a quick provisional pass over the lines on screen.
+        val allTokens = if (large) {
+            if (tokenizerIsIncremental != false) highlightVisibleLinesFirst(snapshot, version)
+            withContext(computeDispatcher) { tokenizer.tokenizeFullCooperative(snapshot) }
         } else {
-            tokenStore.merge(tokenizedLines, updatedTokens)
+            withContext(computeDispatcher) { tokenizer.tokenizeFull(snapshot) }
         }
+        if (document.version != version) return
+        tokenStore.replaceAll(allTokens)
+        lastTokenizerResult = allTokens
+        tokenVersion++
+    }
+
+    /**
+     * Tokenizes just the visible lines, with no previous tokens (a provisional pass the built-in
+     * tokenizers answer by scanning only those lines), so they are coloured before the full pass
+     * over a large document finishes.
+     */
+    private fun highlightVisibleLinesFirst(snapshot: String, version: Long) {
+        val last = document.lineCount - 1
+        val visible = visibleLines ?: 0..INITIAL_VISIBLE_LINES
+        val lines = visible.first.coerceIn(0, last)..visible.last.coerceIn(0, last)
+        val started = TimeSource.Monotonic.markNow()
+        val provisional = tokenizer.tokenizeLines(snapshot, lines, emptyList())
+        if (started.elapsedNow().inWholeMilliseconds >= SLOW_PARTIAL_PASS_MS) tokenizerIsIncremental = false
+        if (document.version != version) return
+        tokenStore.merge(lines, provisional)
         tokenVersion++
     }
 
@@ -572,7 +620,11 @@ class CodeEditorState(
     }
 }
 
-/** Creates and [remember]s a [CodeEditorState]. */
+/**
+ * Creates and [remember]s a [CodeEditorState]; a different [tokenizer] creates a new one from
+ * [initialText]. To switch the language of an open document and keep its text and undo history,
+ * assign [CodeEditorState.tokenizer] instead.
+ */
 @Composable
 fun rememberCodeEditorState(
     initialText: String = "",
@@ -581,3 +633,9 @@ fun rememberCodeEditorState(
 ): CodeEditorState = remember(tokenizer) {
     CodeEditorState(initialText, tokenizer, tokenizeDebounceMs)
 }
+
+/** Lines highlighted first when the layout has not reported what is on screen yet. */
+private const val INITIAL_VISIBLE_LINES = 100
+
+/** A partial tokenization pass slower than this is treated as a full scan on single-threaded hosts. */
+private const val SLOW_PARTIAL_PASS_MS = 50L

@@ -87,6 +87,15 @@ fun FindReplacePanel(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Shows or hides the replace row, like the chevron in front of VS Code's find box.
+                    IconButton(
+                        onClick = { state.replaceMode = !state.replaceMode },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (state.replaceMode) "Hide replace" else "Show replace"
+                        },
+                    ) {
+                        Text(if (state.replaceMode) "▾" else "▸", modifier = Modifier.clearAndSetSemantics { })
+                    }
                     OutlinedTextField(
                         value = state.query,
                         onValueChange = { state.query = it },
@@ -101,7 +110,7 @@ fun FindReplacePanel(
                         text = matchLabel(state),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp),
+                        modifier = Modifier.width(64.dp),
                     )
                     // The glyphs mean nothing to a screen reader; the buttons carry the labels.
                     IconButton(
@@ -123,33 +132,14 @@ fun FindReplacePanel(
                     }
                 }
 
-                // Replace row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = state.replacement,
-                        onValueChange = { state.replacement = it },
-                        placeholder = { Text("Replace") },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = LocalEditorTypography.current.fontFamily,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = onReplace,
-                        enabled = state.matches.isNotEmpty() && state.currentMatchIndex >= 0,
-                    ) { Text("Replace") }
-                    TextButton(
-                        onClick = onReplaceAll,
-                        enabled = state.matches.isNotEmpty(),
-                    ) { Text("All") }
+                // Replace row, in replace mode only (Ctrl+H, or the toggle above)
+                if (state.replaceMode) {
+                    ReplaceRow(state, onReplace, onReplaceAll)
                 }
 
                 // Options row
                 Row(
+
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -174,8 +164,38 @@ fun FindReplacePanel(
     }
 }
 
-private fun matchLabel(state: FindReplaceState): String = if (state.matches.isEmpty()) {
-    if (state.query.isEmpty()) "" else "0"
-} else {
-    "${state.currentMatchIndex + 1}/${state.matches.size}"
+@Composable
+private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplaceAll: () -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = state.replacement,
+            onValueChange = { state.replacement = it },
+            placeholder = { Text("Replace") },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = LocalEditorTypography.current.fontFamily,
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(
+            onClick = onReplace,
+            enabled = state.matches.isNotEmpty() && state.currentMatchIndex >= 0,
+        ) { Text("Replace") }
+        TextButton(
+            onClick = onReplaceAll,
+            enabled = state.matches.isNotEmpty(),
+        ) { Text("All") }
+    }
+}
+
+private fun matchLabel(state: FindReplaceState): String = when {
+    state.matches.isEmpty() -> if (state.query.isEmpty()) "" else "0"
+
+    // Past the cap the total is unknown: "3/10000+".
+    state.matchesCapped -> "${state.currentMatchIndex + 1}/${state.matches.size}+"
+
+    else -> "${state.currentMatchIndex + 1}/${state.matches.size}"
 }

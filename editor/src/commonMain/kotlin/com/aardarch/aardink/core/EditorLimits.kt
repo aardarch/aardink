@@ -42,4 +42,11 @@ object EditorLimits {
      * the limit again.
      */
     var plainTextFallbackChars: Int = 2 * 1024 * 1024
+
+    /**
+     * The most matches the find panel collects; it shows "10000+" beyond that. A search for a
+     * common character in a large document would otherwise build a match list, and a highlight
+     * per match, far beyond what anyone steps through. Applies on every platform.
+     */
+    var maxFindMatches: Int = 10_000
 }

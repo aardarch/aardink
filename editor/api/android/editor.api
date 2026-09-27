@@ -85,6 +85,7 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public static synthetic fun requestRename$default (Lcom/aardarch/aardink/core/CodeEditorState;IILjava/lang/Object;)V
 	public final fun scheduleTokenization ()V
 	public final fun setComputeDispatcher (Lkotlinx/coroutines/CoroutineDispatcher;)V
+	public final fun setTokenizer (Lcom/aardarch/aardink/core/IncrementalTokenizer;)V
 	public final fun tokensForLine (I)Ljava/util/List;
 	public final fun undo ()Ljava/lang/String;
 }
@@ -199,8 +200,10 @@ public final class com/aardarch/aardink/core/EditorLimits {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorLimits;
 	public final fun getCooperativeTokenizeThresholdChars ()I
+	public final fun getMaxFindMatches ()I
 	public final fun getPlainTextFallbackChars ()I
 	public final fun setCooperativeTokenizeThresholdChars (I)V
+	public final fun setMaxFindMatches (I)V
 	public final fun setPlainTextFallbackChars (I)V
 }
 
@@ -338,6 +341,7 @@ public final class com/aardarch/aardink/core/FindReplaceState {
 	public final fun getCurrentMatchIndex ()I
 	public final fun getMatches ()Ljava/util/List;
 	public final fun getQuery ()Ljava/lang/String;
+	public final fun getReplaceMode ()Z
 	public final fun getReplacement ()Ljava/lang/String;
 	public final fun getUseRegex ()Z
 	public final fun getVisible ()Z
@@ -347,11 +351,13 @@ public final class com/aardarch/aardink/core/FindReplaceState {
 	public final fun prevMatch ()Lkotlin/ranges/IntRange;
 	public final fun setCaseSensitive (Z)V
 	public final fun setQuery (Ljava/lang/String;)V
+	public final fun setReplaceMode (Z)V
 	public final fun setReplacement (Ljava/lang/String;)V
 	public final fun setUseRegex (Z)V
 	public final fun setVisible (Z)V
 	public final fun setWholeWord (Z)V
-	public final fun show ()V
+	public final fun show (Z)V
+	public static synthetic fun show$default (Lcom/aardarch/aardink/core/FindReplaceState;ZILjava/lang/Object;)V
 	public final fun toOptions ()Lcom/aardarch/aardink/core/FindEngine$Options;
 }
 
@@ -738,16 +744,16 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$AnnotationToolti
 public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt;
 	public fun <init> ()V
-	public final fun getLambda$-1088215910$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-1194525862$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1971954223$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1988451003$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-750560481$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-896015989$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-977784956$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1735550802$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1758297251$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1100410448$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1295850246$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1840380520$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$65438541$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1923415362$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1984148761$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$512948177$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$741610503$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class com/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt {

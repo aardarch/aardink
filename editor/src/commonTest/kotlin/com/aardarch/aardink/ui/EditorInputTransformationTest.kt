@@ -69,11 +69,16 @@ class EditorInputTransformationTest {
     }
 
     private fun stateFor(text: String): CodeEditorState = CodeEditorState(
-        initialText = text,
+        initialText = "",
         tokenizeDebounceMs = 0,
         scope = CoroutineScope(Dispatchers.Unconfined),
     ).apply {
         computeDispatcher = Dispatchers.Unconfined
+        // Loaded only now: the constructor's first tokenization pass would otherwise start on the
+        // default background dispatcher and resume there, racing the test's own edits.
+        loadText(text)
+        // Where a fresh TextFieldState(text) puts it, which the tests below type at.
+        selection = TextRange(text.length)
     }
 
     private fun runInput(
