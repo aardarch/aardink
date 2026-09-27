@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.toml
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
@@ -58,6 +59,8 @@ object TomlTokenizer : RegexTokenizer() {
         // Punctuation and operators
         Regex("[=\\[\\]{},.]") to TokenType.Punctuation,
     )
+
+    override val commentSyntax: CommentSyntax = CommentSyntax(line = "#")
 
     override fun keyboardToolbarChars(): List<Char> = listOf('=', '[', ']', '"', '\'', '#', '.', '{', '}', ',')
 }

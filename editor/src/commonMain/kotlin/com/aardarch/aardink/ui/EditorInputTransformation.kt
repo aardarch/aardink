@@ -24,26 +24,28 @@ import androidx.compose.foundation.text.input.insert
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.edit.AppliedChange
+import com.aardarch.aardink.core.edit.EditKind
+import com.aardarch.aardink.core.edit.TextChange
+import com.aardarch.aardink.core.edit.TypingRules
+import com.aardarch.aardink.core.edit.applyChanges
 
 /**
- * Mirrors every user keystroke into [CodeEditorState.document] and [CodeEditorState.undoManager]
- * as it happens, then applies the same-language "typing conveniences" the old `handleTextChange`
- * applied — smart indent on `Enter` and auto-close of brackets/quotes — directly to the buffer the
- * framework is already editing.
+ * Mirrors every user keystroke into [CodeEditorState.document] as it happens, records it for undo,
+ * then applies the typing rules ([TypingRules]: smart indent on Enter, auto-close of brackets and
+ * quotes) directly to the buffer the framework is already editing.
  *
  * Deliberately does NOT call [CodeEditorState.applyEdit] or any other method that would push a
  * fresh copy of [CodeEditorState.document]'s text back into `textFieldState`: this transformation
  * runs *during* the field's own edit of that same state, and re-entering it here is undefined
- * behavior. It calls [CodeEditorState.bumpTextVersionAndScheduleTokenization] once the mirroring is
- * done instead.
+ * behavior. It hands the applied changes to [CodeEditorState.recordFieldEdit] instead.
  *
  * A single-character insertion with no deletion — an ordinary keystroke, not a multi-character IME
  * commit, paste, or deletion — additionally triggers [onSingleCharacterInsert] so the composable can
  * run its own completion-request logic (which needs composition-scoped state this class does not
  * have access to). [onSingleCharacterInsert]'s `autoCloseLength` reports how many characters (0 if
  * none) were auto-closed right after the typed one, so the caller can re-address any in-flight
- * completion list past that insertion too — matching the old `handleTextChange`'s
- * `carried.map { it.shiftedForInsert(finalSelection.start, closing.length, absorbing = false) }`.
+ * completion list past that insertion too.
  */
 internal class EditorInputTransformation(
     private val state: CodeEditorState,
@@ -54,69 +56,53 @@ internal class EditorInputTransformation(
 
     override fun TextFieldBuffer.transformInput() {
         normalizeLineEndings()
-
-        var singleCharInsertAt = -1
-        var singleCharTyped: Char? = null
-        val isSingleChange = changes.changeCount == 1
-
-        changes.forEachChangeReversed { range, originalRange ->
-            val deleteLen = originalRange.length
-            if (deleteLen > 0) {
-                val deletedText = state.document.subSequence(originalRange.min, originalRange.max).toString()
-                state.document.delete(originalRange.min, deleteLen)
-                state.undoManager.recordDelete(originalRange.min, deleteLen, deletedText)
-            }
-            val insertLen = range.length
-            if (insertLen > 0) {
-                val insertedText = asCharSequence().substring(range.min, range.max)
-                state.document.insert(originalRange.min, insertedText)
-                state.undoManager.recordInsert(originalRange.min, insertedText)
-                if (isSingleChange && deleteLen == 0 && insertLen == 1) {
-                    singleCharInsertAt = originalRange.min
-                    singleCharTyped = insertedText[0]
-                }
-            }
-        }
-
-        val typedChar = singleCharTyped
-        var autoCloseLength = 0
-        if (typedChar != null) {
-            val service = languageService()
-            if (service != null) {
-                if (typedChar == '\n') {
-                    val (newLine, _) = state.document.offsetToLineCol(singleCharInsertAt + 1)
-                    val spaces = service.smartIndent(state.document, newLine)
-                    if (spaces > 0) {
-                        val indentAt = singleCharInsertAt + 1
-                        val indent = " ".repeat(spaces)
-                        insert(indentAt, indent)
-                        state.document.insert(indentAt, indent)
-                        state.undoManager.recordInsert(indentAt, indent)
-                        placeCursorBeforeCharAt(indentAt + spaces)
-                    }
-                } else {
-                    val closing = service.autoClose(state.document, singleCharInsertAt, typedChar)
-                    if (closing != null) {
-                        val insertAt = selection.start
-                        insert(insertAt, closing)
-                        state.document.insert(insertAt, closing)
-                        state.undoManager.recordInsert(insertAt, closing)
-                        placeCursorBeforeCharAt(insertAt)
-                        autoCloseLength = closing.length
-                    }
-                }
-            }
-        }
-
         // A pass with no text change is not an edit. On wasmJs every programmatic update of the
         // field (loadText, undo, ...) is echoed back through here with an empty change list;
-        // bumping for it reported each setValue to the host twice and tokenized twice.
-        if (changes.changeCount > 0) state.bumpTextVersionAndScheduleTokenization()
+        // recording it reported each setValue to the host twice and tokenized twice.
+        if (changes.changeCount == 0) {
+            onOtherChange()
+            return
+        }
+
+        // The field's changes, in the coordinates of the text before them, as the document is.
+        val fieldChanges = ArrayList<TextChange>(changes.changeCount)
+        changes.forEachChangeReversed { range, originalRange ->
+            fieldChanges.add(TextChange(originalRange.min, originalRange.max, asCharSequence().substring(range.min, range.max)))
+        }
+        val kind = kindOf(fieldChanges, originalSelection)
+        val applied: MutableList<AppliedChange> = state.document.applyChanges(fieldChanges).toMutableList()
+
+        val single = fieldChanges.singleOrNull()
+        val typedChar = single?.takeIf { it.start == it.end && it.text.length == 1 }?.text?.get(0)
+        var autoCloseLength = 0
+        if (typedChar != null) {
+            val followUp = TypingRules.afterTyping(state.document, languageService(), single.start, typedChar)
+            if (followUp != null) {
+                insert(followUp.insertAt, followUp.text)
+                applied += state.document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
+                placeCursorBeforeCharAt(followUp.caret)
+                if (typedChar != '\n') autoCloseLength = followUp.text.length
+            }
+        }
+
+        state.recordFieldEdit(applied, kind, originalSelection, selection)
 
         if (typedChar != null) {
-            onSingleCharacterInsert(singleCharInsertAt, typedChar, autoCloseLength)
+            onSingleCharacterInsert(single.start, typedChar, autoCloseLength)
         } else {
             onOtherChange()
+        }
+    }
+
+    /** How the undo history groups this edit: typing, backspace, forward delete, or anything else. */
+    private fun kindOf(fieldChanges: List<TextChange>, before: TextRange): EditKind {
+        val change = fieldChanges.singleOrNull() ?: return EditKind.Other
+        val deleted = change.end - change.start
+        return when {
+            change.text.isNotEmpty() -> TypingRules.kindOfTyping(change.text, deleted)
+            before.collapsed && before.start == change.end -> EditKind.DeletingLeft
+            before.collapsed && before.start == change.start -> EditKind.DeletingRight
+            else -> EditKind.Other
         }
     }
 
@@ -136,7 +122,8 @@ internal class EditorInputTransformation(
         changes.forEachChangeReversed { range, _ -> if (range.length > 0) inserted += range }
         for (range in inserted) {
             val text = asCharSequence().substring(range.min, range.max)
-            if ('\r' in text) replace(range.min, range.max, text.replace("\r\n", "\n").replace('\r', '\n'))
+            val normalized = TypingRules.normalizeLineEndings(text)
+            if (normalized != text) replace(range.min, range.max, normalized)
         }
     }
 }

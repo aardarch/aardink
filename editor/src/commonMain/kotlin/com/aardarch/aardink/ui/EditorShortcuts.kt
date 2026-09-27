@@ -18,6 +18,7 @@ package com.aardarch.aardink.ui
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -27,8 +28,9 @@ import androidx.compose.ui.input.key.type
 import com.aardarch.aardink.platform.PlatformInfo
 
 /**
- * What [editorKeyboardShortcuts] invokes. Deliberately a narrow set — undo/redo, find/replace,
- * go-to-line, indent/outdent and escape. No multi-cursor, no Ctrl+/, no Ctrl+D.
+ * What [editorKeyboardShortcuts] invokes: undo/redo, find/replace, go-to-line, indent/outdent,
+ * the line commands (toggle comment, move, copy and delete lines) and escape. No multi-cursor
+ * yet: Ctrl+D needs the editor's own renderer to show more than one caret.
  *
  * @param onEscape returns whether it dismissed anything, which decides whether the key is
  *   consumed. Escape must keep bubbling when there is nothing to dismiss, or it would trap a
@@ -42,6 +44,10 @@ internal class EditorShortcutActions(
     val onGoToLine: () -> Unit,
     val onIndent: () -> Unit,
     val onOutdent: () -> Unit,
+    val onToggleComment: () -> Unit,
+    val onMoveLines: (up: Boolean) -> Unit,
+    val onCopyLines: (down: Boolean) -> Unit,
+    val onDeleteLines: () -> Unit,
     val onEscape: () -> Boolean,
 )
 
@@ -50,9 +56,9 @@ internal class EditorShortcutActions(
  *
  * Handled at *preview* level, before the text field sees the event. That matters most for
  * undo: `BasicTextField` has its own built-in Ctrl+Z which operates on the field's private undo
- * stack and bypasses [com.aardarch.aardink.core.EditorUndoManager] entirely, desynchronising the
- * field from [com.aardarch.aardink.core.CodeDocument]. Intercepting here routes every undo
- * through the same manager the toolbar buttons use. On Android this is a net-new fix for hosts
+ * stack and bypasses the editor's own undo history entirely, desynchronising the field from
+ * [com.aardarch.aardink.core.CodeDocument]. Intercepting here routes every undo through the same
+ * history the toolbar buttons use. On Android this is a net-new fix for hosts
  * with a hardware keyboard attached, not a behaviour change for touch input — none of these
  * chords are reachable without one.
  *
@@ -93,6 +99,23 @@ internal fun Modifier.editorKeyboardShortcuts(actions: EditorShortcutActions): M
 
         command && event.key == Key.G -> {
             actions.onGoToLine()
+            true
+        }
+
+        command && event.key == Key.Slash -> {
+            actions.onToggleComment()
+            true
+        }
+
+        command && event.isShiftPressed && event.key == Key.K -> {
+            actions.onDeleteLines()
+            true
+        }
+
+        // Alt (Option on macOS) + arrows, as in VS Code: with Shift they copy, without they move.
+        event.isAltPressed && (event.key == Key.DirectionUp || event.key == Key.DirectionDown) -> {
+            val up = event.key == Key.DirectionUp
+            if (event.isShiftPressed) actions.onCopyLines(!up) else actions.onMoveLines(up)
             true
         }
 

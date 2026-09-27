@@ -63,9 +63,11 @@ private val SAMPLE = """
  * [KeyboardToolbarPlacement.platformDefault] resolving to `Hidden` because a desktop always has
  * a real keyboard.
  *
- * Try: Ctrl/Cmd+Z and +Y (undo/redo through EditorUndoManager, not the field's own stack),
- * Ctrl/Cmd+F (find), Ctrl/Cmd+G (go to line), Tab and Shift+Tab on a multi-line selection,
- * Escape to dismiss, and the mouse wheel plus the scrollbar on the right.
+ * Try: Ctrl/Cmd+Z and +Y (undo/redo through the editor's history, not the field's own stack),
+ * Ctrl/Cmd+F (find), Ctrl/Cmd+H (replace), Ctrl/Cmd+G (go to line), Tab and Shift+Tab on a
+ * multi-line selection, Ctrl/Cmd+/ (toggle comment), Alt+Up/Down (move lines), Shift+Alt+Up/Down
+ * (copy lines), Ctrl/Cmd+Shift+K (delete lines), Escape to dismiss, and the mouse wheel plus the
+ * scrollbar on the right.
  */
 fun main() = application {
     Window(

@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.markdown
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
@@ -65,6 +66,8 @@ object MarkdownTokenizer : RegexTokenizer() {
         // Horizontal rule
         Regex("(?m)^\\s*(?:---|\\*\\*\\*|___)\\s*$") to TokenType.Punctuation,
     )
+
+    override val commentSyntax: CommentSyntax = CommentSyntax(blockStart = "<!--", blockEnd = "-->")
 
     override fun keyboardToolbarChars(): List<Char> = listOf('#', '*', '_', '`', '-', '>', '[', ']', '(', ')')
 }

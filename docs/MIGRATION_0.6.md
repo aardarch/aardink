@@ -36,10 +36,10 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | 0.5 | 0.6 | Landed in |
 | --- | --- | --- |
 | `textFieldState` | Removed. Read `text`, `selection` / `selections`; edit with `applyEdit` / `applyTextEdits` | *pending* (PR 7) |
-| `undoManager: EditorUndoManager` | Removed. Use `undo()`, `redo()`, `canUndo`, `canRedo`, `pushUndoStop()` | *pending* (PR 4) |
+| `undoManager: EditorUndoManager` | Removed. Use `undo()`, `redo()`, `canUndo`, `canRedo` (snapshot state, for toolbar buttons) and `pushUndoStop()`; `alternativeVersionId` for dirty tracking; `lastChangeKind` to tell undo and redo from edits | PR 4 |
 | `tokenCache: TokenCache` | Removed. Use `tokensForLine(line)`; a token that spans lines comes back as one token per line | PR 2 |
 | `tokenizer` (`val`) | `var`: assigning it re-highlights and keeps text, selection and undo history | PR 3 |
-| `selection` (read-only) | Settable; setting it collapses to one cursor | *pending* (PR 4) |
+| `selection` (read-only) | Settable; setting it replaces every selection with this one. `selections` / `setSelections` handle several, the primary first (as in Monaco) | PR 4 |
 
 ## Other removed symbols
 
@@ -51,7 +51,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | `applyFolding(...)` (deprecated in 0.5) | Removed. `FoldState` drives folding | *pending* (PR 7) |
 | `EditorTheme.fontFamily`, `fontSize`, `lineHeight` (deprecated in 0.5) | Removed. Provide `LocalEditorTypography` | *pending* (PR 7) |
 | `TokenCache` | Removed; the editor keeps its tokens internally. Read them with `CodeEditorState.tokensForLine` | PR 2 |
-| `EditorUndoManager`, `EditOperation` | Internal | *pending* (PR 4) |
+| `EditorUndoManager`, `EditOperation` | Removed; the editor keeps its undo history internally | PR 4 |
 
 ## Changed behaviour
 
@@ -65,6 +65,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | Language services and folding providers | Called with the live `CodeDocument`, which could change under a service running on another thread | Called with a read-only snapshot taken when the request was made; editing it throws `IllegalStateException` | PR 2 |
 | `CodeDocument` | A plain class | A `CharSequence`: index it, slice it with `subSequence`, and run a `Regex` over it without copying `text`. `text` is built once per edit and shared | PR 2 |
 | Web `updateOptions({ language })` | Rebuilt the editor state and lost undo history | Keeps undo history | PR 3 |
+| Undo | Undid runs of typed characters up to a space, and put the caret where the edit was | Groups as Monaco does: typing until the caret moves, the kind of edit changes, or a space follows a word, so a word at a time; backspaces together; every other edit on its own. Undo restores every selection from before the step | PR 4 |
 
 ## Example: an Android host
 

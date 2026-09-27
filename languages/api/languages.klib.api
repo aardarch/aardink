@@ -109,6 +109,9 @@ final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aa
 }
 
 final object com.aardarch.aardink.languages.internal.css/CssTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.css/CssTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.css/CssTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.css/CssTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.css/CssTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
 }
 
@@ -121,6 +124,9 @@ final object com.aardarch.aardink.languages.internal.folding/TomlFoldingProvider
 }
 
 final object com.aardarch.aardink.languages.internal.html/HtmlTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages.internal.html/HtmlTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
     final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.html/HtmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
@@ -155,10 +161,16 @@ final object com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageServic
 }
 
 final object com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.markdown/MarkdownTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
 }
 
@@ -174,10 +186,16 @@ final object com.aardarch.aardink.languages.internal.toml/TomlLanguageService : 
 }
 
 final object com.aardarch.aardink.languages.internal.toml/TomlTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.toml/TomlTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.toml/TomlTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.toml/TomlTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.toml/TomlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.typescript/TypeScriptTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
 }
 
@@ -186,6 +204,9 @@ final object com.aardarch.aardink.languages.internal.xml/HtmlLanguageService : c
 final object com.aardarch.aardink.languages.internal.xml/XmlLanguageService : com.aardarch.aardink.languages.internal.xml/TagValidator // com.aardarch.aardink.languages.internal.xml/XmlLanguageService|null[0]
 
 final object com.aardarch.aardink.languages.internal.xml/XmlTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages.internal.xml/XmlTokenizer|null[0]
+    final val commentSyntax // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
     final fun keyboardToolbarChars(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.keyboardToolbarChars|keyboardToolbarChars(){}[0]
     final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal.xml/XmlTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]

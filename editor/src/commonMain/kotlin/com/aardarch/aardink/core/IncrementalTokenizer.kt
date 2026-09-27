@@ -89,6 +89,13 @@ interface IncrementalTokenizer {
      * Characters are shown in the order returned. Duplicates are deduplicated by the toolbar.
      */
     fun keyboardToolbarChars(): List<Char> = emptyList()
+
+    /**
+     * How the language writes comments, for the toggle-comment command (Ctrl/Cmd+/); null (the
+     * default) turns the command off.
+     */
+    val commentSyntax: CommentSyntax?
+        get() = null
 }
 
 /** A no-op tokenizer that treats all text as [TokenType.Default]. Useful for plain-text editing. */

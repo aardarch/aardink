@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.typescript
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
@@ -49,6 +50,8 @@ object TypeScriptTokenizer : RegexTokenizer() {
         Regex("[{}\\[\\]();,.:]") to TokenType.Punctuation,
         Regex("[+\\-*/%=!<>&|^~?]+") to TokenType.Operator,
     )
+
+    override val commentSyntax: CommentSyntax = CommentSyntax(line = "//", blockStart = "/*", blockEnd = "*/")
 
     override fun keyboardToolbarChars(): List<Char> = listOf('{', '}', '(', ')', '"', '\'', '`', '<', '>', ';', '.', '=')
 }

@@ -12,7 +12,8 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 | 15 | Done (code) | npm job in `release.yml`, package metadata, LICENSE and README in the package, publint + attw in CI. **Waiting on the manual bootstrap** in `docs/NPM_BOOTSTRAP.md`. |
 | 2 | Done | `core/text/{GapBuffer,LineIndex,DocumentChange}`, `CodeDocument` as a `CharSequence` with snapshots, internal `TokenStore` (line-aligned, shifted by change events, fixes stale colours after inserted lines), `tokensForLine`, language services get snapshots. 10k keystrokes into 2 MB: ~17 ms (JVM). |
 | 3 | Done | Incremental `RegexTokenizer` and `XmlTokenizer` (restart + convergence, scan cache keyed by the identity of the tokenizer's last result, zero-length markers for the covered span), golden test over every built-in language; viewport-first on single-threaded hosts, with a learned fallback for slow partial passes; `tokenizer` var; chunked, capped, cancellable find; replace mode; debounced, prefix/suffix-trimmed diff lane. |
-| 4–14, 16, 17 | Not started | See §6. |
+| 4 | Done | `core/edit/` (selection sets, changes, Monaco-style `UndoHistory`, `TypingRules`, `TextNavigator`, `LineCommands`, `OccurrenceFinder`); public `selections`/`setSelections`, `canUndo`/`canRedo`, `pushUndoStop`, `alternativeVersionId`, `lastChangeKind`, `CommentSyntax`; `EditorUndoManager` removed; Ctrl+/, Alt+Up/Down, Shift+Alt+Up/Down, Ctrl+Shift+K wired on the current field. |
+| 5–14, 16, 17 | Not started | See §6. PR 0 (spike) comes before PR 5. |
 | A1–A3 | Not started | `aardflex-web-app` switch-over (§7.1). |
 | B1 | Not started | `aardflex` Android upgrade 0.4.0 → 0.6.0 (§7.2). |
 
@@ -249,9 +250,10 @@ its undo stack private and gives hosts a small, stable surface:
 
 Grouping rules, as in Monaco:
 
-- Consecutive typing stays in one entry. The entry closes when the cursor moves, when a word
-  boundary or whitespace is typed after a word, when the edit kind changes (typing vs. delete),
-  after 500 ms idle, or on `pushUndoStop()`.
+- Consecutive typing stays in one entry. The entry closes when the cursor moves, when
+  whitespace is typed after a word, when the edit kind changes (typing vs. delete), or on
+  `pushUndoStop()`. There is no idle timeout: Monaco has none, and grouping stays deterministic
+  (and testable) that way.
 - An IME composition is one entry, from the first composing text to the commit.
 - A multi-cursor edit is one entry. Undo restores every cursor and selection from before the edit.
 - Paste, completion, code actions, rename, format, replace-all, comment toggle and line moves
@@ -460,7 +462,7 @@ building its own wasm executable.
 ### `:editor` — new
 
 1. `CodeEditorState.selections: List<TextRange>` and `setSelections(List<TextRange>)`, where
-   the last entry is primary.
+   the first entry is primary (as in Monaco's `getSelections`/`setSelections`).
 2. Undo (§4.4a): `CodeEditorState.canUndo`, `canRedo`, `pushUndoStop()`,
    `alternativeVersionId: Long`, `lastChangeKind: EditChangeKind`, and
    `enum class EditChangeKind { Edit, Undo, Redo, Flush }`.
@@ -911,6 +913,8 @@ Monaco's on the fixtures, and bundle size recorded.
 - `ui/screen/XmlEditorScreen.kt:195`: move to `EditorOptions` if decision 1 is A. Its explicit
   `diagnostics` list keeps its host-supplied meaning.
 - `ui/theme/AardflexEditorTheme.kt`: drop any `fontFamily`/`fontSize`/`lineHeight` arguments.
+- `ui/screen/XmlEditorScreen.kt:94,100`: `codeEditorState.undoManager.canUndo`/`canRedo` become
+  `codeEditorState.canUndo`/`canRedo`.
 - `service/XmlIncrementalTokenizer.kt` still compiles and stays correct: it passes its own augmented
   list back as `previousTokens`, which the built-in XML tokenizer does not recognise, so every
   pass is a full scan (as in 0.5). Replace it with `DeclarativeTokenizer` over the web app's

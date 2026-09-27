@@ -25,6 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CodeEditorStateTest {
 
@@ -241,7 +242,7 @@ class CodeEditorStateTest {
 
     @Test
     fun `loadText clears the field's own undo history`() {
-        // Ctrl+Z is intercepted and routed through EditorUndoManager, so the field's built-in
+        // Ctrl+Z is intercepted and routed through the editor's own undo history, so the field's built-in
         // stack is never used -- but if loadText left it populated, a platform-level undo
         // gesture could resurrect text from a previously loaded document.
         val state = testState("first document")
@@ -260,5 +261,111 @@ class CodeEditorStateTest {
         state.applyTextEdits(listOf(TextEdit(range = 0..4, newText = "HELLO")))
 
         assertEquals(state.textFieldState.selection, state.selection)
+    }
+
+    // ── 0.6: selections and Monaco-style undo ──────────────────────────────────
+
+    @Test
+    fun `setSelections keeps the primary first and merges overlaps`() {
+        val state = testState("abcdefgh")
+        state.setSelections(listOf(TextRange(6), TextRange(0, 2), TextRange(1, 3)))
+        assertEquals(listOf(TextRange(6), TextRange(0, 3)), state.selections)
+        assertEquals(TextRange(6), state.selection)
+        state.selection = TextRange(1)
+        assertEquals(listOf(TextRange(1)), state.selections)
+    }
+
+    @Test
+    fun `undo restores the selections from before the edit`() {
+        val state = testState("one two")
+        state.setSelections(listOf(TextRange(4, 7)))
+        state.applyEdit(4, 3, "2", TextRange(5))
+        state.undo()
+        assertEquals("one two", state.text)
+        assertEquals(TextRange(4, 7), state.selection)
+        state.redo()
+        assertEquals(TextRange(5), state.selection)
+    }
+
+    @Test
+    fun `canUndo and canRedo follow the history`() {
+        val state = testState("x")
+        assertFalse(state.canUndo)
+        state.applyEdit(1, 0, "y", TextRange(2))
+        assertTrue(state.canUndo)
+        assertFalse(state.canRedo)
+        state.undo()
+        assertFalse(state.canUndo)
+        assertTrue(state.canRedo)
+        state.loadText("new")
+        assertFalse(state.canUndo)
+        assertFalse(state.canRedo)
+    }
+
+    @Test
+    fun `alternativeVersionId tells a saved text from a changed one`() {
+        val state = testState("saved")
+        val saved = state.alternativeVersionId
+        state.applyEdit(5, 0, "!", TextRange(6))
+        assertTrue(state.alternativeVersionId != saved)
+        state.undo()
+        assertEquals(saved, state.alternativeVersionId)
+    }
+
+    @Test
+    fun `lastChangeKind reports edits, undo, redo and flush`() {
+        val state = testState("a")
+        assertEquals(EditChangeKind.Flush, state.lastChangeKind)
+        state.applyEdit(1, 0, "b", TextRange(2))
+        assertEquals(EditChangeKind.Edit, state.lastChangeKind)
+        state.undo()
+        assertEquals(EditChangeKind.Undo, state.lastChangeKind)
+        state.redo()
+        assertEquals(EditChangeKind.Redo, state.lastChangeKind)
+        state.loadText("c")
+        assertEquals(EditChangeKind.Flush, state.lastChangeKind)
+    }
+
+    @Test
+    fun `applyTextEdits carries every selection through the batch`() {
+        val state = testState("aaa bbb ccc")
+        state.setSelections(listOf(TextRange(9), TextRange(5)))
+        state.applyTextEdits(listOf(TextEdit(range = 0 until 0, newText = ">>")))
+        assertEquals(listOf(TextRange(11), TextRange(7)), state.selections)
+    }
+
+    @Test
+    fun `line commands work through the state and undo in one step`() {
+        val state = testState("a\nb\nc").apply { tokenizer = SlashCommentTokenizer }
+        state.selection = TextRange(2)
+        state.toggleComment()
+        assertEquals("a\n// b\nc", state.text)
+        state.moveLines(up = true)
+        assertEquals("// b\na\nc", state.text)
+        state.undo()
+        assertEquals("a\n// b\nc", state.text)
+        state.deleteLines()
+        assertEquals("a\nc", state.text)
+        state.copyLines(down = true)
+        assertEquals("a\nc\nc", state.text)
+    }
+
+    @Test
+    fun `add next occurrence selects the word, then the next match`() {
+        val state = testState("val x = x + x")
+        state.selection = TextRange(4)
+        assertTrue(state.addNextOccurrence())
+        assertEquals(listOf(TextRange(4, 5)), state.selections)
+        assertTrue(state.addNextOccurrence())
+        assertEquals(TextRange(8, 9), state.selection)
+        assertTrue(state.selectAllOccurrences())
+        assertEquals(3, state.selections.size)
+    }
+
+    private object SlashCommentTokenizer : IncrementalTokenizer {
+        override fun tokenizeFull(text: String): List<Token> = emptyList()
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> = emptyList()
+        override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
+        override val commentSyntax: CommentSyntax = CommentSyntax(line = "//")
     }
 }

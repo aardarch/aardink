@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.html
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.languages.internal.xml.XmlTokenizer
@@ -34,6 +35,8 @@ object HtmlTokenizer : IncrementalTokenizer {
         XmlTokenizer.tokenizeLines(text, dirtyRange, previousTokens)
 
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = XmlTokenizer.canSpanLines(lineIndex, tokens)
+
+    override val commentSyntax: CommentSyntax = CommentSyntax(blockStart = "<!--", blockEnd = "-->")
 
     override fun keyboardToolbarChars(): List<Char> = listOf('<', '>', '/', '=', '"', '&', ';', '#', '.')
 }

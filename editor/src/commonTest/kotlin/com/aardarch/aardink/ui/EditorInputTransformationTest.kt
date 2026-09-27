@@ -36,7 +36,7 @@ import kotlin.test.assertTrue
  * Pins the user-edit path PR 1 introduced and left untested.
  *
  * `InputTransformation` only ever runs for user-originated edits, and its job is to mirror
- * whatever the field did into [CodeDocument] and [com.aardarch.aardink.core.EditorUndoManager]
+ * whatever the field did into [CodeDocument] and the editor's undo history
  * so the two never drift. These tests drive `transformInput` through
  * [androidx.compose.foundation.text.input.TextFieldState.edit], which produces a buffer whose
  * `changes` describe the edit exactly as a real keystroke would.
@@ -115,7 +115,7 @@ class EditorInputTransformationTest {
         runInput(state) { insert(2, "c") }
 
         assertEquals("abc", state.document.text)
-        assertTrue(state.undoManager.canUndo, "a keystroke must be undoable")
+        assertTrue(state.canUndo, "a keystroke must be undoable")
     }
 
     @Test
@@ -124,7 +124,7 @@ class EditorInputTransformationTest {
         runInput(state) { delete(1, 3) }
 
         assertEquals("a", state.document.text)
-        assertTrue(state.undoManager.canUndo)
+        assertTrue(state.canUndo)
     }
 
     @Test
@@ -263,5 +263,34 @@ class EditorInputTransformationTest {
         state.loadText("one\r\ntwo\r\n")
 
         assertEquals("one\r\ntwo\r\n", state.document.text)
+    }
+
+    @Test
+    fun `typed words undo one at a time`() {
+        val state = stateFor("")
+        for ((i, c) in "hello world".withIndex()) runInput(state) { insert(i, c.toString()) }
+        assertEquals("hello world", state.document.text)
+        state.undo()
+        assertEquals("hello", state.document.text)
+        state.undo()
+        assertEquals("", state.document.text)
+    }
+
+    @Test
+    fun `backspaces undo together, as one step`() {
+        val state = stateFor("abcdef")
+        for (end in 6 downTo 4) runInput(state) { delete(end - 1, end) }
+        assertEquals("abc", state.document.text)
+        state.undo()
+        assertEquals("abcdef", state.document.text)
+    }
+
+    @Test
+    fun `a typed bracket and its auto-closed pair undo together`() {
+        val state = stateFor("f")
+        runInput(state, TestLanguageService()) { insert(1, "(") }
+        assertEquals("f()", state.document.text)
+        state.undo()
+        assertEquals("f", state.document.text)
     }
 }

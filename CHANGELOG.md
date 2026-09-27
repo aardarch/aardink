@@ -45,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tokenCache`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
   text, selection and undo history. On the web, `updateOptions({ language })` now does this too.
+- Multiple selections in the state: `CodeEditorState.selections` and `setSelections` (the first
+  is the primary one, as in Monaco), and a settable `selection`. Until 0.6's own renderer lands
+  the text field shows only the primary one.
+- A Monaco-style undo surface: `canUndo`, `canRedo`, `pushUndoStop()`, `alternativeVersionId`
+  (compare it with the value stored at save time to know whether the document is dirty) and
+  `lastChangeKind` (`EditChangeKind.Edit`, `Undo`, `Redo`, `Flush`).
+- Line commands with VS Code's keys: toggle comment (Ctrl/Cmd+/), move lines (Alt+Up/Down), copy
+  lines (Shift+Alt+Up/Down), delete lines (Ctrl/Cmd+Shift+K). Tab and Shift+Tab work on every
+  selection. `CommentSyntax` and `IncrementalTokenizer.commentSyntax` say how a language comments;
+  the built-in languages fill it in.
 - Find and replace: `FindReplaceState.show(replace)` and `replaceMode`, Ctrl+H opens the panel in
   replace mode, and the panel has a toggle for the replace row. Searches stop at
   `EditorLimits.maxFindMatches` (10,000, shown as "10000+"), run in chunks on the web, and a new
@@ -67,12 +77,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `previousTokens`; see `IncrementalTokenizer.tokenizeLines`. A wrapper that post-processes the
   list keeps working, with full scans.
 - The find panel shows its replace row only in replace mode.
+- Undo groups edits as Monaco does: a run of typing until the caret moves, the kind of edit
+  changes or a space follows a word (so undo removes a word at a time), backspaces together, and
+  every other edit on its own. Undo and redo restore the selections from before and after the step.
 - The diff lane is recomputed 300 ms after the last edit rather than on every keystroke.
 
 ### Removed
 
 - **Breaking:** `TokenCache` and `CodeEditorState.tokenCache`. Use
   `CodeEditorState.tokensForLine`. See `docs/MIGRATION_0.6.md`.
+- **Breaking:** `EditorUndoManager`, its `EditOperation` classes, and `CodeEditorState.undoManager`.
+  Use `CodeEditorState.undo()`, `redo()`, `canUndo` and `canRedo`.
 
 ### Fixed
 

@@ -59,7 +59,7 @@ class CodeEditorLayoutUiTest {
     }
 
     @Test
-    fun `ctrl Z undoes through EditorUndoManager`() = runComposeUiTest {
+    fun `ctrl Z undoes through the editor history`() = runComposeUiTest {
         // The point of intercepting at preview level: BasicTextField's built-in Ctrl+Z would
         // undo on its own private stack and leave CodeDocument behind.
         val state = stateFor("start")
@@ -211,5 +211,55 @@ class CodeEditorLayoutUiTest {
         waitForIdle()
 
         assertEquals("one", state.document.text)
+    }
+
+    @Test
+    fun `ctrl slash toggles a line comment`() = runComposeUiTest {
+        val state = stateFor("val a = 1").apply { tokenizer = SlashComments }
+        setContent { CodeEditorLayout(state = state) }
+        state.selection = TextRange(0)
+
+        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
+        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
+            withKeyDown(Key.CtrlLeft) { pressKey(Key.Slash) }
+        }
+        waitForIdle()
+
+        assertEquals("// val a = 1", state.document.text)
+        assertEquals(state.document.text, state.textFieldState.text.toString())
+    }
+
+    @Test
+    fun `alt down moves the line and shift alt down copies it`() = runComposeUiTest {
+        val state = stateFor("one\ntwo")
+        setContent { CodeEditorLayout(state = state) }
+        state.selection = TextRange(1)
+
+        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
+        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
+            withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) }
+        }
+        waitForIdle()
+        assertEquals("two\none", state.document.text)
+
+        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
+            withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } }
+        }
+        waitForIdle()
+        assertEquals("two\none\none", state.document.text)
+    }
+
+    private object SlashComments : com.aardarch.aardink.core.IncrementalTokenizer {
+        override fun tokenizeFull(text: String): List<com.aardarch.aardink.core.Token> = emptyList()
+
+        override fun tokenizeLines(
+            text: String,
+            dirtyRange: IntRange,
+            previousTokens: List<com.aardarch.aardink.core.Token>,
+        ): List<com.aardarch.aardink.core.Token> = emptyList()
+
+        override fun canSpanLines(lineIndex: Int, tokens: List<com.aardarch.aardink.core.Token>): Boolean = false
+
+        override val commentSyntax = com.aardarch.aardink.core.CommentSyntax(line = "//")
     }
 }

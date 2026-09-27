@@ -78,6 +78,7 @@ public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : c
 	public static final field $stable I
 	public fun <init> ()V
 	public fun canSpanLines (ILjava/util/List;)Z
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	protected fun getMultiLineConstructs ()Z
 	protected abstract fun getRules ()Ljava/util/List;
 	public fun keyboardToolbarChars ()Ljava/util/List;
@@ -90,6 +91,7 @@ public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : c
 public final class com/aardarch/aardink/languages/internal/css/CssTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/css/CssTokenizer;
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 }
 
@@ -125,6 +127,7 @@ public final class com/aardarch/aardink/languages/internal/html/HtmlTokenizer : 
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/html/HtmlTokenizer;
 	public fun canSpanLines (ILjava/util/List;)Z
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
 	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -162,12 +165,14 @@ public final class com/aardarch/aardink/languages/internal/kotlin/KotlinLanguage
 public final class com/aardarch/aardink/languages/internal/kotlin/KotlinTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/kotlin/KotlinTokenizer;
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 }
 
 public final class com/aardarch/aardink/languages/internal/markdown/MarkdownTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/markdown/MarkdownTokenizer;
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 }
 
@@ -185,12 +190,14 @@ public final class com/aardarch/aardink/languages/internal/toml/TomlLanguageServ
 public final class com/aardarch/aardink/languages/internal/toml/TomlTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/toml/TomlTokenizer;
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 }
 
 public final class com/aardarch/aardink/languages/internal/typescript/TypeScriptTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/typescript/TypeScriptTokenizer;
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 }
 
@@ -219,6 +226,7 @@ public final class com/aardarch/aardink/languages/internal/xml/XmlTokenizer : co
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/xml/XmlTokenizer;
 	public fun canSpanLines (ILjava/util/List;)Z
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
 	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

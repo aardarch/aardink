@@ -168,6 +168,10 @@ fun CodeEditorLayout(
             onGoToLine = onRequestGoToLine,
             onIndent = { state.indentSelection() },
             onOutdent = { state.outdentSelection() },
+            onToggleComment = { state.toggleComment() },
+            onMoveLines = { up -> state.moveLines(up) },
+            onCopyLines = { down -> state.copyLines(down) },
+            onDeleteLines = { state.deleteLines() },
             onEscape = {
                 // Consume Escape only when it actually dismissed something, so a host's own
                 // dialog still sees the key when the editor had nothing open.
@@ -520,8 +524,8 @@ fun CodeEditorLayout(
         if (keyboardToolbarPlacement != KeyboardToolbarPlacement.Hidden) {
             KeyboardToolbarRow(
                 quickChars = remember(state.tokenizer) { state.tokenizer.keyboardToolbarChars() },
-                canUndo = state.undoManager.canUndo,
-                canRedo = state.undoManager.canRedo,
+                canUndo = state.canUndo,
+                canRedo = state.canRedo,
                 onInsertChar = { char ->
                     val insertAt = state.selection.start
                     state.applyEdit(insertAt, 0, char.toString(), TextRange(insertAt + 1))

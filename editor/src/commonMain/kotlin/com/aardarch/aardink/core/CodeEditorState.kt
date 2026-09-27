@@ -24,11 +24,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.edit.AppliedChange
+import com.aardarch.aardink.core.edit.CommandEdit
+import com.aardarch.aardink.core.edit.EditKind
+import com.aardarch.aardink.core.edit.LineCommands
+import com.aardarch.aardink.core.edit.OccurrenceFinder
+import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.core.edit.TextChange
+import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.core.edit.UndoHistory
+import com.aardarch.aardink.core.edit.applyChanges
+import com.aardarch.aardink.core.edit.mapOffset
+import com.aardarch.aardink.core.edit.reapply
+import com.aardarch.aardink.core.edit.revert
 import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -38,9 +52,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
-
-/** One indentation step. Spaces, not a tab, to match what smartIndent already inserts. */
-private const val INDENT: String = "    "
 
 /**
  * The central state holder for a [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout].
@@ -88,14 +99,14 @@ class CodeEditorState(
 
     val document = CodeDocument(initialText)
     internal val tokenStore = TokenStore(document)
-    val undoManager = EditorUndoManager()
+    private val history = UndoHistory()
 
     /**
      * The `BasicTextField` interop point — [document] remains the canonical text/undo model;
      * this field mirrors it for the field to render and receive IME input into. Advanced hosts
      * may read it, but every mutation should still go through this class's own methods
      * ([applyEdit], [applyTextEdits], [loadText], [undo], [redo]) so [document] and the undo
-     * history stay in sync with it.
+     * history stay in sync with it. Removed in 0.6.0's switch-over to the editor's own renderer.
      */
     @ExperimentalFoundationApi
     val textFieldState: TextFieldState = TextFieldState(initialText)
@@ -120,12 +131,84 @@ class CodeEditorState(
     var externalEditVersion by mutableIntStateOf(0)
         private set
 
-    /** Current cursor / selection in document-absolute character offsets. */
+    /**
+     * The primary cursor or selection, in document-absolute character offsets. Setting it replaces
+     * every selection with this one.
+     */
     var selection: TextRange
         get() = textFieldState.selection
-        internal set(value) {
-            textFieldState.edit { selection = value }
-        }
+        set(value) = setSelections(listOf(value))
+
+    /**
+     * Every selection, primary first (as in Monaco's `getSelections`). A range's `start` is its
+     * anchor and its `end` the caret, so a range selected backwards has `start > end`. Until the
+     * editor draws its own carets, only the primary one is shown, and moving it in the text field
+     * drops the others.
+     */
+    val selections: List<TextRange>
+        get() = currentSelections().ranges
+
+    /**
+     * Replaces the selections; the first becomes the primary one. Ranges that overlap are merged;
+     * each is clamped to the document.
+     *
+     * @throws IllegalArgumentException if [selections] is empty.
+     */
+    fun setSelections(selections: List<TextRange>) {
+        applySelections(SelectionSet.of(selections).clampedTo(document.length))
+    }
+
+    // The selections after the primary one, and the primary they belong with: once the text field
+    // moves its caret somewhere else, they no longer apply.
+    private var extraSelections by mutableStateOf<List<TextRange>>(emptyList())
+    private var extrasPrimary: TextRange? = null
+
+    internal fun currentSelections(): SelectionSet {
+        val primary = textFieldState.selection
+        val extras = extraSelections
+        return if (extras.isEmpty() || primary != extrasPrimary) SelectionSet.single(primary) else SelectionSet.of(listOf(primary) + extras)
+    }
+
+    private fun applySelections(set: SelectionSet) {
+        extraSelections = set.ranges.drop(1)
+        extrasPrimary = set.primary
+        if (textFieldState.selection != set.primary) textFieldState.edit { selection = set.primary }
+    }
+
+    /** Whether [undo] would change anything. Snapshot state: a toolbar button can observe it. */
+    var canUndo by mutableStateOf(false)
+        private set
+
+    /** Whether [redo] would change anything. */
+    var canRedo by mutableStateOf(false)
+        private set
+
+    /**
+     * Monaco's alternative version id: a new value for every edit, and after [undo] or [redo] the
+     * value the document had at that point. Store it when saving; the document is unchanged since
+     * the save exactly while it still equals the stored value, however it got there.
+     */
+    var alternativeVersionId by mutableLongStateOf(0L)
+        private set
+
+    /** What the last change to the document was: an edit, an undo, a redo, or a whole new text. */
+    var lastChangeKind by mutableStateOf(EditChangeKind.Flush)
+        private set
+
+    /**
+     * Ends the current undo step, so the next edit starts a new one (Monaco's `pushUndoStop`).
+     * Typing otherwise joins one step until the caret moves or a space follows a word; call this
+     * before a programmatic edit that should undo on its own, or after saving.
+     */
+    fun pushUndoStop() {
+        history.pushStop()
+    }
+
+    private fun refreshHistoryState() {
+        canUndo = history.canUndo
+        canRedo = history.canRedo
+        alternativeVersionId = history.alternativeVersionId
+    }
 
     /** Cursor line (0-based). Derived from [selection] and the document's line index. */
     val cursorLine: Int
@@ -208,13 +291,15 @@ class CodeEditorState(
         document.replaceAll(newText)
         // A new document, not an edit: highlight it with a full pass.
         lastTokenizerResult = null
-        undoManager.clear()
-        syncFieldToDocument(TextRange(0))
+        history.clear()
+        syncFieldToDocument(SelectionSet.caret(0))
         // After the sync, not before: syncFieldToDocument edits the field, and that edit pushes
         // its own entry onto the field's undo stack. Clearing first left the freshly loaded
         // document undoable back to the previous one, so a platform-level undo gesture could
         // resurrect text the document no longer has.
         textFieldState.undoState.clearHistory()
+        lastChangeKind = EditChangeKind.Flush
+        refreshHistoryState()
         textVersion++
         scheduleTokenization()
     }
@@ -222,225 +307,146 @@ class CodeEditorState(
     /**
      * Applies a programmatic text edit — from the keyboard toolbar, find/replace, a completion
      * accept, or a quick fix — inserting [insertText] (may be empty) after deleting
-     * [deleteLength] characters starting at [deleteOffset].
-     *
-     * Records the edit in [undoManager] and advances [textVersion]. Not used for the user's own
-     * keystrokes inside [textFieldState] — those are applied directly to [document] and
-     * [undoManager] by the `InputTransformation` installed on the field, without a round trip
-     * through this method.
+     * [deleteLength] characters starting at [deleteOffset], then placing the selection at
+     * [newSelection]. One undo step.
      */
     fun applyEdit(deleteOffset: Int, deleteLength: Int, insertText: String, newSelection: TextRange) {
-        undoManager.flushPendingInsert()
-        val deletedText = if (deleteLength > 0) {
-            val start = deleteOffset.coerceIn(0, document.length)
-            val end = (deleteOffset + deleteLength).coerceIn(start, document.length)
-            document.subSequence(start, end).toString()
-        } else {
-            ""
-        }
-
-        if (deleteLength > 0) {
-            document.delete(deleteOffset, deleteLength)
-            undoManager.recordDelete(deleteOffset, deleteLength, deletedText)
-        }
-        if (insertText.isNotEmpty()) {
-            document.insert(deleteOffset, insertText)
-            undoManager.recordInsert(deleteOffset, insertText)
-        }
-
-        syncFieldToDocument(newSelection)
-        textVersion++
-        scheduleTokenization()
+        val start = deleteOffset.coerceIn(0, document.length)
+        val end = (deleteOffset + deleteLength).coerceIn(start, document.length)
+        applyChanges(listOf(TextChange(start, end, insertText)), EditKind.Other) { SelectionSet.single(newSelection) }
     }
 
     /**
-     * Applies a batch of [TextEdit]s atomically to the document, recording the operation in
-     * undo history as a single batch and scheduling tokenization.
-     *
-     * [selection] is clamped to the resulting document — a batch that shortens the text past the
-     * cursor would otherwise leave a selection out of bounds, which `TextFieldState` rejects.
+     * Applies a batch of [TextEdit]s atomically to the document as one undo step, and carries
+     * every selection through them: a rename or import inserted above a caret must not leave it at
+     * a number that now points into unrelated text. A caret inside a replaced range ends up after
+     * the replacement. Several inserts at one offset land in the order given, as LSP specifies.
      */
     fun applyTextEdits(edits: List<TextEdit>) {
         if (edits.isEmpty()) return
-        undoManager.flushPendingInsert()
-
-        // Apply edits in reverse range order so modifying earlier offsets doesn't skew subsequent
-        // ranges. Edits sharing an offset are applied last-to-first, which lands them in the order
-        // they were given: LSP says several inserts at one position appear in array order, so
-        // inserting "a" then "b" must read "ab" and not "ba".
-        val sorted = edits.withIndex()
-            .sortedWith(
-                compareByDescending<IndexedValue<TextEdit>> { it.value.range.first }
-                    .thenByDescending { it.value.range.last }
-                    .thenByDescending { it.index },
-            )
-            .map { it.value }
-        val ops = mutableListOf<EditorUndoManager.EditOperation>()
-        // One snapshot for the whole batch: edits are applied high-to-low, so text below the lowest
-        // offset touched so far is unchanged and can be sliced from the snapshot — O(len) per edit
-        // instead of an O(n) document copy per edit.
-        val snapshot = document.text
-        var untouchedBelow = snapshot.length
-
-        for (edit in sorted) {
+        val changes = edits.map { edit ->
             val start = edit.range.first.coerceIn(0, document.length)
-            val end = (edit.range.last + 1).coerceIn(start, document.length)
-            val deleteLen = end - start
-            val deletedText = when {
-                deleteLen == 0 -> ""
-                end <= untouchedBelow -> snapshot.substring(start, end)
-                else -> document.subSequence(start, end).toString() // overlapping edits: fall back to live text
-            }
-            untouchedBelow = minOf(untouchedBelow, start)
-
-            if (deleteLen > 0) {
-                document.delete(start, deleteLen)
-                ops.add(EditorUndoManager.EditOperation.Delete(start, deleteLen, deletedText))
-            }
-            if (edit.newText.isNotEmpty()) {
-                document.insert(start, edit.newText)
-                ops.add(EditorUndoManager.EditOperation.Insert(start, edit.newText))
-            }
+            TextChange(start, (edit.range.last + 1).coerceIn(start, document.length), edit.newText)
         }
-
-        if (ops.isNotEmpty()) {
-            undoManager.recordBatch(ops)
-        }
-
-        // Carry the caret through the batch: a rename or import inserted above it must not leave
-        // it at a number that now points into unrelated text.
-        val before = selection
-        val newSelection = clampToDocument(
-            TextRange(mapThroughEdits(before.start, sorted), mapThroughEdits(before.end, sorted)),
-        )
-        syncFieldToDocument(newSelection)
-        textVersion++
-        scheduleTokenization()
+        val before = currentSelections()
+        applyChanges(changes, EditKind.Other) { before.map { mapOffset(it, changes) } }
     }
 
     /**
-     * Where [offset] (into the text before a batch) sits after [edits] are applied. An edit ending
-     * at or before the offset shifts it by the size difference; one the offset falls inside snaps
-     * it to the end of the replacement, the same place a single [applyEdit] leaves the caret.
-     */
-    private fun mapThroughEdits(offset: Int, edits: List<TextEdit>): Int {
-        var shift = 0
-        var snapped: Int? = null
-        for (edit in edits) {
-            val start = edit.range.first.coerceAtLeast(0)
-            val end = (edit.range.last + 1).coerceAtLeast(start)
-            when {
-                end <= offset -> shift += edit.newText.length - (end - start)
-                start < offset -> snapped = start + edit.newText.length
-            }
-        }
-        return (snapped ?: offset) + shift
-    }
-
-    private fun clampToDocument(range: TextRange): TextRange {
-        val start = range.start.coerceIn(0, document.length)
-        val end = range.end.coerceIn(0, document.length)
-        return if (start == range.start && end == range.end) range else TextRange(start, end)
-    }
-
-    /**
-     * Undoes the most recent edit and returns the new document text (for a host that wants to
-     * react to it), or null if there is nothing to undo.
+     * Undoes the most recent undo step, restoring the selections from before it, and returns the
+     * new document text (for a host that wants to react to it), or null if there is nothing to undo.
      */
     fun undo(): String? {
-        val op = undoManager.undo() ?: return null
-        val newSelection = applyOperationToDocument(undoManager.inverseOf(op))
-        syncFieldToDocument(newSelection)
-        textVersion++
-        scheduleTokenization()
+        val entry = history.undo() ?: return null
+        document.revert(entry.changes)
+        afterHistoryStep(entry.selectionsBefore, EditChangeKind.Undo)
         return document.text
     }
 
-    /**
-     * Redoes the previously undone edit and returns the new document text, or null.
-     */
+    /** Redoes the last undone step and returns the new document text, or null. */
     fun redo(): String? {
-        val op = undoManager.redo() ?: return null
-        val newSelection = applyOperationToDocument(op)
-        syncFieldToDocument(newSelection)
-        textVersion++
-        scheduleTokenization()
+        val entry = history.redo() ?: return null
+        document.reapply(entry.changes)
+        afterHistoryStep(entry.selectionsAfter, EditChangeKind.Redo)
         return document.text
     }
 
-    // -- Indentation ----------------------------------------------------------
+    private fun afterHistoryStep(selections: SelectionSet, kind: EditChangeKind) {
+        syncFieldToDocument(selections.clampedTo(document.length))
+        lastChangeKind = kind
+        refreshHistoryState()
+        textVersion++
+        scheduleTokenization()
+    }
+
+    // -- Line commands --------------------------------------------------------
 
     /**
-     * Indents every line touched by the selection by [INDENT] spaces.
-     *
-     * With a collapsed cursor and nothing selected this inserts an indent at the cursor, which
-     * is what Tab does in every editor. With a selection it shifts whole lines and keeps the
-     * selection covering them, so Tab can be pressed repeatedly.
+     * Tab. With only carets, inserts an indent at each; with a selection, indents every line it
+     * touches and then selects those lines whole, so Tab can be pressed repeatedly.
      */
     fun indentSelection() {
-        val sel = selection
-        if (sel.collapsed) {
-            applyEdit(sel.start, 0, INDENT, TextRange(sel.start + INDENT.length))
-            return
-        }
-        val (firstLine, lastLine) = selectedLineRange(sel)
-        val edits = (firstLine..lastLine).map { line ->
-            val start = document.lineStart(line)
-            TextEdit(range = start until start, newText = INDENT)
-        }
-        if (edits.isEmpty()) return
-        applyTextEdits(edits)
-        selection = TextRange(
-            document.lineStart(firstLine),
-            document.lineEnd(lastLine),
-        )
+        val before = currentSelections()
+        val edit = LineCommands.indent(document, before)
+        if (before.ranges.all { it.collapsed }) applyCommand(edit) else applyKeepingLinesSelected(edit.changes, before)
     }
 
     /**
-     * Removes up to [INDENT] leading spaces (or one leading tab) from every line the selection
-     * touches. Lines with no leading whitespace are left alone rather than eating real text.
+     * Shift+Tab. Removes up to one indent (four spaces, or one tab) from every line the selections
+     * touch; lines with no leading whitespace are left alone rather than eating real text.
      */
     fun outdentSelection() {
-        val sel = selection
-        val (firstLine, lastLine) = selectedLineRange(sel)
-        val edits = (firstLine..lastLine).mapNotNull { line ->
-            val start = document.lineStart(line)
-            val text = document.lineText(line)
-            val removable = leadingIndentWidth(text)
-            if (removable == 0) null else TextEdit(range = start until (start + removable), newText = "")
-        }
-        if (edits.isEmpty()) return
-        applyTextEdits(edits)
-        if (!sel.collapsed) {
-            selection = TextRange(document.lineStart(firstLine), document.lineEnd(lastLine))
+        val before = currentSelections()
+        val edit = LineCommands.outdent(document, before) ?: return
+        if (before.ranges.all { it.collapsed }) applyCommand(edit) else applyKeepingLinesSelected(edit.changes, before)
+    }
+
+    /** Ctrl+/: toggles line comments (or a block comment) per [IncrementalTokenizer.commentSyntax]. */
+    internal fun toggleComment(): Boolean = applyCommand(LineCommands.toggleComment(document, currentSelections(), tokenizer.commentSyntax))
+
+    /** Alt+Up / Alt+Down: moves the selected lines. */
+    internal fun moveLines(up: Boolean): Boolean = applyCommand(LineCommands.moveLines(document, currentSelections(), up))
+
+    /** Shift+Alt+Down / Up: copies the selected lines below themselves. */
+    internal fun copyLines(down: Boolean): Boolean = applyCommand(LineCommands.copyLines(document, currentSelections(), down))
+
+    /** Ctrl+Shift+K: deletes the selected lines. */
+    internal fun deleteLines(): Boolean = applyCommand(LineCommands.deleteLines(document, currentSelections()))
+
+    /** Ctrl/Cmd+D: selects the word at each caret, then adds the next occurrence of the selection. */
+    internal fun addNextOccurrence(): Boolean {
+        val current = currentSelections()
+        val primary = current.primary
+        // Whole words when the selection is exactly a word, as after the first Ctrl+D.
+        val word = TextNavigator.wordAt(document, primary.min)
+        val wholeWord = !primary.collapsed && word.first == primary.min && word.last + 1 == primary.max
+        val next = OccurrenceFinder.addNext(document, current, wholeWord) ?: return false
+        applySelections(next)
+        return true
+    }
+
+    /** Ctrl+Shift+L: selects every occurrence of the primary selection (or of the word at the caret). */
+    internal fun selectAllOccurrences(): Boolean {
+        val all = OccurrenceFinder.selectAll(document, currentSelections()) ?: return false
+        applySelections(all)
+        return true
+    }
+
+    private fun applyCommand(edit: CommandEdit?): Boolean {
+        edit ?: return false
+        return applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }
+    }
+
+    /** Applies [changes] and selects every line the [before] selections covered, whole. */
+    private fun applyKeepingLinesSelected(changes: List<TextChange>, before: SelectionSet) {
+        // Indenting changes no line numbers, so the blocks stay valid across the edit.
+        val lines = before.ranges.map { range -> LineCommands.lineBlocks(document, SelectionSet.single(range)).first() }
+        applyChanges(changes, EditKind.Other) {
+            SelectionSet.of(lines.map { TextRange(document.lineStart(it.first), document.lineEnd(it.last)) })
         }
     }
 
-    /** The inclusive range of lines the selection touches. */
-    private fun selectedLineRange(sel: TextRange): Pair<Int, Int> {
-        val first = document.offsetToLineCol(sel.min).first
-        // A selection ending exactly at a line start has not really reached that line; treating
-        // it as included would indent a line the user never highlighted.
-        val endOffset = if (sel.max > sel.min && sel.max == document.lineStart(
-                document.offsetToLineCol(sel.max).first,
-            )
-        ) {
-            sel.max - 1
-        } else {
-            sel.max
+    /**
+     * The one path every programmatic edit takes: applies [changes] to the document, records them
+     * as one undo step (joining the open one when [kind] continues it), places the selections
+     * [selectionsAfter] gives (evaluated once the document has changed), and schedules tokenization.
+     * Returns whether the text changed.
+     */
+    private fun applyChanges(changes: List<TextChange>, kind: EditKind, selectionsAfter: () -> SelectionSet): Boolean {
+        val before = currentSelections()
+        val applied = document.applyChanges(changes)
+        val after = selectionsAfter().clampedTo(document.length)
+        if (applied.isEmpty()) {
+            applySelections(after)
+            return false
         }
-        val last = document.offsetToLineCol(endOffset.coerceAtLeast(sel.min)).first
-        return first to maxOf(first, last)
-    }
-
-    /** How many characters of leading indentation one outdent step should remove. */
-    private fun leadingIndentWidth(lineText: String): Int {
-        if (lineText.startsWith("\t")) return 1
-        var spaces = 0
-        while (spaces < INDENT.length && spaces < lineText.length && lineText[spaces] == ' ') {
-            spaces++
-        }
-        return spaces
+        history.record(kind, applied, before, after)
+        syncFieldToDocument(after)
+        lastChangeKind = EditChangeKind.Edit
+        refreshHistoryState()
+        textVersion++
+        scheduleTokenization()
+        return true
     }
 
     // ── Tokenization scheduling ───────────────────────────────────────────────
@@ -574,47 +580,36 @@ class CodeEditorState(
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    /** Applies [op] to [document] only (not [textFieldState]) and returns the caret it implies. */
-    private fun applyOperationToDocument(op: EditorUndoManager.EditOperation): TextRange = when (op) {
-        is EditorUndoManager.EditOperation.Insert -> {
-            document.insert(op.offset, op.text)
-            TextRange(op.offset + op.text.length)
-        }
-
-        is EditorUndoManager.EditOperation.Delete -> {
-            document.delete(op.offset, op.length)
-            TextRange(op.offset)
-        }
-
-        is EditorUndoManager.EditOperation.Batch -> {
-            var caret = TextRange(0)
-            op.operations.forEach { caret = applyOperationToDocument(it) }
-            caret
-        }
-    }
-
     /**
      * Replaces [textFieldState]'s entire content with [document]'s current text and places its
-     * selection at [newSelection], in one atomic edit so the selection is never validated against
-     * stale text. Bumps [externalEditVersion]. Called by every mutation method above — never by
-     * the field's own `InputTransformation`, which is already editing [textFieldState] directly.
+     * selection at the primary one of [selections], in one atomic edit so the selection is never
+     * validated against stale text. Bumps [externalEditVersion]. Called by every mutation method
+     * above — never by the field's own `InputTransformation`, which is already editing
+     * [textFieldState] directly.
      */
-    private fun syncFieldToDocument(newSelection: TextRange) {
+    private fun syncFieldToDocument(selections: SelectionSet) {
         val newText = document.text
         textFieldState.edit {
             replace(0, length, newText)
-            selection = newSelection
+            selection = selections.primary
         }
+        extraSelections = selections.ranges.drop(1)
+        extrasPrimary = selections.primary
         externalEditVersion++
     }
 
     /**
-     * Advances [textVersion] and schedules a tokenization pass, without touching [textFieldState]
-     * or [externalEditVersion]. Called by the field's `InputTransformation` after it has already
-     * mutated [document] and [undoManager] directly to mirror a user keystroke it applied to
-     * [textFieldState] itself.
+     * Records an edit the text field made itself — a keystroke, a paste, an IME commit — which the
+     * field's `InputTransformation` has already applied to [document] as [applied]. [before] and
+     * [after] are the field's selections around it. Advances [textVersion] and schedules
+     * tokenization, without touching [textFieldState] or [externalEditVersion].
      */
-    internal fun bumpTextVersionAndScheduleTokenization() {
+    internal fun recordFieldEdit(applied: List<AppliedChange>, kind: EditKind, before: TextRange, after: TextRange) {
+        if (applied.isEmpty()) return
+        history.record(kind, applied, SelectionSet.single(before), SelectionSet.single(after))
+        extraSelections = emptyList()
+        lastChangeKind = EditChangeKind.Edit
+        refreshHistoryState()
         textVersion++
         scheduleTokenization()
     }

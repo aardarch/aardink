@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.kotlin
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
@@ -88,6 +89,8 @@ object KotlinTokenizer : RegexTokenizer() {
         while (end < text.length && text[end].let { it == '_' || it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' }) end++
         return end
     }
+
+    override val commentSyntax: CommentSyntax = CommentSyntax(line = "//", blockStart = "/*", blockEnd = "*/")
 
     override fun keyboardToolbarChars(): List<Char> = listOf('{', '}', '(', ')', '"', '$', '.', ':', '<', '>', '=')
 }
