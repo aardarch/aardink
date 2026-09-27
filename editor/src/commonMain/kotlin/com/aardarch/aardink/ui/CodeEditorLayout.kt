@@ -58,11 +58,13 @@ import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
+import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.view.EditorController
@@ -72,6 +74,7 @@ import com.aardarch.aardink.ui.view.GutterContent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -98,6 +101,10 @@ import kotlinx.coroutines.withContext
  * @param savedText Baseline text for the diff lane (typically the last-saved version).
  * @param onDiagnosticsChange Called with each list the editor collects from [languageService] while
  *   [diagnostics] is null; not called for a list the host passes.
+ * @param onNavigateToLocation Called when go to definition (F12, Ctrl/Cmd+click) or the references
+ *   list leads to another file: a [Location] in this document is shown here, and one elsewhere
+ *   (its range [IntRange.EMPTY], with [Location.uri], [Location.line] and [Location.column]) is
+ *   the host's to open.
  * @param onRequestGoToLine Invoked on Cmd/Ctrl+G. Hosts wire it to [GoToLineDialog]; the default
  *   does nothing, so the shortcut is inert until a host opts in.
  */
@@ -114,6 +121,7 @@ fun CodeEditorLayout(
     savedText: String = "",
     onCursorChange: (line: Int, column: Int) -> Unit = { _, _ -> },
     onDiagnosticsChange: (List<Diagnostic>) -> Unit = {},
+    onNavigateToLocation: (Location) -> Unit = {},
     toolbarStyle: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
     keyboardToolbarPlacement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.BottomHover,
     onRequestGoToLine: () -> Unit = {},
@@ -192,6 +200,10 @@ fun CodeEditorLayout(
     // Hover documentation: after the mouse rests on a symbol, or from the touch menu's "Info".
     var hover by remember { mutableStateOf<HoverShown?>(null) }
     var hoverJob by remember { mutableStateOf<Job?>(null) }
+
+    // The references list (Shift+F12), at the caret it was asked for.
+    var references by remember { mutableStateOf<ReferencesShown?>(null) }
+    var referenceSelected by remember { mutableIntStateOf(0) }
 
     // Code actions, Signature help & Rename state
     var showCodeActionsMenu by remember { mutableStateOf(false) }
@@ -419,6 +431,85 @@ fun CodeEditorLayout(
         snapshotFlow { state.textVersion to view.scroll.scrollY }.collect { hover = null }
     }
 
+    // ── Go to definition, references, format ─────────────────────────────────
+    val currentOnNavigateToLocation = rememberUpdatedState(onNavigateToLocation)
+    // A place in this document is shown here; one in another file is the host's to open.
+    val openLocation: (Location) -> Unit = { location ->
+        if (location.isIn(state.document)) {
+            val start = location.range.first
+            val end = (location.range.last + 1).coerceIn(start, state.document.length)
+            state.navigateTo(start, TextRange(start, end))
+        } else {
+            currentOnNavigateToLocation.value(location)
+        }
+    }
+    val goToDefinition: () -> Boolean = definition@{
+        val service = languageService ?: return@definition false
+        val offset = state.selection.end
+        coroutineScope.launch {
+            val version = state.textVersion
+            val document = state.document.snapshot()
+            val location = withContext(state.computeDispatcher) { service.definition(document, offset) } ?: return@launch
+            if (state.textVersion == version) openLocation(location)
+        }
+        true
+    }
+    val findReferences: () -> Boolean = find@{
+        val service = languageService ?: return@find false
+        val offset = state.selection.end
+        coroutineScope.launch {
+            val version = state.textVersion
+            val document = state.document.snapshot()
+            val found = withContext(state.computeDispatcher) { service.references(document, offset) }
+            if (state.textVersion != version || found.isEmpty()) return@launch
+            referenceSelected = 0
+            references = ReferencesShown(offset, found.map { ReferenceItem.of(it, document) })
+        }
+        true
+    }
+    // Shift+Alt+F: the selection through formatRange, else the whole document through format,
+    // whose result is reduced to the lines that change, so carets and folds elsewhere stay put.
+    // Either way one undo step.
+    val format: () -> Boolean = format@{
+        val service = languageService ?: return@format false
+        val selection = state.selection
+        coroutineScope.launch {
+            val version = state.textVersion
+            val document = state.document.snapshot()
+            val edits = withContext(state.computeDispatcher) {
+                if (selection.collapsed) {
+                    MinimalEdits.between(document.text, service.format(document))
+                } else {
+                    service.formatRange(document, selection.min until selection.max)
+                }
+            }
+            if (state.textVersion == version && edits.isNotEmpty()) state.applyTextEdits(edits)
+        }
+        true
+    }
+    // The references list goes when the text changes under it.
+    LaunchedEffect(state) {
+        snapshotFlow { state.textVersion }.collect { references = null }
+    }
+    // Ctrl (Cmd) over a symbol with a definition: it becomes a link. Asked once per word the mouse
+    // is over, not per pixel it moves.
+    LaunchedEffect(controller, languageService) {
+        snapshotFlow {
+            val at = controller.hoverAt?.takeIf { controller.linkModifier && languageService != null }
+            at?.let { view.offsetAt(it).offset }?.let { offset ->
+                TextNavigator.wordAt(state.document, offset).takeUnless { it.isEmpty() }?.let { word -> offset to word }
+            }
+        }.distinctUntilChangedBy { it?.second }.collectLatest { found ->
+            controller.link = null
+            val service = languageService ?: return@collectLatest
+            val (offset, word) = found ?: return@collectLatest
+            val version = state.textVersion
+            val document = state.document.snapshot()
+            withContext(state.computeDispatcher) { service.definition(document, offset) } ?: return@collectLatest
+            if (state.textVersion == version) controller.link = TextRange(word.first, word.last + 1)
+        }
+    }
+
     // ── Pending navigation: select the target and scroll it to the middle of the view ─
     LaunchedEffect(state, view) {
         snapshotFlow { state.pendingNavigation }.collect { nav ->
@@ -496,6 +587,26 @@ fun CodeEditorLayout(
             }
         }
     }
+    // The references list takes the arrows, Enter and Escape while it is up.
+    val referencesKey: (KeyEvent) -> Boolean = key@{ event ->
+        val shown = references ?: return@key false
+        if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return@key false
+        when (event.key) {
+            Key.DirectionDown -> referenceSelected = (referenceSelected + 1) % shown.items.size
+
+            Key.DirectionUp -> referenceSelected = (referenceSelected - 1).mod(shown.items.size)
+
+            Key.Enter, Key.NumPadEnter -> {
+                references = null
+                shown.items.getOrNull(referenceSelected)?.let { openLocation(it.location) }
+            }
+
+            Key.Escape -> references = null
+
+            else -> return@key false
+        }
+        true
+    }
     // The completion list takes the arrows, Enter, Tab and Escape while it is up at the caret.
     val completionKey: (KeyEvent) -> Boolean = key@{ event ->
         if (!completionAtCaret || !showCompletion || completionItems.isEmpty() || event.type != KeyEventType.KeyDown) return@key false
@@ -545,7 +656,10 @@ fun CodeEditorLayout(
             },
             onTriggerSuggest = requestCompletions,
             onInput = onInput,
-            onPopupKey = completionKey,
+            onGoToDefinition = goToDefinition,
+            onFindReferences = findReferences,
+            onFormat = format,
+            onPopupKey = { event -> referencesKey(event) || completionKey(event) },
             onShowInfo = if (languageService != null) {
                 { offset ->
                     hoverJob?.cancel()
@@ -735,6 +849,18 @@ fun CodeEditorLayout(
                         onDismiss = { hover = null },
                     ) { HoverDocCard(shown.doc) }
                 }
+                references?.let { shown ->
+                    EditorAnchoredPopup(anchor = view.caretRect(shown.offset), onDismiss = { references = null }) {
+                        ReferencesPeekCard(
+                            items = shown.items,
+                            selected = referenceSelected,
+                            onOpen = { item ->
+                                references = null
+                                openLocation(item.location)
+                            },
+                        )
+                    }
+                }
                 val tooltipTarget = tooltipDiagnostic
                 if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
                     EditorAnchoredPopup(
@@ -780,6 +906,9 @@ fun CodeEditorLayout(
 
 /** Hover documentation on screen, for the symbol from [start] to [end]. */
 private class HoverShown(val doc: HoverDoc, val start: Int, val end: Int)
+
+/** The references list on screen: asked for at [offset], where it is anchored. */
+private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
 
 /** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
 private const val HOVER_DELAY_MS = 500L

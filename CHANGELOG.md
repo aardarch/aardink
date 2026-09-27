@@ -62,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sideways to stay inside the window. Hover documentation (`LanguageService.hoverDoc`, which the
   editor never showed before) appears when the mouse rests on a symbol for half a second, and
   from the touch menu's "Info".
+- Go to definition, references and format, which language services offered but the editor never
+  used. F12 or Ctrl/Cmd+click goes to the definition of the symbol there (holding Ctrl/Cmd
+  underlines a symbol that has one); a definition in another file goes to the new
+  `CodeEditorLayout(onNavigateToLocation)` for the host to open. Shift+F12 lists the references at
+  the caret, to step through with the arrows and open with Enter or a click. Shift+Alt+F formats
+  the selection (`formatRange`) or the whole document (`format`), changing only the lines that
+  differ, as one undo step, so carets and folds elsewhere stay put. The right-click menu has all
+  three. The mouse pointer is a text cursor over the text.
 - Diagnostics without a host. `CodeEditorLayout(diagnostics = null)`, the default, asks the
   language service 500 ms after the editor appears and after each pause in typing, drops any
   answer for text that has changed since it asked, and reports each list through the new `onDiagnosticsChange`. On the

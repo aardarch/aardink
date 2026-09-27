@@ -58,6 +58,8 @@ internal class EditorDecorations(
     val highlightCaretLines: Boolean = false,
     /** The bracket pair to box, as document offsets of the two characters. */
     val bracketMatch: Pair<Int, Int>? = null,
+    /** The symbol under a mouse with Ctrl (Cmd) held, underlined as a link to its definition. */
+    val link: TextRange? = null,
 )
 
 /**
@@ -102,7 +104,8 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         drawSquiggles(line, decorations.diagnostics, colors, left, top)
-        decorations.composition?.let { drawComposition(line, it, colors.text, left, top) }
+        decorations.composition?.let { drawUnderline(line, it, colors.text, left, top) }
+        decorations.link?.let { drawUnderline(line, it, colors.text, left, top) }
     }
 }
 
@@ -161,11 +164,12 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
     }
 }
 
-private fun DrawScope.drawComposition(line: VisibleLine, composition: TextRange, color: Color, left: Float, top: Float) {
-    if (composition.collapsed || composition.max < line.start || composition.min > line.end) return
+/** A thin line under [range], as an input method's composition and a link are drawn. */
+private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: Color, left: Float, top: Float) {
+    if (range.collapsed || range.max < line.start || range.min > line.end) return
     val layout = line.layout
-    val a = (composition.min - line.start).coerceIn(0, line.shownLength)
-    val b = (composition.max - line.start).coerceIn(a, line.shownLength)
+    val a = (range.min - line.start).coerceIn(0, line.shownLength)
+    val b = (range.max - line.start).coerceIn(a, line.shownLength)
     if (b <= a) return
     val stroke = 1.dp.toPx()
     val firstRow = layout.getLineForOffset(a)

@@ -26,6 +26,8 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.isAltPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.platform.PlatformInfo
 
 /**
  * What pressing, dragging and tapping in the text do to the selections.
@@ -57,6 +60,9 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** A right click at a point (viewport coordinates): open the context menu there. */
     var onContextMenu: (Offset) -> Unit = {}
 
+    /** A Ctrl (Cmd) click, after it placed the caret: go to the definition there; true when it went. */
+    var onLinkClick: () -> Boolean = { false }
+
     private enum class SelectionUnit { Character, Word, Line, Column }
 
     private var unit = SelectionUnit.Character
@@ -72,7 +78,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     private val state get() = view.state
 
-    fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false) {
+    fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false, link: Boolean = false) {
         onPress(touch)
         val hit = view.offsetAt(position)
         if (hit.onFoldPlaceholder && clicks == 1 && !shift) {
@@ -117,6 +123,8 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
                 unit = SelectionUnit.Character
                 origin = TextRange(hit.offset)
                 state.replaceSelections(SelectionSet.caret(hit.offset))
+                // Ctrl (Cmd) + click: to the definition, and no drag selection after it.
+                if (link && onLinkClick()) origin = null
             }
 
             clicks == 2 -> {
@@ -268,7 +276,8 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             lastClickTime = down.uptimeMillis
             lastClickPosition = down.position
             val modifiers = currentEvent.keyboardModifiers
-            handler.press(down.position, clickCount, modifiers.isShiftPressed, modifiers.isAltPressed)
+            val link = if (PlatformInfo.isMacOs) modifiers.isMetaPressed else modifiers.isCtrlPressed
+            handler.press(down.position, clickCount, modifiers.isShiftPressed, modifiers.isAltPressed, link = link)
             down.consume()
             drag(down.id) { change ->
                 handler.drag(change.position)

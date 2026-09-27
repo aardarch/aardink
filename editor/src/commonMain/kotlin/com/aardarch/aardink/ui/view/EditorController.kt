@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.Clipboard
@@ -103,6 +105,12 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     /** Where a mouse rests over the text, in viewport coordinates; null when it is elsewhere or pressed. */
     var hoverAt by mutableStateOf<Offset?>(null)
 
+    /** Ctrl (Cmd on macOS) is held: the symbol under the mouse shows as a link, and a click follows it. */
+    var linkModifier by mutableStateOf(false)
+
+    /** The symbol under the mouse that has a definition to go to, while [linkModifier] is held; set by the host. */
+    var link by mutableStateOf<TextRange?>(null)
+
     /** The text area's layout coordinates, from the input node. */
     var coordinates: LayoutCoordinates? = null
 
@@ -141,6 +149,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             if (touch && !readOnly) ime.keyboardRequests++
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
+        pointer.onLinkClick = { actions.onGoToDefinition() }
     }
 
     /** A selection handle dragged to [position] (viewport coordinates): that end of the selection follows it. */
@@ -160,6 +169,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     // ── Keys ─────────────────────────────────────────────────────────────────
 
     fun onKeyEvent(event: KeyEvent): Boolean {
+        linkModifier = if (PlatformInfo.isMacOs) event.isMetaPressed else event.isCtrlPressed
         showToolbarAtCaret = false
         if (actions.onPopupKey(event)) return true
         val binding = EditorKeyBindings.resolve(event, PlatformInfo.isMacOs)

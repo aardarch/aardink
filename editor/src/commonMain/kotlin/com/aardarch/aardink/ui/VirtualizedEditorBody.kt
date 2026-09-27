@@ -32,9 +32,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.areAnyPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
@@ -51,6 +55,7 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
+import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.platform.editorMagnifier
 import com.aardarch.aardink.ui.view.EditorBody
 import com.aardarch.aardink.ui.view.EditorColors
@@ -210,6 +215,7 @@ internal fun VirtualizedEditorBody(
                         composition = controller.ime.composition,
                         highlightCaretLines = highlightCaretLines,
                         bracketMatch = bracketMatch,
+                        link = controller.link.takeIf { controller.linkModifier },
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },
@@ -218,6 +224,7 @@ internal fun VirtualizedEditorBody(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(EditorTestTags.EDITOR)
+                    .pointerHoverIcon(if (controller.linkModifier && controller.link != null) PointerIcon.Hand else PointerIcon.Text)
                     .pointerInput(controller) { trackHover(controller) },
                 inputModifier = Modifier
                     .then(EditorInputElement(controller))
@@ -246,6 +253,10 @@ private suspend fun PointerInputScope.trackHover(controller: EditorController) {
         while (true) {
             val event = awaitPointerEvent()
             val change = event.changes.firstOrNull() ?: continue
+            if (change.type == PointerType.Mouse) {
+                val modifiers = event.keyboardModifiers
+                controller.linkModifier = if (PlatformInfo.isMacOs) modifiers.isMetaPressed else modifiers.isCtrlPressed
+            }
             controller.hoverAt = when {
                 change.type != PointerType.Mouse -> null
                 event.type == PointerEventType.Exit || event.type == PointerEventType.Press -> null

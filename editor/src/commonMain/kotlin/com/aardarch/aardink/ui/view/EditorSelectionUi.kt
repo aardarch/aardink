@@ -48,6 +48,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.EditorAnchoredPopup
 import com.aardarch.aardink.ui.EditorTestTags
 import kotlin.math.roundToInt
@@ -247,8 +248,38 @@ internal fun BoxScope.EditorContextMenu(controller: EditorController) {
                 close()
                 controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
             })
+            if (controller.languageService() != null) {
+                val mac = PlatformInfo.isMacOs
+                HorizontalDivider()
+                DropdownMenuItem(text = { Text("Go to Definition") }, trailingIcon = { Shortcut("F12") }, onClick = {
+                    close()
+                    controller.actions.onGoToDefinition()
+                })
+                DropdownMenuItem(text = {
+                    Text("Find References")
+                }, trailingIcon = { Shortcut(if (mac) "⇧F12" else "Shift+F12") }, onClick = {
+                    close()
+                    controller.actions.onFindReferences()
+                })
+                val selection = controller.state.selection
+                DropdownMenuItem(
+                    text = { Text(if (selection.collapsed) "Format Document" else "Format Selection") },
+                    trailingIcon = { Shortcut(if (mac) "⇧⌥F" else "Shift+Alt+F") },
+                    enabled = editable,
+                    onClick = {
+                        close()
+                        controller.actions.onFormat()
+                    },
+                )
+            }
         }
     }
+}
+
+/** A menu item's key, as the platform writes it. */
+@Composable
+private fun Shortcut(keys: String) {
+    Text(keys, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 private val HANDLE_SIZE = 22.dp

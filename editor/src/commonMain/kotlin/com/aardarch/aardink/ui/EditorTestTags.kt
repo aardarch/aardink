@@ -37,4 +37,7 @@ internal object EditorTestTags {
 
     /** The menu over a touch selection. */
     const val TOUCH_MENU = "aardink.touchMenu"
+
+    /** The references list at the caret (Shift+F12). */
+    const val REFERENCES = "aardink.references"
 }
