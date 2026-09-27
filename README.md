@@ -1,24 +1,45 @@
 # Aardink
 
-A Compose Multiplatform code editor — incremental tokenization, LSP-lite
-language services, code folding, find/replace, and rich gutter annotations.
-Runs on Android, desktop (JVM) and the browser (Wasm) from one codebase.
+A Compose Multiplatform code editor with VS Code's keys and Monaco's API shape: multiple cursors,
+incremental highlighting, folding, find and replace, diagnostics, completions, a minimap and
+sticky scroll. It runs on Android, desktop (JVM) and the browser (Wasm) from one codebase, and
+draws only the lines on screen, so a keystroke costs the same in a 5,000-line file as in a
+50-line one.
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.aardarch/aardink.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/com.aardarch/aardink)
+[![npm](https://img.shields.io/npm/v/@aardarch/aardink-web.svg?label=npm)](https://www.npmjs.com/package/@aardarch/aardink-web)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![minSdk](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](#requirements)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20JVM%20%7C%20Wasm-blue.svg)](#requirements)
 
+> **Upgrading from 0.5?** 0.6 replaces the text field underneath the editor, and the API changes
+> with it. [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md) has every change with a before and
+> after.
+
 ## Features
 
-- Compose-native editor surface — zero XML, zero Android resources
-- Incremental tokenization with pluggable per-language tokenizers
-- Code folding with pluggable folding providers
-- Find / replace panel
-- Rich gutter: line numbers, fold handles, annotations
-- LSP-lite language services: completions, diagnostics, hover, formatting
-- Themable via `EditorTheme` + `LocalEditorTheme`, with pre-built themes
-  (e.g. `EditorThemes.VsCodeDark`, `EditorThemes.MidnightOcean`)
+| | Android | Desktop | Web |
+| --- | :---: | :---: | :---: |
+| Syntax highlighting, incremental, for Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown | ✓ | ✓ | ✓ |
+| Your own language: a tokenizer in Kotlin, or a Monarch grammar as data (`DeclarativeGrammar`) | ✓ | ✓ | ✓ |
+| … or registered from JavaScript, with completions, hover and diagnostics in JavaScript | | | ✓ |
+| Folding, find and replace, go to line | ✓ | ✓ | ✓ |
+| Multiple cursors and column selection | ✓ | ✓ | ✓ |
+| Undo grouped as Monaco does, `alternativeVersionId` for dirty tracking | ✓ | ✓ | ✓ |
+| Completions, hover, signature help and quick fixes at the caret | ✓ | ✓ | ✓ |
+| Diagnostics (squiggles and gutter markers), from the language or the host | ✓ | ✓ | ✓ |
+| Go to definition, find references, format document or selection | ✓ | ✓ | ✓ |
+| Bracket-pair colours and matching, current-line highlight | ✓ | ✓ | ✓ |
+| Minimap and sticky scroll | ✓ | ✓ | ✓ |
+| Diff lane against a saved baseline | ✓ | ✓ | ✓ |
+| VS Code's keyboard shortcuts (Cmd on macOS) | with a keyboard | ✓ | ✓ |
+| Input methods: composition, and a phone keyboard's autocorrect and voice input | ✓ | ✓ | ✓ |
+| Touch: selection handles, text menu | ✓ | | ✓ |
+| Magnifier while dragging a handle | ✓ | | |
+| Keyboard toolbar above the soft keyboard: the language's characters, caret arrows, undo, redo | ✓ | | on touch devices |
+| Right-click menu | | ✓ | ✓ |
+| Language servers (`aardink-languages-lsp`) | streams | streams | WebSocket |
+| Themes: `EditorTheme` data classes, six built in, or VS Code theme JSON | ✓ | ✓ | ✓ |
 
 ## Modules
 
@@ -81,6 +102,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import com.aardarch.aardink.core.rememberCodeEditorState
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.LocalEditorTheme
 
@@ -97,12 +119,16 @@ fun MyEditor() {
             state = state,
             languageService = kotlinLanguage.languageService,
             foldingProvider = kotlinLanguage.foldingProvider,
+            options = EditorOptions(showMinimap = true, stickyScroll = true),
         )
     }
 }
 ```
 
-See the [`sample/`](sample/) module for a runnable example.
+With a language service and no `diagnostics` argument, the editor collects the service's
+diagnostics itself. Read the text with `state.text`, the selections with `state.selections`, and
+edit with `state.applyTextEdits(...)`; `state.canUndo`, `undo()` and `redo()` drive toolbar
+buttons. See the [`sample/`](sample/) module for a runnable example.
 
 ## Using Aardink in a web app
 
@@ -126,7 +152,12 @@ instead: a small Gradle wasmJs module that depends on `aardink-editor-web`, with
 covers both routes: the export template, npm packaging, Vite configuration, and a Monaco option
 mapping.
 
-> **On the web:** a keystroke settles in under 20 ms whatever the size of the document (measured
+A language of your own can be registered from JavaScript as a Monarch grammar, with completions,
+hover and diagnostics answered by JavaScript functions, and a theme as Monaco's `defineTheme`
+data. [`docs/AARDFLEX_WEB_SWITCHOVER.md`](docs/AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco
+app over.
+
+> **On the web:** a keystroke settles in about 10 ms, and nearly always under 35 ms, whatever the size of the document (measured
 > in [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance)). A disposed editor is not
 > fully released until Compose Multiplatform 1.13, so reuse one editor rather than mounting a new
 > one per view.
@@ -143,13 +174,17 @@ Custom themes are just `EditorTheme(...)` instances.
 
 To add a new language, implement these interfaces from the `editor` module:
 
-- `IncrementalTokenizer` — syntax highlighting
+- `IncrementalTokenizer` — syntax highlighting, and `commentSyntax` for toggling comments
 - `FoldingProvider` — code folding
-- `LanguageService` *(optional)* — completions, diagnostics, hover,
-  formatting
+- `LanguageService` *(optional)* — completions, diagnostics, hover, signature help, quick fixes,
+  definitions, references and formatting
 
 Bundle them as a `LanguageDefinition` and register with `LanguageRegistry`.
 The [`languages/`](languages/) module is a working reference.
+
+For highlighting alone, no tokenizer code is needed: `DeclarativeTokenizer(DeclarativeGrammar.parse(json))`
+highlights from a Monarch grammar (Monaco's format) as JSON, a line at a time and incrementally.
+Its tokens are `NamedTokenType`s named by the grammar, which an `EditorTheme` colours.
 
 ## Sample apps
 

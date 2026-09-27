@@ -12,16 +12,23 @@ cannot -- `src/main/java` no longer exists anywhere.
 ```text
 editor/          # The library module -- the published artifact (com.aardarch:aardink)
   src/commonMain/kotlin/com/aardarch/aardink/
-    core/        # Document model, tokenization, undo, find, folding, LSP models (TextEdit, CodeAction, SignatureHelp)
-    ui/          # Composables: CodeEditorLayout, EditorGutter, SignatureHelpPopup, CodeActionMenu, RenameDialog, etc.
+    core/        # CodeEditorState, CodeDocument, tokens (TokenStore), diagnostics tracking, find, folding, LSP models
+      text/      # GapBuffer, LineIndex, DocumentChange: the document's storage, updated edit by edit
+      edit/      # UI-free editing: SelectionSet, UndoHistory, TypingRules, TextNavigator, LineCommands, MinimalEdits
+    ui/          # Composables: CodeEditorLayout, EditorOptions, themes, find panel, popups, dialogs
+      view/      # The renderer (internal): EditorView (VisualLineMap, LineLayoutCache), EditorDrawing,
+                 #   EditorController + EditorKeyBindings, pointer input, gutter, sticky scroll, minimap
+      input/     # Text input (internal): EditorImeAdapter, ImeWindowBuffer
     platform/    # expect declarations -- the ONLY package where expect/actual may live
   src/androidMain/ src/jvmMain/ src/wasmJsMain/      # actuals, under platform/ only
+  src/skikoMain/ # actuals shared by desktop and web (text input request, scrollbars): under platform/ too
   src/commonTest/kotlin/                             # kotlin.test, runs on every target
   api/           # Committed public ABI dumps (klib + android + jvm)
 
 languages/       # Built-in language support -- published as com.aardarch:aardink-languages
   src/commonMain/kotlin/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
+    DeclarativeGrammar.kt / DeclarativeTokenizer.kt   # Monarch grammars as data (also behind the web's registerLanguage)
     internal/    # Per-language tokenizers + folding providers + services (Kotlin, XML, JSON, TOML, etc.)
 
 languages-lsp/   # External Language Server Protocol bridge -- published as com.aardarch:aardink-languages-lsp
@@ -31,7 +38,7 @@ languages-lsp/   # External Language Server Protocol bridge -- published as com.
   src/wasmJsMain/          # WebSocketLspTransport
 
 editor-web/      # Browser bridge -- published as com.aardarch:aardink-editor-web (wasmJs only)
-  src/wasmJsMain/kotlin/com/aardarch/aardink/web/   # AardinkWeb (mount/getValue/...), WebEditorOptions
+  src/wasmJsMain/kotlin/com/aardarch/aardink/web/   # AardinkWeb (mount/getValue/...), WebEditorOptions, WebLanguages (registerLanguage/registerTheme)
   src/wasmJsMain/composeResources/font/             # Bundled JetBrains Mono (OFL, see JETBRAINS_MONO_OFL.txt)
   src/wasmJsTest/.../ExportsTemplate.kt             # The @JsExport template consumers copy -- compiled and tested here
 
@@ -128,10 +135,34 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **Never reference `Dispatchers.Default` or `Dispatchers.IO` directly** in `:editor` or
   `:languages-lsp`. Use `EditorDispatchers`: `Dispatchers.IO` does not exist on wasmJs, and
   `Dispatchers.Default` there is the UI event loop, not a background pool.
-- **No lookbehind (`(?<=` / `(?<!`) in tokenizer rules.** Kotlin/wasm runs its own regex
-  engine, which evaluates a lookbehind at every candidate position — one such rule made a
+- **No lookbehind (`(?<=` / `(?<!`) in tokenizer rules or grammars.** Kotlin/wasm runs its own
+  regex engine, which evaluates a lookbehind at every candidate position — one such rule made a
   3 KB Kotlin file take a second to highlight in the browser. Type tokens from their context
-  in `RegexTokenizer.refine` instead (see `KotlinTokenizer`).
+  in `RegexTokenizer.refine` instead (see `KotlinTokenizer`). `DeclarativeGrammar.parse`
+  refuses a grammar with one.
+
+## Rendering Rules
+
+The editor draws only what is on screen, and every keystroke's cost must stay independent of the
+document's size. The web's 5,000-line gates in `tools/vite-smoke/perf.mjs` (CI runs `--gate`)
+catch a breach, but late; these rules keep it from happening:
+
+- **Never lay out the whole document.** Lines are laid out one at a time, on demand, through
+  `EditorView.layoutFor` and its `LineLayoutCache`; only lines on screen (and the few sticky
+  ones) are measured, and the minimap draws blocks, not text. An off-screen line's wrapped row
+  count is an estimate in `VisualLineMap`, corrected once the line is laid out.
+- **No `document.text` in per-frame or per-keystroke paths.** `CodeDocument` is a
+  `CharSequence`: read `lineText(line)`, `subSequence`, or index it. `text` builds the whole
+  string (once per edit, then shared), so it belongs only where the whole text is really needed:
+  handing it to a host callback or a language service's snapshot.
+- **Work proportional to the edit.** Tokens, folds, diagnostics and brackets move with a
+  `DocumentChange` (the `TokenStore`, `FoldState.onLinesChanged`, `DiagnosticsTracker`,
+  `BracketIndex`); a tokenizer rescans from the edit until it is back in step, not from the top.
+- **Nothing long on the web's main thread.** wasm has one thread: whole-document passes
+  (first tokenization, diagnostics, find) run cooperatively in slices of about 8 ms
+  (`CooperativePacer`, `diagnosticsPacer`), and `Dispatchers.Default` there is the UI loop.
+- **Selections and carets never relayout text.** They are drawn over the laid-out lines; colour
+  changes key the layout cache by colour, not by position.
 - **Do not add runtime dependencies without necessity** — `:editor` depends on Compose plus
   `kotlinx-serialization-json` (an agreed exception: `EditorThemeParser` needs it in place of
   the Android-only `org.json` so the module compiles as common Kotlin); `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
@@ -151,7 +182,10 @@ The `editor` module is intentionally language-agnostic:
 | Symbol | Description |
 | --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
-| `CodeEditorState` / `rememberCodeEditorState()` | State holder for the editor, including `applyTextEdits()` |
+| `EditorOptions` | The editor's switches: read-only, soft wrap, gutter, minimap, sticky scroll, brackets, tabs |
+| `CodeEditorState` / `rememberCodeEditorState()` | State holder: text, `selections`, `applyTextEdits()`, undo (`canUndo`, `pushUndoStop`, `alternativeVersionId`) |
+| `DeclarativeGrammar` / `DeclarativeTokenizer` | Highlighting from a Monarch grammar as JSON (`:languages`) |
+| `AardinkWeb` | The browser bridge (`:editor-web`); the npm package wraps it in a Monaco-shaped API |
 | `LanguageService` | Interface — completions, diagnostics, hover, formatting, code actions, definition, signature help, rename |
 | `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`) |
 | `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |

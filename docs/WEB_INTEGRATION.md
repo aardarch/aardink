@@ -40,7 +40,9 @@ your web app (Svelte/React/...)  ── calls ──▶  your JS exports  (aardi
 There are two ways in:
 
 - **Use the ready-built package.** `pnpm add @aardarch/aardink-web` installs `:sample-web`'s
-  build from npm, released with every Aardink version. It has the built-in languages and themes
+  build from [npmjs.com](https://www.npmjs.com/package/@aardarch/aardink-web), published with
+  every Aardink version from GitHub Actions with npm provenance; pre-releases go to the `next`
+  tag (`pnpm add @aardarch/aardink-web@next`). It has the built-in languages and themes
   and the Monaco-shaped API below, and needs no Gradle or JDK. A language of your own can be
   registered from JavaScript as a Monarch grammar, with completions, hover and diagnostics
   answered by your own functions, and a theme as Monaco's `defineTheme` data; see
@@ -71,7 +73,7 @@ There are two ways in:
 | `setBaseline(text)` | The text the gutter's diff lane compares with, typically what was last saved; `""` turns it off. |
 | `format(then)` | The language's formatter, as one undo step changing only what differs; `then` gets whether anything changed. |
 | `focus` | Moves the keyboard focus to the editor. |
-| `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. |
+| `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. A grammar's comments and strings, being the editor's own, come back as `comment` and `string`, and the built-in languages' tokens under Monaco's standard names. |
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
 | `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
@@ -189,10 +191,14 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 ```
 
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
-  `cases` with `@array`, `@default` and `@eos`, capture groups, `include`, `@rematch`,
-  `defaultToken`, `ignoreCase` and `tokenPostfix`. Lookbehind is refused when the language is
-  registered: Kotlin/wasm's regex engine runs it at every position. The grammar highlights a line
-  at a time, so an edit rescans only until the lines below are back in the state they were in.
+  `cases` with `@array`, `@default` and `@eos`, capture groups (each with a token name,
+  `{ token, next }` or `cases` of its own), `include`, `@rematch`, `defaultToken`, `ignoreCase`,
+  `tokenPostfix` and `@name` regex attributes. Not supported: `@brackets`, `nextEmbedded`,
+  `log`, `$1`-style substitutions in token names, and lookbehind, which is refused when the
+  language is registered because Kotlin/wasm's regex engine runs it at every position. The
+  grammar highlights a line at a time, so an edit rescans only until the lines below are back in
+  the state they were in. [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real
+  Monaco language over this way.
 - **Colours** follow token names by dotted prefix, as in Monaco: `tag.aardflex` takes the theme's
   `tag.aardflex` colour, else its `tag` colour, else the built-in themes' colour for Monaco's
   standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). `comment` and
@@ -223,12 +229,14 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `getSelections` / `setSelections` | The same | Monaco's `Selection` fields. |
 | `model.canUndo`, `canRedo`, `pushStackElement`, `getAlternativeVersionId` | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | |
 | `getAction('editor.action.formatDocument').run()` | `format()` | Resolves with whether anything changed. |
-| `monaco.editor.tokenize` | `tokenize` | Same arguments and shape. |
+| `monaco.editor.tokenize` | `tokenize` | Same arguments and shape. Monaco's `comment.*` and `string.*` names come back as `comment` and `string`. |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
-| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. |
+| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. Colours only: a rule's `fontStyle` is ignored. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
-| `revealPositionInCenter` | `revealPosition` | Scrolls it into view; not centred. |
+| `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
+| `renderWhitespace`, `fontFamily`, `automaticLayout` | None | Whitespace is not drawn; the font is the bundled JetBrains Mono; the editor always follows its container's size. |
+| Completion snippets (`insertTextRules: InsertAsSnippet`) | None | A completion inserts plain text and leaves the caret after it. |
 
 ## Fonts
 
@@ -270,7 +278,8 @@ Wasm GC and exception handling: Chrome/Edge 119+, Firefox 120+, Safari 18.2+.
 ## Performance
 
 Measured with `tools/vite-smoke/perf.mjs` in headless Chrome 154 on a desktop machine, on
-highlighted Kotlin (0.6 renderer, 2026-09-27). Expect slower on phones.
+highlighted Kotlin with the language's own diagnostics running (the 0.6.0 code, 2026-09-27).
+Expect slower on phones.
 
 - **Idle:** the time from the event until frames have come at display rate for a third of a
   second, so it includes every frame the event causes, re-highlighting too.
@@ -278,16 +287,23 @@ highlighted Kotlin (0.6 renderer, 2026-09-27). Expect slower on phones.
 
 | Document | Mount → idle | Key → idle, p50 / p95 | Key → change callback, p95 | `setValue` → idle | Keys lost at 10 keys/s |
 | --- | --- | --- | --- | --- | --- |
-| 50 lines (2 KB) | 34 ms | 7.8 / 15.6 ms | 1.9 ms | 4 ms | 0 of 30 |
-| 250 lines (8 KB) | 56 ms | 8.1 / 13.8 ms | 2.2 ms | 4 ms | 0 of 30 |
-| 1,000 lines (33 KB) | 84 ms | 9.5 / 16.8 ms | 2.3 ms | 13 ms | 0 of 30 |
-| 5,000 lines (163 KB) | 82 ms | 8.6 / 18.9 ms | 2.6 ms | 12 ms | 0 of 30 |
+| 50 lines (2 KB) | 26 ms | 9.6 / 32.7 ms | 9.4 ms | 8 ms | 0 of 30 |
+| 250 lines (8 KB) | 74 ms | 10.6 / 24.0 ms | 8.6 ms | 14 ms | 0 of 30 |
+| 1,000 lines (33 KB) | 101 ms | 8.2 / 23.3 ms | 7.8 ms | 19 ms | 0 of 30 |
+| 5,000 lines (163 KB), two runs | 62–70 ms | 7.8–9.9 / 16.9–21.6 ms | 3.3–6.0 ms | 11–18 ms | 0 of 30 |
 
 A keystroke costs the same in any size of document: the editor lays out and draws only the lines
 on screen, the input method sees a window of text around the caret rather than the whole
 document, and the first highlighting pass over a large document runs in slices of about 8 ms, so
-frames keep coming while it works. No main-thread task over 50 ms occurs while mounting or typing
-in the 5,000-line document.
+frames keep coming while it works. No main-thread task over 50 ms occurs anywhere in these runs:
+mounting, typing, `setValue` or scrolling.
+
+The tails are the language's diagnostics: they run half a second after each pause in typing, as
+for a user, and `perf.mjs` pauses longer than that between keys, so a key sometimes arrives while
+a slice of them is running and waits for it. Before automatic diagnostics (PR 7 of the 0.6 plan),
+the 5,000-line document measured 8.6 / 18.9 ms per key and 2.6 ms to the change callback.
+Measurements on a busy machine (a build running alongside) show single 50–60 ms tasks and p95s
+past 30 ms; the table is from an otherwise idle one.
 
 The minimap (`minimap: { enabled: true }`) adds 0.1 to 0.5 ms of main-thread work per frame while
 scrolling the 5,000-line document, and scrolling stays at 60 frames a second: it draws the text as
@@ -310,7 +326,7 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 
 | ID | Check | Result |
 | --- | --- | --- |
-| W-1 | Mount + dispose 50×, heap | **Leaks ~275 KB per disposed editor.** JS heap after forced GC goes 8.5 → 22.2 → 35.9 MB over two batches of 50; no canvases are left behind. Each `ComposeViewport` adds `resize`, `focus`, `blur`, `visibilitychange` and `dragend` listeners to `window` that Compose 1.12.1 never removes, and there is no public API to tear a viewport down. Removing those listeners by hand does not free the memory, so something inside the scene (such as the Recomposer's snapshot observers) also holds it. **Reuse one editor with `setValue`/`updateOptions` instead of mounting a new one per view.** Tracked upstream as [CMP-9090](https://youtrack.jetbrains.com/issue/CMP-9090) and [CMP-10507](https://youtrack.jetbrains.com/issue/CMP-10507); fixed for Compose Multiplatform 1.13, which disposes a viewport when its element leaves the DOM ([compose-multiplatform-core#3242](https://github.com/JetBrains/compose-multiplatform-core/pull/3242)). |
+| W-1 | Mount + dispose 50×, heap | **Leaks ~320 KB per disposed editor** (275 KB in 0.5). JS heap after forced GC goes 9.1 → 25.1 → 41.2 MB over two batches of 50; no canvases or other elements are left behind, since `dispose` removes the editor's own element. Each `ComposeViewport` adds `resize`, `focus`, `blur`, `visibilitychange` and `dragend` listeners to `window` that Compose 1.12.1 never removes, and there is no public API to tear a viewport down. Removing those listeners by hand does not free the memory, so something inside the scene (such as the Recomposer's snapshot observers) also holds it. **Reuse one editor with `setValue`/`updateOptions` instead of mounting a new one per view.** Tracked upstream as [CMP-9090](https://youtrack.jetbrains.com/issue/CMP-9090) and [CMP-10507](https://youtrack.jetbrains.com/issue/CMP-10507); fixed for Compose Multiplatform 1.13, which disposes a viewport when its element leaves the DOM ([compose-multiplatform-core#3242](https://github.com/JetBrains/compose-multiplatform-core/pull/3242)). |
 | W-2 | IME composition: CJK, macOS dead keys, Android Chrome Gboard | **Automated part passes:** `checklist.mjs W-2` drives composition through the DevTools protocol (`Input.imeSetComposition` / `Input.insertText`), the path Chrome's own IME bridge uses: kana → kanji, a second composition, a simulated dead key and Pinyin-style letters all commit exactly (4/4). **Real IMEs still manual:** Windows/macOS CJK, macOS dead keys and press-and-hold, Android Chrome with Gboard. |
 | W-3 | Paste: 100 KB latency, CRLF, Firefox permission prompt | A 101 KB paste reports its change after ~21 ms. **CRLF used to be kept verbatim**; typed and pasted text is now normalised to LF. The editor takes pasted text from the browser's `paste` event, which needs no permission; Firefox and Safari: **manual**. |
 | W-4 | Selection: mouse drag, Shift+arrows, double-click, touch handles | **Manual.** |
@@ -319,9 +335,14 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 | W-7 | Wheel over the editor must not scroll the page | Contained: a 600 px wheel over the editor leaves the page's `scrollY` at 0. |
 | W-8 | devicePixelRatio and zoom | At DPR 2 the canvas has a 2000×1200 backing store for 1000×600 CSS px, and text and squiggles are sharp. A change of density or font scale (zoom, another screen) lays every line out again (`EditorViewTest`). Browser zoom by hand: **manual**. |
 | W-9 | No flicker when Compose fetches a fallback font for a missing glyph | **Manual.** A new editor waits up to 500 ms for the bundled font instead of showing a first frame in the default monospace; `preloadAardink()` fetches it early. |
-| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke settles in 8.6 ms (p50), no key is lost at 10 keys/s, and the initial highlighting pass causes no long task. `perf.mjs` measures it and CI gates it; see [Performance](#performance). |
+| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke settles in 8–10 ms (p50), no key is lost at 10 keys/s, and the initial highlighting pass causes no long task. `perf.mjs` measures it and CI gates it; see [Performance](#performance). |
 
 ## Known limitations
 
-- A disposed editor is not fully released (W-1) on Compose Multiplatform 1.12; reuse editors. `dispose()` now takes the editor's element out of the page, which from 1.13 frees it entirely.
-- No minimap or bracket-pair colouring yet.
+- A disposed editor is not fully released (W-1) on Compose Multiplatform 1.12; reuse editors.
+  `dispose()` takes the editor's element out of the page, which from 1.13 frees it entirely.
+- Themes are colours only, whitespace is not drawn, and completions are plain text (no snippet
+  placeholders); see the Monaco table above.
+- A grammar's comments and strings take the theme's `comment` and `string` colours: a rule for
+  `string.format` or `comment.doc` colours nothing.
+- The items marked **manual** in the checklist above wait for real devices before 0.6.0.

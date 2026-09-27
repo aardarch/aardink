@@ -10,9 +10,9 @@ Most apps need three changes: pass `EditorOptions` instead of the boolean flags,
 `CodeEditorState.textFieldState`, and drop `annotatedText`. The rest of this guide lists every
 removed or changed public symbol, with a before/after for each.
 
-> **Status:** this guide is filled in PR by PR while 0.6.0 is built (see
-> [AARDINK_0.6_PLAN.md](AARDINK_0.6_PLAN.md) §5 and §6). An entry marked *pending* has not
-> landed on `main` yet; its symbol still works as in 0.5.
+The "Landed in" column names the pull request of [AARDINK_0.6_PLAN.md](AARDINK_0.6_PLAN.md) §6
+that made each change, for anyone reading the history. [The last section](#example-the-aardflex-android-app)
+upgrades a real app.
 
 ## Dependencies
 
@@ -88,6 +88,103 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | Keyboard toolbar | Inserted the character as is | Types it through the typing rules, as a key: `(` gets its `)` | PR 7 |
 | Web clipboard | The text field's | Ctrl/Cmd+C, X and V are left to the browser, whose clipboard events carry the text without a permission prompt | PR 7 |
 
-## Example: an Android host
+## Worth adopting
 
-*Pending (PR 16): a full before/after of a real `CodeEditorLayout` call site.*
+Not needed to compile, but new in 0.6:
+
+- **Toggle comment for your own tokenizer.** Ctrl/Cmd+/ works when the tokenizer says how the
+  language comments: override `IncrementalTokenizer.commentSyntax` (the built-in languages do). A
+  tokenizer that wraps a built-in one can pass its `commentSyntax` on.
+- **`EditorOptions`** has `stickyScroll`, `showMinimap`, `bracketPairColorization`,
+  `highlightCurrentLine`, `matchBrackets`, `tabSize` and `insertSpaces`.
+- **`onNavigateToLocation`** opens a definition in another file; without it, F12 and
+  Ctrl/Cmd+click only work within the document.
+- **`onDiagnosticsChange`** reports the language service's diagnostics when `diagnostics` is
+  `null`, for a problems list of your own.
+- **`DeclarativeGrammar` and `DeclarativeTokenizer`** (in `aardink-languages`) highlight from a
+  Monarch grammar as JSON, incrementally, with no tokenizer code. The web package's
+  `registerLanguage` takes the same grammars.
+
+## Example: the aardflex Android app
+
+The aardflex app (`apps/android/aardflex/v1.0` in the aardflex repository) goes from 0.4.0 to
+0.6.0. It passes its own diagnostics and has no custom `EditorTheme` fonts, so most of its code
+compiles unchanged; one screen changes.
+
+**`gradle/libs.versions.toml`**
+
+```toml
+aardink = "0.6.0"   # was "0.4.0"; skipping 0.5.0 is fine, the artifacts still resolve to -android
+```
+
+**`ui/screen/XmlEditorScreen.kt`**: the undo manager is gone, and `canUndo` / `canRedo` are
+snapshot state, so the `derivedStateOf` that re-read them on every text change goes too.
+
+```kotlin
+// 0.4 / 0.5
+val canUndo by remember(editorViewModel) {
+    derivedStateOf {
+        editorViewModel.codeEditorState.textVersion
+        editorViewModel.codeEditorState.undoManager.canUndo
+    }
+}
+val canRedo by remember(editorViewModel) {
+    derivedStateOf {
+        editorViewModel.codeEditorState.textVersion
+        editorViewModel.codeEditorState.undoManager.canRedo
+    }
+}
+
+// 0.6
+val canUndo = editorViewModel.codeEditorState.canUndo
+val canRedo = editorViewModel.codeEditorState.canRedo
+```
+
+The `CodeEditorLayout` call compiles as it is. Its `diagnostics = editorDiagnostics` is a list,
+so the editor keeps showing the app's own diagnostics rather than asking the language service.
+The app has no boolean flags to move into `EditorOptions`, but can now switch on what 0.6 adds:
+
+```kotlin
+CodeEditorLayout(
+    state = editorViewModel.codeEditorState,
+    languageService = editorViewModel.languageService,
+    findReplaceState = editorViewModel.findReplaceState,
+    foldState = editorViewModel.foldState,
+    foldingProvider = editorViewModel.foldingProvider,
+    diagnostics = editorDiagnostics,
+    savedText = ui.savedText,
+    onCursorChange = { line, col -> editorViewModel.syncCursorFromEditor(line, col) },
+    options = EditorOptions(stickyScroll = true), // new in 0.6, optional
+    modifier = modifier,
+)
+```
+
+`findReplaceState.show()` still opens the find panel, now without its replace row;
+`show(replace = true)` opens both. `GoToLineDialog`, `navigateTo`, `loadText`, `undo()` and
+`redo()` are unchanged.
+
+**`service/XmlIncrementalTokenizer.kt`** still compiles and highlights correctly. It post-processes
+the built-in XML tokenizer's output and passes that list back as `previousTokens`, which the
+built-in tokenizer does not recognise as its own, so every pass is a full scan, as in 0.4. Two
+optional improvements:
+
+- Forward the XML comment syntax, so Ctrl+/ comments lines:
+  `override val commentSyntax get() = base.commentSyntax`.
+- Better: highlight with the web app's grammar, so both apps share one grammar and editing is
+  incremental. Export the Monarch grammar from `aardflex-web-app` to JSON once (a RegExp literal
+  becomes its `source` string), keep it as an asset, and:
+
+  ```kotlin
+  val grammar = DeclarativeGrammar.parse(context.assets.open("aardflex-xml.grammar.json").reader().readText())
+  val tokenizer = DeclarativeTokenizer(grammar)
+  ```
+
+  Its tokens are `NamedTokenType`s (`tag.aardflex.xml`, `variable.module.xml`, ...), coloured by
+  `EditorTheme.tokenColors` entries for exactly those names; `grammar.tokenNames` lists every name
+  the grammar can produce. Comments and strings are the editor's own `TokenType.Comment` and
+  `TokenType.StringLiteral`. `XmlTokenType.Expression` and `ColorRef` and the post-processing then
+  go.
+
+Then re-run the app's screenshot tests, and check an input method (Gboard: autocorrect, voice
+input, a Samsung keyboard's deletes) and TalkBack by hand, since 0.6 replaces the text field
+underneath.

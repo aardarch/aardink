@@ -36,7 +36,7 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
 | 9 | Done | `:sample-web`, npm package, `tools/vite-smoke/`, checklist. See §7.4: W-1 leak and W-10 latency are open. |
 | 10 | Done | 0.5.0 released as-is: §7.4's W-1 leak and W-10 latency ship as documented known issues (CHANGELOG, README, `docs/WEB_INTEGRATION.md`). Gradle 9.8.0. No `-rc1` dry run: an rc tag publishes to Maven Central just the same, so CI on `main` served as the dry run instead. |
-| 11 | **Superseded** | Replaced by `docs/AARDINK_0.6_PLAN.md` §7.1: aardflex-web-app consumes `@aardarch/aardink-web` from npmjs instead of building its own wasm executable. |
+| 11 | **Superseded** | Replaced by [`docs/AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) (planned in `docs/AARDINK_0.6_PLAN.md` §7.1): aardflex-web-app consumes `@aardarch/aardink-web` from npmjs instead of building its own wasm executable. |
 
 **Post-release:** this plan is complete through 0.5.0 and is now a historical record. Work continues
 in `docs/AARDINK_0.6_PLAN.md`, which covers §7.4's open items, the manual web checklist and §11.
@@ -1426,6 +1426,10 @@ PR's dump.
 | 11 | **Separate repo, `aardflex-web-app`**: switch-over from Monaco (§11) | `pnpm check`/`pnpm test`/`pnpm build` green; ported tokenizer golden tests pass; bundle size compared and recorded |
 
 ## 11. `aardflex-web-app` switch-over (executed in that repo, after PR 10 above ships)
+
+> **Superseded** by [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md): the app installs
+> `@aardarch/aardink-web` from npm and registers its grammar from TypeScript. Kept as the record
+> of the 0.5 design.
 
 This work happens in `C:\repos\aardarch\aardflex-web-app`, not in this repository, and
 depends on Aardink 0.5.0 being available (either from `mavenLocal()`/`includeBuild` during
