@@ -600,7 +600,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val layout = layoutFor(shownLine)
         val shown = min(lineLength(shownLine), MAX_RENDERED_LINE_CHARS)
         val col = if (shownLine == line) column.coerceAtMost(shown) else shown
-        val rowInLine = layout.getLineForOffset(col)
+        val rowInLine = layout.rowFor(col)
         val targetX = x ?: layout.getHorizontalPosition(col, usePrimaryDirection = true)
         val targetRow = lineMap.firstRowOf(shownLine) + rowInLine + rows
         if (targetRow < 0) return 0
@@ -627,7 +627,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val layout = layoutFor(shownLine)
         val shown = min(lineLength(shownLine), MAX_RENDERED_LINE_CHARS)
         val col = if (shownLine == line) column.coerceAtMost(shown) else shown
-        return lineMap.firstRowOf(shownLine) + layout.getLineForOffset(col)
+        return lineMap.firstRowOf(shownLine) + layout.rowFor(col)
     }
 
     /** The row on screen at viewport y [y], clamped to the document's rows. */
@@ -675,3 +675,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         const val MAX_RENDERED_LINE_CHARS = 10_000
     }
 }
+
+/**
+ * The row of this layout that [offset] is on, one of the rows [TextLayoutResult.lineCount] counts.
+ * On skiko, `getLineForOffset` reads Skia's line metrics and `lineCount` its line number, and the
+ * two can disagree (CI's Linux Chrome, during an input method's composition), so a row taken
+ * straight from `getLineForOffset` can be one the layout's line getters reject.
+ */
+internal fun TextLayoutResult.rowFor(offset: Int): Int = getLineForOffset(offset).coerceIn(0, lineCount - 1)

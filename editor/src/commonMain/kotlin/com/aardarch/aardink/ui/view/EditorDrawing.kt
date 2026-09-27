@@ -153,8 +153,8 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
             DiagnosticSeverity.Warning -> colors.warning
             DiagnosticSeverity.Info -> colors.info
         }
-        val firstRow = layout.getLineForOffset(a)
-        val lastRow = layout.getLineForOffset(max(a, b - 1))
+        val firstRow = layout.rowFor(a)
+        val lastRow = layout.rowFor(max(a, b - 1))
         for (row in firstRow..lastRow) {
             val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
             var x1 = if (row == lastRow && b > a) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
@@ -172,8 +172,8 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
     val b = (range.max - line.start).coerceIn(a, line.shownLength)
     if (b <= a) return
     val stroke = 1.dp.toPx()
-    val firstRow = layout.getLineForOffset(a)
-    val lastRow = layout.getLineForOffset(b - 1)
+    val firstRow = layout.rowFor(a)
+    val lastRow = layout.rowFor(b - 1)
     for (row in firstRow..lastRow) {
         val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
         val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
