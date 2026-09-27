@@ -45,6 +45,9 @@ private fun handle(id: Int): AardinkEditorHandle =
  */
 @JsExport fun aardinkSetBundledFontUrl(url: String) = AardinkWeb.setResourceUrl(AardinkWeb.BUNDLED_FONT_PATH, url)
 
+/** Starts fetching the bundled font, so the first editor shows in it at once. */
+@JsExport fun aardinkPreloadFont() = AardinkWeb.preloadFont()
+
 @JsExport
 fun aardinkCreate(containerId: String, initialText: String, optionsJson: String): Int {
     val handle = AardinkWeb.mount(

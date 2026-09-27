@@ -35,7 +35,8 @@ function load() {
 }
 
 export function preloadAardink() {
-  return load().then(() => undefined);
+  // The font too: an editor waits up to half a second for it rather than showing in another first.
+  return load().then((k) => k.aardinkPreloadFont());
 }
 
 let generatedIds = 0;

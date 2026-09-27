@@ -120,6 +120,20 @@ class AardinkWebTest {
     }
 
     @Test
+    fun `dispose takes the editor's elements out of its container and leaves the host's`() {
+        val handle = mount()
+        val container = containers.last()
+        val own = document.createElement("span")
+        container.appendChild(own)
+        assertTrue(container.childElementCount >= 2, "the viewport's element and the host's")
+
+        AardinkWeb.dispose(handle)
+
+        assertEquals(1, container.childElementCount)
+        assertSame(own, container.firstElementChild)
+    }
+
+    @Test
     fun `changing language keeps the text and swaps the tokenizer`() {
         val handle = mount("val x = 1", WebEditorOptions(language = "plaintext"))
 

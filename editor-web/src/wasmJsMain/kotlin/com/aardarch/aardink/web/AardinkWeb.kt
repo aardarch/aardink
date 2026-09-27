@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -60,11 +61,15 @@ import com.aardarch.aardink.web.res.Res
 import kotlinx.browser.document
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -76,6 +81,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
+import org.w3c.dom.Element
+import org.w3c.dom.HTMLElement
 
 /**
  * One editor mounted by [AardinkWeb.mount]. Opaque to hosts: every operation goes through
@@ -117,8 +124,12 @@ class AardinkEditorHandle internal constructor(
     /** What the diff lane compares the text with; "" for no diff lane. */
     internal val baseline: MutableState<String> = mutableStateOf("")
 
-    /** Counts [AardinkWeb.focus] calls, for the composition to act on. */
+    /** Counts [AardinkWeb.focus] calls, for the composition to act on, and how many it has. */
     internal val focusRequests = mutableIntStateOf(0)
+    internal var focusesDone = 0
+
+    /** The element the viewport lives in, inside the host's container, for [AardinkWeb.dispose] to take out. */
+    internal var viewportElement: Element? = null
 }
 
 /**
@@ -222,9 +233,18 @@ object AardinkWeb {
             initialLanguage = language,
             initialOptions = options,
         )
-        ComposeViewport(container) {
+        // An element of the editor's own, filling the container, so dispose() can take out all
+        // Compose put in it (sometimes only after this returns) and nothing of the host's.
+        val viewport = (document.createElement("div") as HTMLElement).apply {
+            style.width = "100%"
+            style.height = "100%"
+            setAttribute("data-aardink-editor", "")
+        }
+        container.appendChild(viewport)
+        ComposeViewport(viewport) {
             if (!handle.disposed.value) EditorContent(handle)
         }
+        handle.viewportElement = viewport
         return handle
     }
 
@@ -501,11 +521,23 @@ object AardinkWeb {
     fun dispose(handle: AardinkEditorHandle) {
         if (handle.disposed.value) return
         handle.disposed.value = true
+        // Out of the page: from Compose Multiplatform 1.13 that tears the viewport down entirely
+        // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops.
+        handle.viewportElement?.remove()
+        handle.viewportElement = null
         handle.onChange = null
         handle.onContentChange = null
         handle.onCursorChange = null
         handle.onDiagnosticsChange = null
         handle.scope.cancel()
+    }
+
+    /**
+     * Starts fetching the bundled JetBrains Mono, so the first editor mounted shows in it straight
+     * away (W-9). Safe to call more than once. The npm package's `preloadAardink()` calls it.
+     */
+    fun preloadFont() {
+        bundledFontLoad()
     }
 
     /**
@@ -565,8 +597,10 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         }
     }
 
+    // Nothing until the font is there (or has had its time): no flash of another font.
+    val fontFamily = rememberBundledMonoFont()
     val typography = EditorTypography(
-        fontFamily = rememberBundledMonoFont(),
+        fontFamily = fontFamily ?: FontFamily.Monospace,
         fontSize = options.fontSize.sp,
         lineHeight = (options.fontSize * 20f / 14f).sp,
     )
@@ -578,43 +612,49 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         themeWithNames(baseTheme, AardinkWeb.namedColors[options.theme].orEmpty(), AardinkWeb.grammarNames[language.id].orEmpty())
     }
 
+    // A focus() made before the editor is on screen (it waits for its font) is kept until it is.
     val focusRequester = remember { FocusRequester() }
     val focusRequests = handle.focusRequests.intValue
-    LaunchedEffect(focusRequests) {
-        if (focusRequests > 0) runCatching { focusRequester.requestFocus() }
+    val shown = fontFamily != null
+    LaunchedEffect(focusRequests, shown) {
+        if (!shown || focusRequests <= handle.focusesDone) return@LaunchedEffect
+        withFrameNanos { }
+        if (runCatching { focusRequester.requestFocus() }.isSuccess) handle.focusesDone = focusRequests
     }
 
-    CompositionLocalProvider(
-        LocalEditorTheme provides theme,
-        LocalEditorTypography provides typography,
-    ) {
-        CodeEditorLayout(
-            state = state,
-            modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
-            languageService = language.languageService,
-            findReplaceState = handle.findReplaceState,
-            foldState = handle.foldState,
-            foldingProvider = language.foldingProvider,
-            diagnostics = handle.diagnostics.value,
-            savedText = handle.baseline.value,
-            onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
-            onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
-            keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
-            options = EditorOptions(
-                readOnly = options.readOnly,
-                softWrap = options.wordWrap,
-                showGutter = options.showGutter,
-                showLineNumbers = options.showLineNumbers,
-                showFoldMarkers = options.showFoldMarkers,
-                showMinimap = options.minimap,
-                stickyScroll = options.stickyScroll,
-                bracketPairColorization = options.bracketPairColorization,
-                highlightCurrentLine = options.highlightCurrentLine,
-                tabSize = options.tabSize.coerceIn(1, 16),
-                insertSpaces = options.insertSpaces,
-            ),
-            onRequestGoToLine = { showGoToLine = true },
-        )
+    if (fontFamily != null) {
+        CompositionLocalProvider(
+            LocalEditorTheme provides theme,
+            LocalEditorTypography provides typography,
+        ) {
+            CodeEditorLayout(
+                state = state,
+                modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
+                languageService = language.languageService,
+                findReplaceState = handle.findReplaceState,
+                foldState = handle.foldState,
+                foldingProvider = language.foldingProvider,
+                diagnostics = handle.diagnostics.value,
+                savedText = handle.baseline.value,
+                onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
+                onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
+                keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
+                options = EditorOptions(
+                    readOnly = options.readOnly,
+                    softWrap = options.wordWrap,
+                    showGutter = options.showGutter,
+                    showLineNumbers = options.showLineNumbers,
+                    showFoldMarkers = options.showFoldMarkers,
+                    showMinimap = options.minimap,
+                    stickyScroll = options.stickyScroll,
+                    bracketPairColorization = options.bracketPairColorization,
+                    highlightCurrentLine = options.highlightCurrentLine,
+                    tabSize = options.tabSize.coerceIn(1, 16),
+                    insertSpaces = options.insertSpaces,
+                ),
+                onRequestGoToLine = { showGoToLine = true },
+            )
+        }
     }
 
     if (showGoToLine) {
@@ -629,35 +669,51 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     }
 }
 
-/** JetBrains Mono, once loaded; shared by every editor on the page so it is fetched once. */
-private var bundledMonoFont: FontFamily? = null
+/** JetBrains Mono's loading, started once and shared by every editor on the page. */
+private var bundledFont: Deferred<FontFamily?>? = null
 
 /**
- * The bundled JetBrains Mono, or the platform monospace family until (and unless) it loads.
+ * The bundled JetBrains Mono, loading; null when it cannot be had.
  *
  * Not `org.jetbrains.compose.resources.Font(Res.font...)`: that throws inside composition when
  * the resource cannot be fetched -- a host whose bundler does not serve `composeResources/`,
  * or Karma -- and takes the whole editor down with it. A missing font should cost the typeface,
  * not the editor.
  */
+private fun bundledFontLoad(): Deferred<FontFamily?> = bundledFont ?: fontScope.async {
+    try {
+        FontFamily(Font("JetBrainsMono-Regular", Res.readBytes("font/jetbrains_mono_regular.ttf")))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        println("Aardink: could not load the bundled JetBrains Mono (${e.message}); using the default monospace font.")
+        null
+    }
+}.also { bundledFont = it }
+
+private val fontScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+/**
+ * The editor's font: the bundled JetBrains Mono, waited for up to [FONT_WAIT_MS] so the editor does
+ * not appear in one font and then jump to another (W-9); the platform's monospace font if it takes
+ * longer, swapped for JetBrains Mono when it comes. Null while waiting.
+ */
+@OptIn(ExperimentalCoroutinesApi::class) // Deferred.getCompleted
 @Composable
-private fun rememberBundledMonoFont(): FontFamily {
-    var family by remember { mutableStateOf(bundledMonoFont ?: FontFamily.Monospace) }
-    LaunchedEffect(Unit) {
-        if (bundledMonoFont != null) return@LaunchedEffect
-        try {
-            val bytes = Res.readBytes("font/jetbrains_mono_regular.ttf")
-            val loaded = FontFamily(Font("JetBrainsMono-Regular", bytes))
-            bundledMonoFont = loaded
-            family = loaded
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            println("Aardink: could not load the bundled JetBrains Mono (${e.message}); using the default monospace font.")
-        }
+private fun rememberBundledMonoFont(): FontFamily? {
+    val load = remember { bundledFontLoad() }
+    val ready = if (load.isCompleted) load.getCompleted() ?: FontFamily.Monospace else null
+    var family by remember { mutableStateOf(ready) }
+    LaunchedEffect(load) {
+        if (family != null && load.isCompleted) return@LaunchedEffect
+        family = withTimeoutOrNull(FONT_WAIT_MS) { load.await() } ?: FontFamily.Monospace
+        load.await()?.let { family = it }
     }
     return family
 }
+
+/** How long a new editor waits for its font before showing in the fallback. */
+private const val FONT_WAIT_MS = 500L
 
 /** Builds [AardinkWeb.tokenize]'s JSON: tokens by line, with the gaps between them as `""`. */
 private class JsonArrayBuilderLines(private val text: String) {

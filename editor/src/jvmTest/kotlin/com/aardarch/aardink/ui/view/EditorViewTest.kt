@@ -80,6 +80,20 @@ class EditorViewTest {
     private fun lines(count: Int) = (0 until count).joinToString("\n") { "line number $it" }
 
     @Test
+    fun `a new density or font scale lays the lines out again`() {
+        val view = viewOf(lines(3))
+        view.prepare(400, 200)
+        val before = view.layoutFor(0)
+        assertTrue(before === view.layoutFor(0), "cached")
+        // Browser zoom or a move to another screen: a new Density (with its measurer) is a new style.
+        val zoomed = TextMeasurer(createFontFamilyResolver(), Density(2f, fontScale = 1.5f), LayoutDirection.Ltr, cacheSize = 0)
+        view.style = view.style!!.copy(measurer = zoomed)
+        val after = view.layoutFor(0)
+        assertTrue(after !== before)
+        assertTrue(after.size.width > before.size.width * 2.5f, "${after.size.width} vs ${before.size.width}")
+    }
+
+    @Test
     fun `a point in the text maps to the character under it`() {
         val view = viewOf(lines(20))
         view.prepare(400, 200)

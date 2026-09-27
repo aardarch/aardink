@@ -72,7 +72,8 @@ There are two ways in:
 | `format(then)` | The language's formatter, as one undo step changing only what differs; `then` gets whether anything changed. |
 | `focus` | Moves the keyboard focus to the editor. |
 | `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. |
-| `dispose` / `isDisposed` | Remove the editor's composition and stop its work. Idempotent. The container element is left for you to remove or reuse. **See W-1 below: memory is not fully released.** |
+| `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
+| `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
 | `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
@@ -243,6 +244,25 @@ package, call `aardinkSetBundledFontUrl(url)` before the first `aardinkCreate`, 
 it logs `Aardink: could not load the bundled JetBrains Mono ...` and falls back to the default
 monospace font.
 
+A new editor waits up to half a second for the font before it shows, rather than appearing in the
+fallback and then jumping to JetBrains Mono (W-9); `preloadAardink()` starts the fetch early, so
+usually it waits for nothing. If the font takes longer, the editor shows in the fallback and
+switches when the font arrives.
+
+## Host page CSS
+
+- **Size the container.** The editor fills it. For a full-height editor on phones use
+  `height: 100dvh` rather than `100vh`, which ignores the browser's own toolbars.
+- **The soft keyboard (W-5).** With
+  `<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">`
+  the page shrinks when the keyboard opens, so the editor (and its keyboard toolbar) stay above
+  it; without it, the keyboard covers the bottom of the page. The editor keeps the caret in view
+  either way, and the browser's hidden input element follows the caret.
+- **Do not move a mounted editor's container** to another place in the DOM. From Compose
+  Multiplatform 1.13, an editor whose element leaves the document is torn down. Framework
+  features that re-parent DOM nodes (a Svelte `{#key}` block, React portals moving between
+  parents) do that: mount the editor where it stays, or dispose it and mount a new one.
+
 ## Browser requirements
 
 Wasm GC and exception handling: Chrome/Edge 119+, Firefox 120+, Safari 18.2+.
@@ -297,11 +317,11 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 | W-5 | Mobile soft keyboard: viewport resize, toolbar placement | **Manual** (needs a phone). |
 | W-6 | Focus: click-to-focus; Tab stays in the field; Ctrl+F/Ctrl+S are not the browser's | Click-to-focus works (the checklist types after a click). Tab and browser shortcuts: **manual**. |
 | W-7 | Wheel over the editor must not scroll the page | Contained: a 600 px wheel over the editor leaves the page's `scrollY` at 0. |
-| W-8 | devicePixelRatio and zoom | At DPR 2 the canvas has a 2000×1200 backing store for 1000×600 CSS px, and text and squiggles are sharp. Browser zoom: **manual**. |
-| W-9 | No flicker when Compose fetches a fallback font for a missing glyph | **Manual.** The bundled font swaps in once it loads (the first frame uses the default monospace). |
+| W-8 | devicePixelRatio and zoom | At DPR 2 the canvas has a 2000×1200 backing store for 1000×600 CSS px, and text and squiggles are sharp. A change of density or font scale (zoom, another screen) lays every line out again (`EditorViewTest`). Browser zoom by hand: **manual**. |
+| W-9 | No flicker when Compose fetches a fallback font for a missing glyph | **Manual.** A new editor waits up to 500 ms for the bundled font instead of showing a first frame in the default monospace; `preloadAardink()` fetches it early. |
 | W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke settles in 8.6 ms (p50), no key is lost at 10 keys/s, and the initial highlighting pass causes no long task. `perf.mjs` measures it and CI gates it; see [Performance](#performance). |
 
 ## Known limitations
 
-- A disposed editor is not fully released (W-1); reuse editors. Fixed upstream for Compose Multiplatform 1.13.
+- A disposed editor is not fully released (W-1) on Compose Multiplatform 1.12; reuse editors. `dispose()` now takes the editor's element out of the page, which from 1.13 frees it entirely.
 - No minimap or bracket-pair colouring yet.

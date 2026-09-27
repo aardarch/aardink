@@ -183,6 +183,7 @@ final object com.aardarch.aardink.web/AardinkWeb { // com.aardarch.aardink.web/A
     final fun onDiagnosticsChange(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/Function1<kotlin/String, kotlin/Unit>?) // com.aardarch.aardink.web/AardinkWeb.onDiagnosticsChange|onDiagnosticsChange(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.Function1<kotlin.String,kotlin.Unit>?){}[0]
     final fun parseOptions(kotlin/String): com.aardarch.aardink.web/WebEditorOptions // com.aardarch.aardink.web/AardinkWeb.parseOptions|parseOptions(kotlin.String){}[0]
     final fun patchOptions(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/String) // com.aardarch.aardink.web/AardinkWeb.patchOptions|patchOptions(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.String){}[0]
+    final fun preloadFont() // com.aardarch.aardink.web/AardinkWeb.preloadFont|preloadFont(){}[0]
     final fun pushUndoStop(com.aardarch.aardink.web/AardinkEditorHandle) // com.aardarch.aardink.web/AardinkWeb.pushUndoStop|pushUndoStop(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun redo(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/Boolean // com.aardarch.aardink.web/AardinkWeb.redo|redo(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun registerLanguage(kotlin/String, com.aardarch.aardink.web/WebLanguageProviders = ...): kotlin/String // com.aardarch.aardink.web/AardinkWeb.registerLanguage|registerLanguage(kotlin.String;com.aardarch.aardink.web.WebLanguageProviders){}[0]
