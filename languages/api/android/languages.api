@@ -13,6 +13,27 @@ public final class com/aardarch/aardink/languages/BuiltInLanguages {
 	public final fun getXml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 }
 
+public final class com/aardarch/aardink/languages/DeclarativeGrammar {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/DeclarativeGrammar$Companion;
+	public final fun getTokenNames ()Ljava/util/Set;
+}
+
+public final class com/aardarch/aardink/languages/DeclarativeGrammar$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/aardarch/aardink/languages/DeclarativeGrammar;
+}
+
+public final class com/aardarch/aardink/languages/DeclarativeTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/DeclarativeGrammar;)V
+	public fun canSpanLines (ILjava/util/List;)Z
+	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
+	public fun keyboardToolbarChars ()Ljava/util/List;
+	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;
+	public fun tokenizeFullCooperative (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun tokenizeLines (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Ljava/util/List;
+}
+
 public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public static final field $stable I
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)V
@@ -52,6 +73,18 @@ public final class com/aardarch/aardink/languages/LanguageRegistry {
 
 public final class com/aardarch/aardink/languages/LanguageRegistry$Companion {
 	public final fun withBuiltIns ()Lcom/aardarch/aardink/languages/LanguageRegistry;
+}
+
+public final class com/aardarch/aardink/languages/NamedTokenType : com/aardarch/aardink/core/TokenType {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/aardarch/aardink/languages/NamedTokenType;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/NamedTokenType;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/NamedTokenType;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public abstract class com/aardarch/aardink/languages/internal/BaseLanguageService : com/aardarch/aardink/core/LanguageService {

@@ -58,6 +58,9 @@ kotlin {
             // yield() in the cooperative tokenizers. Already on the graph through :editor's
             // Compose dependencies; declared because this module now calls it directly.
             implementation(libs.kotlinx.coroutines.core)
+            // DeclarativeGrammar.parse reads JSON. Already on the graph through :editor, whose
+            // theme parser uses it; declared because this module now calls it directly.
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

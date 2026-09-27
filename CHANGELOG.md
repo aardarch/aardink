@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sideways to stay inside the window. Hover documentation (`LanguageService.hoverDoc`, which the
   editor never showed before) appears when the mouse rests on a symbol for half a second, and
   from the touch menu's "Info".
+- Grammars as data: `DeclarativeGrammar.parse(json)` reads a subset of Monaco's Monarch (states,
+  rules of regex, action and next state, `cases`, capture groups, `include`, `@rematch`,
+  `defaultToken`, `ignoreCase`, `tokenPostfix`, `@name` regex attributes), and
+  `DeclarativeTokenizer(grammar)` highlights with it, a line at a time and incrementally.
+  Lookbehind is refused when the grammar is read, with where it is. Tokens get a
+  `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`); comments and strings get the
+  editor's own types.
 - Sticky scroll (`EditorOptions.stickyScroll`): the first lines of the blocks the top of the view
   is inside (up to five, from the folding provider's ranges) stay pinned at the top, each pushed
   up as its block ends; a click scrolls to it.
