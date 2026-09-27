@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
  * Structural XML / HTML validator, auto-close provider, completion provider, and formatter.
@@ -45,8 +46,10 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val stack = ArrayDeque<OpenTag>()
         var i = 0
         val n = text.length
+        val pacer = diagnosticsPacer()
 
         while (i < n) {
+            pacer?.onProgress(i)
             val c = text[i]
 
             // Check for unescaped '&' outside tags/comments/CDATA

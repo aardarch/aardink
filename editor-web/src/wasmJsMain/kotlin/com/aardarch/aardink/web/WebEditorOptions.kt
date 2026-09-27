@@ -41,8 +41,9 @@ data class WebEditorOptions(
 
 /**
  * A diagnostic as a web host describes it — the shape of a Monaco marker, so hosts moving off
- * Monaco can pass theirs through unchanged. Lines and columns are **1-based**, and
- * [endColumn] is **exclusive**. A range that runs past the end of its line is clamped to it.
+ * Monaco can pass theirs through unchanged, and the shape [AardinkWeb.onDiagnosticsChange]
+ * reports the language's own in. Lines and columns are **1-based**, and [endColumn] is
+ * **exclusive**. A range that runs past the end of its line is clamped to it.
  *
  * @property severity `"error"`, `"warning"` or `"info"`; anything else is treated as `"info"`.
  */

@@ -16,6 +16,11 @@
 package com.aardarch.aardink.web
 
 import kotlinx.browser.document
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.w3c.dom.HTMLElement
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -55,6 +60,25 @@ class ExportsTemplateTest {
             assertEquals("two", aardinkGetValue(id))
 
             assertFalse(aardinkUndo(id), "setValue and a language change leave no history")
+        } finally {
+            aardinkDispose(id)
+        }
+    }
+
+    @Test
+    fun `the language's own diagnostics reach the diagnostics callback as JSON`() = runTest {
+        val id = aardinkCreate(container.id, "[1,]", """{"language": "json"}""")
+        try {
+            val reported = mutableListOf<String>()
+            aardinkOnDiagnosticsChange(id) { reported += it }
+            withContext(Dispatchers.Main) {
+                withTimeout(5_000) {
+                    while (reported.isEmpty()) delay(16)
+                }
+            }
+            assertTrue(reported.last().contains("Trailing comma in array"), reported.last())
+            aardinkSetDiagnostics(id, "[]")
+            aardinkSetDiagnostics(id, "null")
         } finally {
             aardinkDispose(id)
         }

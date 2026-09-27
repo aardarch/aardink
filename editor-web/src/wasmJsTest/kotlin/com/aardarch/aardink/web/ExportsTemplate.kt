@@ -71,8 +71,15 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
 
 @JsExport fun aardinkOnCursorChange(id: Int, callback: (Int, Int) -> Unit) = AardinkWeb.onCursorChange(handle(id), callback)
 
-/** A JSON array of `{line, startColumn, endColumn, message, severity}`, 1-based, end-exclusive. */
+/**
+ * A JSON array of `{line, startColumn, endColumn, message, severity}`, 1-based, end-exclusive; or
+ * `null` to show the language's own diagnostics again.
+ */
 @JsExport fun aardinkSetDiagnostics(id: Int, diagnosticsJson: String) = AardinkWeb.setDiagnosticsJson(handle(id), diagnosticsJson)
+
+/** Called with the language's own diagnostics, as a JSON array in the same shape, each time they change. */
+@JsExport
+fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
 @JsExport fun aardinkRevealPosition(id: Int, line: Int, column: Int) = AardinkWeb.navigateTo(handle(id), line, column)
 

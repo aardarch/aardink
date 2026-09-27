@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.ComposeViewport
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
@@ -55,6 +56,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
@@ -82,7 +84,9 @@ class AardinkEditorHandle internal constructor(
     internal val state: MutableState<CodeEditorState> = mutableStateOf(initialState)
     internal val language: MutableState<LanguageDefinition> = mutableStateOf(initialLanguage)
     internal val options: MutableState<WebEditorOptions> = mutableStateOf(initialOptions)
-    internal val diagnostics: MutableState<List<Diagnostic>> = mutableStateOf(emptyList())
+
+    /** The host's diagnostics, or null while the language's own are shown. */
+    internal val diagnostics: MutableState<List<Diagnostic>?> = mutableStateOf(null)
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -94,6 +98,7 @@ class AardinkEditorHandle internal constructor(
 
     internal var onChange: ((String) -> Unit)? = null
     internal var onCursorChange: ((Int, Int) -> Unit)? = null
+    internal var onDiagnosticsChange: ((String) -> Unit)? = null
 }
 
 /**
@@ -210,8 +215,16 @@ object AardinkWeb {
         handle.onCursorChange = callback
     }
 
-    /** Replaces the diagnostics shown as squiggles and gutter markers. */
-    fun setDiagnostics(handle: AardinkEditorHandle, diagnostics: List<WebDiagnostic>) {
+    /**
+     * Shows the host's [diagnostics] as squiggles and gutter markers in place of the language's
+     * own; `null` goes back to the language's own. Either way they move along with the text as
+     * it is edited, until the next list.
+     */
+    fun setDiagnostics(handle: AardinkEditorHandle, diagnostics: List<WebDiagnostic>?) {
+        if (diagnostics == null) {
+            handle.diagnostics.value = null
+            return
+        }
         val document = handle.state.value.document
         handle.diagnostics.value = diagnostics.mapNotNull { web ->
             if (web.line < 1 || web.line > document.lineCount) return@mapNotNull null
@@ -233,9 +246,41 @@ object AardinkWeb {
         }
     }
 
-    /** Parses a JSON array of [WebDiagnostic] and shows it; see [setDiagnostics]. */
+    /** Parses a JSON array of [WebDiagnostic], or `null`, and shows it; see [setDiagnostics]. */
     fun setDiagnosticsJson(handle: AardinkEditorHandle, diagnosticsJson: String) {
-        setDiagnostics(handle, json.decodeFromString(diagnosticsJsonSerializer, diagnosticsJson))
+        setDiagnostics(handle, json.decodeFromString(diagnosticsJsonSerializer.nullable, diagnosticsJson))
+    }
+
+    /**
+     * Registers the single diagnostics listener, replacing any previous one; `null` removes it.
+     * Called with a JSON array of [WebDiagnostic] each time the language's own diagnostics are
+     * collected: 500 ms after the editor appears, and after each pause in typing. Not called while
+     * the host's list from [setDiagnostics] is shown.
+     */
+    fun onDiagnosticsChange(handle: AardinkEditorHandle, callback: ((String) -> Unit)?) {
+        handle.onDiagnosticsChange = callback
+    }
+
+    /**
+     * [diagnostics] in the host's shape. A marker covers one line, so a range running on past the
+     * end of its first line ends there.
+     */
+    internal fun toWebDiagnostics(document: CodeDocument, diagnostics: List<Diagnostic>): List<WebDiagnostic> =
+        diagnostics.map { diagnostic ->
+            val (line, startColumn) = document.offsetToLineCol(diagnostic.range.first)
+            val (endLine, endColumn) = document.offsetToLineCol(diagnostic.range.last + 1)
+            WebDiagnostic(
+                line = line + 1,
+                startColumn = startColumn + 1,
+                endColumn = if (endLine == line) endColumn + 1 else document.lineEnd(line) - document.lineStart(line) + 1,
+                message = diagnostic.message,
+                severity = diagnostic.severity.name.lowercase(),
+            )
+        }
+
+    internal fun reportDiagnostics(handle: AardinkEditorHandle, diagnostics: List<Diagnostic>) {
+        val callback = handle.onDiagnosticsChange ?: return
+        callback(json.encodeToString(diagnosticsJsonSerializer, toWebDiagnostics(handle.state.value.document, diagnostics)))
     }
 
     /** Scrolls to and places the caret at a 1-based [line] and [column], clamped to the document. */
@@ -267,6 +312,7 @@ object AardinkWeb {
         handle.disposed.value = true
         handle.onChange = null
         handle.onCursorChange = null
+        handle.onDiagnosticsChange = null
         handle.scope.cancel()
     }
 
@@ -343,6 +389,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
             foldingProvider = language.foldingProvider,
             diagnostics = handle.diagnostics.value,
             onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
+            onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
             keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
             options = EditorOptions(
                 readOnly = options.readOnly,

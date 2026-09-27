@@ -58,8 +58,14 @@ export async function createEditor(container, onChange, options = {}) {
   // The Kotlin side holds one listener of each kind; fan out to any number here.
   const contentListeners = new Set();
   const cursorListeners = new Set();
+  const diagnosticsListeners = new Set();
   k.aardinkOnChange(id, (text) => contentListeners.forEach((listener) => listener(text)));
   k.aardinkOnCursorChange(id, (line, column) => cursorListeners.forEach((listener) => listener(line, column)));
+  k.aardinkOnDiagnosticsChange(id, (json) => {
+    if (diagnosticsListeners.size === 0) return;
+    const diagnostics = JSON.parse(json);
+    diagnosticsListeners.forEach((listener) => listener(diagnostics));
+  });
   if (onChange) contentListeners.add(onChange);
 
   let disposed = false;
@@ -76,7 +82,11 @@ export async function createEditor(container, onChange, options = {}) {
       cursorListeners.add(listener);
       return () => cursorListeners.delete(listener);
     },
-    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics)),
+    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics ?? null)),
+    onDidChangeDiagnostics(listener) {
+      diagnosticsListeners.add(listener);
+      return () => diagnosticsListeners.delete(listener);
+    },
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),
     showFind: () => k.aardinkShowFind(id),
     undo: () => k.aardinkUndo(id),
@@ -86,6 +96,7 @@ export async function createEditor(container, onChange, options = {}) {
       disposed = true;
       contentListeners.clear();
       cursorListeners.clear();
+      diagnosticsListeners.clear();
       k.aardinkDispose(id);
     },
   };

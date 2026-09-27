@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
  * In-process language service for TOML documents.
@@ -69,8 +70,10 @@ object TomlLanguageService : BaseLanguageService() {
         val arrayInstances = mutableMapOf<List<String>, Int>()
         var sectionKeys = keysByTable.getOrPut(emptyList<String>() to 0) { mutableSetOf() }
         val lineStates = lineStates(document)
+        val pacer = diagnosticsPacer()
 
         for (i in 0 until lineCount) {
+            pacer?.onProgress(i)
             val lineText = document.lineText(i)
             val trimmed = lineText.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("#")) continue

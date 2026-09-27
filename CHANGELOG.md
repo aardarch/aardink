@@ -62,6 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sideways to stay inside the window. Hover documentation (`LanguageService.hoverDoc`, which the
   editor never showed before) appears when the mouse rests on a symbol for half a second, and
   from the touch menu's "Info".
+- Diagnostics without a host. `CodeEditorLayout(diagnostics = null)`, the default, asks the
+  language service 500 ms after the editor appears and after each pause in typing, drops any
+  answer for text that has changed since it asked, and reports each list through the new `onDiagnosticsChange`. On the
+  web the built-in languages' checks pause for frames as they go. While the text is edited, every
+  diagnostic (the host's too) moves along with the text it marks instead of staying at its old
+  offset until the next list.
+- On the web, the language's own diagnostics show until the host calls `setDiagnostics`;
+  `setDiagnostics(null)` goes back to them, and `AardinkWeb.onDiagnosticsChange` (in the npm
+  package, `onDidChangeDiagnostics`) reports them in the same Monaco-marker shape.
 - Editor chrome, each switchable in `EditorOptions`: the caret's line is highlighted in
   `EditorTheme.lineHighlight`; the bracket pair the caret touches is boxed; and brackets are
   coloured by nesting depth from the new `EditorTheme.bracketPairColors` (VS Code's colours by
@@ -111,8 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every other edit on its own. Undo and redo restore the selections from before and after the step.
 - The diff lane is recomputed 300 ms after the last edit rather than on every keystroke.
 - **Breaking:** `CodeEditorLayout`'s `readOnly`, `softWrap` and `show*` parameters are now fields
-  of `options: EditorOptions`, and `diagnostics` is nullable (`null` will collect them from the
-  language service; for now it shows none).
+  of `options: EditorOptions`, and `diagnostics` is nullable: `null`, the default, collects them
+  from the language service.
 - A new `CodeEditorState` starts with the caret at the start of the text, as after `loadText`,
   instead of at its end.
 - Replace All is one undo step instead of one per match.

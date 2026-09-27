@@ -59,7 +59,8 @@ There are two ways in:
 | `updateOptions(options)` / `patchOptions(json)` / `currentOptions` | Replace all options, or apply only the JSON keys given (Monaco's `updateOptions(partial)`). |
 | `onChange(callback)` | Full text after each change, typed or programmatic; at most once per frame. One listener; `null` removes it. |
 | `onCursorChange(callback)` | 1-based line and column. |
-| `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. |
+| `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. They replace the language's own diagnostics, which show until then; `null` (`"null"` in JSON) goes back to those. Either way they move with the text as it is edited. |
+| `onDiagnosticsChange(callback)` | The language's own diagnostics, as a JSON array in the same shape, each time they are collected: 500 ms after the editor appears, and after each pause in typing. Not called while the host's list is shown. One listener; `null` removes it. |
 | `navigateTo(line, column)` | Scroll to and place the caret at a 1-based position, clamped to the document. |
 | `showFind`, `undo`, `redo` | As named. `undo`/`redo` return whether anything changed. |
 | `dispose` / `isDisposed` | Remove the editor's composition and stop its work. Idempotent. The container element is left for you to remove or reuse. **See W-1 below: memory is not fully released.** |
@@ -113,6 +114,7 @@ const editor = await createEditor(container, (text) => save(text), {
 editor.updateOptions({ readOnly: true });
 editor.setDiagnostics([{ line: 3, startColumn: 5, endColumn: 9, message: 'Unknown tag', severity: 'error' }]);
 const stop = editor.onDidChangeCursor((line, column) => status(line, column));
+const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
@@ -154,7 +156,8 @@ Chrome, failing on any failed check or failed request.
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
 | `minimap`, `bracketPairColorization`, multi-cursor | — | Not supported. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame. |
-| `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. |
+| `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
+| `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | `revealPositionInCenter` | `revealPosition` | Scrolls it into view; not centred. |
 
 ## Fonts

@@ -49,6 +49,7 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticsTracker
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
@@ -90,9 +91,13 @@ import kotlinx.coroutines.withContext
  *   - [KeyboardToolbarRow]
  *
  * @param options How the editor looks and behaves; see [EditorOptions].
- * @param diagnostics Diagnostics to show as gutter dots and squiggles, or null to collect them from
- *   [languageService].
+ * @param diagnostics Diagnostics to show as gutter dots and squiggles, or null for the editor to
+ *   ask [languageService] for them, 500 ms after it appears and after each pause in typing,
+ *   dropping any answer for text that has changed since it was asked. Either way their ranges
+ *   move along with each edit until the next list arrives.
  * @param savedText Baseline text for the diff lane (typically the last-saved version).
+ * @param onDiagnosticsChange Called with each list the editor collects from [languageService] while
+ *   [diagnostics] is null; not called for a list the host passes.
  * @param onRequestGoToLine Invoked on Cmd/Ctrl+G. Hosts wire it to [GoToLineDialog]; the default
  *   does nothing, so the shortcut is inert until a host opts in.
  */
@@ -108,6 +113,7 @@ fun CodeEditorLayout(
     diagnostics: List<Diagnostic>? = null,
     savedText: String = "",
     onCursorChange: (line: Int, column: Int) -> Unit = { _, _ -> },
+    onDiagnosticsChange: (List<Diagnostic>) -> Unit = {},
     toolbarStyle: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
     keyboardToolbarPlacement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.BottomHover,
     onRequestGoToLine: () -> Unit = {},
@@ -124,7 +130,55 @@ fun CodeEditorLayout(
     val controller = remember(view) { EditorController(state, view) }
 
     val textVersion = state.textVersion
-    val shownDiagnostics = diagnostics.orEmpty()
+
+    // ── Diagnostics: the host's list, or the language service's ──────────────
+    // Either way the tracker moves their ranges along with each edit until the next list.
+    val diagnosticsTracker = remember(state) { DiagnosticsTracker(state.document) }
+    DisposableEffect(diagnosticsTracker) {
+        state.document.addChangeListener(diagnosticsTracker)
+        onDispose { state.document.removeChangeListener(diagnosticsTracker) }
+    }
+    val currentOnDiagnosticsChange = rememberUpdatedState(onDiagnosticsChange)
+    val collectDiagnostics = diagnostics == null
+    LaunchedEffect(diagnosticsTracker, languageService, collectDiagnostics) {
+        if (!collectDiagnostics) return@LaunchedEffect
+        val publish: (List<Diagnostic>) -> Unit = { list ->
+            diagnosticsTracker.replace(list)
+            currentOnDiagnosticsChange.value(list)
+        }
+        val service = languageService
+        if (service == null) {
+            if (diagnosticsTracker.diagnostics.isNotEmpty()) publish(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            // Asked once typing pauses, as Monaco's validation is; collectLatest drops a pass
+            // still running when the next edit comes. The first pass waits too, so that it runs
+            // after the editor's first frames rather than among them: on the web it shares their
+            // thread, and in among the first highlighting pass it could hold up a frame.
+            delay(DIAGNOSTICS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val list = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) { service.diagnostics(document) }
+            }
+            // An edit made straight through the document bumps no text version, and cancels
+            // nothing: the answer is for text that no longer exists.
+            if (state.document.version != document.version) return@collectLatest
+            publish(list)
+        }
+    }
+    // A list the host has just passed is shown as it is, and handed to the tracker after this
+    // composition; from then on the tracker's copy, moved along with the edits, is shown.
+    val shownDiagnostics = if (diagnostics != null && diagnosticsTracker.given !== diagnostics) {
+        diagnostics
+    } else {
+        diagnosticsTracker.diagnostics
+    }
+    if (diagnostics != null) {
+        SideEffect { if (diagnosticsTracker.given !== diagnostics) diagnosticsTracker.replace(diagnostics) }
+    }
 
     // Completion state. With a hardware keyboard the list sits at the caret and the arrows move
     // its selection; on a touch device it is a strip above the keyboard.
@@ -804,6 +858,9 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
 }
 
 // ── Signature help context ─────────────────────────────────────────────────────
+
+/** Delay before the language service is asked for diagnostics, after the editor appears or an edit. */
+private const val DIAGNOSTICS_DEBOUNCE_MS = 500L
 
 /** Delay before the diff lane is recomputed after an edit. */
 private const val DIFF_DEBOUNCE_MS = 300L

@@ -49,7 +49,17 @@ export interface AardinkEditor {
   onDidChangeContent(listener: (text: string) => void): () => void;
   /** 1-based caret position. Returns an unsubscribe function. */
   onDidChangeCursor(listener: (line: number, column: number) => void): () => void;
-  setDiagnostics(diagnostics: AardinkDiagnostic[]): void;
+  /**
+   * Shows these diagnostics in place of the language's own; `null` goes back to the language's
+   * own. Either way they move along with the text as it is edited, until the next list.
+   */
+  setDiagnostics(diagnostics: AardinkDiagnostic[] | null): void;
+  /**
+   * The language's own diagnostics each time they are collected: 500 ms after the editor appears,
+   * and after each pause in typing. Not called while a list from `setDiagnostics` is shown.
+   * Returns an unsubscribe function.
+   */
+  onDidChangeDiagnostics(listener: (diagnostics: AardinkDiagnostic[]) => void): () => void;
   revealPosition(line: number, column: number): void;
   showFind(): void;
   undo(): boolean;

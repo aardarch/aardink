@@ -21,6 +21,8 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.CooperativePacer
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
  * Hand-written JSON validator, auto-close provider, completion provider, and formatter.
@@ -33,7 +35,7 @@ object JsonLanguageService : BaseLanguageService() {
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val text = document.text
         if (text.isBlank()) return emptyList()
-        val parser = JsonParser(text)
+        val parser = JsonParser(text, diagnosticsPacer())
         val diag = parser.parse() ?: return emptyList()
         return listOf(diag.toDiagnostic(document))
     }
@@ -216,10 +218,10 @@ object JsonLanguageService : BaseLanguageService() {
         }
     }
 
-    private class JsonParser(val text: String) {
+    private class JsonParser(val text: String, private val pacer: CooperativePacer?) {
         var pos = 0
 
-        fun parse(): ParseError? {
+        suspend fun parse(): ParseError? {
             return try {
                 skipWs()
                 if (pos >= text.length) return ParseError(0, 0, "Empty JSON document")
@@ -234,7 +236,8 @@ object JsonLanguageService : BaseLanguageService() {
             }
         }
 
-        private fun parseValue() {
+        private suspend fun parseValue() {
+            pacer?.onProgress(pos)
             skipWs()
             if (pos >= text.length) fail("Expected a JSON value")
             when (val c = text[pos]) {
@@ -249,7 +252,7 @@ object JsonLanguageService : BaseLanguageService() {
             }
         }
 
-        private fun parseObject() {
+        private suspend fun parseObject() {
             expect('{')
             skipWs()
             if (peek() == '}') {
@@ -290,7 +293,7 @@ object JsonLanguageService : BaseLanguageService() {
             }
         }
 
-        private fun parseArray() {
+        private suspend fun parseArray() {
             expect('[')
             skipWs()
             if (peek() == ']') {

@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.web
 
+import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
@@ -24,6 +25,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import org.w3c.dom.HTMLElement
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -181,7 +184,7 @@ class AardinkWebTest {
             """.trimIndent(),
         )
 
-        val diagnostics = handle.diagnostics.value
+        val diagnostics = handle.diagnostics.value!!
         assertEquals(2, diagnostics.size, "the out-of-range line is dropped")
         // "second" is offsets 6..11 in "first\nsecond line".
         assertEquals(6..11, diagnostics[0].range)
@@ -189,6 +192,53 @@ class AardinkWebTest {
         assertEquals(DiagnosticSeverity.Warning, diagnostics[0].severity)
         assertEquals(8..8, diagnostics[1].range, "a zero-width marker keeps one character")
         assertEquals(DiagnosticSeverity.Error, diagnostics[1].severity)
+    }
+
+    @Test
+    fun `the language's own diagnostics are reported once the editor is up`() = runTest {
+        val handle = mount("{\n  \"a\": 1,\n}", WebEditorOptions(language = "json"))
+        val reported = mutableListOf<String>()
+        AardinkWeb.onDiagnosticsChange(handle) { reported += it }
+
+        awaitUntil { reported.isNotEmpty() }
+
+        val markers = Json.decodeFromString(ListSerializer(WebDiagnostic.serializer()), reported.last())
+        assertEquals(listOf(WebDiagnostic(line = 3, startColumn = 1, endColumn = 2, message = "Trailing comma in object")), markers)
+        assertEquals(null, handle.diagnostics.value, "no host list: the language's own are shown")
+    }
+
+    @Test
+    fun `the host's list replaces the language's own until it is set to null`() = runTest {
+        val handle = mount("{\"a\": }", WebEditorOptions(language = "json"))
+        val reported = mutableListOf<String>()
+        AardinkWeb.onDiagnosticsChange(handle) { reported += it }
+        awaitUntil { reported.isNotEmpty() }
+
+        AardinkWeb.setDiagnosticsJson(handle, """[{"line": 1, "startColumn": 2, "endColumn": 5, "message": "from the host"}]""")
+        assertEquals("from the host", handle.diagnostics.value!!.single().message)
+        reported.clear()
+        AardinkWeb.setValue(handle, "{\"b\": }")
+        letFramesRun()
+        assertTrue(reported.isEmpty(), "the language is not asked while the host's list is shown")
+
+        AardinkWeb.setDiagnosticsJson(handle, "null")
+        assertEquals(null, handle.diagnostics.value)
+        awaitUntil { reported.isNotEmpty() }
+        assertEquals(
+            "Unexpected character '}'",
+            Json.decodeFromString(ListSerializer(WebDiagnostic.serializer()), reported.last()).single().message,
+        )
+    }
+
+    @Test
+    fun `a diagnostic running over several lines is reported up to the end of its first`() {
+        val handle = mount("first\nsecond")
+        val document = handle.state.value.document
+        val markers = AardinkWeb.toWebDiagnostics(
+            document,
+            listOf(Diagnostic(range = 2..8, lineNumber = 0, message = "wide", severity = DiagnosticSeverity.Info)),
+        )
+        assertEquals(listOf(WebDiagnostic(line = 1, startColumn = 3, endColumn = 6, message = "wide", severity = "info")), markers)
     }
 
     @Test

@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
  * In-process language service for Kotlin.
@@ -94,8 +95,10 @@ object KotlinLanguageService : BaseLanguageService() {
         val stack = ArrayDeque<Pair<Char, Int>>()
         var i = 0
         val n = text.length
+        val pacer = diagnosticsPacer()
 
         while (i < n) {
+            pacer?.onProgress(i)
             val c = text[i]
 
             // Line comment //

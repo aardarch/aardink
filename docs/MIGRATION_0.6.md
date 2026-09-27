@@ -29,7 +29,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | --- | --- | --- |
 | `readOnly`, `softWrap`, `showGutter`, `showLineNumbers`, `showFoldMarkers`, `showDiagnosticAnnotations`, `showDiffMarkers` parameters | `options = EditorOptions(readOnly = …, softWrap = …, …)`, a data class: change one switch with `copy` | PR 7 |
 | `annotatedText: AnnotatedString?` | Removed. Highlighting comes from the state's tokenizer; override colours through `EditorTheme` | PR 7 |
-| `diagnostics: List<Diagnostic> = emptyList()` | `diagnostics: List<Diagnostic>? = null`. `null` collects them from the language service; pass a list to supply your own, as before | Signature PR 7; collecting *pending* (PR 10) |
+| `diagnostics: List<Diagnostic> = emptyList()` | `diagnostics: List<Diagnostic>? = null`. `null` collects them from the language service (500 ms after the editor appears, and after each pause in typing) and reports each list to the new `onDiagnosticsChange`; pass a list to supply your own, as before. A host that passed nothing and has a language service now shows that service's diagnostics: pass `emptyList()` to keep showing none | Signature PR 7; collecting PR 10 |
 
 ## `CodeEditorState`
 
@@ -77,6 +77,8 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | Mouse and touch | The text field's | Click, Shift+click, Alt+click (another caret), double and triple click, drag; touch tap, long press, selection handles with the platform's text toolbar; a right-click menu on desktop and the web | PR 7 |
 | Popups | Signature help and hover at the top of the editor; completions only as a strip | Next to the caret or the symbol, flipping above or below to stay in the window. With a hardware keyboard completions are a list at the caret (Ctrl+Space; arrows, Enter or Tab, Escape); touch devices keep the strip. `HoverDocPopup`, `SignatureHelpPopup` and `CodeActionMenu` keep their signatures for hosts that show them themselves | PR 9 |
 | Touch selection menu | The platform's text toolbar | The editor's own menu: cut, copy, paste, select all, and "Info" with a language service | PR 9 |
+| Diagnostics while editing | Stayed at their offsets until the next list, drifting off the text they marked | Move with the text they mark, the host's list too; dropped when the whole text is replaced (`loadText`) | PR 10 |
+| Web diagnostics | Only the host's, from `setDiagnostics` | The language's own until the host calls `setDiagnostics`; `setDiagnostics(null)` goes back to them, and `onDiagnosticsChange` (`onDidChangeDiagnostics` in the npm package) reports them. Call `setDiagnostics([])` at mount to keep showing none | PR 10 |
 | Keyboard toolbar | Inserted the character as is | Types it through the typing rules, as a key: `(` gets its `)` | PR 7 |
 | Web clipboard | The text field's | Ctrl/Cmd+C, X and V are left to the browser, whose clipboard events carry the text without a permission prompt | PR 7 |
 

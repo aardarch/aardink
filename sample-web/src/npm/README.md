@@ -33,6 +33,8 @@ editor.setDiagnostics([
   { line: 3, startColumn: 5, endColumn: 9, message: 'Unknown tag', severity: 'error' },
 ]);
 const stop = editor.onDidChangeCursor((line, column) => showPosition(line, column));
+// The language's own diagnostics (shown until you call setDiagnostics; null goes back to them).
+const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
