@@ -16,17 +16,21 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.Token
-import com.aardarch.aardink.languages.internal.COOPERATIVE_TOKENS_PER_YIELD
+import com.aardarch.aardink.languages.internal.COOPERATIVE_TOKENS_PER_CHECK
+import com.aardarch.aardink.languages.internal.cooperativeSlice
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import com.aardarch.aardink.languages.internal.xml.XmlTokenizer
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 class CooperativeTokenizingTest {
 
@@ -42,8 +46,7 @@ class CooperativeTokenizingTest {
         { "a": [1, 2, null, true] }
     """.trimIndent() + "\n"
 
-    // Just enough that the regex and XML tokenizers each cross at least two yield boundaries
-    // (asserted below). Kept small on purpose: wasm runs the whole pass on the browser thread,
+    // Enough that the regex and XML tokenizers each pass several clock checks (asserted below). Kept small on purpose: wasm runs the whole pass on the browser thread,
     // and a much larger input stalls Karma past its ping timeout.
     private val largeText = snippet.repeat(200)
 
@@ -59,6 +62,13 @@ class CooperativeTokenizingTest {
         }
     }
 
+    @AfterTest
+    fun restoreSlice() {
+        cooperativeSlice = defaultSlice
+    }
+
+    private val defaultSlice = cooperativeSlice
+
     @Test
     fun `regex tokenizer yields while tokenizing a large document`() = runTest {
         assertYieldsWhileTokenizing { KotlinTokenizer.tokenizeFullCooperative(largeText) }
@@ -70,32 +80,33 @@ class CooperativeTokenizingTest {
     }
 
     @Test
-    fun `a document under one chunk never yields`() = runTest {
-        val tokens = KotlinTokenizer.tokenizeFull(snippet)
-        assertTrue(tokens.size < COOPERATIVE_TOKENS_PER_YIELD, "snippet must fit in one chunk")
-
+    fun `a pass that fits in its time slice never pauses`() = runTest {
+        cooperativeSlice = 1.hours
         var otherWorkRan = false
         launch { otherWorkRan = true }
-        KotlinTokenizer.tokenizeFullCooperative(snippet)
-        assertFalse(otherWorkRan, "a single-chunk pass should not give up the thread")
+        KotlinTokenizer.tokenizeFullCooperative(largeText)
+        assertFalse(otherWorkRan, "a pass inside its slice should not give up the thread")
     }
 
     /**
      * runTest's dispatcher is single-threaded, like wasmJs: a coroutine launched beside the pass
-     * can only make progress when the pass suspends, so its tick count shows that it did.
+     * can only make progress when the pass suspends, so its tick count shows that it did. A zero
+     * time slice makes the pass pause at every clock check.
      */
     private suspend fun TestScope.assertYieldsWhileTokenizing(tokenize: suspend () -> List<Token>) {
+        cooperativeSlice = Duration.ZERO
         var ticks = 0
+        // Ticks on the test's virtual clock, which only moves while the pass is paused.
         val ticker = launch {
             while (true) {
+                delay(1)
                 ticks++
-                yield()
             }
         }
         val tokens = tokenize()
         ticker.cancel()
 
-        val expectedYields = tokens.size / COOPERATIVE_TOKENS_PER_YIELD
+        val expectedYields = tokens.size / COOPERATIVE_TOKENS_PER_CHECK - 1
         assertTrue(expectedYields >= 2, "test input too small: ${tokens.size} tokens")
         assertTrue(ticks >= expectedYields, "expected >= $expectedYields yields, other work ran $ticks times")
     }

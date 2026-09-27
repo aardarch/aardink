@@ -44,7 +44,7 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.platform.EditorClipboardEvents
-import com.aardarch.aardink.platform.EditorViewScrollbars
+import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.platform.editorMagnifier
 import com.aardarch.aardink.ui.view.EditorBody
 import com.aardarch.aardink.ui.view.EditorColors
@@ -202,7 +202,7 @@ internal fun VirtualizedEditorBody(
                 },
             )
         },
-        scrollbars = { EditorViewScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
     )
 }
 

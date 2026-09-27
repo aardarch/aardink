@@ -126,12 +126,10 @@ instead: a small Gradle wasmJs module that depends on `aardink-editor-web`, with
 covers both routes: the export template, npm packaging, Vite configuration, and a Monaco option
 mapping.
 
-> **Current limits on the web (0.5):** typing cost grows with document size. It is comfortable
-> for a few hundred lines, but past that each keystroke keeps the editor busy longer and fast
-> typing can lose keys. A disposed editor is not fully released, so reuse one editor rather than
-> mounting a new one per view. Both are measured in
-> [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance); 0.6.0's virtualised renderer
-> fixes the first, and Compose Multiplatform 1.13 the second.
+> **On the web:** a keystroke settles in under 20 ms whatever the size of the document (measured
+> in [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance)). A disposed editor is not
+> fully released until Compose Multiplatform 1.13, so reuse one editor rather than mounting a new
+> one per view.
 
 ## Theming
 

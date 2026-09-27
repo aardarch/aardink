@@ -13,12 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package com.aardarch.aardink.core
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -96,22 +92,12 @@ class CodeEditorState(
             field = value
             lastTokenizerResult = null
             tokenizerIsIncremental = null
-            scheduleTokenization()
+            scheduleTokenization(debounce = false)
         }
 
     val document = CodeDocument(initialText)
     internal val tokenStore = TokenStore(document)
     private val history = UndoHistory()
-
-    /**
-     * The `BasicTextField` interop point — [document] remains the canonical text/undo model;
-     * this field mirrors it for the field to render and receive IME input into. Advanced hosts
-     * may read it, but every mutation should still go through this class's own methods
-     * ([applyEdit], [applyTextEdits], [loadText], [undo], [redo]) so [document] and the undo
-     * history stay in sync with it. Removed in 0.6.0's switch-over to the editor's own renderer.
-     */
-    @ExperimentalFoundationApi
-    val textFieldState: TextFieldState = TextFieldState(initialText)
 
     // ── Snapshot-backed observable state ──────────────────────────────────────
 
@@ -124,8 +110,8 @@ class CodeEditorState(
         private set
 
     /**
-     * Bumped by every mutation that did not originate from a keystroke inside [textFieldState]
-     * itself — i.e. every call to [applyEdit], [applyTextEdits], [loadText], [undo], and [redo].
+     * Bumped by every mutation that did not come from typing — every call to [applyEdit],
+     * [applyTextEdits], [loadText], [undo], [redo], and the editor's key commands.
      * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] uses this to dismiss transient
      * UI (the completion dropdown, a diagnostic tooltip, the code-action menu) whose state
      * describes text that just changed out from under it.
@@ -143,9 +129,7 @@ class CodeEditorState(
 
     /**
      * Every selection, primary first (as in Monaco's `getSelections`). A range's `start` is its
-     * anchor and its `end` the caret, so a range selected backwards has `start > end`. Until the
-     * editor draws its own carets, only the primary one is shown, and moving it in the text field
-     * drops the others.
+     * anchor and its `end` the caret, so a range selected backwards has `start > end`.
      */
     val selections: List<TextRange>
         get() = currentSelections().ranges
@@ -160,42 +144,13 @@ class CodeEditorState(
         applySelections(SelectionSet.of(selections).clampedTo(document.length))
     }
 
-    // The selections after the primary one, and the primary they belong with: once the text field
-    // moves its caret somewhere else, they no longer apply.
-    private var extraSelections by mutableStateOf<List<TextRange>>(emptyList())
-    private var extrasPrimary: TextRange? = null
+    /** The selections, snapshot state: reading them in composition or drawing observes them. */
+    private var selectionSet by mutableStateOf(SelectionSet.caret(0))
 
-    /**
-     * Whether [textFieldState] mirrors the document, for the text-field renderer. The editor's own
-     * renderer turns it off: it draws [document] directly, and copying the whole text into the
-     * field after every edit is one of the costs it exists to remove. The selections then live in
-     * this class alone. Goes away with [textFieldState] when the text field does.
-     */
-    internal var fieldMirror: Boolean = true
-        set(value) {
-            if (field == value) return
-            val current = currentSelections()
-            field = value
-            if (value) syncFieldToDocument(current) else ownSelections = current
-        }
-
-    private var ownSelections by mutableStateOf(SelectionSet.caret(0))
-
-    internal fun currentSelections(): SelectionSet {
-        if (!fieldMirror) return ownSelections
-        val primary = textFieldState.selection
-        val extras = extraSelections
-        return if (extras.isEmpty() || primary != extrasPrimary) SelectionSet.single(primary) else SelectionSet.of(listOf(primary) + extras)
-    }
+    internal fun currentSelections(): SelectionSet = selectionSet
 
     private fun applySelections(set: SelectionSet) {
-        if (!fieldMirror) {
-            ownSelections = set
-            return
-        }
-        extraSelections = set.ranges.drop(1)
-        extrasPrimary = set.primary
-        if (textFieldState.selection != set.primary) textFieldState.edit { selection = set.primary }
+        selectionSet = set
     }
 
     /** Whether [undo] would change anything. Snapshot state: a toolbar button can observe it. */
@@ -315,16 +270,11 @@ class CodeEditorState(
         // A new document, not an edit: highlight it with a full pass.
         lastTokenizerResult = null
         history.clear()
-        syncFieldToDocument(SelectionSet.caret(0))
-        // After the sync, not before: syncFieldToDocument edits the field, and that edit pushes
-        // its own entry onto the field's undo stack. Clearing first left the freshly loaded
-        // document undoable back to the previous one, so a platform-level undo gesture could
-        // resurrect text the document no longer has.
-        textFieldState.undoState.clearHistory()
+        placeSelections(SelectionSet.caret(0))
         lastChangeKind = EditChangeKind.Flush
         refreshHistoryState()
         textVersion++
-        scheduleTokenization()
+        scheduleTokenization(debounce = false)
     }
 
     /**
@@ -375,7 +325,7 @@ class CodeEditorState(
     }
 
     private fun afterHistoryStep(selections: SelectionSet, kind: EditChangeKind) {
-        syncFieldToDocument(selections.clampedTo(document.length))
+        placeSelections(selections.clampedTo(document.length))
         lastChangeKind = kind
         refreshHistoryState()
         textVersion++
@@ -475,7 +425,7 @@ class CodeEditorState(
 
     /** What every edit ends with: the selections placed, history state and versions updated, tokenization scheduled. */
     private fun afterEdit(selections: SelectionSet, external: Boolean) {
-        syncFieldToDocument(selections, external)
+        placeSelections(selections, external)
         lastChangeKind = EditChangeKind.Edit
         refreshHistoryState()
         textVersion++
@@ -670,7 +620,7 @@ class CodeEditorState(
     init {
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
-        if (document.length > 0) scheduleTokenization()
+        if (document.length > 0) scheduleTokenization(debounce = false)
     }
 
     /**
@@ -678,9 +628,17 @@ class CodeEditorState(
      * Cancels any in-flight pass so only the final state of a burst of edits is processed.
      */
     fun scheduleTokenization() {
+        scheduleTokenization(debounce = true)
+    }
+
+    /**
+     * Without [debounce] the pass starts at once: a new document or a new tokenizer is not a
+     * burst of typing, and its colours should not wait for one to end.
+     */
+    private fun scheduleTokenization(debounce: Boolean) {
         tokenizationJob?.cancel()
         tokenizationJob = tokenizationScope.launch {
-            if (tokenizeDebounceMs > 0) delay(tokenizeDebounceMs)
+            if (debounce && tokenizeDebounceMs > 0) delay(tokenizeDebounceMs)
             runTokenization()
         }
     }
@@ -749,41 +707,12 @@ class CodeEditorState(
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     /**
-     * Replaces [textFieldState]'s entire content with [document]'s current text and places its
-     * selection at the primary one of [selections], in one atomic edit so the selection is never
-     * validated against stale text. Bumps [externalEditVersion] when [external]. Called by every
-     * mutation method above — never by the field's own `InputTransformation`, which is already
-     * editing [textFieldState] directly. Without [fieldMirror] it only places the selections.
+     * Places the selections after a change to the text, and bumps [externalEditVersion] when the
+     * change did not come from typing ([external]).
      */
-    private fun syncFieldToDocument(selections: SelectionSet, external: Boolean = true) {
-        if (fieldMirror) {
-            val newText = document.text
-            textFieldState.edit {
-                replace(0, length, newText)
-                selection = selections.primary
-            }
-            extraSelections = selections.ranges.drop(1)
-            extrasPrimary = selections.primary
-        } else {
-            ownSelections = selections
-        }
+    private fun placeSelections(selections: SelectionSet, external: Boolean = true) {
+        selectionSet = selections
         if (external) externalEditVersion++
-    }
-
-    /**
-     * Records an edit the text field made itself — a keystroke, a paste, an IME commit — which the
-     * field's `InputTransformation` has already applied to [document] as [applied]. [before] and
-     * [after] are the field's selections around it. Advances [textVersion] and schedules
-     * tokenization, without touching [textFieldState] or [externalEditVersion].
-     */
-    internal fun recordFieldEdit(applied: List<AppliedChange>, kind: EditKind, before: TextRange, after: TextRange) {
-        if (applied.isEmpty()) return
-        history.record(kind, applied, SelectionSet.single(before), SelectionSet.single(after))
-        extraSelections = emptyList()
-        lastChangeKind = EditChangeKind.Edit
-        refreshHistoryState()
-        textVersion++
-        scheduleTokenization()
     }
 }
 

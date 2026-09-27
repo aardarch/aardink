@@ -13,16 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(ExperimentalAardinkRenderer::class)
-
 package com.aardarch.aardink.sample.screenshots
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -34,11 +29,9 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
-import com.aardarch.aardink.ui.EditorRenderer
+import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
-import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
-import com.aardarch.aardink.ui.LocalEditorRenderer
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
@@ -52,14 +45,13 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The same scenes rendered by both renderers ([EditorRenderer.TextField] and
- * [EditorRenderer.Virtualized]), side by side under `screenshots/renderer-<scene>-<renderer>.png`,
- * so the editor's own renderer can be compared with the text field before it replaces it.
+ * The editor's rendering of the things a sample screen does not show: soft wrap, a closed fold,
+ * squiggles, and a selection with find matches, under `screenshots/scene-<scene>.png`.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h480dp-xxhdpi")
-class RendererScenarioScreenshotTest {
+class EditorSceneScreenshotTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -101,33 +93,26 @@ class RendererScenarioScreenshotTest {
         diagnostics: List<Diagnostic> = emptyList(),
         softWrap: Boolean = false,
     ) {
-        var renderer by mutableStateOf(EditorRenderer.TextField)
         composeTestRule.setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark, LocalEditorRenderer provides renderer) {
+                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
                     CodeEditorLayout(
                         state = state,
                         foldState = foldState,
                         foldingProvider = kotlin.foldingProvider,
                         findReplaceState = findReplaceState,
                         diagnostics = diagnostics,
-                        softWrap = softWrap,
+                        options = EditorOptions(softWrap = softWrap),
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
         }
-        for (each in EditorRenderer.entries) {
-            renderer = each
-            // Past the find and folding debounces, which run on the test clock.
-            composeTestRule.mainClock.advanceTimeBy(1_000)
-            composeTestRule.waitForIdle()
-            composeTestRule.onRoot().captureRoboImage(
-                "../screenshots/renderer-$scene-${each.name.lowercase()}.png",
-                roborazziOptions = options,
-            )
-        }
+        // Past the find and folding debounces, which run on the test clock.
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("../screenshots/scene-$scene.png", roborazziOptions = options)
     }
 
     @Test

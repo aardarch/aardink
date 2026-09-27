@@ -15,25 +15,38 @@
  */
 package com.aardarch.aardink.languages.internal
 
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.delay
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
-/** Tokens emitted between suspension points — keeps one chunk well inside a 16 ms frame. */
-internal const val COOPERATIVE_TOKENS_PER_YIELD: Int = 2_000
+/** Tokens between looks at the clock: a clock read per token would cost more than it saves. */
+internal const val COOPERATIVE_TOKENS_PER_CHECK: Int = 256
+
+/**
+ * How long a cooperative pass works before it lets the browser draw a frame: half a 60 Hz frame,
+ * leaving the other half for the frame itself. A variable so tests can make every check suspend.
+ */
+internal var cooperativeSlice: Duration = 8.milliseconds
 
 /**
  * Paces a cooperative tokenization pass: call [onProgress] with the running token count once per
- * scanner step, and it [yield]s each time another [every] tokens have been produced.
+ * scanner step. Every [COOPERATIVE_TOKENS_PER_CHECK] tokens it looks at the clock, and once the
+ * pass has worked for [cooperativeSlice] since it last paused, it pauses again.
  *
- * Counting tokens rather than steps keeps the check to one comparison per step, and a step that
- * emits several tokens (a whole XML tag) can only overshoot a chunk, never skip a yield.
+ * It pauses with `delay`, not `yield`: in the browser, kotlinx.coroutines runs a batch of queued
+ * tasks per browser task, and a coroutine that only yields resumes inside the same batch, before
+ * any frame is drawn. A timer lets the browser paint first.
  */
-internal class CooperativePacer(private val every: Int = COOPERATIVE_TOKENS_PER_YIELD) {
-    private var nextYieldAt = every
+internal class CooperativePacer {
+    private var sliceStart = TimeSource.Monotonic.markNow()
+    private var nextCheckAt = COOPERATIVE_TOKENS_PER_CHECK
 
     suspend fun onProgress(tokenCount: Int) {
-        if (tokenCount >= nextYieldAt) {
-            nextYieldAt = tokenCount + every
-            yield()
-        }
+        if (tokenCount < nextCheckAt) return
+        nextCheckAt = tokenCount + COOPERATIVE_TOKENS_PER_CHECK
+        if (sliceStart.elapsedNow() < cooperativeSlice) return
+        delay(1)
+        sliceStart = TimeSource.Monotonic.markNow()
     }
 }

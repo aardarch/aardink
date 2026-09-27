@@ -13,13 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(ExperimentalTestApi::class, ExperimentalAardinkRenderer::class)
+@file:OptIn(ExperimentalTestApi::class)
 
 package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toAwtImage
@@ -47,23 +45,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The editor's own renderer ([EditorRenderer.Virtualized]) in a real composition: what it lays
- * out, and what the pointer does to the selection.
+ * The editor's renderer in a real composition: what it lays out, and what the pointer does to
+ * the selection.
  */
 class EditorViewUiTest {
 
     private fun ComposeUiTest.showEditor(state: CodeEditorState, foldState: FoldState? = null, softWrap: Boolean = false) {
         setContent {
-            Virtualized {
-                CodeEditorLayout(state = state, foldState = foldState, softWrap = softWrap, modifier = Modifier.size(600.dp, 400.dp))
-            }
+            CodeEditorLayout(
+                state = state,
+                foldState = foldState,
+                options = EditorOptions(softWrap = softWrap),
+                modifier = Modifier.size(600.dp, 400.dp),
+            )
         }
         waitForIdle()
-    }
-
-    @Composable
-    private fun Virtualized(content: @Composable () -> Unit) {
-        CompositionLocalProvider(LocalEditorRenderer provides EditorRenderer.Virtualized, content = content)
     }
 
     /** Saves what is on screen, for looking at while developing: -Daardink.viewShots=<dir>. */

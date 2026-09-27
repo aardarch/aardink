@@ -21,50 +21,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import com.aardarch.aardink.core.Diagnostic
-import com.aardarch.aardink.core.DiagnosticSeverity
 
-/**
- * Draws wavy squiggle underlines for each [Diagnostic] whose range maps to a known character
- * position in [textLayoutResult]. The squiggles are drawn in the calling [DrawScope]'s local
- * coordinate space — add this to a `Modifier.drawBehind` on the same Box as `BasicTextField`.
- *
- * Pass the colours from the active [com.aardarch.aardink.core.EditorTheme] so the underlines stay
- * coherent with the rest of the editor's palette.
- */
-fun DrawScope.drawSquiggles(
-    diagnostics: List<Diagnostic>,
-    textLayoutResult: TextLayoutResult?,
-    errorColor: Color,
-    warningColor: Color,
-    infoColor: Color,
-) {
-    if (textLayoutResult == null || diagnostics.isEmpty()) return
-    val textLength = textLayoutResult.layoutInput.text.length
-    if (textLength == 0) return
-
-    for (diagnostic in diagnostics) {
-        val rangeStart = diagnostic.range.first.coerceIn(0, textLength - 1)
-        val rangeEnd = (diagnostic.range.last).coerceIn(rangeStart, textLength - 1)
-
-        val color = when (diagnostic.severity) {
-            DiagnosticSeverity.Error -> errorColor
-            DiagnosticSeverity.Warning -> warningColor
-            DiagnosticSeverity.Info -> infoColor
-        }
-
-        val lineIndex = textLayoutResult.getLineForOffset(rangeStart)
-        val lineBottom = textLayoutResult.getLineBottom(lineIndex)
-        val xStart = textLayoutResult.getBoundingBox(rangeStart).left
-        val endBox = textLayoutResult.getBoundingBox(rangeEnd)
-        val xEnd = if (endBox.right > xStart) endBox.right else xStart + 20.dp.toPx()
-
-        drawSquiggleLine(xStart, xEnd, lineBottom + 1.dp.toPx(), color)
-    }
-}
-
+/** A wavy underline from [xStart] to [xEnd] at [y]: a diagnostic's squiggle. */
 internal fun DrawScope.drawSquiggleLine(xStart: Float, xEnd: Float, y: Float, color: Color) {
     if (xEnd <= xStart) return
     val amplitude = 2.dp.toPx()

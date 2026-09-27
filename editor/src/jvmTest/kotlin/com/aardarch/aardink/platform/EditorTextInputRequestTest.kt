@@ -41,7 +41,6 @@ class EditorTextInputRequestTest {
     private fun requestFor(text: String, caret: Int): Pair<CodeEditorState, EditorTextInputRequest> {
         val state = CodeEditorState(initialText = "", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
             computeDispatcher = Dispatchers.Unconfined
-            fieldMirror = false
             loadText(text)
             selection = TextRange(caret)
         }

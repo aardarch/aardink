@@ -36,8 +36,7 @@ const KNOWN_UPSTREAM = [
 
 /**
  * Typing, an IME composition, a paste and a touch tap, the way a browser delivers them, into a
- * fresh editor filling the page. Run against the editor's own renderer (docs/AARDINK_0.6_PLAN.md,
- * PR 6), which handles these itself.
+ * fresh editor filling the page.
  */
 async function interactionChecks(page) {
   const checks = {};
@@ -92,7 +91,6 @@ async function interactionChecks(page) {
 }
 
 try {
-  for (const renderer of ['textfield', 'virtualized']) {
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
   page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
@@ -103,27 +101,23 @@ try {
     (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
   });
 
-  await page.goto(renderer === 'textfield' ? url : `${url}?aardinkRenderer=${renderer}`, { waitUntil: 'load' });
+  await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
   const report = await page.evaluate(() => window.__aardinkSmoke);
   // A few frames so the light theme and the diagnostic are painted before the screenshot.
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  await page.screenshot({ path: renderer === 'textfield' ? 'dist/smoke.png' : `dist/smoke-${renderer}.png` });
+  await page.screenshot({ path: 'dist/smoke.png' });
 
-  console.log(`@aardarch/aardink-web ${report.version} (${renderer})`);
+  console.log(`@aardarch/aardink-web ${report.version}`);
   for (const [name, ok] of Object.entries(report.checks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   if (report.error) failures.push(`in-page error: ${report.error}`);
-  const failedChecks = Object.entries(report.checks).filter(([, ok]) => !ok).map(([name]) => `${name} (${renderer})`);
+  const failedChecks = Object.entries(report.checks).filter(([, ok]) => !ok).map(([name]) => name);
   if (failedChecks.length) failures.push(`failed checks: ${failedChecks.join(', ')}`);
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
-  if (renderer !== 'textfield') {
-    const interactions = await interactionChecks(page);
-    for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
-    const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => `${name} (${renderer})`);
-    if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
-  }
-  await page.close();
-  }
+  const interactions = await interactionChecks(page);
+  for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
+  const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);
+  if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
 } finally {
   await harness.close();
 }

@@ -17,9 +17,6 @@ package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.sp
 
 /**
  * Complete visual specification for the code editor.
@@ -45,27 +42,4 @@ data class EditorTheme(
     val errorColor: Color,
     val warningColor: Color,
     val infoColor: Color,
-
-    // ── Typography (deprecated) ────────────────────────────────────────
-    // These three have never been read by the editor: every call site hardcoded
-    // FontFamily.Monospace and EditorDefaults' metrics instead, so setting them here had no
-    // effect. Typography now lives in its own type so it can be provided independently of
-    // colours (a web host swaps the font but keeps the theme). Kept as constructor parameters
-    // with their original defaults rather than removed, so existing named-argument call sites
-    // and the binary signature still work.
-    @Deprecated(
-        "Superseded by EditorTypography; provide LocalEditorTypography instead. " +
-            "This value is not read by the editor.",
-    )
-    val fontFamily: FontFamily = FontFamily.Monospace,
-    @Deprecated(
-        "Superseded by EditorTypography; provide LocalEditorTypography instead. " +
-            "This value is not read by the editor.",
-    )
-    val fontSize: TextUnit = 14.sp,
-    @Deprecated(
-        "Superseded by EditorTypography; provide LocalEditorTypography instead. " +
-            "This value is not read by the editor.",
-    )
-    val lineHeight: TextUnit = 20.sp,
 )

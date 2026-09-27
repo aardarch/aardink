@@ -13,24 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalAardinkRenderer::class)
-
 package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -45,18 +34,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
@@ -74,12 +52,10 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
-import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -87,133 +63,59 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The canonical code editor composable.
+ * The code editor.
+ *
+ * Only the lines on screen are laid out and drawn, so typing, scrolling and highlighting cost the
+ * same in a 50-line file and a 100,000-line one. The editor takes its own text input (keys, input
+ * methods, the clipboard) on Android, desktop and the web.
  *
  * Layout (top → bottom):
- *   - [FindReplacePanel] (slides down when visible)
- *   - [AnnotationTooltip] (shows when user taps a gutter annotation dot)
- *   - Row: [EditorGutter] | scrollable [BasicTextField]
+ *   - [FindReplacePanel], while [findReplaceState] is visible
+ *   - [AnnotationTooltip], after a tap on a gutter dot
+ *   - the gutter and the text
  *   - [CompletionDropdown] strip
  *   - [KeyboardToolbarRow]
  *
- * @param diagnostics Language-service diagnostics; rendered as gutter dots and squiggle underlines.
+ * @param options How the editor looks and behaves; see [EditorOptions].
+ * @param diagnostics Diagnostics to show as gutter dots and squiggles, or null to collect them from
+ *   [languageService].
  * @param savedText Baseline text for the diff lane (typically the last-saved version).
- * @param softWrap When true, long lines wrap to the editor width and horizontal scrolling is disabled.
+ * @param onRequestGoToLine Invoked on Cmd/Ctrl+G. Hosts wire it to [GoToLineDialog]; the default
+ *   does nothing, so the shortcut is inert until a host opts in.
  */
 @Composable
 fun CodeEditorLayout(
     state: CodeEditorState,
     modifier: Modifier = Modifier,
-    annotatedText: AnnotatedString? = null,
+    options: EditorOptions = EditorOptions(),
     languageService: LanguageService? = null,
     findReplaceState: FindReplaceState? = null,
     foldState: FoldState? = null,
     foldingProvider: FoldingProvider = NoOpFoldingProvider,
-    diagnostics: List<Diagnostic> = emptyList(),
+    diagnostics: List<Diagnostic>? = null,
     savedText: String = "",
     onCursorChange: (line: Int, column: Int) -> Unit = { _, _ -> },
-    readOnly: Boolean = false,
     toolbarStyle: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
     keyboardToolbarPlacement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.BottomHover,
-    showGutter: Boolean = true,
-    showLineNumbers: Boolean = true,
-    showFoldMarkers: Boolean = true,
-    showDiagnosticAnnotations: Boolean = true,
-    showDiffMarkers: Boolean = true,
-    softWrap: Boolean = false,
-    /**
-     * Invoked when the user presses Cmd/Ctrl+G. Hosts wire this to [GoToLineDialog]; the
-     * default does nothing, so the shortcut is inert until a host opts in.
-     */
     onRequestGoToLine: () -> Unit = {},
 ) {
-    val density = LocalDensity.current
-    val typography = LocalEditorTypography.current
-    val lineHeightPx = with(density) { typography.lineHeight.toPx() }
-    val topPaddingPx = with(density) { EditorDefaults.contentPaddingTop.toPx() }
-
-    val verticalScrollState = rememberScrollState()
-    val horizontalScrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
-
     val theme = LocalEditorTheme.current
     val textColor = theme.tokenColors[TokenType.Default] ?: MaterialTheme.colorScheme.onSurface
-    val gutterBackground = theme.gutterBackground
-    val gutterForeground = theme.gutterForeground
-    val cursorColor = theme.cursorColor
 
-    // The editor's own renderer, when the host opted in: it draws the document itself and keeps the
-    // text field out of the way (no copy of the whole text into it after every edit).
-    val view = if (LocalEditorRenderer.current == EditorRenderer.Virtualized) remember(state) { EditorView(state) } else null
-    if (view != null) {
-        DisposableEffect(view) {
-            state.fieldMirror = false
-            view.attach()
-            onDispose {
-                view.detach()
-                state.fieldMirror = true
-            }
-        }
+    val view = remember(state) { EditorView(state) }
+    DisposableEffect(view) {
+        view.attach()
+        onDispose { view.detach() }
     }
-    val controller = remember(view) { view?.let { EditorController(state, it) } }
+    val controller = remember(view) { EditorController(state, view) }
 
     val textVersion = state.textVersion
-    val tokenVersion = state.tokenVersion
-    val documentLineCount = remember(textVersion) { state.document.lineCount }
-
-    // Auto-derive an AnnotatedString from the token cache + theme when the consumer didn't pass
-    // one explicitly. Recomputed on token-cache or theme changes; clamped to the current text so
-    // a stale token list (one tokenization tick behind an edit) is safe.
-    val effectiveAnnotatedText: AnnotatedString? = remember(annotatedText, tokenVersion, textVersion, theme, view) {
-        if (annotatedText != null) return@remember annotatedText
-        // The editor's own renderer colours each line from the token store as it lays it out.
-        if (view != null) return@remember null
-        val cachedTokens = state.tokenStore.allTokens()
-        if (cachedTokens.isEmpty()) return@remember null
-        annotateTokens(state.document.text, cachedTokens, theme)
-    }
-
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var viewportHeightPx by remember { mutableIntStateOf(0) }
+    val shownDiagnostics = diagnostics.orEmpty()
 
     // Completion state
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
     var showCompletion by remember { mutableStateOf(false) }
-
-    // Hardware-keyboard shortcuts. Unreachable without a physical keyboard, so this changes
-    // nothing for touch input on Android.
-    val shortcutActions = remember(state, findReplaceState, onRequestGoToLine) {
-        EditorShortcutActions(
-            onUndo = { state.undo() },
-            onRedo = { state.redo() },
-            onFind = { findReplaceState?.show() },
-            onReplace = { findReplaceState?.show(replace = true) },
-            onGoToLine = onRequestGoToLine,
-            onIndent = { state.indentSelection() },
-            onOutdent = { state.outdentSelection() },
-            onToggleComment = { state.toggleComment() },
-            onMoveLines = { up -> state.moveLines(up) },
-            onCopyLines = { down -> state.copyLines(down) },
-            onDeleteLines = { state.deleteLines() },
-            onEscape = {
-                // Consume Escape only when it actually dismissed something, so a host's own
-                // dialog still sees the key when the editor had nothing open.
-                when {
-                    showCompletion -> {
-                        showCompletion = false
-                        true
-                    }
-
-                    findReplaceState?.visible == true -> {
-                        findReplaceState.hide()
-                        true
-                    }
-
-                    else -> false
-                }
-            },
-        )
-    }
     var completionJob by remember { mutableStateOf<Job?>(null) }
 
     // Code actions, Signature help & Rename state
@@ -323,8 +225,8 @@ fun CodeEditorLayout(
     }
 
     // Gutter annotations: highest-severity diagnostic per line
-    val gutterAnnotations = remember(diagnostics) {
-        diagnostics
+    val gutterAnnotations = remember(shownDiagnostics) {
+        shownDiagnostics
             .groupBy { it.lineNumber }
             .mapValues { (_, diags) ->
                 val worst = diags.maxBy { it.severity.ordinal }
@@ -343,7 +245,7 @@ fun CodeEditorLayout(
     // Any edit — typed, applied from a quick fix, or made by the host — leaves the tapped
     // diagnostic's range and the code-action menu pointing at text that has moved.
     LaunchedEffect(state) {
-        snapshotFlow { textVersion }.collect {
+        snapshotFlow { state.textVersion }.collect {
             tooltipDiagnostic = null
             showCodeActionsMenu = false
         }
@@ -351,9 +253,8 @@ fun CodeEditorLayout(
 
     // The completion dropdown manages its own visibility while the user is typing (see
     // handleSingleCharacterInsert below); every OTHER kind of edit — undo/redo, a quick fix, a
-    // rename, a toolbar quick-insert, a host-driven loadText — closes it, because its items were
-    // addressed to text that just changed under it in a way typing's own re-addressing doesn't
-    // cover.
+    // rename, a key command, a host-driven loadText — closes it, because its items were addressed
+    // to text that just changed under it in a way typing's own re-addressing doesn't cover.
     LaunchedEffect(state) {
         snapshotFlow { state.externalEditVersion }.collect {
             showCompletion = false
@@ -419,62 +320,19 @@ fun CodeEditorLayout(
         }
     }
 
-    // ── Visible lines, for the tokenizer to highlight first ────────────────────
-    // Approximate (folds and wrapped rows are ignored): it only decides which lines of a large
-    // document get coloured before the rest.
-    // The editor's own renderer reports them from its layout pass instead.
-    if (view == null) {
-        LaunchedEffect(state, lineHeightPx, topPaddingPx) {
-            snapshotFlow { verticalScrollState.value to viewportHeightPx }.collect { (scroll, height) ->
-                val first = ((scroll - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
-                state.visibleLines = first..(first + (height / lineHeightPx).toInt() + 1)
-            }
+    // ── Pending navigation: select the target and scroll it to the middle of the view ─
+    LaunchedEffect(state, view) {
+        snapshotFlow { state.pendingNavigation }.collect { nav ->
+            if (nav == null) return@collect
+            state.selection = nav.select ?: TextRange(nav.targetOffset)
+            view.requestReveal(nav.targetOffset, center = true)
+            state.clearNavigation()
         }
     }
-
-    // ── Pending navigation: scroll to target offset and update selection ─────
-    if (view != null) {
-        LaunchedEffect(state, view) {
-            snapshotFlow { state.pendingNavigation }.collect { nav ->
-                if (nav == null) return@collect
-                state.selection = nav.select ?: TextRange(nav.targetOffset)
-                view.requestReveal(nav.targetOffset, center = true)
-                state.clearNavigation()
-            }
-        }
-    } else {
-        LaunchedEffect(state) {
-            snapshotFlow { state.pendingNavigation }.collect { nav ->
-                if (nav == null) return@collect
-                val tlr = textLayoutResult
-                val targetY = if (tlr != null) {
-                    val transformedLength = tlr.layoutInput.text.length
-                    val offset = nav.targetOffset.coerceIn(0, transformedLength)
-                    val visualRow = tlr.getLineForOffset(offset)
-                        .coerceIn(0, (tlr.lineCount - 1).coerceAtLeast(0))
-                    (topPaddingPx + tlr.getLineTop(visualRow) - lineHeightPx * 3).coerceAtLeast(0f).toInt()
-                } else {
-                    val (line, _) = state.document.offsetToLineCol(nav.targetOffset)
-                    (topPaddingPx + line * lineHeightPx - lineHeightPx * 3).coerceAtLeast(0f).toInt()
-                }
-                verticalScrollState.animateScrollTo(targetY)
-                state.selection = nav.select ?: TextRange(nav.targetOffset)
-                state.clearNavigation()
-            }
-        }
-    }
-
-    val matches = findReplaceState?.matches ?: emptyList()
-    val currentMatchIndex = findReplaceState?.currentMatchIndex ?: -1
-    val matchHighlight = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
-    val currentMatchHighlight = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f)
-
-    val foldedRanges = foldState?.foldedRanges() ?: emptyList()
 
     // ── Completion trigger, on every ordinary (single-character) keystroke ───
     // Needs composition-scoped state (completionItems/showCompletion/completionJob/
-    // coroutineScope) EditorInputTransformation itself doesn't have, so it lives here and is
-    // invoked from a stable callback the transformation holds onto across recompositions.
+    // coroutineScope), so it lives here; the editor's input reaches it through the controller.
     val currentLanguageService = rememberUpdatedState(languageService)
     val currentTriggerChars = rememberUpdatedState(triggerChars)
 
@@ -518,74 +376,54 @@ fun CodeEditorLayout(
         }
     }
     val currentHandleSingleCharacterInsert = rememberUpdatedState(handleSingleCharacterInsert)
+    val onInput: (CodeEditorState.TypedInput?) -> Unit = { typed ->
+        if (typed != null) {
+            currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
+        } else {
+            showCompletion = false
+        }
+    }
 
-    if (controller != null) {
-        val requestCompletions: () -> Unit = {
-            val service = currentLanguageService.value
-            if (service != null) {
-                val cursor = state.selection.start
-                completionJob?.cancel()
-                completionJob = coroutineScope.launch {
-                    val items = service.completions(state.document.snapshot(), cursor)
-                    completionItems = items
-                    showCompletion = items.isNotEmpty()
-                }
+    // ── What the editor's keys and input do beyond the text ──────────────────
+    val requestCompletions: () -> Unit = {
+        val service = currentLanguageService.value
+        if (service != null) {
+            val cursor = state.selection.start
+            completionJob?.cancel()
+            completionJob = coroutineScope.launch {
+                val items = service.completions(state.document.snapshot(), cursor)
+                completionItems = items
+                showCompletion = items.isNotEmpty()
             }
         }
-        SideEffect {
-            controller.readOnly = readOnly
-            controller.scope = coroutineScope
-            controller.languageService = { currentLanguageService.value }
-            controller.actions = EditorHostActions(
-                onFind = shortcutActions.onFind,
-                onReplace = shortcutActions.onReplace,
-                onGoToLine = shortcutActions.onGoToLine,
-                onEscape = shortcutActions.onEscape,
-                onTriggerSuggest = requestCompletions,
-                onInput = { typed ->
-                    if (typed != null) {
-                        currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
-                    } else {
+    }
+    SideEffect {
+        controller.readOnly = options.readOnly
+        controller.scope = coroutineScope
+        controller.languageService = { currentLanguageService.value }
+        controller.actions = EditorHostActions(
+            onFind = { findReplaceState?.show() },
+            onReplace = { findReplaceState?.show(replace = true) },
+            onGoToLine = onRequestGoToLine,
+            onEscape = {
+                // Consume Escape only when it actually dismissed something, so a host's own
+                // dialog still sees the key when the editor had nothing open.
+                when {
+                    showCompletion -> {
                         showCompletion = false
+                        true
                     }
-                },
-            )
-        }
-    }
 
-    val inputTransformation = remember(state) {
-        EditorInputTransformation(
-            state = state,
-            languageService = { currentLanguageService.value },
-            onSingleCharacterInsert = { insertedAt, typedChar, autoCloseLength ->
-                currentHandleSingleCharacterInsert.value(insertedAt, typedChar, autoCloseLength)
+                    findReplaceState?.visible == true -> {
+                        findReplaceState.hide()
+                        true
+                    }
+
+                    else -> false
+                }
             },
-            onOtherChange = { showCompletion = false },
-        )
-    }
-
-    val outputTransformation = remember(
-        effectiveAnnotatedText,
-        textColor,
-        matches,
-        currentMatchIndex,
-        matchHighlight,
-        currentMatchHighlight,
-        foldedRanges,
-    ) {
-        EditorOutputTransformation(
-            syntaxColoredText = effectiveAnnotatedText,
-            textColor = textColor,
-            matches = matches,
-            currentMatchIndex = currentMatchIndex,
-            matchHighlight = matchHighlight,
-            currentMatchHighlight = currentMatchHighlight,
-            foldedRanges = foldedRanges,
-            document = state.document,
-            placeholderStyle = SpanStyle(
-                color = textColor.copy(alpha = 0.4f),
-                fontStyle = FontStyle.Italic,
-            ),
+            onTriggerSuggest = requestCompletions,
+            onInput = onInput,
         )
     }
 
@@ -599,12 +437,9 @@ fun CodeEditorLayout(
                 canRedo = state.canRedo,
                 onInsertChar = { char ->
                     // Through the typing rules, as a key would: a toolbar "(" gets its ")" too.
-                    val selection = state.selection
-                    val typed = state.applyInput(selection.min, selection.max, char.toString(), service = currentLanguageService.value)
-                    if (typed != null) {
-                        currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
-                    } else {
-                        showCompletion = false
+                    if (!options.readOnly) {
+                        val selection = state.selection
+                        onInput(state.applyInput(selection.min, selection.max, char.toString(), service = currentLanguageService.value))
                     }
                 },
                 onMoveCursorLeft = {
@@ -655,14 +490,8 @@ fun CodeEditorLayout(
                     val all = findReplaceState.matches
                     if (all.isEmpty()) return@FindReplacePanel
                     val replacement = findReplaceState.replacement
-                    all.sortedByDescending { it.first }.forEach { range ->
-                        state.applyEdit(
-                            deleteOffset = range.first,
-                            deleteLength = range.last - range.first + 1,
-                            insertText = replacement,
-                            newSelection = TextRange(range.first + replacement.length),
-                        )
-                    }
+                    // One batch: one undo step for the whole replacement.
+                    state.applyTextEdits(all.map { TextEdit(it, replacement) })
                 },
                 onClose = { findReplaceState.hide() },
                 modifier = Modifier.fillMaxWidth(),
@@ -685,9 +514,10 @@ fun CodeEditorLayout(
         }
 
         // ── Signature help, Code action popups & Rename Dialog ────────────────
-        if (showSignatureHelp && currentSignatureHelp != null) {
+        val signatureHelp = currentSignatureHelp
+        if (showSignatureHelp && signatureHelp != null) {
             SignatureHelpPopup(
-                help = currentSignatureHelp!!,
+                help = signatureHelp,
                 onDismiss = { showSignatureHelp = false },
             )
         }
@@ -736,177 +566,34 @@ fun CodeEditorLayout(
         }
 
         // ── Editor body: gutter + text area ──────────────────────────────────
-        if (controller != null) {
-            VirtualizedEditorBody(
-                state = state,
-                controller = controller,
-                foldState = foldState,
-                diagnostics = diagnostics,
-                findReplaceState = findReplaceState,
-                gutter = if (showGutter) {
-                    GutterContent(
-                        annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
-                        foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
-                        diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
-                        showLineNumbers = showLineNumbers,
-                        onToggleFold = { line -> foldState?.toggle(line) },
-                        onAnnotationTap = { lineIndex ->
-                            tooltipDiagnostic = diagnostics
-                                .filter { it.lineNumber == lineIndex }
-                                .maxByOrNull { it.severity.ordinal }
-                        },
-                    )
-                } else {
-                    null
-                },
-                softWrap = softWrap,
-                textColor = textColor,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            )
-        } else {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                if (showGutter) {
-                    // Use the document's logical line count as the source of truth and ask the
-                    // text layout where each line actually sits. This keeps the gutter aligned
-                    // with what BasicTextField rendered, regardless of trailing-newline phantom
-                    // lines, soft wrap, or folds. NaN entries mark logical lines that collapsed
-                    // onto the previous visual row (a phantom trailing line not rendered by
-                    // Compose) and are skipped by the gutter renderer.
-                    val gutterLineCount = documentLineCount
-                    val lineTops: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
-                        val tlr = textLayoutResult ?: return@remember null
-                        val transformedLength = tlr.layoutInput.text.length
-                        val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
-                        var prevRow = -1
-                        FloatArray(documentLineCount) { i ->
-                            val origOffset = state.document.lineStart(i)
-                            val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
-                                .coerceIn(0, transformedLength)
-                            val visualRow = tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
-                            if (visualRow == prevRow) {
-                                Float.NaN
-                            } else {
-                                prevRow = visualRow
-                                topPaddingPx + tlr.getLineTop(visualRow)
-                            }
-                        }
-                    }
-                    val lineBottoms: FloatArray? = remember(textLayoutResult, textVersion, foldedRanges) {
-                        val tlr = textLayoutResult ?: return@remember null
-                        val transformedLength = tlr.layoutInput.text.length
-                        val maxRow = (tlr.lineCount - 1).coerceAtLeast(0)
-                        fun visualRowOf(line: Int): Int {
-                            val origOffset = state.document.lineStart(line)
-                            val transformedOffset = originalToTransformedOffset(state.document, foldedRanges, origOffset)
-                                .coerceIn(0, transformedLength)
-                            return tlr.getLineForOffset(transformedOffset).coerceIn(0, maxRow)
-                        }
-                        FloatArray(documentLineCount) { i ->
-                            // The bottom of a logical line = top of the next non-collapsed logical
-                            // line, or the last visual row's bottom for the final one.
-                            val thisRow = visualRowOf(i)
-                            var nextI = i + 1
-                            var bottom = Float.NaN
-                            while (nextI < documentLineCount) {
-                                val nextRow = visualRowOf(nextI)
-                                if (nextRow != thisRow) {
-                                    bottom = topPaddingPx + tlr.getLineTop(nextRow)
-                                    break
-                                }
-                                nextI++
-                            }
-                            if (bottom.isNaN()) topPaddingPx + tlr.getLineBottom(maxRow) else bottom
-                        }
-                    }
-                    val lineTopProvider: ((Int) -> Float)? = lineTops?.let { tops -> { i -> tops.getOrElse(i) { Float.NaN } } }
-                    val lineBottomProvider: ((Int) -> Float)? = lineBottoms?.let { bottoms -> { i -> bottoms.getOrElse(i) { 0f } } }
-                    EditorGutter(
-                        lineCount = gutterLineCount,
-                        scrollState = verticalScrollState,
-                        lineHeightPx = lineHeightPx,
-                        topPaddingPx = topPaddingPx,
-                        background = gutterBackground,
-                        foreground = gutterForeground,
-                        annotations = if (showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
-                        foldableLines = if (showFoldMarkers) foldableLines else emptySet(),
-                        foldedRanges = foldedRanges,
-                        onToggleFold = { line -> foldState?.toggle(line) },
-                        diffAnnotations = if (showDiffMarkers) diffAnnotations else emptyMap(),
-                        onAnnotationTap = { lineIndex ->
-                            tooltipDiagnostic = diagnostics
-                                .filter { it.lineNumber == lineIndex }
-                                .maxByOrNull { it.severity.ordinal }
-                        },
-                        showLineNumbers = showLineNumbers,
-                        lineTopProvider = lineTopProvider,
-                        lineBottomProvider = lineBottomProvider,
-                    )
-                }
-
-                // Outer box exists so the scrollbars can overlay the scrolling content rather
-                // than take layout space from it. On Android EditorScrollbars draws nothing, so
-                // this costs one empty Box and changes no pixels.
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .onSizeChanged { viewportHeightPx = it.height },
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(verticalScrollState)
-                            .then(if (softWrap) Modifier else Modifier.horizontalScroll(horizontalScrollState))
-                            .padding(
-                                start = EditorDefaults.contentPaddingHorizontal,
-                                top = EditorDefaults.contentPaddingTop,
-                                end = EditorDefaults.contentPaddingHorizontal,
-                            )
-                            .drawBehind {
-                                drawSquiggles(
-                                    diagnostics = diagnostics,
-                                    textLayoutResult = textLayoutResult,
-                                    errorColor = theme.errorColor,
-                                    warningColor = theme.warningColor,
-                                    infoColor = theme.infoColor,
-                                )
-                            },
-                    ) {
-                        BasicTextField(
-                            state = state.textFieldState,
-                            inputTransformation = inputTransformation,
-                            outputTransformation = outputTransformation,
-                            onTextLayout = { getResult -> textLayoutResult = getResult() },
-                            lineLimits = TextFieldLineLimits.MultiLine(),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag(EditorTestTags.TEXT_FIELD)
-                                .editorKeyboardShortcuts(shortcutActions),
-                            textStyle = TextStyle(
-                                fontFamily = typography.fontFamily,
-                                fontSize = typography.fontSize,
-                                lineHeight = typography.lineHeight,
-                                color = textColor,
-                            ),
-                            cursorBrush = SolidColor(cursorColor),
-                            readOnly = readOnly,
-                        )
-                    }
-
-                    EditorScrollbars(
-                        vertical = verticalScrollState,
-                        horizontal = if (softWrap) null else horizontalScrollState,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            }
-        }
+        VirtualizedEditorBody(
+            state = state,
+            controller = controller,
+            foldState = foldState,
+            diagnostics = shownDiagnostics,
+            findReplaceState = findReplaceState,
+            gutter = if (options.showGutter) {
+                GutterContent(
+                    annotations = if (options.showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
+                    foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
+                    diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
+                    showLineNumbers = options.showLineNumbers,
+                    onToggleFold = { line -> foldState?.toggle(line) },
+                    onAnnotationTap = { lineIndex ->
+                        tooltipDiagnostic = shownDiagnostics
+                            .filter { it.lineNumber == lineIndex }
+                            .maxByOrNull { it.severity.ordinal }
+                    },
+                )
+            } else {
+                null
+            },
+            softWrap = options.softWrap,
+            textColor = textColor,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        )
 
         // ── Completion strip ─────────────────────────────────────────────────
         CompletionDropdown(

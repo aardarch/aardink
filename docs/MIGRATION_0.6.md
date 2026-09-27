@@ -27,15 +27,15 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 
 | 0.5 | 0.6 | Landed in |
 | --- | --- | --- |
-| `readOnly`, `softWrap`, `showGutter`, `showLineNumbers`, `showFoldMarkers`, `showDiagnosticAnnotations`, `showDiffMarkers` parameters | `options = EditorOptions(...)` | *pending* (PR 7) |
-| `annotatedText: AnnotatedString?` | Removed. Highlighting comes from the state's tokenizer; override colours through `EditorTheme` | *pending* (PR 7) |
-| `diagnostics: List<Diagnostic> = emptyList()` | `diagnostics: List<Diagnostic>? = null`. `null` collects them from the language service; pass a list to supply your own, as before | *pending* (PR 10) |
+| `readOnly`, `softWrap`, `showGutter`, `showLineNumbers`, `showFoldMarkers`, `showDiagnosticAnnotations`, `showDiffMarkers` parameters | `options = EditorOptions(readOnly = …, softWrap = …, …)`, a data class: change one switch with `copy` | PR 7 |
+| `annotatedText: AnnotatedString?` | Removed. Highlighting comes from the state's tokenizer; override colours through `EditorTheme` | PR 7 |
+| `diagnostics: List<Diagnostic> = emptyList()` | `diagnostics: List<Diagnostic>? = null`. `null` collects them from the language service; pass a list to supply your own, as before | Signature PR 7; collecting *pending* (PR 10) |
 
 ## `CodeEditorState`
 
 | 0.5 | 0.6 | Landed in |
 | --- | --- | --- |
-| `textFieldState` | Removed. Read `text`, `selection` / `selections`; edit with `applyEdit` / `applyTextEdits` | *pending* (PR 7) |
+| `textFieldState` | Removed. Read `text`, `selection` / `selections`; edit with `applyEdit` / `applyTextEdits` | PR 7 |
 | `undoManager: EditorUndoManager` | Removed. Use `undo()`, `redo()`, `canUndo`, `canRedo` (snapshot state, for toolbar buttons) and `pushUndoStop()`; `alternativeVersionId` for dirty tracking; `lastChangeKind` to tell undo and redo from edits | PR 4 |
 | `tokenCache: TokenCache` | Removed. Use `tokensForLine(line)`; a token that spans lines comes back as one token per line | PR 2 |
 | `tokenizer` (`val`) | `var`: assigning it re-highlights and keeps text, selection and undo history | PR 3 |
@@ -45,11 +45,11 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 
 | 0.5 | 0.6 | Landed in |
 | --- | --- | --- |
-| `EditorGutter(...)` | Internal. `CodeEditorLayout` draws the gutter; toggle it with `EditorOptions` | *pending* (PR 7) |
-| `DrawScope.drawSquiggles(...)` | Internal | *pending* (PR 7) |
-| `annotateTokens(...)` | Internal | *pending* (PR 7) |
-| `applyFolding(...)` (deprecated in 0.5) | Removed. `FoldState` drives folding | *pending* (PR 7) |
-| `EditorTheme.fontFamily`, `fontSize`, `lineHeight` (deprecated in 0.5) | Removed. Provide `LocalEditorTypography` | *pending* (PR 7) |
+| `EditorGutter(...)` | Removed. `CodeEditorLayout` draws the gutter; toggle it with `EditorOptions` | PR 7 |
+| `DrawScope.drawSquiggles(...)` | Removed; the editor draws squiggles itself | PR 7 |
+| `annotateTokens(...)` | Removed; each line is coloured as it is laid out | PR 7 |
+| `applyFolding(...)` (deprecated in 0.5) | Removed. `FoldState` drives folding | PR 7 |
+| `EditorTheme.fontFamily`, `fontSize`, `lineHeight` (deprecated in 0.5) | Removed. Provide `LocalEditorTypography` | PR 7 |
 | `TokenCache` | Removed; the editor keeps its tokens internally. Read them with `CodeEditorState.tokensForLine` | PR 2 |
 | `EditorUndoManager`, `EditOperation` | Removed; the editor keeps its undo history internally | PR 4 |
 
@@ -66,6 +66,14 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | `CodeDocument` | A plain class | A `CharSequence`: index it, slice it with `subSequence`, and run a `Regex` over it without copying `text`. `text` is built once per edit and shared | PR 2 |
 | Web `updateOptions({ language })` | Rebuilt the editor state and lost undo history | Keeps undo history | PR 3 |
 | Undo | Undid runs of typed characters up to a space, and put the caret where the edit was | Groups as Monaco does: typing until the caret moves, the kind of edit changes, or a space follows a word, so a word at a time; backspaces together; every other edit on its own. Undo restores every selection from before the step | PR 4 |
+| Rendering | One `BasicTextField` held the whole document | The editor lays out and draws only the lines on screen and takes its own text input (keys, input methods, clipboard). UI tests find it by its semantics (editable text, set-text and insert-text actions) instead of a text field; `performTextInput` works as before | PR 7 |
+| Initial caret | At the end of `initialText` | At the start, as after `loadText` and in Monaco | PR 7 |
+| Replace all | One undo step per match | One undo step for all of them | PR 7 |
+| Selection colour | Material's text-selection colour | `EditorTheme.selectionColor` | PR 7 |
+| Carets | The text field's caret, blinking while focused | One caret per selection, blinking while the editor has focus, hidden without it | PR 7 |
+| Mouse and touch | The text field's | Click, Shift+click, Alt+click (another caret), double and triple click, drag; touch tap, long press, selection handles with the platform's text toolbar; a right-click menu on desktop and the web | PR 7 |
+| Keyboard toolbar | Inserted the character as is | Types it through the typing rules, as a key: `(` gets its `)` | PR 7 |
+| Web clipboard | The text field's | Ctrl/Cmd+C, X and V are left to the browser, whose clipboard events carry the text without a permission prompt | PR 7 |
 
 ## Example: an Android host
 

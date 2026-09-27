@@ -7,7 +7,7 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 
 | PR | State | Notes |
 | --- | --- | --- |
-| 0 | In progress | Report: `docs/spikes/0.6-input-renderer.md`. Built on `v0.6-uplift` as the real PR 5/6 code rather than a throwaway branch. S3 passes on 1.12.1; S2 has its first wasm numbers (mount → idle 4.0 s → 0.40 s). |
+| 0 | Done (automated) | Report and decision in `docs/spikes/0.6-input-renderer.md`: our own input on every platform, no fallback needed. Built on `v0.6-uplift` as the real PR 5/6 code. Still open: the manual device checks, and S5 (teardown) on a CMP 1.13 build. |
 | 1 | Done | Branch `v0.6-uplift`. Dependencies already current (§3); `0.6.0-SNAPSHOT`; canary workflow; `perf.mjs` + 0.5 baseline; CDP IME check; CMP 1.13 findings (W-1 fixed upstream). |
 | 15 | Done | npm job in `release.yml`, package metadata, LICENSE and README in the package, publint + attw in CI. Bootstrap (`docs/NPM_BOOTSTRAP.md`) done 2026-09-27: 0.5.0 published by hand as `latest`; trusted publisher `release.yml` / `aardarch/aardink` / environment `npm` (publish and stage publish); the `npm` environment deploys `v*` tags only. First automated publish: `v0.6.0-rc1` to `next`. |
 | 2 | Done | `core/text/{GapBuffer,LineIndex,DocumentChange}`, `CodeDocument` as a `CharSequence` with snapshots, internal `TokenStore` (line-aligned, shifted by change events, fixes stale colours after inserted lines), `tokensForLine`, language services get snapshots. 10k keystrokes into 2 MB: ~17 ms (JVM). |
@@ -15,7 +15,8 @@ Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §
 | 4 | Done | `core/edit/` (selection sets, changes, Monaco-style `UndoHistory`, `TypingRules`, `TextNavigator`, `LineCommands`, `OccurrenceFinder`); public `selections`/`setSelections`, `canUndo`/`canRedo`, `pushUndoStop`, `alternativeVersionId`, `lastChangeKind`, `CommentSyntax`; `EditorUndoManager` removed; Ctrl+/, Alt+Up/Down, Shift+Alt+Up/Down, Ctrl+Shift+K wired on the current field. |
 | 5 | Done | `ui/view/{VisualLineMap,LineLayoutCache,EditorScrollController,EditorView,EditorDrawing,EditorPointerInput,EditorViewport,EditorGutterView}`, `skikoMain` with the v2 scrollbar adapters; `EditorRenderer` switch (`LocalEditorRenderer`, `@ExperimentalAardinkRenderer`), sample toggles (Android menu, desktop picker, web `?aardinkRenderer=virtualized`); folds follow edits (`FoldState.onLinesChanged`); `renderer-*` Roborazzi scenes (wrap, fold, squiggles, selection) in both renderers. |
 | 6 | Done | `ui/input/{ImeWindowBuffer,EditorImeAdapter}`; `platform/EditorTextInput` (Android `InputConnection`, skiko request in `skikoMain`), `TypedTextDecoder`, `EditorClipboard`, `EditorMagnifier`; `ui/view/{EditorKeyBindings,EditorController,EditorInputNode,EditorSelectionUi}` (handles, text toolbar, right-click menu); keyboard toolbar through the typing rules. Web 5,000 lines: key → idle p50 10.7 ms, p95 17.7 ms, no dropped keys; W-2 4/4 on the new renderer. |
-| 7–14, 16, 17 | Not started | See §6. |
+| 7 | Done | Text field path, `textFieldState`, `annotatedText`, `EditorGutter`, `drawSquiggles`, `annotateTokens`, `applyFolding`, `EditorTheme` typography and the renderer switch removed; `EditorOptions`; nullable `diagnostics`; time-sliced cooperative tokenizing (`delay`, not `yield`) and an undebounced first pass; `perf.mjs --gate` in CI. Web 5,000 lines: mount → idle 82 ms, key → idle p95 19 ms, no lost keys, no long task. |
+| 8–14, 16, 17 | Not started | See §6. |
 | A1–A3 | Not started | `aardflex-web-app` switch-over (§7.1). |
 | B1 | Not started | `aardflex` Android upgrade 0.4.0 → 0.6.0 (§7.2). |
 

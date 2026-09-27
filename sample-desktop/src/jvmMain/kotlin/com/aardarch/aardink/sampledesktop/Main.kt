@@ -43,12 +43,9 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
-import com.aardarch.aardink.ui.EditorRenderer
 import com.aardarch.aardink.ui.EditorThemes
-import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
-import com.aardarch.aardink.ui.LocalEditorRenderer
 import com.aardarch.aardink.ui.LocalEditorTheme
 
 private val SAMPLE = """
@@ -66,11 +63,11 @@ private val SAMPLE = """
  * [KeyboardToolbarPlacement.platformDefault] resolving to `Hidden` because a desktop always has
  * a real keyboard.
  *
- * Try: Ctrl/Cmd+Z and +Y (undo/redo through the editor's history, not the field's own stack),
- * Ctrl/Cmd+F (find), Ctrl/Cmd+H (replace), Ctrl/Cmd+G (go to line), Tab and Shift+Tab on a
- * multi-line selection, Ctrl/Cmd+/ (toggle comment), Alt+Up/Down (move lines), Shift+Alt+Up/Down
- * (copy lines), Ctrl/Cmd+Shift+K (delete lines), Escape to dismiss, and the mouse wheel plus the
- * scrollbar on the right.
+ * Try: Ctrl/Cmd+Z and +Y (undo/redo), Ctrl/Cmd+F (find), Ctrl/Cmd+H (replace), Ctrl/Cmd+G (go to
+ * line), Tab and Shift+Tab on a multi-line selection, Ctrl/Cmd+/ (toggle comment), Alt+Up/Down
+ * (move lines), Shift+Alt+Up/Down (copy lines), Ctrl/Cmd+Shift+K (delete lines), Ctrl/Cmd+D (next
+ * occurrence), Alt+click and Ctrl+Alt+Up/Down (more carets), a right click (the context menu),
+ * Escape to dismiss, and the mouse wheel plus the scrollbar on the right.
  */
 fun main() = application {
     Window(
@@ -90,20 +87,6 @@ private fun SampleWindow() {
     var language by remember { mutableStateOf(registry.byId("kotlin") ?: registry.all.first()) }
     var themeName by remember { mutableStateOf("VS Code Dark") }
     var showGoToLine by remember { mutableStateOf(false) }
-
-    // Aardink 0.6's own renderer, while it is still opt-in; -Daardink.renderer=virtualized starts with it.
-    @OptIn(ExperimentalAardinkRenderer::class)
-    var renderer by remember {
-        mutableStateOf(
-            if (System.getProperty("aardink.renderer") ==
-                "virtualized"
-            ) {
-                EditorRenderer.Virtualized
-            } else {
-                EditorRenderer.TextField
-            },
-        )
-    }
 
     val themes = remember {
         linkedMapOf(
@@ -134,22 +117,13 @@ private fun SampleWindow() {
                 themeName = themes.keys.toList()[index]
             }
 
-            @OptIn(ExperimentalAardinkRenderer::class)
-            PickerButton(label = "Renderer: ${renderer.name}", options = EditorRenderer.entries.map { it.name }) { index ->
-                renderer = EditorRenderer.entries[index]
-            }
-
             Text(
-                text = "Ctrl/Cmd+Z/Y undo/redo · +F find · +G go to line · Tab / Shift+Tab indent",
+                text = "Ctrl/Cmd+Z/Y undo/redo · +F find · +G go to line · +D next occurrence · Alt+click add caret",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
-        @OptIn(ExperimentalAardinkRenderer::class)
-        CompositionLocalProvider(
-            LocalEditorTheme provides (themes[themeName] ?: EditorThemes.VsCodeDark),
-            LocalEditorRenderer provides renderer,
-        ) {
+        CompositionLocalProvider(LocalEditorTheme provides (themes[themeName] ?: EditorThemes.VsCodeDark)) {
             CodeEditorLayout(
                 state = state,
                 languageService = language.languageService,

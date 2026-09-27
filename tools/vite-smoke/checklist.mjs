@@ -19,18 +19,15 @@
 // it does not fail on thresholds, because the numbers are for a human to record and compare.
 // Latency gates live in perf.mjs.
 //
-//   pnpm build && node checklist.mjs [W-1 W-2 ...] [--renderer virtualized]   # no ids = every check
+//   pnpm build && node checklist.mjs [W-1 W-2 ...]   # no ids = every check
 
 import { freshPage, largeKotlin, MOUNT, startHarness } from './harness.mjs';
 
 const only = process.argv.slice(2).filter((a) => /^W-\d+$/.test(a));
 const wanted = (id) => only.length === 0 || only.includes(id);
-// The editor's own renderer while it is opt-in: --renderer virtualized.
-const rendererArg = process.argv.indexOf('--renderer');
-const query = rendererArg > 0 ? `?aardinkRenderer=${process.argv[rendererArg + 1]}` : '';
 
 const harness = await startHarness();
-const open = (options = {}) => freshPage(harness, { query, ...options });
+const open = (options = {}) => freshPage(harness, options);
 const record = (id, text) => console.log(`${id}: ${text}`);
 
 try {

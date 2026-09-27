@@ -19,7 +19,7 @@
 // Writes dist/perf.json. Without --gate it only reports; with --gate it fails when a measurement
 // misses its CI gate.
 //
-//   pnpm build && node perf.mjs [--gate] [--keys 30] [--lines 5000] [--renderer virtualized]
+//   pnpm build && node perf.mjs [--gate] [--keys 30] [--lines 5000]
 
 import { writeFileSync } from 'node:fs';
 import { freshPage, largeKotlin, MOUNT, percentile, startHarness } from './harness.mjs';
@@ -29,8 +29,6 @@ const gate = args.includes('--gate');
 const keyCount = Number(args[args.indexOf('--keys') + 1]) || 30;
 // The gates are defined on the 5,000-line reference document; other sizes are for comparison.
 const lineCount = Number(args[args.indexOf('--lines') + 1]) || 5000;
-// The editor's own renderer, while it is opt-in (docs/AARDINK_0.6_PLAN.md, PRs 5-6).
-const renderer = args.includes('--renderer') ? args[args.indexOf('--renderer') + 1] : 'textfield';
 
 // Target: what 0.6.0 aims for, recorded in WEB_INTEGRATION.md. Gate: what CI enforces with
 // --gate, looser to absorb shared-runner noise. null = informational only.
@@ -50,8 +48,7 @@ const results = {};
 const text = largeKotlin(lineCount);
 
 try {
-  const page = await freshPage(harness, { query: renderer === 'textfield' ? '' : `?aardinkRenderer=${renderer}` });
-  results.renderer = renderer;
+  const page = await freshPage(harness);
   results.chrome = await harness.browser.version();
   results.package = await page.evaluate(() => window.__aardinkSmoke.version);
   results.documentKb = Math.round(text.length / 1024);
@@ -197,7 +194,7 @@ try {
 }
 
 const failures = [];
-console.log(`@aardarch/aardink-web ${results.package} (${results.renderer}) in ${results.chrome}, ${results.documentKb} KB Kotlin, ${results.keys} keys`);
+console.log(`@aardarch/aardink-web ${results.package} in ${results.chrome}, ${results.documentKb} KB Kotlin, ${results.keys} keys`);
 for (const [name, limit] of Object.entries(LIMITS)) {
   const value = results[name];
   const unit = limit.unit ?? 'ms';

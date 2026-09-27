@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(ExperimentalAardinkRenderer::class)
-
 package com.aardarch.aardink.sample
 
 import android.view.KeyEvent
@@ -23,7 +21,6 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -31,9 +28,6 @@ import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.ui.CodeEditorLayout
-import com.aardarch.aardink.ui.EditorRenderer
-import com.aardarch.aardink.ui.ExperimentalAardinkRenderer
-import com.aardarch.aardink.ui.LocalEditorRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
@@ -46,7 +40,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * The editor's own renderer as an Android input method sees it: the `InputConnection` the
+ * The editor as an Android input method sees it: the `InputConnection` the
  * focused Compose view hands out, driven the way Gboard and Samsung Keyboard drive one.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -61,12 +55,10 @@ class EditorInputConnectionTest {
             computeDispatcher = Dispatchers.Unconfined
         }
 
-    /** Shows [state] in the editor's own renderer, focuses it, puts the caret at [caret] and returns the input connection. */
+    /** Shows [state] in the editor, focuses it, puts the caret at [caret] and returns the input connection. */
     private fun connect(state: CodeEditorState, caret: Int = state.document.length): InputConnection {
         rule.setContent {
-            CompositionLocalProvider(LocalEditorRenderer provides EditorRenderer.Virtualized) {
-                CodeEditorLayout(state = state, modifier = Modifier.fillMaxSize())
-            }
+            CodeEditorLayout(state = state, modifier = Modifier.fillMaxSize())
         }
         rule.onNode(hasSetTextAction()).requestFocus()
         rule.waitForIdle()

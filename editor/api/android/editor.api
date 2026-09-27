@@ -74,7 +74,6 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun getSelection-d9O1mEE ()J
 	public final fun getSelections ()Ljava/util/List;
 	public final fun getText ()Ljava/lang/String;
-	public final fun getTextFieldState ()Landroidx/compose/foundation/text/input/TextFieldState;
 	public final fun getTextVersion ()I
 	public final fun getTokenVersion ()I
 	public final fun getTokenizeDebounceMs ()J
@@ -244,14 +243,10 @@ public final class com/aardarch/aardink/core/EditorLimits {
 
 public final class com/aardarch/aardink/core/EditorTheme {
 	public static final field $stable I
-	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-0d7_KjU ()J
 	public final fun component10-0d7_KjU ()J
 	public final fun component11-0d7_KjU ()J
-	public final fun component12 ()Landroidx/compose/ui/text/font/FontFamily;
-	public final fun component13-XSAIIZE ()J
-	public final fun component14-XSAIIZE ()J
 	public final fun component2-0d7_KjU ()J
 	public final fun component3-0d7_KjU ()J
 	public final fun component4-0d7_KjU ()J
@@ -260,19 +255,16 @@ public final class com/aardarch/aardink/core/EditorTheme {
 	public final fun component7-0d7_KjU ()J
 	public final fun component8 ()Ljava/util/Map;
 	public final fun component9-0d7_KjU ()J
-	public final fun copy-_0bBojw (JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJ)Lcom/aardarch/aardink/core/EditorTheme;
-	public static synthetic fun copy-_0bBojw$default (Lcom/aardarch/aardink/core/EditorTheme;JJJJJJJLjava/util/Map;JJJLandroidx/compose/ui/text/font/FontFamily;JJILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun copy-S36olT0 (JJJJJJJLjava/util/Map;JJJ)Lcom/aardarch/aardink/core/EditorTheme;
+	public static synthetic fun copy-S36olT0$default (Lcom/aardarch/aardink/core/EditorTheme;JJJJJJJLjava/util/Map;JJJILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorTheme;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBackground-0d7_KjU ()J
 	public final fun getCursorColor-0d7_KjU ()J
 	public final fun getErrorColor-0d7_KjU ()J
 	public final fun getFindMatchColor-0d7_KjU ()J
-	public final fun getFontFamily ()Landroidx/compose/ui/text/font/FontFamily;
-	public final fun getFontSize-XSAIIZE ()J
 	public final fun getGutterBackground-0d7_KjU ()J
 	public final fun getGutterForeground-0d7_KjU ()J
 	public final fun getInfoColor-0d7_KjU ()J
-	public final fun getLineHeight-XSAIIZE ()J
 	public final fun getLineHighlight-0d7_KjU ()J
 	public final fun getSelectionColor-0d7_KjU ()J
 	public final fun getTokenColors ()Ljava/util/Map;
@@ -703,7 +695,7 @@ public final class com/aardarch/aardink/ui/CodeActionMenuKt {
 }
 
 public final class com/aardarch/aardink/ui/CodeEditorLayoutKt {
-	public static final fun CodeEditorLayout (Lcom/aardarch/aardink/core/CodeEditorState;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/FindReplaceState;Lcom/aardarch/aardink/core/FoldState;Lcom/aardarch/aardink/core/FoldingProvider;Ljava/util/List;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ZLcom/aardarch/aardink/ui/KeyboardToolbarStyle;Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;ZZZZZZLkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;III)V
+	public static final fun CodeEditorLayout (Lcom/aardarch/aardink/core/CodeEditorState;Landroidx/compose/ui/Modifier;Lcom/aardarch/aardink/ui/EditorOptions;Lcom/aardarch/aardink/core/LanguageService;Lcom/aardarch/aardink/core/FindReplaceState;Lcom/aardarch/aardink/core/FoldState;Lcom/aardarch/aardink/core/FoldingProvider;Ljava/util/List;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lcom/aardarch/aardink/ui/KeyboardToolbarStyle;Lcom/aardarch/aardink/ui/KeyboardToolbarPlacement;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;III)V
 }
 
 public final class com/aardarch/aardink/ui/CompletionDropdownKt {
@@ -753,20 +745,44 @@ public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
 	public static final fun EditorAttributionBadge (Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
 
-public final class com/aardarch/aardink/ui/EditorGutterKt {
-	public static final fun EditorGutter-ip_dT8w (ILandroidx/compose/foundation/ScrollState;FFJJLandroidx/compose/ui/Modifier;Ljava/util/Map;Ljava/util/Set;Ljava/util/List;Lkotlin/jvm/functions/Function1;Ljava/util/Map;Lkotlin/jvm/functions/Function1;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
-}
-
-public final class com/aardarch/aardink/ui/EditorRenderer : java/lang/Enum {
-	public static final field TextField Lcom/aardarch/aardink/ui/EditorRenderer;
-	public static final field Virtualized Lcom/aardarch/aardink/ui/EditorRenderer;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/EditorRenderer;
-	public static fun values ()[Lcom/aardarch/aardink/ui/EditorRenderer;
-}
-
-public final class com/aardarch/aardink/ui/EditorRendererKt {
-	public static final fun getLocalEditorRenderer ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+public final class com/aardarch/aardink/ui/EditorOptions {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZZZZZZZZZZZZIZ)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component10 ()Z
+	public final fun component11 ()Z
+	public final fun component12 ()Z
+	public final fun component13 ()I
+	public final fun component14 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Z
+	public final fun component8 ()Z
+	public final fun component9 ()Z
+	public final fun copy (ZZZZZZZZZZZZIZ)Lcom/aardarch/aardink/ui/EditorOptions;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBracketPairColorization ()Z
+	public final fun getHighlightCurrentLine ()Z
+	public final fun getInsertSpaces ()Z
+	public final fun getMatchBrackets ()Z
+	public final fun getReadOnly ()Z
+	public final fun getShowDiagnosticAnnotations ()Z
+	public final fun getShowDiffMarkers ()Z
+	public final fun getShowFoldMarkers ()Z
+	public final fun getShowGutter ()Z
+	public final fun getShowLineNumbers ()Z
+	public final fun getShowMinimap ()Z
+	public final fun getSoftWrap ()Z
+	public final fun getStickyScroll ()Z
+	public final fun getTabSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/ui/EditorThemeParser {
@@ -808,15 +824,8 @@ public final class com/aardarch/aardink/ui/EditorTypographyKt {
 	public static final fun getLocalEditorTypography ()Landroidx/compose/runtime/ProvidableCompositionLocal;
 }
 
-public abstract interface annotation class com/aardarch/aardink/ui/ExperimentalAardinkRenderer : java/lang/annotation/Annotation {
-}
-
 public final class com/aardarch/aardink/ui/FindReplacePanelKt {
 	public static final fun FindReplacePanel (Lcom/aardarch/aardink/core/FindReplaceState;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
-}
-
-public final class com/aardarch/aardink/ui/FoldingTransformKt {
-	public static final fun applyFolding (Landroidx/compose/ui/text/AnnotatedString;Ljava/util/List;Lcom/aardarch/aardink/core/CodeDocument;Landroidx/compose/ui/text/SpanStyle;)Landroidx/compose/ui/text/input/TransformedText;
 }
 
 public final class com/aardarch/aardink/ui/GoToLineDialogKt {
@@ -908,14 +917,6 @@ public final class com/aardarch/aardink/ui/RenameDialogKt {
 
 public final class com/aardarch/aardink/ui/SignatureHelpPopupKt {
 	public static final fun SignatureHelpPopup (Lcom/aardarch/aardink/core/SignatureHelp;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
-}
-
-public final class com/aardarch/aardink/ui/SquiggleUnderlineKt {
-	public static final fun drawSquiggles-15-ZiRo (Landroidx/compose/ui/graphics/drawscope/DrawScope;Ljava/util/List;Landroidx/compose/ui/text/TextLayoutResult;JJJ)V
-}
-
-public final class com/aardarch/aardink/ui/TokenAnnotatorKt {
-	public static final fun annotateTokens (Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/EditorTheme;)Landroidx/compose/ui/text/AnnotatedString;
 }
 
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt {

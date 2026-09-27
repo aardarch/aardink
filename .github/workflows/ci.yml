@@ -109,13 +109,13 @@ jobs:
           npx --yes publint@0.3 --strict
           npx --yes @arethetypeswrong/cli@0.18 --pack --profile esm-only
 
-      # Latency on the 5,000-line reference document (docs/AARDINK_0.6_PLAN.md section 6). It only
-      # reports until the virtualised renderer lands; PR 7 turns on --gate.
+      # Latency on the 5,000-line reference document (docs/AARDINK_0.6_PLAN.md section 6). Fails
+      # the build when a measurement misses its gate (looser than the target, for shared runners).
       - name: Web performance
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         working-directory: tools/vite-smoke
-        run: node perf.mjs --keys 20
+        run: node perf.mjs --gate --keys 20
 
       - name: Upload web sample
         uses: actions/upload-artifact@v7

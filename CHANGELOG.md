@@ -41,24 +41,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@aardarch/aardink-web` is published to npm with every release, through npm trusted
   publishing with provenance: `pnpm add @aardarch/aardink-web`. Pre-release versions go to the
   `next` dist-tag.
-- A preview of the editor's own renderer, which lays out and draws only the lines on screen:
-  `CompositionLocalProvider(LocalEditorRenderer provides EditorRenderer.Virtualized)` around
-  `CodeEditorLayout`, opted in with `@ExperimentalAardinkRenderer`; on the web, add
-  `?aardinkRenderer=virtualized` to the page URL. It draws folds, soft wrap, squiggles, find
-  matches, selections and carets; selects with mouse and touch (handles, the text toolbar, a
-  right-click menu); and takes its own text input: keys with VS Code's bindings, input methods
-  (composition, auto-correction) through a window of text around the caret on the web, and the
-  clipboard through the browser's clipboard events. On the web's 5,000-line reference document a
-  keystroke settles in 11 ms instead of 2.2 s, and no key is lost at any typing speed. The switch
-  is removed again before 0.6.0, which renders only this way.
+- **The editor's own renderer, on every platform.** `CodeEditorLayout` no longer wraps a
+  `BasicTextField` holding the whole document: it lays out and draws only the lines on screen, from
+  a cache of recently drawn ones, and takes its own text input. Keys follow VS Code's bindings
+  (Cmd on macOS); input methods compose and auto-correct as in a text field, the web's seeing a
+  window of text around the caret instead of the whole document; the clipboard goes through
+  Compose's `Clipboard`, or on the web through the browser's clipboard events, which need no
+  permission. Mouse: click, Shift+click, Alt+click for another caret, double and triple click,
+  drag, and a right-click menu. Touch: tap, long press, selection handles with the platform's text
+  toolbar, and Android's magnifier. On the web's 5,000-line reference document the editor settles
+  82 ms after mounting (3.2 s in 0.5) and 9 ms after a keystroke (3.7 s), and loses no keys at any
+  typing speed (15 to 29 of 30 at 10 keys a second). See `docs/MIGRATION_0.6.md`.
+- `EditorOptions`, passed as `CodeEditorLayout(options = …)`: read-only, soft wrap and the gutter
+  switches, plus `highlightCurrentLine`, `matchBrackets`, `bracketPairColorization`,
+  `stickyScroll`, `showMinimap`, `tabSize` and `insertSpaces`.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
 - The keyboard toolbar types through the typing rules, as a key does: its `(` gets a `)`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
   text, selection and undo history. On the web, `updateOptions({ language })` now does this too.
-- Multiple selections in the state: `CodeEditorState.selections` and `setSelections` (the first
-  is the primary one, as in Monaco), and a settable `selection`. Until 0.6's own renderer lands
-  the text field shows only the primary one.
+- Multiple selections: `CodeEditorState.selections` and `setSelections` (the first is the primary
+  one, as in Monaco), and a settable `selection`. Ctrl/Cmd+D adds the next occurrence, Ctrl+Shift+L
+  selects them all, Alt+click and Ctrl+Alt+Up/Down add carets, and typing, deleting and pasting
+  work at every one.
 - A Monaco-style undo surface: `canUndo`, `canRedo`, `pushUndoStop()`, `alternativeVersionId`
   (compare it with the value stored at save time to know whether the document is dirty) and
   `lastChangeKind` (`EditChangeKind.Edit`, `Undo`, `Redo`, `Flush`).
@@ -92,6 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes or a space follows a word (so undo removes a word at a time), backspaces together, and
   every other edit on its own. Undo and redo restore the selections from before and after the step.
 - The diff lane is recomputed 300 ms after the last edit rather than on every keystroke.
+- **Breaking:** `CodeEditorLayout`'s `readOnly`, `softWrap` and `show*` parameters are now fields
+  of `options: EditorOptions`, and `diagnostics` is nullable (`null` will collect them from the
+  language service; for now it shows none).
+- A new `CodeEditorState` starts with the caret at the start of the text, as after `loadText`,
+  instead of at its end.
+- Replace All is one undo step instead of one per match.
+- Selections are drawn in `EditorTheme.selectionColor`, which was not used before, and a find
+  match inside a selection stays visible.
+- The first highlighting pass over a new document or language starts at once instead of after the
+  typing debounce, and on the web a large document's pass runs in slices of about 8 ms, so frames
+  keep coming while it works.
 
 ### Removed
 
@@ -99,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CodeEditorState.tokensForLine`. See `docs/MIGRATION_0.6.md`.
 - **Breaking:** `EditorUndoManager`, its `EditOperation` classes, and `CodeEditorState.undoManager`.
   Use `CodeEditorState.undo()`, `redo()`, `canUndo` and `canRedo`.
+- **Breaking:** `CodeEditorState.textFieldState`, the `annotatedText` parameter of
+  `CodeEditorLayout`, `EditorGutter`, `DrawScope.drawSquiggles`, `annotateTokens`, `applyFolding`,
+  and `EditorTheme`'s deprecated `fontFamily`, `fontSize` and `lineHeight`. See
+  `docs/MIGRATION_0.6.md`.
 
 ### Fixed
 
@@ -107,6 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   numbers. Colours now move with their text.
 - The diff lane marked every line below an inserted line as modified; it now marks just the
   inserted one.
+- Fast typing lost keys in large documents on the web (about half of them at 10 keys a second
+  past 1,000 lines). None are lost now.
+- Squiggles were placed by document offset against the folded layout, so they drifted once
+  anything above them was folded; each is now drawn on its own line.
+- Closed folds now follow edits above them instead of hiding the wrong lines until the next
+  folding pass.
+- A touch tap in the web editor did nothing once a mouse had been over the page (a hovering mouse
+  pointer never lifts, and the tap waited for it).
 
 ## [0.5.0] - 2026-09-27
 

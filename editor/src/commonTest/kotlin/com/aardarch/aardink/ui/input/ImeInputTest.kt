@@ -116,7 +116,6 @@ class EditorImeAdapterTest {
     private fun stateOf(text: String) =
         CodeEditorState(initialText = "", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
             computeDispatcher = Dispatchers.Unconfined
-            fieldMirror = false
             loadText(text)
         }
 

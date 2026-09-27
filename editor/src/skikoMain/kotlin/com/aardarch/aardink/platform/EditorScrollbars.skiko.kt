@@ -28,7 +28,7 @@ import com.aardarch.aardink.ui.view.EditorScrollController
 import kotlin.math.max
 
 @Composable
-internal actual fun EditorViewScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier) {
+internal actual fun EditorScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         VerticalScrollbar(
             adapter = remember(scroll) { VerticalAdapter(scroll) },

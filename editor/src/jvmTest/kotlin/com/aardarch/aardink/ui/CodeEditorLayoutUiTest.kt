@@ -13,253 +13,265 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(ExperimentalTestApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalTestApi::class)
 
 package com.aardarch.aardink.ui
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.Token
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Renders the real [CodeEditorLayout] and drives it through the test input APIs.
- *
- * These run on the JVM target only. The scenarios here are the ones unit tests genuinely
- * cannot reach: they need a composition, a focused text field and real key events. The
- * keyboard shortcuts in particular could not be covered any other way — they are installed as
- * a modifier on the field and only fire for actual key input.
+ * Renders the real [CodeEditorLayout] and drives it through the test input APIs: typing, the
+ * key bindings (movement, selection, deletion, the line commands, the shortcuts), menus and touch.
  */
 class CodeEditorLayoutUiTest {
 
-    private fun stateFor(text: String) = CodeEditorState(initialText = text)
+    private fun ComposeUiTest.show(
+        state: CodeEditorState,
+        findReplaceState: FindReplaceState? = null,
+        onRequestGoToLine: () -> Unit = {},
+        readOnly: Boolean = false,
+    ) {
+        setContent {
+            CodeEditorLayout(
+                state = state,
+                findReplaceState = findReplaceState,
+                onRequestGoToLine = onRequestGoToLine,
+                options = EditorOptions(readOnly = readOnly),
+                modifier = Modifier.size(600.dp, 400.dp),
+            )
+        }
+        waitForIdle()
+    }
+
+    private fun ComposeUiTest.editor(): SemanticsNodeInteraction = onNodeWithTag(EditorTestTags.EDITOR)
+
+    private fun ComposeUiTest.keys(block: androidx.compose.ui.test.KeyInjectionScope.() -> Unit) {
+        editor().requestFocus()
+        editor().performKeyInput(block)
+        waitForIdle()
+    }
 
     @Test
     fun `typing updates the document`() = runComposeUiTest {
-        val state = stateFor("")
-        setContent { CodeEditorLayout(state = state) }
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performTextInput("abc")
+        val state = CodeEditorState("")
+        show(state)
+        editor().performTextInput("abc")
         waitForIdle()
-
         assertEquals("abc", state.document.text)
-        assertEquals(state.document.text, state.textFieldState.text.toString())
+        assertEquals(TextRange(3), state.selection)
     }
 
     @Test
-    fun `ctrl Z undoes through the editor history`() = runComposeUiTest {
-        // The point of intercepting at preview level: BasicTextField's built-in Ctrl+Z would
-        // undo on its own private stack and leave CodeDocument behind.
-        val state = stateFor("start")
-        setContent { CodeEditorLayout(state = state) }
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performTextInput("X")
+    fun `a click focuses the editor`() = runComposeUiTest {
+        val state = CodeEditorState("text")
+        show(state)
+        editor().performMouseInput { click() }
         waitForIdle()
-        assertTrue(state.document.text.contains("X"), "precondition: the edit landed")
+        editor().assertIsFocused()
+    }
 
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) }
-        }
+    @Test
+    fun `ctrl Z undoes and ctrl Y redoes`() = runComposeUiTest {
+        val state = CodeEditorState("start")
+        show(state)
+        state.selection = TextRange(5)
+        editor().performTextInput("X")
         waitForIdle()
-
+        assertEquals("startX", state.document.text)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
         assertEquals("start", state.document.text)
-        assertEquals(state.document.text, state.textFieldState.text.toString())
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Y) } }
+        assertEquals("startX", state.document.text)
     }
 
     @Test
-    fun `ctrl Y redoes`() = runComposeUiTest {
-        val state = stateFor("start")
-        setContent { CodeEditorLayout(state = state) }
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performTextInput("X")
-        waitForIdle()
-        val afterEdit = state.document.text
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) }
-        }
-        waitForIdle()
-        assertEquals("start", state.document.text)
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.Y) }
-        }
-        waitForIdle()
-
-        assertEquals(afterEdit, state.document.text)
-    }
-
-    @Test
-    fun `ctrl F opens the find panel`() = runComposeUiTest {
-        val state = stateFor("hello world")
-        val findReplaceState = FindReplaceState()
-        setContent { CodeEditorLayout(state = state, findReplaceState = findReplaceState) }
-
-        assertFalse(findReplaceState.visible, "precondition: find starts hidden")
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.F) }
-        }
-        waitForIdle()
-
-        assertTrue(findReplaceState.visible)
-    }
-
-    @Test
-    fun `escape dismisses the find panel`() = runComposeUiTest {
-        val state = stateFor("hello world")
-        val findReplaceState = FindReplaceState()
-        setContent { CodeEditorLayout(state = state, findReplaceState = findReplaceState) }
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.F) }
-        }
-        waitForIdle()
-        assertTrue(findReplaceState.visible)
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput { pressKey(Key.Escape) }
-        waitForIdle()
-
-        assertFalse(findReplaceState.visible)
+    fun `ctrl F opens the find panel and escape closes it`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        val find = FindReplaceState()
+        show(state, findReplaceState = find)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
+        assertTrue(find.visible)
+        keys { pressKey(Key.Escape) }
+        assertFalse(find.visible)
     }
 
     @Test
     fun `ctrl G asks the host to go to a line`() = runComposeUiTest {
-        val state = stateFor("a\nb\nc")
-        var requested = false
-        setContent {
-            CodeEditorLayout(state = state, onRequestGoToLine = { requested = true })
-        }
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.G) }
-        }
-        waitForIdle()
-
-        assertTrue(requested, "Ctrl+G should reach the host callback")
+        var asked = false
+        show(CodeEditorState("a\nb"), onRequestGoToLine = { asked = true })
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.G) } }
+        assertTrue(asked)
     }
 
     @Test
-    fun `tab indents the selected lines`() = runComposeUiTest {
-        val state = stateFor("one\ntwo\nthree")
-        setContent { CodeEditorLayout(state = state) }
-        waitForIdle()
-
-        // Select the first two lines.
+    fun `tab indents the selected lines and shift tab outdents them`() = runComposeUiTest {
+        val state = CodeEditorState("one\ntwo")
+        show(state)
         state.selection = TextRange(0, 7)
-        waitForIdle()
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput { pressKey(Key.Tab) }
-        waitForIdle()
-
-        assertEquals("    one\n    two\nthree", state.document.text)
-    }
-
-    @Test
-    fun `shift tab outdents the selected lines`() = runComposeUiTest {
-        val state = stateFor("    one\n    two\nthree")
-        setContent { CodeEditorLayout(state = state) }
-        waitForIdle()
-
-        state.selection = TextRange(0, 15)
-        waitForIdle()
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) }
-        }
-        waitForIdle()
-
-        assertEquals("one\ntwo\nthree", state.document.text)
+        keys { pressKey(Key.Tab) }
+        assertEquals("    one\n    two", state.document.text)
+        keys { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
+        assertEquals("one\ntwo", state.document.text)
     }
 
     @Test
     fun `outdent leaves a line with no indentation alone`() = runComposeUiTest {
-        val state = stateFor("one")
-        setContent { CodeEditorLayout(state = state) }
-        waitForIdle()
-
+        val state = CodeEditorState("one")
+        show(state)
         state.selection = TextRange(0, 3)
-        waitForIdle()
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) }
-        }
-        waitForIdle()
-
+        keys { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
         assertEquals("one", state.document.text)
     }
 
     @Test
     fun `ctrl slash toggles a line comment`() = runComposeUiTest {
-        val state = stateFor("val a = 1").apply { tokenizer = SlashComments }
-        setContent { CodeEditorLayout(state = state) }
+        val state = CodeEditorState("val a = 1").apply { tokenizer = SlashComments }
+        show(state)
         state.selection = TextRange(0)
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.CtrlLeft) { pressKey(Key.Slash) }
-        }
-        waitForIdle()
-
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Slash) } }
         assertEquals("// val a = 1", state.document.text)
-        assertEquals(state.document.text, state.textFieldState.text.toString())
     }
 
     @Test
-    fun `alt down moves the line and shift alt down copies it`() = runComposeUiTest {
-        val state = stateFor("one\ntwo")
-        setContent { CodeEditorLayout(state = state) }
+    fun `alt down moves the line and shift alt up copies it`() = runComposeUiTest {
+        val state = CodeEditorState("one\ntwo")
+        show(state)
         state.selection = TextRange(1)
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).requestFocus()
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) }
-        }
-        waitForIdle()
+        keys { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) } }
         assertEquals("two\none", state.document.text)
-
-        onNodeWithTag(EditorTestTags.TEXT_FIELD).performKeyInput {
-            withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } }
-        }
-        waitForIdle()
+        keys { withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } } }
         assertEquals("two\none\none", state.document.text)
     }
 
-    private object SlashComments : com.aardarch.aardink.core.IncrementalTokenizer {
-        override fun tokenizeFull(text: String): List<com.aardarch.aardink.core.Token> = emptyList()
+    @Test
+    fun `arrows move the caret and shift selects`() = runComposeUiTest {
+        val state = CodeEditorState("abc\ndef")
+        show(state)
+        state.selection = TextRange(1)
+        keys { pressKey(Key.DirectionRight) }
+        assertEquals(TextRange(2), state.selection)
+        keys { pressKey(Key.DirectionDown) }
+        assertEquals(TextRange(6), state.selection)
+        keys { withKeyDown(Key.ShiftLeft) { pressKey(Key.MoveHome) } }
+        assertEquals(TextRange(6, 4), state.selection)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveEnd) } }
+        assertEquals(TextRange(7), state.selection)
+    }
 
-        override fun tokenizeLines(
-            text: String,
-            dirtyRange: IntRange,
-            previousTokens: List<com.aardarch.aardink.core.Token>,
-        ): List<com.aardarch.aardink.core.Token> = emptyList()
+    @Test
+    fun `backspace, delete and enter edit`() = runComposeUiTest {
+        val state = CodeEditorState("abcd")
+        show(state)
+        state.selection = TextRange(2)
+        keys { pressKey(Key.Backspace) }
+        assertEquals("acd", state.document.text)
+        keys { pressKey(Key.Delete) }
+        assertEquals("ad", state.document.text)
+        keys { pressKey(Key.Enter) }
+        assertEquals("a\nd", state.document.text)
+        assertEquals(TextRange(2), state.selection)
+    }
 
-        override fun canSpanLines(lineIndex: Int, tokens: List<com.aardarch.aardink.core.Token>): Boolean = false
+    @Test
+    fun `ctrl D selects the word, then its next occurrence`() = runComposeUiTest {
+        val state = CodeEditorState("val x = x")
+        show(state)
+        state.selection = TextRange(4)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.D) } }
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.D) } }
+        assertEquals(listOf(TextRange(8, 9), TextRange(4, 5)), state.selections)
+        keys { pressKey(Key.Escape) }
+        assertEquals(1, state.selections.size)
+    }
 
-        override val commentSyntax = com.aardarch.aardink.core.CommentSyntax(line = "//")
+    @Test
+    fun `read-only keeps the text but still moves the caret`() = runComposeUiTest {
+        val state = CodeEditorState("abc")
+        show(state, readOnly = true)
+        state.selection = TextRange(1)
+        keys { pressKey(Key.Backspace) }
+        keys { pressKey(Key.DirectionRight) }
+        assertEquals("abc", state.document.text)
+        assertEquals(TextRange(2), state.selection)
+    }
+
+    @Test
+    fun `a right click opens the context menu`() = runComposeUiTest {
+        val state = CodeEditorState("one two")
+        show(state)
+        editor().performMouseInput { rightClick(Offset(40f, 20f)) }
+        waitForIdle()
+        onNodeWithText("Select All").performClick()
+        waitForIdle()
+        assertEquals(TextRange(0, 7), state.selection)
+    }
+
+    @Test
+    fun `a long press selects the word and shows both handles`() = runComposeUiTest {
+        val state = CodeEditorState("alpha beta")
+        show(state)
+        editor().performTouchInput { longClick(Offset(8.dp.toPx() + 4f, 8.dp.toPx() + 10.dp.toPx())) }
+        waitForIdle()
+        assertEquals(TextRange(0, 5), state.selection)
+        onNodeWithTag(EditorTestTags.HANDLE + "Start").assertExists()
+        onNodeWithTag(EditorTestTags.HANDLE + "End").assertExists()
+        // Dragging the end handle to the right extends the selection.
+        onNodeWithTag(EditorTestTags.HANDLE + "End").performTouchInput { swipeRight(startX = centerX, endX = centerX + 200f) }
+        waitForIdle()
+        assertEquals(0, state.selection.min)
+        assertTrue(state.selection.max > 5, "extended to ${state.selection}")
+    }
+
+    @Test
+    fun `a tap places the caret and shows its handle`() = runComposeUiTest {
+        val state = CodeEditorState("alpha beta")
+        show(state)
+        editor().performTouchInput { click(Offset(8.dp.toPx() + 2f, 8.dp.toPx() + 10.dp.toPx())) }
+        waitForIdle()
+        assertEquals(TextRange(0), state.selection)
+        onNodeWithTag(EditorTestTags.HANDLE + "Insertion").assertExists()
+    }
+
+    private object SlashComments : IncrementalTokenizer {
+        override fun tokenizeFull(text: String): List<Token> = emptyList()
+
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> = emptyList()
+
+        override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
+
+        override val commentSyntax: CommentSyntax = CommentSyntax(line = "//")
     }
 }

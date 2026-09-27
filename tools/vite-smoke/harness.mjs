@@ -49,10 +49,7 @@ export async function startHarness() {
   };
 }
 
-/**
- * A page that has loaded the app and finished the in-page smoke checks. `options.query` is appended
- * to the URL, e.g. `?aardinkRenderer=virtualized` for the editor's own renderer while it is opt-in.
- */
+/** A page that has loaded the app and finished the in-page smoke checks; `options.query` is appended to the URL. */
 export async function freshPage(harness, options = {}) {
   const page = await harness.browser.newPage();
   await page.setViewport({ width: options.width ?? 1000, height: options.height ?? 600, deviceScaleFactor: options.dpr ?? 1 });

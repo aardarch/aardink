@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.text.TextRange
@@ -25,8 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * The input path of the editor's own renderer ([CodeEditorState.applyInput] and the key
- * commands), with the text field mirror off as that renderer runs it.
+ * The editor's input path: [CodeEditorState.applyInput] and the key commands.
  */
 class EditorInputTest {
 
@@ -36,7 +33,6 @@ class EditorInputTest {
         scope = CoroutineScope(Dispatchers.Unconfined),
     ).apply {
         computeDispatcher = Dispatchers.Unconfined
-        fieldMirror = false
         loadText(text)
     }
 
@@ -146,16 +142,12 @@ class EditorInputTest {
     }
 
     @Test
-    fun `without the field mirror, selections live in the state`() {
+    fun `selections are the state's own, and caret moves keep the primary first`() {
         val state = stateFor("abcdef")
         state.setSelections(listOf(TextRange(4), TextRange(1)))
         assertEquals(listOf(TextRange(4), TextRange(1)), state.selections)
-        assertEquals("", state.textFieldState.text.toString(), "the field is not kept up to date")
         state.moveSelections(extend = true) { it.end + 1 }
         assertEquals(listOf(TextRange(4, 5), TextRange(1, 2)), state.selections)
-        state.fieldMirror = true
-        assertEquals("abcdef", state.textFieldState.text.toString())
-        assertEquals(TextRange(4, 5), state.textFieldState.selection)
     }
 
     @Test

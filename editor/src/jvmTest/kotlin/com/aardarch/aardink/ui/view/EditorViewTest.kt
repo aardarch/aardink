@@ -54,7 +54,6 @@ class EditorViewTest {
     private fun viewOf(text: String, softWrap: Boolean = false, foldState: FoldState? = null): EditorView {
         val state = CodeEditorState(initialText = "", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
             computeDispatcher = Dispatchers.Unconfined
-            fieldMirror = false
             loadText(text)
         }
         return EditorView(state).apply {

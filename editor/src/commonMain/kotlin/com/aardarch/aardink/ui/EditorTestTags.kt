@@ -23,7 +23,6 @@ package com.aardarch.aardink.ui
  * test is arbitrary user content.
  */
 internal object EditorTestTags {
-    const val TEXT_FIELD = "aardink.textField"
     const val FIND_PANEL = "aardink.find"
     const val GUTTER = "aardink.gutter"
 

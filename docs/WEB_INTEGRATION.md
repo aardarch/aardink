@@ -20,8 +20,8 @@ Aardink runs in the browser as Kotlin/Wasm through Compose Multiplatform. This p
 Kotlin side (`com.aardarch:aardink-editor-web`), turning it into an npm package, using that
 package from a Vite app, and what the browser verification checklist found.
 
-**Before adopting it, read [Performance](#performance) and [Known limitations](#known-limitations).**
-Typing latency grows with document size, and a disposed editor is not fully released.
+**Before adopting it, read [Known limitations](#known-limitations):** a disposed editor is not
+fully released until Compose Multiplatform 1.13.
 
 > Compose Multiplatform for the web is **Beta**. Expect the rendering layer underneath Aardink
 > to change between Compose releases.
@@ -178,38 +178,32 @@ Wasm GC and exception handling: Chrome/Edge 119+, Firefox 120+, Safari 18.2+.
 ## Performance
 
 Measured with `tools/vite-smoke/perf.mjs` in headless Chrome 154 on a desktop machine, on
-highlighted Kotlin (0.5 renderer, 2026-09-27). Expect slower on phones.
+highlighted Kotlin (0.6 renderer, 2026-09-27). Expect slower on phones.
 
 - **Idle:** the time from the event until frames have come at display rate for a third of a
   second, so it includes every frame the event causes, re-highlighting too.
 - **Keys lost:** a 30-character burst typed at 10 keys a second, about 120 words a minute.
 
-| Document | Mount → idle | Key → idle, p50 / p95 | Key → change callback, p95 | Keys lost at 10 keys/s |
-| --- | --- | --- | --- | --- |
-| 50 lines (2 KB) | 22 ms | 13 / 29 ms | 15 ms | 0 of 30 |
-| 250 lines (8 KB) | 317 ms | 25 / 92 ms | 22 ms | 0 of 30 |
-| 1,000 lines (33 KB) | 604 ms | 487 / 642 ms | 30 ms | 16 of 30 |
-| 5,000 lines (163 KB) | 3.2 s | 3.7 / 4.6 s | 163 ms | 15–29 of 30 |
+| Document | Mount → idle | Key → idle, p50 / p95 | Key → change callback, p95 | `setValue` → idle | Keys lost at 10 keys/s |
+| --- | --- | --- | --- | --- | --- |
+| 50 lines (2 KB) | 34 ms | 7.8 / 15.6 ms | 1.9 ms | 4 ms | 0 of 30 |
+| 250 lines (8 KB) | 56 ms | 8.1 / 13.8 ms | 2.2 ms | 4 ms | 0 of 30 |
+| 1,000 lines (33 KB) | 84 ms | 9.5 / 16.8 ms | 2.3 ms | 13 ms | 0 of 30 |
+| 5,000 lines (163 KB) | 82 ms | 8.6 / 18.9 ms | 2.6 ms | 12 ms | 0 of 30 |
 
-**Typing cost grows with document size, and past a few hundred lines fast typing loses keys.**
-A key that arrives while the editor is still laying out after the previous one can be dropped.
-Keys typed one at a time with the editor idle in between are never lost.
+A keystroke costs the same in any size of document: the editor lays out and draws only the lines
+on screen, the input method sees a window of text around the caret rather than the whole
+document, and the first highlighting pass over a large document runs in slices of about 8 ms, so
+frames keep coming while it works. No main-thread task over 50 ms occurs while mounting or typing
+in the 5,000-line document.
 
-The cause is architectural. The editor is one `BasicTextField`, and Compose lays out the whole
-document as a single paragraph on every change, then again when Skia paints it. A profile of five
-keystrokes in 125 KB of Kotlin puts ~4.6 of ~6 s in `ParagraphLayouter.layoutParagraph`.
-Re-highlighting then applies a new style set to the whole document, which lays it out again.
-Aardink's own share is small: re-applying token styles costs ~65 ms per keystroke at 125 KB.
-Android runs the same design, but its native text stack is fast enough that it does not show.
-The fix is to lay out only the visible lines, which is what 0.6.0 does; see
-[AARDINK_0.6_PLAN.md](AARDINK_0.6_PLAN.md).
+For comparison, 0.5 (one `BasicTextField` holding the whole document) took 3.2 s to settle after
+mounting the same 5,000 lines, 3.7 s after each keystroke, and lost 15 to 29 of 30 keys typed at
+10 keys a second.
 
-Tokenization itself is not the bottleneck: documents over 64 KB are tokenized in chunks that
-yield to the browser (`EditorLimits`), and 64 KB of Kotlin takes ~170 ms of total tokenizing work.
-
-**Guidance for 0.5:** fine for files of a few hundred lines, which is what the editor was designed
-around, such as configuration and markup documents. Do not use it for files beyond ~500 lines of
-highlighted code.
+CI runs `perf.mjs --gate` on every push; a measurement past its gate fails the build. The gates
+(400 ms to mount, 50 ms p95 per key, no lost keys) are looser than the targets above to absorb
+shared-runner noise.
 
 ## Verification checklist
 
@@ -221,17 +215,16 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 | --- | --- | --- |
 | W-1 | Mount + dispose 50×, heap | **Leaks ~275 KB per disposed editor.** JS heap after forced GC goes 8.5 → 22.2 → 35.9 MB over two batches of 50; no canvases are left behind. Each `ComposeViewport` adds `resize`, `focus`, `blur`, `visibilitychange` and `dragend` listeners to `window` that Compose 1.12.1 never removes, and there is no public API to tear a viewport down. Removing those listeners by hand does not free the memory, so something inside the scene (such as the Recomposer's snapshot observers) also holds it. **Reuse one editor with `setValue`/`updateOptions` instead of mounting a new one per view.** Tracked upstream as [CMP-9090](https://youtrack.jetbrains.com/issue/CMP-9090) and [CMP-10507](https://youtrack.jetbrains.com/issue/CMP-10507); fixed for Compose Multiplatform 1.13, which disposes a viewport when its element leaves the DOM ([compose-multiplatform-core#3242](https://github.com/JetBrains/compose-multiplatform-core/pull/3242)). |
 | W-2 | IME composition: CJK, macOS dead keys, Android Chrome Gboard | **Automated part passes:** `checklist.mjs W-2` drives composition through the DevTools protocol (`Input.imeSetComposition` / `Input.insertText`), the path Chrome's own IME bridge uses: kana → kanji, a second composition, a simulated dead key and Pinyin-style letters all commit exactly (4/4). **Real IMEs still manual:** Windows/macOS CJK, macOS dead keys and press-and-hold, Android Chrome with Gboard. |
-| W-3 | Paste: 100 KB latency, CRLF, Firefox permission prompt | A 101 KB paste reports its change after ~120 ms. **CRLF used to be kept verbatim**; typed and pasted text is now normalised to LF. Firefox prompt: **manual**. |
+| W-3 | Paste: 100 KB latency, CRLF, Firefox permission prompt | A 101 KB paste reports its change after ~21 ms. **CRLF used to be kept verbatim**; typed and pasted text is now normalised to LF. The editor takes pasted text from the browser's `paste` event, which needs no permission; Firefox and Safari: **manual**. |
 | W-4 | Selection: mouse drag, Shift+arrows, double-click, touch handles | **Manual.** |
 | W-5 | Mobile soft keyboard: viewport resize, toolbar placement | **Manual** (needs a phone). |
 | W-6 | Focus: click-to-focus; Tab stays in the field; Ctrl+F/Ctrl+S are not the browser's | Click-to-focus works (the checklist types after a click). Tab and browser shortcuts: **manual**. |
 | W-7 | Wheel over the editor must not scroll the page | Contained: a 600 px wheel over the editor leaves the page's `scrollY` at 0. |
 | W-8 | devicePixelRatio and zoom | At DPR 2 the canvas has a 2000×1200 backing store for 1000×600 CSS px, and text and squiggles are sharp. Browser zoom: **manual**. |
 | W-9 | No flicker when Compose fetches a fallback font for a missing glyph | **Manual.** The bundled font swaps in once it loads (the first frame uses the default monospace). |
-| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke keeps the editor busy for 3.7 s (p50), and a 10 keys/s burst loses about half the keys. `perf.mjs` measures it; see [Performance](#performance). |
+| W-10 | Typing latency, 5,000-line file | At 163 KB of Kotlin a keystroke settles in 8.6 ms (p50), no key is lost at 10 keys/s, and the initial highlighting pass causes no long task. `perf.mjs` measures it and CI gates it; see [Performance](#performance). |
 
 ## Known limitations
 
-- Typing latency grows with document size, and past a few hundred lines fast typing loses keys (see [Performance](#performance)).
 - A disposed editor is not fully released (W-1); reuse editors. Fixed upstream for Compose Multiplatform 1.13.
-- No minimap, no bracket-pair colouring, no multi-cursor.
+- No minimap or bracket-pair colouring yet.
