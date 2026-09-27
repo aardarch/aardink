@@ -19,20 +19,24 @@
 // it does not fail on thresholds, because the numbers are for a human to record and compare.
 // Latency gates live in perf.mjs.
 //
-//   pnpm build && node checklist.mjs [W-1 W-2 ...]   # no ids = every check
+//   pnpm build && node checklist.mjs [W-1 W-2 ...] [--renderer virtualized]   # no ids = every check
 
 import { freshPage, largeKotlin, MOUNT, startHarness } from './harness.mjs';
 
 const only = process.argv.slice(2).filter((a) => /^W-\d+$/.test(a));
 const wanted = (id) => only.length === 0 || only.includes(id);
+// The editor's own renderer while it is opt-in: --renderer virtualized.
+const rendererArg = process.argv.indexOf('--renderer');
+const query = rendererArg > 0 ? `?aardinkRenderer=${process.argv[rendererArg + 1]}` : '';
 
 const harness = await startHarness();
+const open = (options = {}) => freshPage(harness, { query, ...options });
 const record = (id, text) => console.log(`${id}: ${text}`);
 
 try {
   // ── W-1: mount + dispose 50×, heap after forced GC ─────────────────────────
   if (wanted('W-1')) {
-    const page = await freshPage(harness);
+    const page = await open();
     const cdp = await page.createCDPSession();
     await cdp.send('Performance.enable');
     const heapMb = async () => {
@@ -67,7 +71,7 @@ try {
   // covers composition start, update and commit, not the platform IMEs themselves (Pinyin,
   // Japanese, Gboard, dead keys), which stay on the manual checklist.
   if (wanted('W-2')) {
-    const page = await freshPage(harness);
+    const page = await open();
     await page.evaluate(async (mount) => {
       window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: '' });
     }, MOUNT);
@@ -101,7 +105,7 @@ try {
 
   // ── W-3: 100 KB paste latency and CRLF ─────────────────────────────────────
   if (wanted('W-3')) {
-    const page = await freshPage(harness);
+    const page = await open();
     await harness.browser.defaultBrowserContext().overridePermissions(harness.url, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
     const pasted = largeKotlin(3000).slice(0, 100 * 1024).replace(/\n/g, '\r\n');
     await page.evaluate(async (text, mount) => {
@@ -128,7 +132,7 @@ try {
 
   // ── W-7: wheel over the editor must not scroll the page ───────────────────
   if (wanted('W-7')) {
-    const page = await freshPage(harness);
+    const page = await open();
     await page.evaluate(async (text) => {
       document.getElementById('editor').style.display = 'none';
       document.body.style.height = '3000px';
@@ -147,7 +151,7 @@ try {
 
   // ── W-8: devicePixelRatio 2 ──────────────────────────────────────────────
   if (wanted('W-8')) {
-    const page = await freshPage(harness, { dpr: 2 });
+    const page = await open({ dpr: 2 });
     await new Promise((r) => setTimeout(r, 1000));
     await page.screenshot({ path: 'dist/checklist-dpr2.png' });
     const canvas = await page.evaluate(() => {
@@ -162,7 +166,7 @@ try {
 
   // ── W-10: typing latency in a 5,000-line file; longest task while tokenizing ─
   if (wanted('W-10')) {
-    const page = await freshPage(harness);
+    const page = await open();
     const text = largeKotlin(5000);
     const longest = await page.evaluate(async (text, mount) => {
       const longTasks = [];

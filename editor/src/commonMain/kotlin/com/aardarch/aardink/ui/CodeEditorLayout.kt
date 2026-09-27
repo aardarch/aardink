@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +75,8 @@ import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.platform.EditorScrollbars
-import com.aardarch.aardink.ui.view.EditorPointerHandler
+import com.aardarch.aardink.ui.view.EditorController
+import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
 import kotlinx.coroutines.CoroutineScope
@@ -153,7 +155,7 @@ fun CodeEditorLayout(
             }
         }
     }
-    val pointer = remember(view) { view?.let { EditorPointerHandler(it) } }
+    val controller = remember(view) { view?.let { EditorController(state, it) } }
 
     val textVersion = state.textVersion
     val tokenVersion = state.tokenVersion
@@ -517,6 +519,40 @@ fun CodeEditorLayout(
     }
     val currentHandleSingleCharacterInsert = rememberUpdatedState(handleSingleCharacterInsert)
 
+    if (controller != null) {
+        val requestCompletions: () -> Unit = {
+            val service = currentLanguageService.value
+            if (service != null) {
+                val cursor = state.selection.start
+                completionJob?.cancel()
+                completionJob = coroutineScope.launch {
+                    val items = service.completions(state.document.snapshot(), cursor)
+                    completionItems = items
+                    showCompletion = items.isNotEmpty()
+                }
+            }
+        }
+        SideEffect {
+            controller.readOnly = readOnly
+            controller.scope = coroutineScope
+            controller.languageService = { currentLanguageService.value }
+            controller.actions = EditorHostActions(
+                onFind = shortcutActions.onFind,
+                onReplace = shortcutActions.onReplace,
+                onGoToLine = shortcutActions.onGoToLine,
+                onEscape = shortcutActions.onEscape,
+                onTriggerSuggest = requestCompletions,
+                onInput = { typed ->
+                    if (typed != null) {
+                        currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
+                    } else {
+                        showCompletion = false
+                    }
+                },
+            )
+        }
+    }
+
     val inputTransformation = remember(state) {
         EditorInputTransformation(
             state = state,
@@ -562,8 +598,14 @@ fun CodeEditorLayout(
                 canUndo = state.canUndo,
                 canRedo = state.canRedo,
                 onInsertChar = { char ->
-                    val insertAt = state.selection.start
-                    state.applyEdit(insertAt, 0, char.toString(), TextRange(insertAt + 1))
+                    // Through the typing rules, as a key would: a toolbar "(" gets its ")" too.
+                    val selection = state.selection
+                    val typed = state.applyInput(selection.min, selection.max, char.toString(), service = currentLanguageService.value)
+                    if (typed != null) {
+                        currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
+                    } else {
+                        showCompletion = false
+                    }
                 },
                 onMoveCursorLeft = {
                     val newPos = (state.selection.start - 1).coerceAtLeast(0)
@@ -694,11 +736,10 @@ fun CodeEditorLayout(
         }
 
         // ── Editor body: gutter + text area ──────────────────────────────────
-        if (view != null && pointer != null) {
+        if (controller != null) {
             VirtualizedEditorBody(
                 state = state,
-                view = view,
-                pointer = pointer,
+                controller = controller,
                 foldState = foldState,
                 diagnostics = diagnostics,
                 findReplaceState = findReplaceState,

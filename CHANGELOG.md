@@ -45,10 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CompositionLocalProvider(LocalEditorRenderer provides EditorRenderer.Virtualized)` around
   `CodeEditorLayout`, opted in with `@ExperimentalAardinkRenderer`; on the web, add
   `?aardinkRenderer=virtualized` to the page URL. It draws folds, soft wrap, squiggles, find
-  matches, selections and carets, and selects with mouse and touch; typing arrives with the next
-  preview step. The switch is removed again before 0.6.0, which renders only this way.
+  matches, selections and carets; selects with mouse and touch (handles, the text toolbar, a
+  right-click menu); and takes its own text input: keys with VS Code's bindings, input methods
+  (composition, auto-correction) through a window of text around the caret on the web, and the
+  clipboard through the browser's clipboard events. On the web's 5,000-line reference document a
+  keystroke settles in 11 ms instead of 2.2 s, and no key is lost at any typing speed. The switch
+  is removed again before 0.6.0, which renders only this way.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
+- The keyboard toolbar types through the typing rules, as a key does: its `(` gets a `)`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
   text, selection and undo history. On the web, `updateOptions({ language })` now does this too.
 - Multiple selections in the state: `CodeEditorState.selections` and `setSelections` (the first

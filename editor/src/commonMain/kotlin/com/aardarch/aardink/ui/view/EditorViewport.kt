@@ -18,6 +18,7 @@ package com.aardarch.aardink.ui.view
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.runtime.Composable
@@ -35,7 +36,8 @@ import androidx.compose.ui.unit.Constraints
  * the pointer, and draws [EditorView.frame] with [decorations] around the text. Carets are drawn
  * on a layer of their own, so their blinking redraws nothing else.
  *
- * [inputModifier] is where focus, keys and text input attach.
+ * [inputModifier] is where focus, keys and text input attach; [overlay] holds what floats over the
+ * text (selection handles, the context menu).
  */
 @Composable
 internal fun EditorViewport(
@@ -47,6 +49,7 @@ internal fun EditorViewport(
     softWrap: Boolean,
     modifier: Modifier = Modifier,
     inputModifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val overscroll = rememberOverscrollEffect()
     Box(
@@ -65,6 +68,7 @@ internal fun EditorViewport(
                 .graphicsLayer()
                 .drawBehind { drawCarets(view.frame, carets(), colors.caret) },
         )
+        overlay()
     }
 }
 

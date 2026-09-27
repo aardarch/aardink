@@ -918,3 +918,18 @@ public final class com/aardarch/aardink/ui/TokenAnnotatorKt {
 	public static final fun annotateTokens (Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/EditorTheme;)Landroidx/compose/ui/text/AnnotatedString;
 }
 
+public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt;
+	public fun <init> ()V
+	public final fun getLambda$1424247831$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1478940575$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$2072429246$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$885451904$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorViewportKt {
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/view/ComposableSingletons$EditorViewportKt;
+	public fun <init> ()V
+	public final fun getLambda$2033591960$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+}
+

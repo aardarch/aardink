@@ -29,4 +29,7 @@ internal object EditorTestTags {
 
     /** The text area of the editor's own renderer. */
     const val EDITOR = "aardink.editor"
+
+    /** A touch selection handle of the editor's own renderer; the name of the handle follows. */
+    const val HANDLE = "aardink.handle."
 }

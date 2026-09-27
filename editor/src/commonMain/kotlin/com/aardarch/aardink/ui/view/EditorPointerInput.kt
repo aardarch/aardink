@@ -16,14 +16,18 @@
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.FoldState
@@ -46,6 +50,9 @@ internal class EditorPointerHandler(private val view: EditorView) {
 
     /** Called on every press in the text, before it moves the selection: focus and the keyboard. */
     var onPress: (touch: Boolean) -> Unit = {}
+
+    /** A right click at a point (viewport coordinates): open the context menu there. */
+    var onContextMenu: (Offset) -> Unit = {}
 
     private enum class SelectionUnit { Character, Word, Line }
 
@@ -123,6 +130,15 @@ internal class EditorPointerHandler(private val view: EditorView) {
         origin = null
     }
 
+    /** A right click: the caret moves there unless it is inside a selection, then the menu opens. */
+    fun secondaryPress(position: Offset) {
+        onPress(false)
+        val hit = view.offsetAt(position)
+        val inside = state.currentSelections().ranges.any { !it.collapsed && hit.offset in it.min..it.max }
+        if (!inside) state.replaceSelections(SelectionSet.caret(hit.offset))
+        onContextMenu(position)
+    }
+
     /** A long press on touch: select the word there, then extend by words while the finger moves. */
     fun longPress(position: Offset) {
         press(position, clicks = 2, shift = false, alt = false, touch = true)
@@ -143,6 +159,29 @@ internal class EditorPointerHandler(private val view: EditorView) {
 }
 
 /**
+ * The first press, of any mouse button: `awaitFirstDown` waits for the primary one, and a right
+ * click opens the context menu.
+ */
+private suspend fun AwaitPointerEventScope.awaitAnyDown(): PointerInputChange {
+    while (true) {
+        awaitPointerEvent().changes.firstOrNull { it.changedToDown() }?.let { return it }
+    }
+}
+
+/**
+ * The release of pointer [id], or null when something else consumed it (a scroll took over).
+ * Unlike `waitForUpOrCancellation`, other pointers do not count: a mouse hovering over the page
+ * (a touchscreen laptop) never lifts, and waiting for it turned every tap into a long press.
+ */
+private suspend fun AwaitPointerEventScope.waitForUp(id: PointerId): PointerInputChange? {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == id } ?: return null
+        if (change.isConsumed) return null
+        if (change.changedToUp()) return change
+    }
+}
+
+/**
  * The pointer gestures of the text area, feeding [handler]. Mouse presses are consumed (a mouse
  * drag selects, never scrolls); touch moves are left alone until a long press, so the scrollable
  * below still scrolls on a swipe.
@@ -152,11 +191,16 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
     var lastClickPosition = Offset.Zero
     var clickCount = 0
     awaitEachGesture {
-        val down = awaitFirstDown()
+        val down = awaitAnyDown()
         val touch = down.type == PointerType.Touch
         val repeated = down.uptimeMillis - lastClickTime <= viewConfiguration.doubleTapTimeoutMillis &&
             (down.position - lastClickPosition).getDistance() <= viewConfiguration.touchSlop * 2
         if (!touch) {
+            if (currentEvent.buttons.isSecondaryPressed) {
+                handler.secondaryPress(down.position)
+                down.consume()
+                return@awaitEachGesture
+            }
             if (!currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
             clickCount = if (repeated) clickCount % 3 + 1 else 1
             lastClickTime = down.uptimeMillis
@@ -171,7 +215,7 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             handler.release()
             return@awaitEachGesture
         }
-        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
+        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUp(down.id) }
         when {
             // Held still: a long press.
             up == null && currentEvent.changes.any { it.id == down.id && it.pressed && !it.isConsumed } -> {

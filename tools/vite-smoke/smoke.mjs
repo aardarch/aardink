@@ -20,7 +20,7 @@
 //
 //   pnpm install && pnpm smoke          # CHROME_BIN overrides the Chrome location
 
-import { startHarness } from './harness.mjs';
+import { MOUNT, startHarness } from './harness.mjs';
 
 const harness = await startHarness();
 const { browser, url } = harness;
@@ -34,9 +34,67 @@ const KNOWN_UPSTREAM = [
   /Accessing `memory` via `wasmExports` is deprecated/,
 ];
 
+/**
+ * Typing, an IME composition, a paste and a touch tap, the way a browser delivers them, into a
+ * fresh editor filling the page. Run against the editor's own renderer (docs/AARDINK_0.6_PLAN.md,
+ * PR 6), which handles these itself.
+ */
+async function interactionChecks(page) {
+  const checks = {};
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const settle = () => new Promise((r) => setTimeout(r, 300));
+  const mountEditor = async (text) => {
+    await page.evaluate(async (mount, text) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: text });
+    }, MOUNT, text);
+    await new Promise((r) => setTimeout(r, 500));
+  };
+
+  // Touch first: once a (synthetic) mouse has been over the page, Compose's web input no longer
+  // delivers Puppeteer's taps at all, for its own text field as much as for this editor.
+  await mountEditor('line one\nline two');
+  await page.touchscreen.tap(150, 36); // the second line
+  await settle();
+  await page.touchscreen.tap(150, 16); // then the first
+  await settle();
+  await page.keyboard.type('!');
+  await settle();
+  const [first, second] = (await value()).split('\n');
+  checks['touch tap places the caret'] = first.includes('!') && !second.includes('!');
+
+  await mountEditor('');
+  await page.mouse.click(300, 20);
+  await page.keyboard.type('abc');
+  await settle();
+  checks['typing'] = (await value()) === 'abc';
+
+  const cdp = await page.createCDPSession();
+  await cdp.send('Input.imeSetComposition', { text: 'に', selectionStart: 1, selectionEnd: 1 });
+  await settle();
+  await cdp.send('Input.insertText', { text: '日' });
+  await settle();
+  checks['IME composition'] = (await value()) === 'abc日';
+
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData('text/plain', 'X\r\nY');
+    document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await settle();
+  checks['paste (CRLF to LF)'] = (await value()) === 'abc日X\nY';
+
+  await page.keyboard.press('Backspace');
+  await settle();
+  checks['backspace'] = (await value()) === 'abc日X\n';
+  return checks;
+}
+
 try {
+  for (const renderer of ['textfield', 'virtualized']) {
   const page = await browser.newPage();
-  await page.setViewport({ width: 900, height: 500 });
+  await page.setViewport({ width: 900, height: 500, hasTouch: true });
   page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
   page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
   page.on('pageerror', (e) => failures.push(`page error: ${e.message}`));
@@ -45,19 +103,27 @@ try {
     (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
   });
 
-  await page.goto(url, { waitUntil: 'load' });
+  await page.goto(renderer === 'textfield' ? url : `${url}?aardinkRenderer=${renderer}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
   const report = await page.evaluate(() => window.__aardinkSmoke);
   // A few frames so the light theme and the diagnostic are painted before the screenshot.
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  await page.screenshot({ path: 'dist/smoke.png' });
+  await page.screenshot({ path: renderer === 'textfield' ? 'dist/smoke.png' : `dist/smoke-${renderer}.png` });
 
-  console.log(`@aardarch/aardink-web ${report.version}`);
+  console.log(`@aardarch/aardink-web ${report.version} (${renderer})`);
   for (const [name, ok] of Object.entries(report.checks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   if (report.error) failures.push(`in-page error: ${report.error}`);
-  const failedChecks = Object.entries(report.checks).filter(([, ok]) => !ok).map(([name]) => name);
+  const failedChecks = Object.entries(report.checks).filter(([, ok]) => !ok).map(([name]) => `${name} (${renderer})`);
   if (failedChecks.length) failures.push(`failed checks: ${failedChecks.join(', ')}`);
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
+  if (renderer !== 'textfield') {
+    const interactions = await interactionChecks(page);
+    for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
+    const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => `${name} (${renderer})`);
+    if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
+  }
+  await page.close();
+  }
 } finally {
   await harness.close();
 }

@@ -18,14 +18,23 @@ package com.aardarch.aardink.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -34,31 +43,37 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorViewScrollbars
+import com.aardarch.aardink.platform.editorMagnifier
 import com.aardarch.aardink.ui.view.EditorBody
 import com.aardarch.aardink.ui.view.EditorColors
+import com.aardarch.aardink.ui.view.EditorContextMenu
+import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorDecorations
 import com.aardarch.aardink.ui.view.EditorGutterView
+import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
-import com.aardarch.aardink.ui.view.EditorPointerHandler
-import com.aardarch.aardink.ui.view.EditorView
+import com.aardarch.aardink.ui.view.EditorSelectionHandles
+import com.aardarch.aardink.ui.view.EditorTextToolbar
 import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.ViewStyle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * The gutter, text area and scrollbars of the editor's own renderer: what the `BasicTextField`
  * and its gutter are in the text-field one. Only the lines on screen are laid out and drawn.
  *
+ * [controller] handles the input: focus, keys, the input method, the pointer, the clipboard.
+ *
  * @param gutter what the gutter shows, or null for no gutter.
- * @param composition the input method's composing text, underlined.
- * @param inputModifier focus, keys and text input for the text area.
  */
 @Composable
 internal fun VirtualizedEditorBody(
     state: CodeEditorState,
-    view: EditorView,
-    pointer: EditorPointerHandler,
+    controller: EditorController,
     foldState: FoldState?,
     diagnostics: List<Diagnostic>,
     findReplaceState: FindReplaceState?,
@@ -66,10 +81,8 @@ internal fun VirtualizedEditorBody(
     softWrap: Boolean,
     textColor: Color,
     modifier: Modifier = Modifier,
-    composition: () -> TextRange? = { null },
-    showCarets: () -> Boolean = { true },
-    inputModifier: Modifier = Modifier,
 ) {
+    val view = controller.view
     val density = LocalDensity.current
     val typography = LocalEditorTypography.current
     val theme = LocalEditorTheme.current
@@ -101,11 +114,44 @@ internal fun VirtualizedEditorBody(
     val tokenStyles = remember(theme) { theme.tokenColors.mapValues { SpanStyle(color = it.value) } }
     val placeholderStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.4f), fontStyle = FontStyle.Italic) }
     val style = ViewStyle(measurer, textStyle, tokenStyles, placeholderStyle, metrics, softWrap)
+    val focusRequester = remember { FocusRequester() }
+    val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
         view.foldState = foldState
-        pointer.foldState = foldState
+        controller.pointer.foldState = foldState
+        controller.clipboard = clipboard
+        controller.requestFocus = { runCatching { focusRequester.requestFocus() } }
     }
+
+    // The carets blink while the editor has focus, and show solid again after every change.
+    var caretOn by remember { mutableStateOf(true) }
+    LaunchedEffect(controller) {
+        snapshotFlow { Triple(controller.focused, state.selections, state.textVersion) }.collectLatest { (focused) ->
+            caretOn = true
+            while (focused) {
+                delay(CARET_BLINK_MS)
+                caretOn = !caretOn
+            }
+        }
+    }
+    // A tap in the text asks for the on-screen keyboard. On the web this also gives Compose's hidden
+    // text area the page's focus back, which a touch on the canvas takes away.
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(controller, keyboard) {
+        var seen = controller.ime.keyboardRequests
+        snapshotFlow { controller.ime.keyboardRequests }.collect {
+            if (it != seen) keyboard?.show()
+            seen = it
+        }
+    }
+    EditorClipboardEvents(
+        active = controller.focused,
+        onCopy = { controller.copyText() },
+        onCut = { controller.cutText() },
+        onPaste = { controller.pasteText(it) },
+    )
+    EditorTextToolbar(controller)
 
     val tertiary = MaterialTheme.colorScheme.tertiary
     val colors = EditorColors(
@@ -131,26 +177,37 @@ internal fun VirtualizedEditorBody(
         viewport = {
             EditorViewport(
                 view = view,
-                pointer = pointer,
+                pointer = controller.pointer,
                 decorations = {
                     EditorDecorations(
                         selections = state.selections,
                         findMatches = findReplaceState?.matches.orEmpty(),
                         currentFindMatch = findReplaceState?.currentMatchIndex ?: -1,
                         diagnostics = diagnostics,
-                        composition = composition(),
+                        composition = controller.ime.composition,
                     )
                 },
-                carets = { if (showCarets()) state.selections else emptyList() },
+                carets = { if (controller.focused && caretOn) state.selections else emptyList() },
                 colors = colors,
                 softWrap = softWrap,
                 modifier = Modifier.fillMaxSize().testTag(EditorTestTags.EDITOR),
-                inputModifier = inputModifier,
+                inputModifier = Modifier
+                    .then(EditorInputElement(controller))
+                    .focusRequester(focusRequester)
+                    .focusTarget()
+                    .editorMagnifier { controller.magnifierCenter },
+                overlay = {
+                    EditorSelectionHandles(controller, theme.cursorColor)
+                    EditorContextMenu(controller)
+                },
             )
         },
         scrollbars = { EditorViewScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
     )
 }
+
+/** Half a caret blink: VS Code's default, 1.06 s a cycle. */
+private const val CARET_BLINK_MS = 530L
 
 /** Measured to find the advance of one character of the (monospace) editor font. */
 private const val CHAR_WIDTH_SAMPLE = "0000000000000000000000000000000000000000000000000000000000000000"
