@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-rc1] - 2026-09-27
+
 0.6.0 replaces the editor's text field with a renderer and text input of its own on every
 platform, so typing costs the same in any size of document, and builds a wave of features on it:
 multiple cursors, column selection, a minimap, sticky scroll, bracket-pair colours, go to
