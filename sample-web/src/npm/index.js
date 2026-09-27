@@ -41,6 +41,74 @@ export function preloadAardink() {
 let generatedIds = 0;
 
 /**
+ * A Monarch grammar as JSON: RegExp literals (/.../) become their source, as the Kotlin side reads
+ * regexes from strings; everything else is kept.
+ */
+function monarchToJson(value) {
+  if (value instanceof RegExp) return value.source;
+  if (Array.isArray(value)) return value.map(monarchToJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, monarchToJson(item)]));
+  }
+  return value;
+}
+
+/** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
+function answer(provider, ...args) {
+  if (!provider) return Promise.resolve(null);
+  return Promise.resolve()
+    .then(() => provider(...args))
+    .then((value) => (value == null ? null : JSON.stringify(value)));
+}
+
+/**
+ * Adds a language highlighted by a Monarch grammar, for createEditor's `language` option. See
+ * index.d.ts for the definition and the providers.
+ */
+export async function registerLanguage(definition, providers = {}) {
+  const k = await load();
+  const grammar = monarchToJson(definition.grammar ?? {});
+  if (definition.comments) grammar.comments = definition.comments;
+  const error = k.aardinkRegisterLanguage(
+    JSON.stringify({
+      id: definition.id,
+      extends: definition.extends,
+      displayName: definition.displayName,
+      extensions: definition.extensions,
+      grammar,
+    }),
+    (text, line, column) => answer(providers.provideCompletionItems, text, line, column),
+    (text, line, column) => answer(providers.provideHover, text, line, column),
+    (text) => answer(providers.provideDiagnostics, text),
+  );
+  if (error) throw new Error(`Aardink: ${error}`);
+}
+
+/** Monaco's defineTheme data ({ base, inherit, rules, colors }) as VS Code theme JSON; VS Code JSON as it is. */
+function toVsCodeTheme(theme) {
+  if (!theme.rules) return theme;
+  const base = { vs: 'vscode-light', 'hc-light': 'vscode-light' }[theme.base] ?? 'vscode-dark';
+  return {
+    type: base === 'vscode-light' ? 'light' : 'dark',
+    base: theme.inherit === false ? undefined : base,
+    colors: theme.colors ?? {},
+    tokenColors: theme.rules
+      .filter((rule) => rule.foreground)
+      .map((rule) => ({ scope: rule.token, settings: { foreground: `#${rule.foreground.replace(/^#/, '')}` } })),
+  };
+}
+
+/** Adds a theme for createEditor's `theme` option, from Monaco's defineTheme data or VS Code theme JSON. */
+export async function registerTheme(name, theme) {
+  const k = await load();
+  const error = k.aardinkRegisterTheme(name, JSON.stringify(toVsCodeTheme(theme)));
+  if (error) throw new Error(`Aardink: ${error}`);
+}
+
+/** Monaco's name for registerTheme. */
+export const defineTheme = registerTheme;
+
+/**
  * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap 'on'/'off' and its
  * { enabled } objects for minimap and stickyScroll (a plain boolean works too).
  */

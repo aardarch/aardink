@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Lookbehind is refused when the grammar is read, with where it is. Tokens get a
   `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`); comments and strings get the
   editor's own types.
+- On the web, languages and themes of your own without building a wasm executable:
+  `registerLanguage` takes a Monarch grammar (with `extends: "xml"` to keep a built-in language's
+  service) and JavaScript functions for completions, hover and diagnostics, answered at once or
+  with a Promise; `defineTheme` / `registerTheme` take Monaco's theme data or VS Code theme JSON,
+  whose colours reach grammars' token names by dotted prefix (`tag.aardflex`, then `tag`). In
+  Kotlin, `AardinkWeb.registerLanguage` with `WebLanguageProviders`, and `registerTheme`.
 - Sticky scroll (`EditorOptions.stickyScroll`): the first lines of the blocks the top of the view
   is inside (up to five, from the folding provider's ranges) stay pinned at the top, each pushed
   up as its block ends; a click scrolls to it.

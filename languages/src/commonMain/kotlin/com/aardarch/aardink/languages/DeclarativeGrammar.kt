@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.TokenType
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -90,8 +91,9 @@ data class NamedTokenType(val name: String) : TokenType {
  * - **Next:** a state name to enter (pushed on the state stack), `@pop`, `@push` (the current
  *   state again) or `@popall`.
  * - **Top level:** `defaultToken` for text no rule matches, `ignoreCase`, `tokenPostfix` added to
- *   every token name, and any other string, which `@name` in a regex stands for, or string
- *   array, for the `@name` guards.
+ *   every token name, `comments` as in Monaco's language configuration (`{ "lineComment": "#",
+ *   "blockComment": ["<!--", "-->"] }`, for toggling comments), and any other string, which
+ *   `@name` in a regex stands for, or string array, for the `@name` guards.
  *
  * **Not supported, and rejected by [parse]:** lookbehind (`(?<=`, `(?<!`), which Kotlin/wasm's
  * regex engine makes very slow.
@@ -102,6 +104,7 @@ class DeclarativeGrammar internal constructor(
     internal val defaultToken: TokenType,
     /** Every token name the grammar can produce, with its postfix: for giving each a colour. */
     val tokenNames: Set<String>,
+    internal val commentSyntax: CommentSyntax? = null,
 ) {
     internal sealed interface Action {
         data class Token(val type: TokenType, val next: Next?, val rematch: Boolean) : Action
@@ -170,7 +173,15 @@ private class GrammarReader(private val json: JsonObject) {
         for ((name, rules) in states) {
             rules.forEachIndexed { index, rule -> checkNext(rule.action, "tokenizer.$name[$index]", states.keys) }
         }
-        return DeclarativeGrammar(states, start, defaultToken, names)
+        return DeclarativeGrammar(states, start, defaultToken, names, comments())
+    }
+
+    private fun comments(): CommentSyntax? {
+        val comments = json["comments"] as? JsonObject ?: return null
+        val line = comments.string("lineComment")
+        val block = (comments["blockComment"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        if (block != null && block.size != 2) fail("comments.blockComment", "a block comment is [start, end]")
+        return CommentSyntax(line = line, blockStart = block?.get(0), blockEnd = block?.get(1)).takeIf { line != null || block != null }
     }
 
     private fun rulesOf(state: String, including: MutableSet<String>): List<DeclarativeGrammar.Rule> {

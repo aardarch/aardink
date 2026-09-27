@@ -41,11 +41,13 @@ There are two ways in:
 
 - **Use the ready-built package.** `pnpm add @aardarch/aardink-web` installs `:sample-web`'s
   build from npm, released with every Aardink version. It has the built-in languages and themes
-  and the Monaco-shaped API below, and needs no Gradle or JDK. Start with
+  and the Monaco-shaped API below, and needs no Gradle or JDK. A language of your own can be
+  registered from JavaScript as a Monarch grammar, with completions, hover and diagnostics
+  answered by your own functions, and a theme as Monaco's `defineTheme` data; see
+  [Your own languages and themes](#your-own-languages-and-themes). Start with
   [Building an npm package](#building-an-npm-package) for the API and
   [Vite](#vite) for the bundler set-up; skip the Gradle parts.
-- **Build your own executable** when you need a grammar or language service of your own written
-  in Kotlin: a small Gradle wasmJs module that depends on `aardink-editor-web`, adds your
+- **Build your own executable** when you need a grammar or language service written in Kotlin: a small Gradle wasmJs module that depends on `aardink-editor-web`, adds your
   languages and themes, and declares the `@JsExport` functions your page calls. That is what lets
   a product ship its own grammar without Aardink knowing about it. `:sample-web` in this
   repository is exactly such a module, and it is the one to copy.
@@ -64,6 +66,8 @@ There are two ways in:
 | `navigateTo(line, column)` | Scroll to and place the caret at a 1-based position, clamped to the document. |
 | `showFind`, `undo`, `redo` | As named. `undo`/`redo` return whether anything changed. |
 | `dispose` / `isDisposed` | Remove the editor's composition and stop its work. Idempotent. The container element is left for you to remove or reuse. **See W-1 below: memory is not fully released.** |
+| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
@@ -141,6 +145,52 @@ branches that never run in a browser. [`tools/vite-smoke/`](../tools/vite-smoke/
 minimal example. CI runs it on every change: `pnpm smoke` builds it and drives it in headless
 Chrome, failing on any failed check or failed request.
 
+### Your own languages and themes
+
+```ts
+import { createEditor, defineTheme, registerLanguage } from '@aardarch/aardink-web';
+
+await registerLanguage(
+  {
+    id: 'aardflex',
+    extends: 'xml', // XML's completions, diagnostics and folding too
+    grammar: {
+      tokenPostfix: '.aardflex',
+      tokenizer: {
+        root: [
+          [/<\/?(layer|text)\b/, 'tag'],
+          [/[a-z-]+(?==)/, 'attribute.name'],
+          [/"[^"]*"/, 'attribute.value'],
+        ],
+      },
+    },
+    comments: { blockComment: ['<!--', '-->'] },
+  },
+  {
+    provideCompletionItems: (text, line, column) => [{ label: 'layer', kind: 'element' }],
+    provideDiagnostics: async (text) => validate(text), // AardinkDiagnostic[]
+  },
+);
+await defineTheme('aardflex-dark', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [{ token: 'tag.aardflex', foreground: 'c586c0' }],
+});
+const editor = await createEditor(container, save, { language: 'aardflex', theme: 'aardflex-dark' });
+```
+
+- **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
+  `cases` with `@array`, `@default` and `@eos`, capture groups, `include`, `@rematch`,
+  `defaultToken`, `ignoreCase` and `tokenPostfix`. Lookbehind is refused when the language is
+  registered: Kotlin/wasm's regex engine runs it at every position. The grammar highlights a line
+  at a time, so an edit rescans only until the lines below are back in the state they were in.
+- **Colours** follow token names by dotted prefix, as in Monaco: `tag.aardflex` takes the theme's
+  `tag.aardflex` colour, else its `tag` colour, else the built-in themes' colour for Monaco's
+  standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). `comment` and
+  `string` tokens are the editor's own comments and strings.
+- **Providers** get the whole text and a 1-based position and may answer at once or with a
+  Promise; a provider that throws or rejects gives no answer rather than breaking the editor.
+
 ### Option names coming from Monaco
 
 | Monaco | Aardink | Notes |
@@ -160,6 +210,8 @@ Chrome, failing on any failed check or failed request.
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame. |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
+| `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
+| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | `revealPositionInCenter` | `revealPosition` | Scrolls it into view; not centred. |
 

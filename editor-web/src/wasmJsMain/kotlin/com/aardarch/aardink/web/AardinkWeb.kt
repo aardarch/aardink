@@ -21,12 +21,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Font
@@ -123,6 +125,54 @@ object AardinkWeb {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // ── What pages register: every editor mounted with the defaults sees it ─────
+
+    /** The built-in languages and every one [registerLanguage] added. */
+    internal val registry: LanguageRegistry = LanguageRegistry.withBuiltIns()
+
+    /** The built-in themes and every one [registerTheme] added. */
+    internal val registeredThemes: MutableMap<String, EditorTheme> = builtInThemes.toMutableMap()
+
+    /** Per registered theme: its colours by scope name, for grammars' token names. */
+    internal val namedColors = HashMap<String, Map<String, Color>>()
+
+    /** Per registered language: the token names its grammar produces. */
+    internal val grammarNames = HashMap<String, Set<String>>()
+
+    /** Counts registrations, so editors on screen pick up a theme or language registered again. */
+    internal val registrations = mutableIntStateOf(0)
+
+    /**
+     * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
+     * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"? }`:
+     * `grammar` is a [DeclarativeGrammar] (a subset of Monaco's Monarch, with `comments` as in
+     * Monaco's language configuration), and `extends` names a language whose language service and
+     * folding this one takes (`"xml"`), besides what [providers] answer. Registering an id again
+     * replaces it. Returns the id; throws [IllegalArgumentException] for a definition it cannot use,
+     * saying where, such as a grammar with a lookbehind.
+     */
+    fun registerLanguage(definitionJson: String, providers: WebLanguageProviders = WebLanguageProviders()): String {
+        val (definition, names) = languageFrom(definitionJson, providers, registry)
+        registry.register(definition)
+        grammarNames[definition.id] = names
+        registrations.intValue++
+        return definition.id
+    }
+
+    /**
+     * Adds (or replaces) a theme, for [WebEditorOptions.theme] to name: VS Code theme JSON, whose
+     * `tokenColors` scopes also colour grammars' token names by dotted prefix (`tag.aardflex`, then
+     * `tag`). What it does not set comes from `base` (a theme key) if given, else `vscode-light`
+     * for a `"type": "light"` theme and `vscode-dark` otherwise. Throws [IllegalArgumentException]
+     * for JSON it cannot read.
+     */
+    fun registerTheme(name: String, themeJson: String) {
+        val (theme, named) = themeFrom(themeJson, registeredThemes)
+        registeredThemes[name] = theme
+        namedColors[name] = named
+        registrations.intValue++
+    }
+
     /**
      * Renders an editor into the element with id [containerId], which must already be in the
      * document; the editor fills it. [registry] and [themes] let a product supply its own
@@ -136,8 +186,8 @@ object AardinkWeb {
         containerId: String,
         initialText: String,
         options: WebEditorOptions = WebEditorOptions(),
-        registry: LanguageRegistry = LanguageRegistry.withBuiltIns(),
-        themes: Map<String, EditorTheme> = builtInThemes,
+        registry: LanguageRegistry = this.registry,
+        themes: Map<String, EditorTheme> = registeredThemes,
     ): AardinkEditorHandle {
         val container = requireNotNull(document.getElementById(containerId)) {
             "No element with id '$containerId' in the document"
@@ -221,30 +271,32 @@ object AardinkWeb {
      * it is edited, until the next list.
      */
     fun setDiagnostics(handle: AardinkEditorHandle, diagnostics: List<WebDiagnostic>?) {
-        if (diagnostics == null) {
-            handle.diagnostics.value = null
-            return
-        }
-        val document = handle.state.value.document
-        handle.diagnostics.value = diagnostics.mapNotNull { web ->
-            if (web.line < 1 || web.line > document.lineCount) return@mapNotNull null
-            val line = web.line - 1
-            val start = document.lineColToOffset(line, web.startColumn - 1)
-            val endExclusive = document.lineColToOffset(line, web.endColumn - 1)
-            Diagnostic(
-                // Diagnostic.range is inclusive of its last character; a zero-width marker still
-                // gets one character so it stays visible.
-                range = start..maxOf(start, endExclusive - 1),
-                lineNumber = line,
-                message = web.message,
-                severity = when (web.severity.lowercase()) {
-                    "error" -> DiagnosticSeverity.Error
-                    "warning" -> DiagnosticSeverity.Warning
-                    else -> DiagnosticSeverity.Info
-                },
-            )
-        }
+        handle.diagnostics.value = diagnostics?.let { toDiagnostics(handle.state.value.document, it) }
     }
+
+    /** [diagnostics] addressed to [document]; ones on lines it does not have are dropped. */
+    internal fun toDiagnostics(document: CodeDocument, diagnostics: List<WebDiagnostic>): List<Diagnostic> = diagnostics.mapNotNull { web ->
+        if (web.line < 1 || web.line > document.lineCount) return@mapNotNull null
+        val line = web.line - 1
+        val start = document.lineColToOffset(line, web.startColumn - 1)
+        val endExclusive = document.lineColToOffset(line, web.endColumn - 1)
+        Diagnostic(
+            // Diagnostic.range is inclusive of its last character; a zero-width marker still
+            // gets one character so it stays visible.
+            range = start..maxOf(start, endExclusive - 1),
+            lineNumber = line,
+            message = web.message,
+            severity = when (web.severity.lowercase()) {
+                "error" -> DiagnosticSeverity.Error
+                "warning" -> DiagnosticSeverity.Warning
+                else -> DiagnosticSeverity.Info
+            },
+        )
+    }
+
+    /** A JSON array of [WebDiagnostic]; empty when it is not one. */
+    internal fun parseDiagnostics(diagnosticsJson: String): List<WebDiagnostic> =
+        runCatching { json.decodeFromString(diagnosticsJsonSerializer, diagnosticsJson) }.getOrDefault(emptyList())
 
     /** Parses a JSON array of [WebDiagnostic], or `null`, and shows it; see [setDiagnostics]. */
     fun setDiagnosticsJson(handle: AardinkEditorHandle, diagnosticsJson: String) {
@@ -376,8 +428,15 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         lineHeight = (options.fontSize * 20f / 14f).sp,
     )
 
+    // Registering a theme or language again changes what this editor shows.
+    val registrations = AardinkWeb.registrations.intValue
+    val baseTheme = handle.themes[options.theme] ?: EditorThemes.VsCodeDark
+    val theme = remember(baseTheme, options.theme, language.id, registrations) {
+        themeWithNames(baseTheme, AardinkWeb.namedColors[options.theme].orEmpty(), AardinkWeb.grammarNames[language.id].orEmpty())
+    }
+
     CompositionLocalProvider(
-        LocalEditorTheme provides (handle.themes[options.theme] ?: EditorThemes.VsCodeDark),
+        LocalEditorTheme provides theme,
         LocalEditorTypography provides typography,
     ) {
         CodeEditorLayout(

@@ -72,6 +72,9 @@ final class com.aardarch.aardink.languages/DeclarativeGrammar { // com.aardarch.
 final class com.aardarch.aardink.languages/DeclarativeTokenizer : com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.languages/DeclarativeTokenizer|null[0]
     constructor <init>(com.aardarch.aardink.languages/DeclarativeGrammar) // com.aardarch.aardink.languages/DeclarativeTokenizer.<init>|<init>(com.aardarch.aardink.languages.DeclarativeGrammar){}[0]
 
+    final val commentSyntax // com.aardarch.aardink.languages/DeclarativeTokenizer.commentSyntax|{}commentSyntax[0]
+        final fun <get-commentSyntax>(): com.aardarch.aardink.core/CommentSyntax? // com.aardarch.aardink.languages/DeclarativeTokenizer.commentSyntax.<get-commentSyntax>|<get-commentSyntax>(){}[0]
+
     final fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages/DeclarativeTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
     final fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages/DeclarativeTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     final fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages/DeclarativeTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]

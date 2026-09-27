@@ -90,6 +90,38 @@ async function interactionChecks(page) {
   return checks;
 }
 
+/**
+ * A grammar and a theme registered from JavaScript, in Monaco's shapes, colour the text: the
+ * keyword `shout` in the theme's magenta, counted by pixel in a screenshot of the editor.
+ */
+async function grammarCheck(page) {
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, defineTheme, registerLanguage } = window.__aardink;
+    await defineTheme('toy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: 'ff00ff' }] });
+    await registerLanguage({ id: 'toy', grammar: { tokenizer: { root: [[/\bshout\b/, 'keyword'], [/\w+/, 'text']] } } });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'shout quietly shout', language: 'toy', theme: 'toy-dark', fontSize: 24 });
+  }, MOUNT);
+  await new Promise((r) => setTimeout(r, 1500));
+  const png = await page.screenshot({ clip: { x: 0, y: 0, width: 600, height: 60 }, encoding: 'base64' });
+  const magenta = await page.evaluate(async (png) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, image.width, image.height);
+    let count = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] > 180 && data[i + 1] < 90 && data[i + 2] > 180) count++;
+    return count;
+  }, png);
+  return { 'registered grammar and theme colour the text': magenta > 50 };
+}
+
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
@@ -116,6 +148,9 @@ try {
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
   const interactions = await interactionChecks(page);
   for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
+  const grammar = await grammarCheck(page);
+  Object.assign(interactions, grammar);
+  for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);
   if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
 } finally {

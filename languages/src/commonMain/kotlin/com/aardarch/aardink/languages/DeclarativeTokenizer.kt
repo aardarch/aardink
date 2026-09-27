@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages
 
+import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
@@ -120,6 +121,9 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
     }
 
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
+
+    /** From the grammar's `comments`, for toggling comments. */
+    override val commentSyntax: CommentSyntax? get() = grammar.commentSyntax
 
     /** Just [lines], from the start state at the first of them, for a quick first colouring; remembers nothing. */
     private fun provisional(text: String, lines: IntRange): List<Token> {

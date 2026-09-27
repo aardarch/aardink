@@ -38,6 +38,16 @@ const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
+A language of your own is a Monarch grammar registered before use, with Monaco's `defineTheme` for
+its colours:
+
+```ts
+import { defineTheme, registerLanguage } from '@aardarch/aardink-web';
+
+await registerLanguage({ id: 'toy', grammar: { tokenizer: { root: [[/\bshout\b/, 'keyword']] } } });
+await defineTheme('toy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: 'ff00ff' }] });
+```
+
 The editor fills its container, so give the container a size. `createEditor` is async because
 the first call loads the WebAssembly module (about 13 MB, 4.7 MB gzipped); every editor on the
 page shares that one module. See [`index.d.ts`](./index.d.ts) for the full API.

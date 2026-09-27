@@ -72,6 +72,62 @@ export interface AardinkEditor {
   dispose(): void;
 }
 
+/** A language highlighted by a grammar, for `registerLanguage`. */
+export interface AardinkLanguageDefinition {
+  /** What `createEditor`'s `language` option names it by. Registering an id again replaces it. */
+  id: string;
+  /**
+   * A subset of Monaco's Monarch: states in `tokenizer` (`root` first), rules of
+   * `[regex, action, next?]`, `cases` with `@array`/`@default`/`@eos`, capture groups,
+   * `include`, `@rematch`, `defaultToken`, `ignoreCase`, `tokenPostfix`. RegExp literals are
+   * fine. Lookbehind is not supported, and is refused.
+   */
+  grammar: object;
+  /** A built-in or registered language whose completions, diagnostics, hover and folding this one takes too, e.g. `'xml'`. */
+  extends?: string;
+  displayName?: string;
+  extensions?: string[];
+  /** As in Monaco's language configuration: what Ctrl/Cmd+/ comments with. */
+  comments?: { lineComment?: string; blockComment?: [string, string] };
+}
+
+export interface AardinkCompletionItem {
+  label: string;
+  /** What accepting it types; the label when absent. */
+  insertText?: string;
+  kind?: 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property';
+  detail?: string;
+  documentation?: string;
+}
+
+/**
+ * What a registered language knows beyond its grammar. Each gets the whole text and, where it
+ * asks about a place, a 1-based line and column; each may answer at once or with a Promise. With
+ * `extends`, the built-in language's answers come after these.
+ */
+export interface AardinkLanguageProviders {
+  provideCompletionItems?(text: string, line: number, column: number): AardinkCompletionItem[] | null | Promise<AardinkCompletionItem[] | null>;
+  provideHover?(text: string, line: number, column: number): { title?: string; contents: string } | null | Promise<{ title?: string; contents: string } | null>;
+  provideDiagnostics?(text: string): AardinkDiagnostic[] | Promise<AardinkDiagnostic[]>;
+}
+
+/** Adds a language for `createEditor`'s `language` option. Rejects with what is wrong with the definition. */
+export function registerLanguage(definition: AardinkLanguageDefinition, providers?: AardinkLanguageProviders): Promise<void>;
+
+/** Monaco's `defineTheme` data. Token rules name a grammar's tokens; `tag` also colours `tag.aardflex`. */
+export interface AardinkThemeData {
+  base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
+  inherit?: boolean;
+  rules: { token: string; foreground?: string }[];
+  colors?: Record<string, string>;
+}
+
+/** Adds a theme for `createEditor`'s `theme` option: Monaco's `defineTheme` data, or a VS Code theme's JSON. */
+export function registerTheme(name: string, theme: AardinkThemeData | object): Promise<void>;
+
+/** Monaco's name for `registerTheme`. */
+export const defineTheme: typeof registerTheme;
+
 /**
  * Mounts an editor that fills `container`. Loads the WebAssembly module on first use (see
  * `preloadAardink`). `onChange` is registered as the first content listener.

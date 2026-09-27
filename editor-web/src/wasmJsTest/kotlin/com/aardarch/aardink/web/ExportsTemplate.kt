@@ -30,7 +30,8 @@ package com.aardarch.aardink.web
 // with your module's own exports.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
-import com.aardarch.aardink.languages.LanguageRegistry
+import kotlinx.coroutines.await
+import kotlin.js.Promise
 
 private val handles = mutableMapOf<Int, AardinkEditorHandle>()
 private var nextHandleId = 1
@@ -50,10 +51,10 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
         containerId = containerId,
         initialText = initialText,
         options = AardinkWeb.parseOptions(optionsJson),
-        // (1) Your languages: e.g. MyLanguages.register(LanguageRegistry.withBuiltIns()).
-        registry = LanguageRegistry.withBuiltIns(),
-        // (2) Your themes: e.g. AardinkWeb.builtInThemes + ("my-dark" to MyDarkTheme).
-        themes = AardinkWeb.builtInThemes,
+        // (1) Your languages: the built-in ones and those registerLanguage adds are there by default.
+        //     For languages written in Kotlin, pass a registry of your own, e.g.
+        //     registry = LanguageRegistry.withBuiltIns().register(MyLanguage) (then it holds only those).
+        // (2) Your themes: likewise, e.g. themes = AardinkWeb.builtInThemes + ("my-dark" to MyDarkTheme).
     )
     val id = nextHandleId++
     handles[id] = handle
@@ -80,6 +81,41 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
 /** Called with the language's own diagnostics, as a JSON array in the same shape, each time they change. */
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
+
+/**
+ * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
+ * [hover] and [diagnostics] answer with JSON through a Promise, or null for nothing (pass one that
+ * resolves to null for what the language does not have). Returns "" when it worked, else what was
+ * wrong with the definition.
+ */
+@JsExport
+fun aardinkRegisterLanguage(
+    definitionJson: String,
+    completions: (String, Int, Int) -> Promise<JsString?>,
+    hover: (String, Int, Int) -> Promise<JsString?>,
+    diagnostics: (String) -> Promise<JsString?>,
+): String = try {
+    AardinkWeb.registerLanguage(
+        definitionJson,
+        WebLanguageProviders(
+            completions = { text, line, column -> completions(text, line, column).await<JsString?>()?.toString() },
+            hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
+            diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
+        ),
+    )
+    ""
+} catch (e: IllegalArgumentException) {
+    e.message ?: "not a language definition"
+}
+
+/** Adds a theme from VS Code theme JSON; see `AardinkWeb.registerTheme`. Returns "" when it worked, else what was wrong. */
+@JsExport
+fun aardinkRegisterTheme(name: String, themeJson: String): String = try {
+    AardinkWeb.registerTheme(name, themeJson)
+    ""
+} catch (e: IllegalArgumentException) {
+    e.message ?: "not a theme"
+}
 
 @JsExport fun aardinkRevealPosition(id: Int, line: Int, column: Int) = AardinkWeb.navigateTo(handle(id), line, column)
 
