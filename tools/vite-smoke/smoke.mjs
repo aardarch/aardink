@@ -133,6 +133,38 @@ async function interactionChecks(page) {
 }
 
 /**
+ * A registered language's trigger character (one the base language does not have) asks its
+ * provider for completions when typed. Accepting one is left to the unit tests: this page has a
+ * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
+ */
+async function triggerCheck(page) {
+  phase = 'trigger characters';
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    window.__asked = [];
+    const { createEditor, registerLanguage } = window.__aardink;
+    await registerLanguage(
+      { id: 'toy-trigger', grammar: { tokenizer: { root: [] } } },
+      {
+        triggerCharacters: ['{'],
+        provideCompletionItems: (text, line, column) => {
+          window.__asked.push(`${line}:${column}`);
+          return [];
+        },
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: '', language: 'toy-trigger' });
+  }, MOUNT);
+  await new Promise((r) => setTimeout(r, 500));
+  await page.mouse.click(300, 20);
+  await page.keyboard.type('{');
+  await new Promise((r) => setTimeout(r, 500));
+  const asked = await page.evaluate(() => window.__asked.slice());
+  return { 'a registered trigger character asks for completions': asked.includes('1:2') };
+}
+
+/**
  * A grammar and a theme registered from JavaScript, in Monaco's shapes, colour the text: the
  * keyword `shout` in the theme's magenta, counted by pixel in a screenshot of the editor.
  */
@@ -193,7 +225,7 @@ try {
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
   const interactions = await interactionChecks(page);
   for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
-  const grammar = await grammarCheck(page);
+  const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)) };
   Object.assign(interactions, grammar);
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);

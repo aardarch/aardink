@@ -77,6 +77,26 @@ try {
   other.dispose();
   second.remove();
   report.checks.disposeIdempotent = true;
+
+  // A registered language's diagnostics, asked again by revalidate() without an edit.
+  let unknown = 'a';
+  await registerLanguage(
+    { id: 'smoke-revalidate', grammar: { tokenizer: { root: [] } } },
+    { provideDiagnostics: () => [{ line: 1, startColumn: 1, endColumn: 2, message: `unknown ${unknown}`, severity: 'warning' }] },
+  );
+  const third = document.createElement('div');
+  third.style.cssText = 'width:300px;height:60px';
+  document.body.append(third);
+  const validated = await createEditor(third, undefined, { value: 'a', language: 'smoke-revalidate' });
+  const messages = [];
+  validated.onDidChangeDiagnostics((markers) => messages.push(markers[0]?.message));
+  await waitFor(() => messages.length > 0);
+  unknown = 'b';
+  validated.revalidate();
+  await waitFor(() => messages.at(-1) === 'unknown b', 3000).catch(() => {});
+  report.checks.revalidate = messages.at(-1) === 'unknown b';
+  validated.dispose();
+  third.remove();
 } catch (e) {
   report.error = String(e && e.stack || e);
 } finally {
