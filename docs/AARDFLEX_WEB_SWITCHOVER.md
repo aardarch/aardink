@@ -54,7 +54,7 @@ The default stays `monaco`. Each step leaves `pnpm check`, `pnpm test` and `pnpm
 ### 1. Install
 
 ```sh
-pnpm add @aardarch/aardink-web@next   # 0.6.0-rc1, for testing A1
+pnpm add @aardarch/aardink-web@next   # 0.6.0-rc2, for testing A1
 pnpm add @aardarch/aardink-web@^0.6.0 # once 0.6.0 is out
 ```
 
