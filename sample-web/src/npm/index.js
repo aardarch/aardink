@@ -105,6 +105,9 @@ export async function registerLanguage(definition, providers = {}) {
       extends: definition.extends,
       displayName: definition.displayName,
       extensions: definition.extensions,
+      inheritCompletions: definition.inheritCompletions,
+      // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
+      triggerCharacters: providers.triggerCharacters,
       grammar,
     }),
     (text, line, column) => answer(providers.provideCompletionItems, text, line, column),

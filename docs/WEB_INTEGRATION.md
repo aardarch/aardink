@@ -76,7 +76,7 @@ There are two ways in:
 | `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. A grammar's comments and strings, being the editor's own, come back as `comment` and `string`, and the built-in languages' tokens under Monaco's standard names. |
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
-| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, and `triggerCharacters` open the completion list. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
@@ -178,7 +178,9 @@ await registerLanguage(
     comments: { blockComment: ['<!--', '-->'] },
   },
   {
+    triggerCharacters: ['{', '|', '@'], // besides XML's < / space : " =
     provideCompletionItems: (text, line, column) => [{ label: 'layer', kind: 'element' }],
+    provideHover: (text, line, column) => ({ title: 'layer', contents: 'A group of elements.', example: '<layer>…</layer>' }),
     provideDiagnostics: async (text) => validate(text), // AardinkDiagnostic[]
   },
 );
@@ -206,6 +208,25 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   to the editor, as in Monaco: no bracket colours or matching inside it.
 - **Providers** get the whole text and a 1-based position and may answer at once or with a
   Promise; a provider that throws or rejects gives no answer rather than breaking the editor.
+- **Completions** take Monaco's item fields `label`, `insertText`, `insertTextRules`, `kind`,
+  `detail`, `documentation`, `filterText`, `sortText` and `range`, in an array or in Monaco's
+  `{ suggestions }`. The editor does not filter on its own: it asks again on each letter typed
+  while the list is open, so a provider offers what fits what has been typed. An item with
+  `filterText` is also dropped while what has been typed of it (from the start of its `range`, or
+  of the word before the caret, to the caret) does not match it; with `sortText` on any item they
+  are ordered by it. `range` (Monaco's `IRange`, or the `replace` of `{ insert, replace }`) names
+  exactly what the item replaces; without it the editor replaces the word before the caret, back
+  to the first of `< > { } ( ) [ ] " ' = , ; . @ | :` or whitespace, which is why `@accent` typed
+  after `@` would otherwise need an `insertText` of `accent`. Kinds are `element`, `attribute`,
+  `value`, `snippet`, `module`, `property`, `transform` (Monaco's `function`) and `colorRef`
+  (`color`).
+- **With `extends`**, the extended language's completions follow yours, less any with the same
+  `kind` and `label` as one of yours. `inheritCompletions: false` in the definition leaves them
+  out (XML's are Android-flavoured: `LinearLayout`, `android:*`, `match_parent`), keeping its
+  diagnostics, folding and hover; answering `{ suggestions, exclusive: true }` leaves them out for
+  one request. `triggerCharacters` on the providers open the list when typed, besides the extended
+  language's, or in place of them with `inheritCompletions: false`.
+- **Hover** is `{ title?, contents, example? }`: plain text, and `example` shown as code below it.
 
 ### Option names coming from Monaco
 
@@ -237,6 +258,7 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
+| `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`. |
 | Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
 | `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
 

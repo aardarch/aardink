@@ -18,6 +18,9 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
@@ -159,5 +162,156 @@ class WebLanguagesTest {
         assertEquals(listOf(true, true, false), items.map { it.isSnippet })
         assertEquals(listOf(false, true, false), items.map { it.keepWhitespace })
         assertEquals("a=\"${'$'}1\"", items[0].insertText)
+    }
+
+    private fun register(id: String, definition: String = "", completions: String? = null, hover: String? = null): LanguageService {
+        AardinkWeb.registerLanguage(
+            """{ "id": "$id", "grammar": { "tokenizer": { "root": [] } } $definition }""",
+            WebLanguageProviders(
+                completions = completions?.let { json -> { _, _, _ -> json } },
+                hover = hover?.let { json -> { _, _, _ -> json } },
+            ),
+        )
+        return AardinkWeb.registry.byId(id)!!.languageService!!
+    }
+
+    @Test
+    fun `trigger characters add to those of the language extended, or replace them without its completions`() {
+        val xml = AardinkWeb.registry.byId("xml")!!.languageService!!.triggerCharacters
+        assertEquals(xml, register("toy-triggers-none", """, "extends": "xml"""").triggerCharacters, "none given: XML's, as before")
+        assertEquals(
+            setOf('{', '|', '@', '$') + xml,
+            register("toy-triggers", """, "extends": "xml", "triggerCharacters": ["{", "|", "@", "$"]""").triggerCharacters,
+        )
+        assertEquals(
+            setOf('{'),
+            register(
+                "toy-triggers-own",
+                """, "extends": "xml", "inheritCompletions": false, "triggerCharacters": ["{"]""",
+            ).triggerCharacters,
+        )
+        assertEquals(setOf('.'), register("toy-triggers-alone", """, "triggerCharacters": ["."]""").triggerCharacters)
+        val error = assertFailsWith<IllegalArgumentException> { register("toy-triggers-bad", """, "triggerCharacters": ["{{"]""") }
+        assertTrue(error.message!!.startsWith("triggerCharacters:"), error.message)
+        assertFailsWith<IllegalArgumentException> { register("toy-inherit-bad", """, "inheritCompletions": "no"""") }
+    }
+
+    @Test
+    fun `inheritCompletions false leaves out the extended language's completions, but not the rest of its service`() = runTest {
+        val document = CodeDocument("<root>\n  <!-- x --> <a ")
+        val service = register("toy-own-only", """, "extends": "xml", "inheritCompletions": false""", """[{ "label": "mine" }]""")
+        assertEquals(listOf("mine"), service.completions(document, document.length).map { it.label })
+        assertTrue(service.diagnostics(document).isNotEmpty(), "XML still reports the unclosed tags")
+        // With nothing of the host's, nothing at all.
+        val silent = register("toy-own-only-silent", """, "extends": "xml", "inheritCompletions": false""", "[]")
+        assertEquals(emptyList(), silent.completions(document, document.length))
+    }
+
+    @Test
+    fun `an exclusive completion list leaves out the extended language's completions for that request`() = runTest {
+        val document = CodeDocument("<root>\n  <")
+        val exclusive =
+            register("toy-exclusive", """, "extends": "xml"""", """{ "suggestions": [{ "label": "mine" }], "exclusive": true }""")
+        assertEquals(listOf("mine"), exclusive.completions(document, document.length).map { it.label })
+        // Monaco's list shape without `exclusive` is merged as an array is.
+        val merged = register("toy-list", """, "extends": "xml"""", """{ "suggestions": [{ "label": "mine" }], "incomplete": false }""")
+        val labels = merged.completions(document, document.length).map { it.label }
+        assertEquals("mine", labels.first())
+        assertTrue(labels.size > 1, "XML's follow")
+    }
+
+    @Test
+    fun `a completion's range is the text it replaces`() = runTest {
+        val document = CodeDocument("<a color=\"@acc\">\n</a>")
+        val service = register(
+            "toy-range",
+            completions = """[
+              { "label": "@accent", "range": { "startLineNumber": 1, "startColumn": 11, "endLineNumber": 1, "endColumn": 15 } },
+              { "label": "@primary", "range": {
+                  "insert": { "startLineNumber": 1, "startColumn": 11, "endLineNumber": 1, "endColumn": 15 },
+                  "replace": { "startLineNumber": 1, "startColumn": 11, "endLineNumber": 1, "endColumn": 16 } } },
+              { "label": "beyond", "range": { "startLineNumber": 9, "startColumn": 1, "endLineNumber": 9, "endColumn": 2 } },
+              { "label": "plain" }
+            ]""",
+        )
+        val items = service.completions(document, 14)
+        assertEquals(listOf(10 until 14, 10 until 15, null, null), items.map { it.replaceRange })
+    }
+
+    @Test
+    fun `filterText keeps only the items matching what has been typed of them`() = runTest {
+        // The caret after "{dt:ho": the editor's own guess of the word is "ho".
+        val document = CodeDocument("<text>{dt:ho</text>")
+        val service = register(
+            "toy-filter",
+            completions = """[
+              { "label": "hour", "filterText": "hour" },
+              { "label": "hourWords", "filterText": "hourWords" },
+              { "label": "dayOfWeekHours", "filterText": "dayOfWeekHours" },
+              { "label": "minute", "filterText": "minute" },
+              { "label": "unfiltered" },
+              { "label": "@accent", "filterText": "@accent", "range": { "startLineNumber": 1, "startColumn": 11, "endLineNumber": 1, "endColumn": 13 } }
+            ]""",
+        )
+        assertEquals(listOf("hour", "hourWords", "dayOfWeekHours", "unfiltered"), service.completions(document, 12).map { it.label })
+    }
+
+    @Test
+    fun `typed text matches in order, ignoring case, from the start of a word`() {
+        assertTrue(fuzzyMatches("", "anything"))
+        assertTrue(fuzzyMatches("hw", "hourWords"))
+        assertTrue(fuzzyMatches("WOR", "hourWords"), "a capital starts a word")
+        assertTrue(fuzzyMatches("acc", "@accent"), "after a character that is not a letter")
+        assertTrue(fuzzyMatches("col", "theme:colors.primary"))
+        assertTrue(!fuzzyMatches("our", "hour"), "not from the middle of a word")
+        assertTrue(!fuzzyMatches("hx", "hour"))
+    }
+
+    @Test
+    fun `sortText orders the host's items, by label where it is missing`() = runTest {
+        val document = CodeDocument("")
+        val sorted = register(
+            "toy-sort",
+            completions = """[{ "label": "c", "sortText": "1" }, { "label": "b" }, { "label": "a", "sortText": "0" }, { "label": "0z" }]""",
+        )
+        assertEquals(listOf("a", "0z", "c", "b"), sorted.completions(document, 0).map { it.label })
+        val unsorted = register("toy-unsorted", completions = """[{ "label": "c" }, { "label": "a" }]""")
+        assertEquals(listOf("c", "a"), unsorted.completions(document, 0).map { it.label }, "without sortText, the order given")
+    }
+
+    @Test
+    fun `kinds take the core's names and Monaco's`() = runTest {
+        val service = register(
+            "toy-kinds",
+            completions = """[
+              { "label": "a", "kind": "transform" }, { "label": "b", "kind": "function" },
+              { "label": "c", "kind": "colorRef" }, { "label": "d", "kind": "color" },
+              { "label": "e", "kind": "keyword" },
+              { "label": "f", "documentation": { "value": "from Monaco's IMarkdownString" } }
+            ]""",
+        )
+        val items = service.completions(CodeDocument(""), 0)
+        assertEquals(
+            listOf(
+                CompletionKind.Transform,
+                CompletionKind.Transform,
+                CompletionKind.ColorRef,
+                CompletionKind.ColorRef,
+                CompletionKind.Value,
+                CompletionKind.Value,
+            ),
+            items.map { it.kind },
+        )
+        assertEquals("from Monaco's IMarkdownString", items.last().documentation)
+    }
+
+    @Test
+    fun `a hover's example is shown as code`() = runTest {
+        val document = CodeDocument("x")
+        val withExample =
+            register("toy-hover", hover = """{ "title": "upper", "contents": "Upper-cases the value.", "example": "{dt:day | upper}" }""")
+        assertEquals(HoverDoc("upper", "Upper-cases the value.", example = "{dt:day | upper}"), withExample.hoverDoc(document, 0))
+        val without = register("toy-hover-plain", hover = """{ "contents": "Plain." }""")
+        assertEquals(HoverDoc("", "Plain."), without.hoverDoc(document, 0))
     }
 }

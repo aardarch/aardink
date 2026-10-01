@@ -171,12 +171,17 @@ object AardinkWeb {
 
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
-     * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"? }`:
-     * `grammar` is a [DeclarativeGrammar] (a subset of Monaco's Monarch, with `comments` as in
-     * Monaco's language configuration), and `extends` names a language whose language service and
-     * folding this one takes (`"xml"`), besides what [providers] answer. Registering an id again
-     * replaces it. Returns the id; throws [IllegalArgumentException] for a definition it cannot use,
-     * saying where, such as a grammar with a lookbehind.
+     * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
+     * "triggerCharacters"?, "inheritCompletions"? }`: `grammar` is a [DeclarativeGrammar] (a subset
+     * of Monaco's Monarch, with `comments` as in Monaco's language configuration), and `extends`
+     * names a language whose language service and folding this one takes (`"xml"`), besides what
+     * [providers] answer. `inheritCompletions: false` leaves out that language's completions,
+     * keeping the rest of its service (see [WebLanguageProviders]). `triggerCharacters`
+     * (one-character strings, as Monaco's completion provider has them) open the completion list
+     * when typed: besides those of the language it extends, or in place of them with
+     * `inheritCompletions: false`; without them, the extended language's apply. Registering an id
+     * again replaces it. Returns the id; throws [IllegalArgumentException] for a definition it
+     * cannot use, saying where, such as a grammar with a lookbehind.
      */
     fun registerLanguage(definitionJson: String, providers: WebLanguageProviders = WebLanguageProviders()): String {
         val definition = languageFrom(definitionJson, providers, registry)

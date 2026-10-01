@@ -138,6 +138,13 @@ export interface AardinkLanguageDefinition {
   grammar: object;
   /** A built-in or registered language whose completions, diagnostics, hover and folding this one takes too, e.g. `'xml'`. */
   extends?: string;
+  /**
+   * With `extends`: `false` leaves out that language's completions (and, when the providers give
+   * `triggerCharacters`, its trigger characters), keeping its diagnostics, hover, folding and the
+   * rest. `true` by default. To leave them out for one request only, answer with
+   * `{ suggestions, exclusive: true }`.
+   */
+  inheritCompletions?: boolean;
   displayName?: string;
   extensions?: string[];
   /** As in Monaco's language configuration: what Ctrl/Cmd+/ comments with. */
@@ -153,26 +160,82 @@ export declare const CompletionItemInsertTextRule: {
   readonly InsertAsSnippet: 4;
 };
 
+/** Monaco's `IRange`: 1-based lines and columns, `endColumn` exclusive. */
+export interface AardinkRange {
+  startLineNumber: number;
+  startColumn: number;
+  endLineNumber: number;
+  endColumn: number;
+}
+
 export interface AardinkCompletionItem {
   label: string;
   /** What accepting it types; the label when absent. A snippet with `InsertAsSnippet`. */
   insertText?: string;
   /** `CompletionItemInsertTextRule` flags, as in Monaco. */
   insertTextRules?: number;
-  kind?: 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property';
+  /**
+   * The icon. `'function'` is another name for `'transform'`, and `'color'` for `'colorRef'`, as
+   * Monaco calls them; any other name shows as `'value'`.
+   */
+  kind?: 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property' | 'transform' | 'function' | 'colorRef' | 'color';
+  /** Shown beside the label when there is no `documentation`. */
   detail?: string;
-  documentation?: string;
+  /** Shown beside the label; Monaco's `{ value }` is shown as plain text. */
+  documentation?: string | { value: string };
+  /**
+   * What the text typed so far is matched against, as in Monaco: its characters in order, ignoring
+   * case, the first at the start of `filterText` or of a word in it. Typed so far is the text from
+   * the start of what the item replaces to the caret. Without it the item is not filtered: your
+   * provider is asked again on each letter typed, and offers what fits.
+   */
+  filterText?: string;
+  /** When any item has one, your items are ordered by it (by `label` where it is missing), as in Monaco. */
+  sortText?: string;
+  /**
+   * The text accepting the item replaces, which must contain the caret, as in Monaco. Of
+   * `{ insert, replace }`, `replace` is used. Without it the item replaces the word before the
+   * caret, back to the first of `< > { } ( ) [ ] " ' = , ; . @ | :` or whitespace.
+   */
+  range?: AardinkRange | { insert: AardinkRange; replace: AardinkRange };
+}
+
+/** Monaco's `CompletionList`, plus `exclusive`: `true` leaves out the extended language's completions for this request. */
+export interface AardinkCompletionList {
+  suggestions: AardinkCompletionItem[];
+  exclusive?: boolean;
+  /** Accepted for Monaco's shape, and ignored: your provider is asked again on each letter typed anyway. */
+  incomplete?: boolean;
+}
+
+export interface AardinkHover {
+  title?: string;
+  /** Plain text. */
+  contents: string;
+  /** Shown as code below `contents`. */
+  example?: string;
 }
 
 /**
  * What a registered language knows beyond its grammar. Each gets the whole text and, where it
  * asks about a place, a 1-based line and column; each may answer at once or with a Promise. With
  * `extends`, the built-in language's answers come after these, less any completion with the same
- * `kind` and `label` as one of yours.
+ * `kind` and `label` as one of yours (see `inheritCompletions` to leave them all out).
  */
 export interface AardinkLanguageProviders {
-  provideCompletionItems?(text: string, line: number, column: number): AardinkCompletionItem[] | null | Promise<AardinkCompletionItem[] | null>;
-  provideHover?(text: string, line: number, column: number): { title?: string; contents: string } | null | Promise<{ title?: string; contents: string } | null>;
+  /**
+   * Characters that open the completion list when typed, as on Monaco's completion provider, e.g.
+   * `['{', '|', '@', '$']`. With `extends` they add to that language's (`'xml'`: `< / space : " =`),
+   * or replace them with `inheritCompletions: false`; without, that language's apply. Letters and
+   * digits always ask again while the list is open.
+   */
+  triggerCharacters?: string[];
+  provideCompletionItems?(
+    text: string,
+    line: number,
+    column: number,
+  ): AardinkCompletionItem[] | AardinkCompletionList | null | Promise<AardinkCompletionItem[] | AardinkCompletionList | null>;
+  provideHover?(text: string, line: number, column: number): AardinkHover | null | Promise<AardinkHover | null>;
   provideDiagnostics?(text: string): AardinkDiagnostic[] | Promise<AardinkDiagnostic[]>;
 }
 

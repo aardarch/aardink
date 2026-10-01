@@ -515,6 +515,10 @@ building its own wasm executable.
   `getAlternativeVersionId()`, and a second `onDidChangeContent` argument
   `{ versionId, isUndoing, isRedoing, isFlush }`
 - **`WebLanguageProviders`**
+- **Registered languages (rc3), in the definition JSON and `index.d.ts`:** `triggerCharacters`
+  (on the providers in `index.d.ts`), `inheritCompletions`, completion items' `filterText`,
+  `sortText`, `range` and kinds `transform` / `colorRef`, Monaco's `{ suggestions }` list with
+  `exclusive`, and a hover's `example`
 - **Everything above mirrored** in `ExportsTemplate.kt`, `sample-web/Exports.kt`, `index.js` and
   `index.d.ts`
 

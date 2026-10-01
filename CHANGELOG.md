@@ -179,6 +179,15 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   its own inside the container), which from Compose Multiplatform 1.13 releases it entirely.
 - `CodeEditorState.revalidate()` collects the language service's diagnostics again at once,
   without waiting for an edit, for when what they depend on outside the text has changed.
+- **Web:** more control for a registered language's completions. `triggerCharacters` on the
+  providers (as on Monaco's completion provider) open the list when typed, besides those of the
+  language it `extends`. `inheritCompletions: false` in the definition leaves out that language's
+  completions while keeping its diagnostics and folding, and an answer of Monaco's
+  `{ suggestions }` shape with `exclusive: true` leaves them out for one request. Items take
+  Monaco's `filterText`, `sortText` and `range` (the exact text an item replaces, so a provider
+  no longer has to work around the characters the editor's guess stops at), the kinds
+  `transform` and `colorRef` (or Monaco's `function` and `color`), and `documentation` as
+  Monaco's `{ value }`. A hover's `example` is shown as code below it.
 
 ### Changed
 

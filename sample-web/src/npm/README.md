@@ -52,10 +52,18 @@ import { defineTheme, registerLanguage } from '@aardarch/aardink-web';
 
 await registerLanguage(
   { id: 'toy', extends: 'xml', grammar: { tokenizer: { root: [[/\bshout\b/, 'keyword']] } } },
-  { provideCompletionItems: (text, line, column) => [{ label: 'shout', kind: 'element' }] },
+  {
+    triggerCharacters: ['{'], // besides XML's
+    provideCompletionItems: (text, line, column) => [{ label: 'shout', kind: 'element' }],
+  },
 );
 await defineTheme('toy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: 'ff00ff' }] });
 ```
+
+Completion items take Monaco's `filterText`, `sortText` and `range` too, and
+`inheritCompletions: false` in the definition leaves out the extended language's completions
+(XML's are Android-flavoured) while keeping its diagnostics and folding. A hover can carry an
+`example`, shown as code.
 
 The editor fills its container, so give the container a size. `createEditor` is async because
 the first call loads the WebAssembly module (about 13 MB, 4.7 MB gzipped); every editor on the
