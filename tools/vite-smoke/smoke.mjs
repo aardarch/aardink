@@ -103,6 +103,32 @@ async function interactionChecks(page) {
   await page.keyboard.press('Backspace');
   await settle();
   checks['backspace'] = (await value()) === 'abc日X\n';
+
+  // The find panel takes the keys while it is open, and Escape gives them back to the text.
+  phase = 'find panel focus';
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyF');
+  await page.keyboard.up('Control');
+  await settle();
+  await page.keyboard.type('zz');
+  await settle();
+  const untouched = (await value()) === 'abc日X\n';
+  await page.keyboard.press('Escape');
+  await settle();
+  await page.keyboard.type('q');
+  await settle();
+  checks['Ctrl+F types into the find field, Escape back into the text'] = untouched && (await value()) === 'abc日X\nq';
+
+  phase = 'showFind focus';
+  await page.evaluate(() => {
+    document.activeElement?.blur();
+    window.__smokeEditor.showFind();
+  });
+  await settle();
+  await page.keyboard.type('zz');
+  await settle();
+  checks['showFind() from outside the editor takes the keys'] = (await value()) === 'abc日X\nq' &&
+    (await page.evaluate(() => document.getElementById('check').contains(document.activeElement)));
   return checks;
 }
 
