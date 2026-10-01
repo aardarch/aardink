@@ -254,6 +254,9 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   later `createEditor`, `registerLanguage` and `registerTheme` on the page failed too. The next
   call now loads again. Chrome still keeps a module whose download failed until the page is
   reloaded.
+- The web editor kept its size when only its container changed (a splitter dragged, a container
+  mounted into while `display: none` and shown later), so it was drawn at the old size and clicks
+  landed in the wrong place. It now watches its container and follows it.
 
 ### Known issues
 

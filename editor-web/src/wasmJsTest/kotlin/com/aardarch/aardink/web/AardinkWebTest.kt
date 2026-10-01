@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlinx.browser.document
+import kotlinx.browser.window
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
@@ -27,7 +28,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.events.Event
+import kotlin.math.roundToInt
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,11 +51,15 @@ class AardinkWebTest {
         containers.forEach { it.remove() }
     }
 
-    private fun mount(text: String = "hello", options: WebEditorOptions = WebEditorOptions()): AardinkEditorHandle {
+    private fun mount(
+        text: String = "hello",
+        options: WebEditorOptions = WebEditorOptions(),
+        width: String = "600px",
+    ): AardinkEditorHandle {
         val id = "aardink-test-${nextId++}"
         val div = document.createElement("div") as HTMLElement
         div.id = id
-        div.style.width = "600px"
+        div.style.width = width
         div.style.height = "400px"
         document.body!!.appendChild(div)
         containers += div
@@ -70,6 +78,31 @@ class AardinkWebTest {
 
     /** Gives the editor a few real frames, for asserting that something does NOT happen. */
     private suspend fun letFramesRun() = withContext(Dispatchers.Main) { delay(200) }
+
+    /**
+     * The width Compose has measured [handle] at, in CSS pixels: its canvas's drawing buffer, which
+     * Compose sizes, not the canvas element's layout width, which follows the page's CSS alone.
+     * 0 before there is a canvas.
+     */
+    private fun canvasWidth(handle: AardinkEditorHandle): Int {
+        // viewport > positioning container > shadow host > (shadow root) > ... canvas
+        val shadowHost = handle.viewportElement?.firstElementChild?.firstElementChild ?: return 0
+        val canvas = shadowHost.shadowRoot?.querySelector("canvas") as? HTMLCanvasElement ?: return 0
+        return (canvas.width / window.devicePixelRatio).roundToInt()
+    }
+
+    /** Counts the window's `resize` events while [block] runs. */
+    private suspend fun countResizes(block: suspend () -> Unit): Int {
+        var count = 0
+        val listener: (Event) -> Unit = { count++ }
+        window.addEventListener("resize", listener)
+        try {
+            block()
+        } finally {
+            window.removeEventListener("resize", listener)
+        }
+        return count
+    }
 
     @Test
     fun `getValue returns what setValue stored`() {
@@ -131,6 +164,37 @@ class AardinkWebTest {
 
         assertEquals(1, container.childElementCount)
         assertSame(own, container.firstElementChild)
+    }
+
+    // One editor for both: every mount takes a WebGL context, which Compose Multiplatform 1.12
+    // does not give back on dispose (W-1), and headless Chrome runs out of them.
+    @Test
+    fun `the editor follows its container's size until it is disposed`() = runTest {
+        val handle = mount()
+        val container = containers.last()
+        awaitUntil { canvasWidth(handle) == 600 }
+
+        container.style.width = "300px"
+        awaitUntil { canvasWidth(handle) == 300 }
+
+        AardinkWeb.dispose(handle)
+        val resizes = countResizes {
+            container.style.width = "500px"
+            letFramesRun()
+        }
+        assertEquals(0, resizes, "a disposed editor no longer watches its container")
+    }
+
+    // A collapsed container rather than a `display: none` one, which measures the same (0 wide)
+    // but makes headless Chrome fail to create the WebGL context once many editors have run.
+    @Test
+    fun `an editor mounted into a collapsed container takes its size once it opens`() = runTest {
+        val handle = mount(width = "0px")
+        letFramesRun()
+
+        containers.last().style.width = "600px"
+
+        awaitUntil { canvasWidth(handle) == 600 }
     }
 
     @Test

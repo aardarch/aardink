@@ -131,6 +131,9 @@ class AardinkEditorHandle internal constructor(
 
     /** The element the viewport lives in, inside the host's container, for [AardinkWeb.dispose] to take out. */
     internal var viewportElement: Element? = null
+
+    /** Stops [followSize] for this editor's viewport; called by [AardinkWeb.dispose]. */
+    internal var stopFollowingSize: JsAny? = null
 }
 
 /**
@@ -200,6 +203,10 @@ object AardinkWeb {
      * [LanguageDefinition]s and [EditorTheme]s — this is how a grammar stays in the product that
      * owns it rather than in Aardink.
      *
+     * The editor follows the container's size, also when only the container changes (a splitter
+     * dragged, a container mounted into while hidden and shown later): each such change sends the
+     * window a `resize` event, which is what Compose measures on.
+     *
      * Returns immediately; the first frame renders on the next animation frame.
      */
     @OptIn(ExperimentalComposeUiApi::class)
@@ -237,6 +244,7 @@ object AardinkWeb {
             if (!handle.disposed.value) EditorContent(handle)
         }
         handle.viewportElement = viewport
+        handle.stopFollowingSize = followSize(viewport)
         return handle
     }
 
@@ -518,6 +526,8 @@ object AardinkWeb {
         handle.disposed.value = true
         // Out of the page: from Compose Multiplatform 1.13 that tears the viewport down entirely
         // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops.
+        handle.stopFollowingSize?.let(::callStop)
+        handle.stopFollowingSize = null
         handle.viewportElement?.remove()
         handle.viewportElement = null
         handle.onChange = null
@@ -661,6 +671,35 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         )
     }
 }
+
+/**
+ * Compose sizes its canvas from its element on the window's `resize` event only, so an editor
+ * whose container changes size on its own (a splitter dragged, a pane shown that was mounted while
+ * `display: none`) would keep its old size, and clicks would land in the wrong place. This watches
+ * [element] and, when its size has changed, sends the window a `resize`, at most once a frame.
+ * Returns the function that stops watching.
+ */
+private fun followSize(element: Element): JsAny = js(
+    """{
+    let last = element.clientWidth + 'x' + element.clientHeight;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+        const size = element.clientWidth + 'x' + element.clientHeight;
+        if (size === last) return;
+        last = size;
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    });
+    observer.observe(element);
+    return () => {
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+    };
+}""",
+)
+
+/** Calls the function [followSize] returned. */
+private fun callStop(stop: JsAny): Unit = js("stop()")
 
 /** JetBrains Mono's loading, started once and shared by every editor on the page. */
 private var bundledFont: Deferred<FontFamily?>? = null

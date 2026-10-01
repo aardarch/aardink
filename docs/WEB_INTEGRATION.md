@@ -263,6 +263,11 @@ switches when the font arrives.
 
 - **Size the container.** The editor fills it. For a full-height editor on phones use
   `height: 100dvh` rather than `100vh`, which ignores the browser's own toolbars.
+- **The editor follows its container's size**, also when only the container changes: a
+  splitter dragged, or a container that was `display: none` when the editor was mounted and is
+  shown later. Compose measures on the window's `resize` event, so the editor sends one
+  (at most once a frame) whenever its container's size changes; a page's own `resize` listeners
+  see those too.
 - **The soft keyboard (W-5).** With
   `<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">`
   the page shrinks when the keyboard opens, so the editor (and its keyboard toolbar) stay above
