@@ -227,12 +227,18 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val text = document.text
         val clampedOffset = cursorOffset.coerceIn(0, text.length)
         val textBefore = text.take(clampedOffset)
+        // A comment or CDATA section holds text, not markup: nothing there is an element or an
+        // attribute, and accepting one would write markup into it.
+        if (isInsideUnclosed(textBefore, "<!--", "-->") || isInsideUnclosed(textBefore, "<![CDATA[", "]]>")) return emptyList()
 
         val lastLt = textBefore.lastIndexOf('<')
         val lastGt = textBefore.lastIndexOf('>')
 
         if (lastLt > lastGt) {
             val tagContent = textBefore.substring(lastLt + 1)
+            // A declaration (`<!DOCTYPE …`) or processing instruction (`<?xml …`) has no elements
+            // or attributes of the document's to offer.
+            if (tagContent.startsWith("!") || tagContent.startsWith("?")) return emptyList()
 
             // 1. Attribute value completion after '=', while the value is still open. A finished
             // value - `id="x"` - puts the cursor back in attribute-name territory, so the quote
@@ -514,6 +520,15 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val quote = afterEq.firstOrNull() ?: return false
         if (quote != '"' && quote != '\'') return false
         return afterEq.indexOf(quote, startIndex = 1) < 0
+    }
+
+    /**
+     * Whether the end of [textBefore] lies inside a construct [open] started and [close] has not
+     * ended yet: the last [open] has no [close] after it.
+     */
+    private fun isInsideUnclosed(textBefore: String, open: String, close: String): Boolean {
+        val start = textBefore.lastIndexOf(open)
+        return start >= 0 && textBefore.indexOf(close, start + open.length) < 0
     }
 
     /** Start of the attribute name being typed at [offset] — [offset] itself when none is. */

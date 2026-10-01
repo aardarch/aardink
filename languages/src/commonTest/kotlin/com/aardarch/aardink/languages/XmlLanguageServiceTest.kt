@@ -207,6 +207,20 @@ class XmlLanguageServiceTest {
     }
 
     @Test
+    fun `nothing is offered inside a comment, a CDATA section, a declaration or a processing instruction`() = runTest {
+        // Enter on the first item in a comment used to write `android:name=""` into it.
+        for (src in listOf("<a>\n  <!-- note ", "<!-- <b ", "<!-- x=\"", "<a><![CDATA[ <b ", "<?xml version=\"1.0\" ", "<!DOCTYPE note ")) {
+            assertEquals(emptyList(), XmlLanguageService.completions(CodeDocument(src), src.length).map { it.label }, src)
+            assertEquals(emptyList(), HtmlLanguageService.completions(CodeDocument(src), src.length).map { it.label }, src)
+        }
+        // After the comment or section ends, the markup's completions are back.
+        val afterComment = "<!-- note --> <a "
+        assertTrue(XmlLanguageService.completions(CodeDocument(afterComment), afterComment.length).isNotEmpty())
+        val afterCData = "<a><![CDATA[ x ]]><"
+        assertTrue(XmlLanguageService.completions(CodeDocument(afterCData), afterCData.length).isNotEmpty())
+    }
+
+    @Test
     fun `format counts every tag on a line`() = runTest {
         // <a><b> opens two levels, so </b> closes back to one - inside <a>. Treating the whole
         // line as a single opener counted one level and left </b> at column 0.
