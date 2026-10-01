@@ -262,6 +262,9 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   (the replace field for Ctrl+H with something already to find). In its fields Enter goes to the
   next match, Shift+Enter to the previous one, and Escape closes the panel and gives the focus
   back to the text.
+- On touch screens the completion strip failed when two items had the same kind and label, as a
+  web language and the built-in one it `extends` can both offer. Such items now each get their own
+  key, and a built-in language no longer repeats a completion the extending language offers.
 
 ### Known issues
 

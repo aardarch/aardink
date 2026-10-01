@@ -167,7 +167,8 @@ export interface AardinkCompletionItem {
 /**
  * What a registered language knows beyond its grammar. Each gets the whole text and, where it
  * asks about a place, a 1-based line and column; each may answer at once or with a Promise. With
- * `extends`, the built-in language's answers come after these.
+ * `extends`, the built-in language's answers come after these, less any completion with the same
+ * `kind` and `label` as one of yours.
  */
 export interface AardinkLanguageProviders {
   provideCompletionItems?(text: string, line: number, column: number): AardinkCompletionItem[] | null | Promise<AardinkCompletionItem[] | null>;

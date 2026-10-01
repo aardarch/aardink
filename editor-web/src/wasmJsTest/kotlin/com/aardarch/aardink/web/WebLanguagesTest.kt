@@ -123,6 +123,24 @@ class WebLanguagesTest {
     }
 
     @Test
+    fun `a completion the host offers is not offered again by the language it extends`() = runTest {
+        val document = CodeDocument("<root>\n  <")
+        val inherited = AardinkWeb.registry.byId("xml")!!.languageService!!.completions(document, document.length).first()
+        val kind = inherited.kind.name.lowercase()
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-xml-same", "extends": "xml", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                completions = { _, _, _ -> """[{ "label": "${inherited.label}", "kind": "$kind", "documentation": "the host's" }]""" },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-xml-same")!!.languageService!!
+
+        val same = service.completions(document, document.length).filter { it.kind == inherited.kind && it.label == inherited.label }
+
+        assertEquals(listOf("the host's"), same.map { it.documentation })
+    }
+
+    @Test
     fun `insertTextRules makes a completion a snippet, as Monaco's flags do`() = runTest {
         AardinkWeb.registerLanguage(
             """{ "id": "toy-snippets", "grammar": { "tokenizer": { "root": [] } } }""",

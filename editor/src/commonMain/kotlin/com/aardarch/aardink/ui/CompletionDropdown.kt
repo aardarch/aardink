@@ -28,12 +28,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -57,6 +58,7 @@ fun CompletionDropdown(items: List<CompletionItem>, visible: Boolean, onAccept: 
         exit = slideOutVertically { it },
         modifier = modifier,
     ) {
+        val keys = remember(items) { completionKeys(items) }
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -64,10 +66,25 @@ fun CompletionDropdown(items: List<CompletionItem>, visible: Boolean, onAccept: 
             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(items = items, key = { "${it.kind.name}:${it.label}" }) { item ->
+            itemsIndexed(items = items, key = { index, _ -> keys[index] }) { _, item ->
                 CompletionChip(item = item, onClick = { onAccept(item) })
             }
         }
+    }
+}
+
+/**
+ * A unique key per item: its kind and label, numbered when they repeat. A list can hold two items
+ * with the same kind and label (a language and the one it extends both offer `true`, say), and
+ * a lazy list fails on a duplicate key.
+ */
+internal fun completionKeys(items: List<CompletionItem>): List<String> {
+    val seen = HashMap<String, Int>()
+    return items.map { item ->
+        val key = "${item.kind.name}:${item.label}"
+        val count = seen[key] ?: 0
+        seen[key] = count + 1
+        if (count == 0) key else "$key#$count"
     }
 }
 

@@ -60,7 +60,8 @@ import kotlinx.serialization.json.jsonObject
  * - [diagnostics]: an array of [WebDiagnostic].
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
- * from both, the host's first; hover from the host, or else from the built-in language.
+ * from both, the host's first; hover from the host, or else from the built-in language. A built-in
+ * completion with the same kind and label as one of the host's is left out: the host's wins.
  */
 class WebLanguageProviders(
     val completions: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
@@ -78,7 +79,10 @@ internal class WebLanguageService(private val base: LanguageService?, private va
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val (line, column) = document.offsetToLineCol(cursorOffset)
         val own = asked { providers.completions?.invoke(document.text, line + 1, column + 1) }?.let(::parseCompletions).orEmpty()
-        return own + base?.completions(document, cursorOffset).orEmpty()
+        val inherited = base?.completions(document, cursorOffset).orEmpty()
+        if (own.isEmpty()) return inherited
+        val offered = own.mapTo(HashSet()) { it.kind to it.label }
+        return own + inherited.filterNot { (it.kind to it.label) in offered }
     }
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
