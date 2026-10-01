@@ -271,6 +271,9 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - **Web: a disposed editor is not fully released** (about 320 KB each) on Compose Multiplatform
   1.12. Reuse one editor with `setValue` and `updateOptions` rather than mounting one per view.
   Aardink adopts Compose Multiplatform 1.13, which fixes it, once it is stable.
+- **Web: the console shows "Accessing `memory` via `wasmExports` is deprecated"** once, on load.
+  Compose Multiplatform's resources library (1.12.1) reads memory the way Kotlin 2.4.20 deprecates
+  when it loads the bundled font; it is harmless.
 - Some checks need real devices and a person: input methods (CJK, dead keys, Gboard and Samsung
   keyboards), touch selection, the mobile soft keyboard, browser zoom, TalkBack and NVDA. See the
   checklist in `docs/WEB_INTEGRATION.md`.

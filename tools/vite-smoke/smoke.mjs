@@ -39,8 +39,9 @@ const notices = [];
 
 // Upstream console output we cannot fix here. Printed, not fatal; revisit on each Compose/Kotlin bump.
 const KNOWN_UPSTREAM = [
-  // Emitted by the Kotlin/Wasm runtime on behalf of a dependency (Compose/Skiko) that still reads
-  // memory through wasmExports. Seen with Kotlin 2.4.20 + Compose Multiplatform 1.12.1.
+  // Logged by the Kotlin 2.4.20 glue the first time anything reads `wasmExports.memory`. The reader
+  // is Compose Multiplatform resources' copyArrayBufferToWasmMemory (1.12.1, still in 1.13.0-alpha01),
+  // which Res.readBytes uses to load the bundled font. Not in Aardink's code.
   /Accessing `memory` via `wasmExports` is deprecated/,
 ];
 

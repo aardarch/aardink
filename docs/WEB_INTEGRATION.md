@@ -348,6 +348,11 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 
 - A disposed editor is not fully released (W-1) on Compose Multiplatform 1.12; reuse editors.
   `dispose()` takes the editor's element out of the page, which from 1.13 frees it entirely.
+- The console shows "Accessing `memory` via `wasmExports` is deprecated" once, when the editor
+  loads its font. Kotlin 2.4.20's glue logs it the first time anything reads `wasmExports.memory`,
+  and Compose Multiplatform's resources library (1.12.1, unchanged in 1.13.0-alpha01) reads it to
+  copy a fetched file into WebAssembly memory. It is harmless and goes away with a Compose
+  Multiplatform release that uses `kotlin.wasm.unsafe` instead.
 - A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
 - The items marked **manual** in the checklist above wait for real devices before 0.6.0.
