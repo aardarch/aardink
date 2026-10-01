@@ -54,6 +54,11 @@ import com.aardarch.aardink.ui.rememberGutterWidth
 internal class GutterContent(
     val annotations: Map<Int, GutterAnnotationKind>,
     val foldableLines: Set<Int>,
+    /**
+     * Keeps the fold lane before any ranges arrive, so the text does not narrow (and rewrap)
+     * when the first ones do.
+     */
+    val reserveFoldLane: Boolean,
     val diffAnnotations: Map<Int, LineDiffKind>,
     val showLineNumbers: Boolean,
     val onToggleFold: (Int) -> Unit,
@@ -88,7 +93,7 @@ internal fun EditorGutterView(
         )
     }
     val hasDiffLane = content.diffAnnotations.isNotEmpty()
-    val hasFoldLane = content.foldableLines.isNotEmpty()
+    val hasFoldLane = content.reserveFoldLane || content.foldableLines.isNotEmpty()
     val hasAnnotationLane = content.annotations.isNotEmpty()
     val width =
         rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, content.showLineNumbers, density, measurer, textStyle)

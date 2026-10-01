@@ -822,6 +822,7 @@ fun CodeEditorLayout(
                 GutterContent(
                     annotations = if (options.showDiagnosticAnnotations) gutterAnnotations else emptyMap(),
                     foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
+                    reserveFoldLane = options.showFoldMarkers && foldState != null && foldingProvider !== NoOpFoldingProvider,
                     diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
