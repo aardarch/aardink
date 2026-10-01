@@ -441,7 +441,7 @@ ones under [Unreleased], which become 0.6.0.
 
 ### Changed
 
-The Aardink icon in the sample app now styles better 
+The Aardink icon in the sample app now styles better
 
 ## [0.4.0] - 2026-09-07
 
