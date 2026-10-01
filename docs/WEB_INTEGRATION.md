@@ -66,6 +66,7 @@ There are two ways in:
 | `onCursorChange(callback)` | 1-based line and column. |
 | `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. They replace the language's own diagnostics, which show until then; `null` (`"null"` in JSON) goes back to those. Either way they move with the text as it is edited. |
 | `onDiagnosticsChange(callback)` | The language's own diagnostics, as a JSON array in the same shape, each time they are collected: 500 ms after the editor appears, and after each pause in typing. Not called while the host's list is shown. One listener; `null` removes it. |
+| `revalidate` | Collects the language's own diagnostics again at once, without an edit: for when what they depend on outside the text has changed. They reach `onDiagnosticsChange`. Nothing happens while the host's list is shown. |
 | `navigateTo(line, column)` | Scroll to and place the caret at a 1-based position, clamped to the document. |
 | `showFind`, `undo`, `redo` | As named. `showFind` moves the keyboard focus to the find field. `undo`/`redo` return whether anything changed. |
 | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | Monaco's undo surface. Keep the alternative version id when saving: the text is unsaved while it differs, and undo brings it back. |
@@ -227,6 +228,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   one request. `triggerCharacters` on the providers open the list when typed, besides the extended
   language's, or in place of them with `inheritCompletions: false`.
 - **Hover** is `{ title?, contents, example? }`: plain text, and `example` shown as code below it.
+- **`revalidate()`** collects the language's diagnostics again at once, for when what your
+  `provideDiagnostics` depends on outside the text has changed (another file, a setting).
 
 ### Option names coming from Monaco
 
@@ -256,6 +259,7 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
 | `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground` and `fontStyle` apply; its `background` is ignored. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
+| Re-running a model's validation | `revalidate()` | Monaco has no single call; this asks the language's diagnostics again without an edit. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
 | `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`. |

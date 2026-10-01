@@ -519,6 +519,7 @@ building its own wasm executable.
   (on the providers in `index.d.ts`), `inheritCompletions`, completion items' `filterText`,
   `sortText`, `range` and kinds `transform` / `colorRef`, Monaco's `{ suggestions }` list with
   `exclusive`, and a hover's `example`
+- **`AardinkWeb.revalidate(handle)`** (rc3), as `revalidate()` in `index.d.ts`
 - **Everything above mirrored** in `ExportsTemplate.kt`, `sample-web/Exports.kt`, `index.js` and
   `index.d.ts`
 

@@ -301,6 +301,26 @@ class AardinkWebTest {
     }
 
     @Test
+    fun `revalidate asks a registered language's provider again, without an edit`() = runTest {
+        // What the provider reports depends on something outside the text, as another file would.
+        var unknown = "a"
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-revalidate", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(diagnostics = { """[{ "line": 1, "startColumn": 1, "endColumn": 2, "message": "unknown $unknown" }]""" }),
+        )
+        val handle = mount("a", WebEditorOptions(language = "toy-revalidate"))
+        val reported = mutableListOf<String>()
+        AardinkWeb.onDiagnosticsChange(handle) { reported += it }
+        awaitUntil { reported.isNotEmpty() }
+        assertTrue(reported.last().contains("unknown a"), reported.last())
+
+        unknown = "b"
+        AardinkWeb.revalidate(handle)
+        awaitUntil { reported.last().contains("unknown b") }
+        assertEquals("a", AardinkWeb.getValue(handle), "no edit was needed")
+    }
+
+    @Test
     fun `the host's list replaces the language's own until it is set to null`() = runTest {
         val handle = mount("{\"a\": }", WebEditorOptions(language = "json"))
         val reported = mutableListOf<String>()

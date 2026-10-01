@@ -188,6 +188,9 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   no longer has to work around the characters the editor's guess stops at), the kinds
   `transform` and `colorRef` (or Monaco's `function` and `color`), and `documentation` as
   Monaco's `{ value }`. A hover's `example` is shown as code below it.
+- **Web:** `revalidate()` (`AardinkWeb.revalidate`) collects the language's own diagnostics again
+  at once, for when what a registered language's `provideDiagnostics` depends on outside the text
+  has changed.
 
 ### Changed
 

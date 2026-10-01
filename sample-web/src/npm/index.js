@@ -206,6 +206,7 @@ export async function createEditor(container, onChange, options = {}) {
       diagnosticsListeners.add(listener);
       return () => diagnosticsListeners.delete(listener);
     },
+    revalidate: () => k.aardinkRevalidate(id),
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),
     setBaseline: (text) => k.aardinkSetBaseline(id, text ?? ''),
     format: () => new Promise((resolve) => k.aardinkFormat(id, resolve)),

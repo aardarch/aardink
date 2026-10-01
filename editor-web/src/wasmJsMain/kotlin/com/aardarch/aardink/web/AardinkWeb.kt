@@ -367,6 +367,16 @@ object AardinkWeb {
     }
 
     /**
+     * Collects the language's own diagnostics again at once, without waiting for an edit: for when
+     * what a registered language's diagnostics provider depends on outside the text has changed
+     * (another file, a setting). They reach [onDiagnosticsChange] as usual. Does nothing while the
+     * host's list from [setDiagnostics] is shown.
+     */
+    fun revalidate(handle: AardinkEditorHandle) {
+        handle.state.value.revalidate()
+    }
+
+    /**
      * [diagnostics] in the host's shape. A marker covers one line, so a range running on past the
      * end of its first line ends there.
      */

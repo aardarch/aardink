@@ -85,6 +85,9 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
+/** Collects the language's own diagnostics again at once, without an edit; they reach [aardinkOnDiagnosticsChange]. */
+@JsExport fun aardinkRevalidate(id: Int) = AardinkWeb.revalidate(handle(id))
+
 /**
  * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
  * [hover] and [diagnostics] answer with JSON through a Promise, or null for nothing (pass one that

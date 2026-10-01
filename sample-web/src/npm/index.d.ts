@@ -92,10 +92,18 @@ export interface AardinkEditor {
   setDiagnostics(diagnostics: AardinkDiagnostic[] | null): void;
   /**
    * The language's own diagnostics each time they are collected: 500 ms after the editor appears,
-   * and after each pause in typing. Not called while a list from `setDiagnostics` is shown.
+   * after each pause in typing, and on `revalidate()`. Not called while a list from
+   * `setDiagnostics` is shown.
    * Returns an unsubscribe function.
    */
   onDidChangeDiagnostics(listener: (diagnostics: AardinkDiagnostic[]) => void): () => void;
+  /**
+   * Collects the language's own diagnostics again now, without waiting for an edit: for when what
+   * your `provideDiagnostics` depends on outside the text has changed (another file, a setting).
+   * They reach `onDidChangeDiagnostics` as usual. Does nothing while a list from `setDiagnostics`
+   * is shown.
+   */
+  revalidate(): void;
   revealPosition(line: number, column: number): void;
   /**
    * Opens the find panel and moves the keyboard focus to its find field, from wherever on the

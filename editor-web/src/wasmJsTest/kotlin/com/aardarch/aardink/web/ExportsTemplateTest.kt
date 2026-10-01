@@ -78,6 +78,14 @@ class ExportsTemplateTest {
                 }
             }
             assertTrue(reported.last().contains("Trailing comma in array"), reported.last())
+            // Asked again without an edit.
+            val before = reported.size
+            aardinkRevalidate(id)
+            withContext(Dispatchers.Main) {
+                withTimeout(5_000) {
+                    while (reported.size == before) delay(16)
+                }
+            }
             aardinkSetDiagnostics(id, "[]")
             aardinkSetDiagnostics(id, "null")
         } finally {
