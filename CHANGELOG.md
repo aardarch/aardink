@@ -36,8 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.0-rc3] - 2026-10-01
-
 0.6.0 replaces the editor's text field with a renderer and text input of its own on every
 platform, so typing costs the same in any size of document, and builds a wave of features on it:
 multiple cursors, column selection, a minimap, sticky scroll, bracket-pair colours, go to
@@ -318,6 +316,15 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - Some checks need real devices and a person: input methods (CJK, dead keys, Gboard and Samsung
   keyboards), touch selection, the mobile soft keyboard, browser zoom, TalkBack and NVDA. See the
   checklist in `docs/WEB_INTEGRATION.md`.
+
+## [0.6.0-rc3] - 2026-10-01
+
+The third release candidate for 0.6.0, on Maven Central and on npm's `next` tag. For the web: a
+failed module load can be retried, the editor follows its container's size, find takes the
+keyboard focus, registered languages set their own completion trigger characters and can drop
+their base language's completions, completion items take Monaco's `range`, `filterText` and
+`sortText`, `revalidate()`, and `replaceValue`/`executeEdits` keep the undo history. Popups,
+panels and touch chrome follow the editor theme. Its changes are the ones under [Unreleased].
 
 ## [0.6.0-rc2] - 2026-10-01
 
