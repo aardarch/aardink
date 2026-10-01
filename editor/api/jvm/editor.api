@@ -779,15 +779,15 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanel
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt;
 	public fun <init> ()V
 	public final fun getLambda$-1988451003$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-896015989$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-2127814215$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-977784956$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1100410448$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1279933214$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1295850246$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1840380520$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1923415362$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1984148761$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$239803317$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$512948177$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$741610503$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class com/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt {

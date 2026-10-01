@@ -53,10 +53,22 @@ class FindReplaceState {
     var currentMatchIndex by mutableIntStateOf(-1)
         internal set
 
-    /** Opens the panel: find only, or with the replace row when [replace] (Ctrl+H). */
+    /**
+     * Counts [show] calls, so the panel takes the keyboard focus each time it is asked to open,
+     * also when it is open already.
+     */
+    internal var showRequests by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Opens the panel: find only, or with the replace row when [replace] (Ctrl+H). The panel takes
+     * the keyboard focus: the find field, or the replace field when [replace] and there is
+     * already something to find.
+     */
     fun show(replace: Boolean = false) {
         visible = true
         replaceMode = replace
+        showRequests++
     }
 
     fun hide() {

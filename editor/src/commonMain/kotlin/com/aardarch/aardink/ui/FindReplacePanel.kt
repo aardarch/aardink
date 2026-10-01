@@ -35,8 +35,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +61,11 @@ import com.aardarch.aardink.core.FindReplaceState
  *
  * The panel mutates [state] directly. The host (typically [CodeEditorLayout]) is responsible for
  * watching the state and re-running [com.aardarch.aardink.core.FindEngine.findAll] on changes.
+ *
+ * It takes the keyboard focus when it opens and on every [FindReplaceState.show]: the find field,
+ * or the replace field when opened for replacing with something already to find. In its fields,
+ * Enter goes to the next match (Shift+Enter to the previous one, and Enter in the replace field
+ * replaces the current match), and Escape closes the panel.
  *
  * @param state The state holder backing this panel.
  * @param onNext User pressed the "next match" arrow — host should scroll/select that match.
@@ -73,10 +90,30 @@ fun FindReplacePanel(
         exit = shrinkVertically() + fadeOut(),
         modifier = modifier,
     ) {
+        val findFocus = remember { FocusRequester() }
+        val replaceFocus = remember { FocusRequester() }
+        // On opening, and again on each show() while open (Ctrl+F pressed in the editor).
+        LaunchedEffect(state.showRequests) {
+            if (!state.visible) return@LaunchedEffect
+            // The fields (the replace row may be new) are attached from the next frame.
+            withFrameNanos { }
+            val target = if (state.replaceMode && state.query.isNotEmpty()) replaceFocus else findFocus
+            runCatching { target.requestFocus() }
+        }
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(EditorTestTags.FIND_PANEL)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                        onClose()
+                        true
+                    } else {
+                        false
+                    }
+                },
         ) {
             Column(
                 modifier = Modifier.padding(8.dp),
@@ -104,7 +141,11 @@ fun FindReplacePanel(
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = LocalEditorTypography.current.fontFamily,
                         ),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(findFocus)
+                            .testTag(EditorTestTags.FIND_FIELD)
+                            .onEnterKey { shift -> if (shift) onPrev() else onNext() },
                     )
                     Text(
                         text = matchLabel(state),
@@ -134,7 +175,7 @@ fun FindReplacePanel(
 
                 // Replace row, in replace mode only (Ctrl+H, or the toggle above)
                 if (state.replaceMode) {
-                    ReplaceRow(state, onReplace, onReplaceAll)
+                    ReplaceRow(state, onReplace, onReplaceAll, replaceFocus)
                 }
 
                 // Options row
@@ -165,7 +206,7 @@ fun FindReplacePanel(
 }
 
 @Composable
-private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplaceAll: () -> Unit) {
+private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplaceAll: () -> Unit, focus: FocusRequester) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -178,7 +219,11 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = LocalEditorTypography.current.fontFamily,
             ),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focus)
+                .testTag(EditorTestTags.REPLACE_FIELD)
+                .onEnterKey { onReplace() },
         )
         TextButton(
             onClick = onReplace,
@@ -188,6 +233,16 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
             onClick = onReplaceAll,
             enabled = state.matches.isNotEmpty(),
         ) { Text("All") }
+    }
+}
+
+/** Runs [action] on Enter, with whether Shift is down, and keeps the key from the field. */
+private fun Modifier.onEnterKey(action: (shift: Boolean) -> Unit): Modifier = onPreviewKeyEvent { event ->
+    if (event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+        action(event.isShiftPressed)
+        true
+    } else {
+        false
     }
 }
 

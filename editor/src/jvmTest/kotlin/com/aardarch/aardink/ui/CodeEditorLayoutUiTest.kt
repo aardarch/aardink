@@ -137,6 +137,89 @@ class CodeEditorLayoutUiTest {
     }
 
     @Test
+    fun `ctrl F puts the keyboard focus in the find field`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        val find = FindReplaceState()
+        show(state, findReplaceState = find)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).assertIsFocused()
+        onNodeWithTag(EditorTestTags.FIND_FIELD).performTextInput("world")
+        waitForIdle()
+
+        assertEquals("world", find.query)
+        assertEquals("hello world", state.document.text, "the typing went to the find field, not the text")
+    }
+
+    @Test
+    fun `the host's show takes the focus without the editor having had it`() = runComposeUiTest {
+        val find = FindReplaceState()
+        show(CodeEditorState("text"), findReplaceState = find)
+
+        find.show()
+        waitForIdle()
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).assertIsFocused()
+    }
+
+    @Test
+    fun `show again while open takes the focus back from the text`() = runComposeUiTest {
+        val find = FindReplaceState()
+        show(CodeEditorState("text"), findReplaceState = find)
+        find.show()
+        waitForIdle()
+        editor().requestFocus()
+        waitForIdle()
+
+        find.show()
+        waitForIdle()
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).assertIsFocused()
+    }
+
+    @Test
+    fun `ctrl H focuses the replace field when there is something to find`() = runComposeUiTest {
+        val find = FindReplaceState().apply { query = "o" }
+        show(CodeEditorState("foo"), findReplaceState = find)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.H) } }
+
+        onNodeWithTag(EditorTestTags.REPLACE_FIELD).assertIsFocused()
+    }
+
+    @Test
+    fun `escape in the find field closes the panel and gives the focus back to the text`() = runComposeUiTest {
+        val find = FindReplaceState()
+        show(CodeEditorState("text"), findReplaceState = find)
+        find.show()
+        waitForIdle()
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).performKeyInput { pressKey(Key.Escape) }
+        waitForIdle()
+
+        assertFalse(find.visible)
+        editor().assertIsFocused()
+    }
+
+    @Test
+    fun `enter in the find field selects the next match and shift enter the previous one`() = runComposeUiTest {
+        val state = CodeEditorState("ab ab ab")
+        val find = FindReplaceState()
+        show(state, findReplaceState = find)
+        find.show()
+        waitForIdle()
+        onNodeWithTag(EditorTestTags.FIND_FIELD).performTextInput("ab")
+        waitUntil { find.matches.size == 3 }
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).performKeyInput { pressKey(Key.Enter) }
+        waitForIdle()
+        assertEquals(1, find.currentMatchIndex)
+
+        onNodeWithTag(EditorTestTags.FIND_FIELD).performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Enter) } }
+        waitForIdle()
+        assertEquals(0, find.currentMatchIndex)
+    }
+
+    @Test
     fun `ctrl G asks the host to go to a line`() = runComposeUiTest {
         var asked = false
         show(CodeEditorState("a\nb"), onRequestGoToLine = { asked = true })

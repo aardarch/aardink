@@ -257,6 +257,11 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - The web editor kept its size when only its container changed (a splitter dragged, a container
   mounted into while `display: none` and shown later), so it was drawn at the old size and clicks
   landed in the wrong place. It now watches its container and follows it.
+- The find panel did not take the keyboard focus when it opened, from Ctrl+F, Ctrl+H or the web's
+  `showFind()`, so what was typed next went into the document. It now focuses its find field
+  (the replace field for Ctrl+H with something already to find). In its fields Enter goes to the
+  next match, Shift+Enter to the previous one, and Escape closes the panel and gives the focus
+  back to the text.
 
 ### Known issues
 

@@ -67,7 +67,7 @@ There are two ways in:
 | `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. They replace the language's own diagnostics, which show until then; `null` (`"null"` in JSON) goes back to those. Either way they move with the text as it is edited. |
 | `onDiagnosticsChange(callback)` | The language's own diagnostics, as a JSON array in the same shape, each time they are collected: 500 ms after the editor appears, and after each pause in typing. Not called while the host's list is shown. One listener; `null` removes it. |
 | `navigateTo(line, column)` | Scroll to and place the caret at a 1-based position, clamped to the document. |
-| `showFind`, `undo`, `redo` | As named. `undo`/`redo` return whether anything changed. |
+| `showFind`, `undo`, `redo` | As named. `showFind` moves the keyboard focus to the find field. `undo`/`redo` return whether anything changed. |
 | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | Monaco's undo surface. Keep the alternative version id when saving: the text is unsaved while it differs, and undo brings it back. |
 | `getSelections` / `setSelections` (and `…Json`) | Every selection in Monaco's `Selection` shape, the primary one first. |
 | `setBaseline(text)` | The text the gutter's diff lane compares with, typically what was last saved; `""` turns it off. |

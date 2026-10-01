@@ -97,6 +97,11 @@ export interface AardinkEditor {
    */
   onDidChangeDiagnostics(listener: (diagnostics: AardinkDiagnostic[]) => void): () => void;
   revealPosition(line: number, column: number): void;
+  /**
+   * Opens the find panel and moves the keyboard focus to its find field, from wherever on the
+   * page it was. Enter goes to the next match, Shift+Enter to the previous one, and Escape closes
+   * the panel and gives the focus back to the text.
+   */
   showFind(): void;
   undo(): boolean;
   redo(): boolean;

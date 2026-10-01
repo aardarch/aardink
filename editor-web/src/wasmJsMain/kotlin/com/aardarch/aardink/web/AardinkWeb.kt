@@ -391,7 +391,10 @@ object AardinkWeb {
         state.navigateTo(offset, TextRange(offset))
     }
 
-    /** Opens the find/replace panel. */
+    /**
+     * Opens the find/replace panel and moves the keyboard focus to its find field, also from
+     * outside the editor; Escape there closes it and gives the focus back to the text.
+     */
     fun showFind(handle: AardinkEditorHandle) {
         handle.findReplaceState.show()
     }

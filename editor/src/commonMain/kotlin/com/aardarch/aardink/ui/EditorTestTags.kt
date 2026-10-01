@@ -24,6 +24,12 @@ package com.aardarch.aardink.ui
  */
 internal object EditorTestTags {
     const val FIND_PANEL = "aardink.find"
+
+    /** The find panel's search field. */
+    const val FIND_FIELD = "aardink.find.query"
+
+    /** The find panel's replace field. */
+    const val REPLACE_FIELD = "aardink.find.replacement"
     const val GUTTER = "aardink.gutter"
 
     /** The text area of the editor's own renderer. */

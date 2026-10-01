@@ -772,7 +772,11 @@ fun CodeEditorLayout(
                     // One batch: one undo step for the whole replacement.
                     state.applyTextEdits(all.map { TextEdit(it, replacement) })
                 },
-                onClose = { findReplaceState.hide() },
+                onClose = {
+                    findReplaceState.hide()
+                    // The panel had the focus; give it back to the text rather than lose it.
+                    controller.requestFocus()
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
         }

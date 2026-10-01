@@ -198,6 +198,21 @@ class AardinkWebTest {
     }
 
     @Test
+    fun `showFind takes the page's focus, so typing goes to the find field`() = runTest {
+        val handle = mount()
+        val container = containers.last()
+        val button = document.createElement("button") as HTMLElement
+        document.body!!.appendChild(button)
+        containers += button
+        awaitUntil { canvasWidth(handle) == 600 }
+        button.focus()
+
+        AardinkWeb.showFind(handle)
+
+        awaitUntil { container.contains(document.activeElement) }
+    }
+
+    @Test
     fun `changing language keeps the text and swaps the tokenizer`() {
         val handle = mount("val x = 1", WebEditorOptions(language = "plaintext"))
 
