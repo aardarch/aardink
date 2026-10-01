@@ -298,7 +298,12 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   so on the web, which has no Material theme, they were light over a dark editor. They now follow
   the active `EditorTheme`, built-in or registered: surfaces a shade off its background, text in
   its foreground, accents in its keyword colour. `KeyboardToolbarDefaults.style()` derives its
-  defaults from `LocalEditorTheme` accordingly.
+  defaults from `LocalEditorTheme` accordingly. The rest of the editor's popups and panels do
+  too: the completion list at the caret, the hover, signature help, references and code action
+  cards, the find/replace panel and its fields, the diagnostic banner (now tinted with the
+  theme's error, warning or info colour), the go-to-line and rename dialogs and the attribution
+  badge. Text in all of them is kept at 4.5:1 or more on its surface, lightened or darkened where
+  a theme's own colour is too dim (Solarized Dark's text, VS Code Dark's keyword blue).
 
 ### Known issues
 

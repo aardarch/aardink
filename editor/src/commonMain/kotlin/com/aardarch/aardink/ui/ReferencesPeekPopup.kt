@@ -88,48 +88,50 @@ internal fun ReferencesPeekCard(
             listState.scrollToItem(selected)
         }
     }
-    Surface(
-        modifier = modifier
-            .widthIn(min = 260.dp, max = 520.dp)
-            .heightIn(max = 280.dp)
-            .shadow(8.dp, RoundedCornerShape(8.dp))
-            .testTag(EditorTestTags.REFERENCES),
-        shape = RoundedCornerShape(8.dp),
-        tonalElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column {
-            Text(
-                text = if (items.size == 1) "1 reference" else "${items.size} references",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            )
-            HorizontalDivider()
-            LazyColumn(state = listState) {
-                itemsIndexed(items) { index, item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (index == selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                            .clickable { onOpen(item) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = item.place,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = item.preview,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+    EditorChromeTheme {
+        Surface(
+            modifier = modifier
+                .widthIn(min = 260.dp, max = 520.dp)
+                .heightIn(max = 280.dp)
+                .shadow(8.dp, RoundedCornerShape(8.dp))
+                .testTag(EditorTestTags.REFERENCES),
+            shape = RoundedCornerShape(8.dp),
+            tonalElevation = 6.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Column {
+                Text(
+                    text = if (items.size == 1) "1 reference" else "${items.size} references",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+                HorizontalDivider()
+                LazyColumn(state = listState) {
+                    itemsIndexed(items) { index, item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (index == selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                .clickable { onOpen(item) }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = item.place,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = item.preview,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }

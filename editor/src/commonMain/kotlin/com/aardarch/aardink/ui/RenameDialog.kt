@@ -38,44 +38,46 @@ import androidx.compose.ui.unit.dp
 fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDismiss: () -> Unit) {
     var newName by remember(currentName) { mutableStateOf(currentName) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Rename Symbol") },
-        text = {
-            Column {
-                Text(
-                    text = "Enter new name for '$currentName':",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    // The sentence above is a sibling, not this field's name; the label is what a
-                    // screen reader announces for the edit box.
-                    label = { Text("New name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (newName.isNotBlank()) {
-                        onConfirm(newName.trim())
-                    }
-                },
-                enabled = newName.isNotBlank() && newName != currentName,
-            ) {
-                Text("Rename")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
+    EditorChromeTheme {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(text = "Rename Symbol") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter new name for '$currentName':",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        // The sentence above is a sibling, not this field's name; the label is what a
+                        // screen reader announces for the edit box.
+                        label = { Text("New name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newName.isNotBlank()) {
+                            onConfirm(newName.trim())
+                        }
+                    },
+                    enabled = newName.isNotBlank() && newName != currentName,
+                ) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 }

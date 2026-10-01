@@ -84,121 +84,123 @@ fun FindReplacePanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(
-        visible = state.visible,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut(),
-        modifier = modifier,
-    ) {
-        val findFocus = remember { FocusRequester() }
-        val replaceFocus = remember { FocusRequester() }
-        // On opening, and again on each show() while open (Ctrl+F pressed in the editor).
-        LaunchedEffect(state.showRequests) {
-            if (!state.visible) return@LaunchedEffect
-            // The fields (the replace row may be new) are attached from the next frame.
-            withFrameNanos { }
-            val target = if (state.replaceMode && state.query.isNotEmpty()) replaceFocus else findFocus
-            runCatching { target.requestFocus() }
-        }
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 2.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(EditorTestTags.FIND_PANEL)
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-                        onClose()
-                        true
-                    } else {
-                        false
-                    }
-                },
+    EditorChromeTheme {
+        AnimatedVisibility(
+            visible = state.visible,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+            modifier = modifier,
         ) {
-            Column(
-                modifier = Modifier.padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+            val findFocus = remember { FocusRequester() }
+            val replaceFocus = remember { FocusRequester() }
+            // On opening, and again on each show() while open (Ctrl+F pressed in the editor).
+            LaunchedEffect(state.showRequests) {
+                if (!state.visible) return@LaunchedEffect
+                // The fields (the replace row may be new) are attached from the next frame.
+                withFrameNanos { }
+                val target = if (state.replaceMode && state.query.isNotEmpty()) replaceFocus else findFocus
+                runCatching { target.requestFocus() }
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 2.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(EditorTestTags.FIND_PANEL)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                            onClose()
+                            true
+                        } else {
+                            false
+                        }
+                    },
             ) {
-                // Find row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    // Shows or hides the replace row, like the chevron in front of VS Code's find box.
-                    IconButton(
-                        onClick = { state.replaceMode = !state.replaceMode },
-                        modifier = Modifier.semantics {
-                            contentDescription = if (state.replaceMode) "Hide replace" else "Show replace"
-                        },
+                    // Find row
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(if (state.replaceMode) "▾" else "▸", modifier = Modifier.clearAndSetSemantics { })
+                        // Shows or hides the replace row, like the chevron in front of VS Code's find box.
+                        IconButton(
+                            onClick = { state.replaceMode = !state.replaceMode },
+                            modifier = Modifier.semantics {
+                                contentDescription = if (state.replaceMode) "Hide replace" else "Show replace"
+                            },
+                        ) {
+                            Text(if (state.replaceMode) "▾" else "▸", modifier = Modifier.clearAndSetSemantics { })
+                        }
+                        OutlinedTextField(
+                            value = state.query,
+                            onValueChange = { state.query = it },
+                            placeholder = { Text("Find") },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = LocalEditorTypography.current.fontFamily,
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(findFocus)
+                                .testTag(EditorTestTags.FIND_FIELD)
+                                .onEnterKey { shift -> if (shift) onPrev() else onNext() },
+                        )
+                        Text(
+                            text = matchLabel(state),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(64.dp),
+                        )
+                        // The glyphs mean nothing to a screen reader; the buttons carry the labels.
+                        IconButton(
+                            onClick = onPrev,
+                            enabled = state.matches.isNotEmpty(),
+                            modifier = Modifier.semantics { contentDescription = "Previous match" },
+                        ) {
+                            Text("▲", modifier = Modifier.clearAndSetSemantics { })
+                        }
+                        IconButton(
+                            onClick = onNext,
+                            enabled = state.matches.isNotEmpty(),
+                            modifier = Modifier.semantics { contentDescription = "Next match" },
+                        ) {
+                            Text("▼", modifier = Modifier.clearAndSetSemantics { })
+                        }
+                        IconButton(onClick = onClose) {
+                            Icon(EditorIcons.Close, contentDescription = "Close find and replace")
+                        }
                     }
-                    OutlinedTextField(
-                        value = state.query,
-                        onValueChange = { state.query = it },
-                        placeholder = { Text("Find") },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = LocalEditorTypography.current.fontFamily,
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(findFocus)
-                            .testTag(EditorTestTags.FIND_FIELD)
-                            .onEnterKey { shift -> if (shift) onPrev() else onNext() },
-                    )
-                    Text(
-                        text = matchLabel(state),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(64.dp),
-                    )
-                    // The glyphs mean nothing to a screen reader; the buttons carry the labels.
-                    IconButton(
-                        onClick = onPrev,
-                        enabled = state.matches.isNotEmpty(),
-                        modifier = Modifier.semantics { contentDescription = "Previous match" },
+
+                    // Replace row, in replace mode only (Ctrl+H, or the toggle above)
+                    if (state.replaceMode) {
+                        ReplaceRow(state, onReplace, onReplaceAll, replaceFocus)
+                    }
+
+                    // Options row
+                    Row(
+
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("▲", modifier = Modifier.clearAndSetSemantics { })
+                        FilterChip(
+                            selected = state.caseSensitive,
+                            onClick = { state.caseSensitive = !state.caseSensitive },
+                            label = { Text("Aa") },
+                        )
+                        FilterChip(
+                            selected = state.wholeWord,
+                            onClick = { state.wholeWord = !state.wholeWord },
+                            label = { Text("ab") },
+                        )
+                        FilterChip(
+                            selected = state.useRegex,
+                            onClick = { state.useRegex = !state.useRegex },
+                            label = { Text(".*") },
+                        )
                     }
-                    IconButton(
-                        onClick = onNext,
-                        enabled = state.matches.isNotEmpty(),
-                        modifier = Modifier.semantics { contentDescription = "Next match" },
-                    ) {
-                        Text("▼", modifier = Modifier.clearAndSetSemantics { })
-                    }
-                    IconButton(onClick = onClose) {
-                        Icon(EditorIcons.Close, contentDescription = "Close find and replace")
-                    }
-                }
-
-                // Replace row, in replace mode only (Ctrl+H, or the toggle above)
-                if (state.replaceMode) {
-                    ReplaceRow(state, onReplace, onReplaceAll, replaceFocus)
-                }
-
-                // Options row
-                Row(
-
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FilterChip(
-                        selected = state.caseSensitive,
-                        onClick = { state.caseSensitive = !state.caseSensitive },
-                        label = { Text("Aa") },
-                    )
-                    FilterChip(
-                        selected = state.wholeWord,
-                        onClick = { state.wholeWord = !state.wholeWord },
-                        label = { Text("ab") },
-                    )
-                    FilterChip(
-                        selected = state.useRegex,
-                        onClick = { state.useRegex = !state.useRegex },
-                        label = { Text(".*") },
-                    )
                 }
             }
         }

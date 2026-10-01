@@ -59,55 +59,57 @@ internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifie
     val activeSigIndex = help.activeSignature.coerceIn(0, help.signatures.size - 1)
     val sig = help.signatures[activeSigIndex]
     val activeParamIndex = help.activeParameter.coerceIn(0, (sig.parameters.size - 1).coerceAtLeast(0))
-    Surface(
-        modifier = modifier
-            .widthIn(max = 380.dp)
-            .shadow(6.dp, RoundedCornerShape(8.dp)),
-        shape = RoundedCornerShape(8.dp),
-        tonalElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            // Annotated signature label highlighting the active parameter
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val annotatedLabel = buildAnnotatedString {
-                val activeParam = sig.parameters.getOrNull(activeParamIndex)
-                // Prefer the range the provider named: `foo(Int, Int)` repeats its parameter
-                // text, and matching on text would highlight the first Int for both.
-                val highlight = activeParam?.labelRange
-                    ?.takeIf { it.first >= 0 && it.last < sig.label.length && !it.isEmpty() }
-                    ?: activeParam?.label
-                        ?.takeIf { it.isNotEmpty() && sig.label.contains(it) }
-                        ?.let { sig.label.indexOf(it).let { start -> start..(start + it.length - 1) } }
+    EditorChromeTheme {
+        Surface(
+            modifier = modifier
+                .widthIn(max = 380.dp)
+                .shadow(6.dp, RoundedCornerShape(8.dp)),
+            shape = RoundedCornerShape(8.dp),
+            tonalElevation = 6.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                // Annotated signature label highlighting the active parameter
+                val primaryColor = MaterialTheme.colorScheme.primary
+                val annotatedLabel = buildAnnotatedString {
+                    val activeParam = sig.parameters.getOrNull(activeParamIndex)
+                    // Prefer the range the provider named: `foo(Int, Int)` repeats its parameter
+                    // text, and matching on text would highlight the first Int for both.
+                    val highlight = activeParam?.labelRange
+                        ?.takeIf { it.first >= 0 && it.last < sig.label.length && !it.isEmpty() }
+                        ?: activeParam?.label
+                            ?.takeIf { it.isNotEmpty() && sig.label.contains(it) }
+                            ?.let { sig.label.indexOf(it).let { start -> start..(start + it.length - 1) } }
 
-                if (highlight != null) {
-                    append(sig.label.take(highlight.first))
-                    withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)) {
-                        append(sig.label.substring(highlight.first, highlight.last + 1))
+                    if (highlight != null) {
+                        append(sig.label.take(highlight.first))
+                        withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)) {
+                            append(sig.label.substring(highlight.first, highlight.last + 1))
+                        }
+                        append(sig.label.substring(highlight.last + 1))
+                    } else {
+                        append(sig.label)
                     }
-                    append(sig.label.substring(highlight.last + 1))
-                } else {
-                    append(sig.label)
                 }
-            }
 
-            Text(
-                text = annotatedLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = LocalEditorTypography.current.fontFamily,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            // Parameter documentation if present
-            val activeParamDoc = sig.parameters.getOrNull(activeParamIndex)?.documentation ?: sig.documentation
-            if (activeParamDoc != null) {
                 Text(
-                    text = activeParamDoc,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    text = annotatedLabel,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = LocalEditorTypography.current.fontFamily,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
+
+                // Parameter documentation if present
+                val activeParamDoc = sig.parameters.getOrNull(activeParamIndex)?.documentation ?: sig.documentation
+                if (activeParamDoc != null) {
+                    Text(
+                        text = activeParamDoc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }

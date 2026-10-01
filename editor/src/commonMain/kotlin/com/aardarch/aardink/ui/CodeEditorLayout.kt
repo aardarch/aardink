@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -131,7 +130,8 @@ fun CodeEditorLayout(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
-    val textColor = theme.tokenColors[TokenType.Default] ?: MaterialTheme.colorScheme.onSurface
+    // A theme without a default token colour falls back to the chrome's text colour, not the host's.
+    val textColor = theme.tokenColors[TokenType.Default] ?: remember(theme) { EditorChromeColors(theme).foreground }
 
     val view = remember(state) { EditorView(state) }
     DisposableEffect(view) {

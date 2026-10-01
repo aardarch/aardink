@@ -46,35 +46,37 @@ fun GoToLineDialog(totalLines: Int, onConfirm: (Int) -> Unit, onDismiss: () -> U
     val parsed = input.toIntOrNull()
     val valid = parsed != null && parsed in 1..totalLines
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Go to line") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { new -> input = new.filter { it.isDigit() }.take(7) },
-                    label = { Text("Line number") },
-                    singleLine = true,
-                    isError = input.isNotEmpty() && !valid,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier,
-                )
-                Text(
-                    text = "1 – $totalLines",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { parsed?.takeIf { valid }?.let(onConfirm) },
-                enabled = valid,
-            ) { Text("Go") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
+    EditorChromeTheme {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Go to line") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { new -> input = new.filter { it.isDigit() }.take(7) },
+                        label = { Text("Line number") },
+                        singleLine = true,
+                        isError = input.isNotEmpty() && !valid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier,
+                    )
+                    Text(
+                        text = "1 – $totalLines",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { parsed?.takeIf { valid }?.let(onConfirm) },
+                    enabled = valid,
+                ) { Text("Go") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            },
+        )
+    }
 }

@@ -61,43 +61,45 @@ internal fun CompletionList(
             listState.scrollToItem(selected)
         }
     }
-    Surface(
-        modifier = modifier
-            .widthIn(min = 220.dp, max = 420.dp)
-            .heightIn(max = 240.dp)
-            .shadow(8.dp, RoundedCornerShape(8.dp))
-            .testTag(EditorTestTags.COMPLETION_LIST),
-        shape = RoundedCornerShape(8.dp),
-        tonalElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        LazyColumn(state = listState) {
-            itemsIndexed(items) { index, item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(if (index == selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                        .clickable { onAccept(item) }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CompletionKindBadge(item.kind)
-                    Text(
-                        text = item.label,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                    item.documentation?.let {
+    EditorChromeTheme {
+        Surface(
+            modifier = modifier
+                .widthIn(min = 220.dp, max = 420.dp)
+                .heightIn(max = 240.dp)
+                .shadow(8.dp, RoundedCornerShape(8.dp))
+                .testTag(EditorTestTags.COMPLETION_LIST),
+            shape = RoundedCornerShape(8.dp),
+            tonalElevation = 6.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            LazyColumn(state = listState) {
+                itemsIndexed(items) { index, item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (index == selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                            .clickable { onAccept(item) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CompletionKindBadge(item.kind)
                         Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = item.label,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
                         )
+                        item.documentation?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
                     }
                 }
             }

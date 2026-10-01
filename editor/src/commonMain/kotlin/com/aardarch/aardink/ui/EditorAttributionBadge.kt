@@ -43,22 +43,24 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun EditorAttributionBadge(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .alpha(0.45f)
-            .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
-                shape = RoundedCornerShape(4.dp),
+    EditorChromeTheme {
+        Box(
+            modifier = modifier
+                .alpha(0.45f)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(4.dp),
+                )
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "CE",
+                fontSize = 9.sp,
+                lineHeight = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
             )
-            .padding(horizontal = 5.dp, vertical = 2.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "CE",
-            fontSize = 9.sp,
-            lineHeight = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-        )
+        }
     }
 }

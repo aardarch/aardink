@@ -58,47 +58,49 @@ internal fun CodeActionCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .widthIn(min = 220.dp, max = 340.dp)
-            .shadow(8.dp, RoundedCornerShape(10.dp)),
-        shape = RoundedCornerShape(10.dp),
-        tonalElevation = 8.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
-            Text(
-                text = "Quick Fixes & Actions",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-            HorizontalDivider(thickness = 0.5.dp)
+    EditorChromeTheme {
+        Surface(
+            modifier = modifier
+                .widthIn(min = 220.dp, max = 340.dp)
+                .shadow(8.dp, RoundedCornerShape(10.dp)),
+            shape = RoundedCornerShape(10.dp),
+            tonalElevation = 8.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ) {
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                Text(
+                    text = "Quick Fixes & Actions",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+                HorizontalDivider(thickness = 0.5.dp)
 
-            actions.forEach { action ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onSelectAction(action)
-                            onDismiss()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = action.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (action.kind != CodeActionKind.QuickFix) {
+                actions.forEach { action ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectAction(action)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
-                            text = action.kind.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 8.dp),
+                            text = action.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
                         )
+                        if (action.kind != CodeActionKind.QuickFix) {
+                            Text(
+                                text = action.kind.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
                     }
                 }
             }

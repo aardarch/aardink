@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -37,7 +38,8 @@ import com.aardarch.aardink.core.DiagnosticSeverity
 
 /**
  * Inline dismissible banner shown when the user taps a gutter annotation dot.
- * Appears as a colored strip between the find panel and the editor body.
+ * Appears as a colored strip between the find panel and the editor body, tinted with the
+ * severity's colour from the active [LocalEditorTheme].
  */
 @Composable
 fun AnnotationTooltip(
@@ -47,53 +49,49 @@ fun AnnotationTooltip(
     modifier: Modifier = Modifier,
     onQuickFix: (() -> Unit)? = null,
 ) {
-    val (bg, fg) = when (severity) {
-        DiagnosticSeverity.Error ->
-            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-
-        DiagnosticSeverity.Warning ->
-            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-
-        DiagnosticSeverity.Info ->
-            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-    }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(bg)
-            // The buttons bring their own 48 dp minimum height; keep the strip to that.
-            .padding(horizontal = 12.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Tapping the message itself also dismisses; say so rather than leaving an unnamed target.
-        Text(
-            text = message,
-            color = fg,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier
-                .weight(1f)
-                .clickable(role = Role.Button, onClickLabel = DISMISS_LABEL, onClick = onDismiss),
-        )
-        if (onQuickFix != null) {
-            // A real button: it carries the button role and the minimum touch target, which a
-            // clickable Text does not.
-            TextButton(
-                onClick = onQuickFix,
-                colors = ButtonDefaults.textButtonColors(contentColor = fg),
-            ) {
-                Text(
-                    text = "💡 Quick Fix",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+    val theme = LocalEditorTheme.current
+    val chrome = remember(theme) { EditorChromeColors(theme) }
+    val bg = chrome.severityContainer(severity)
+    val fg = chrome.onColor(bg)
+    EditorChromeTheme {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(bg)
+                // The buttons bring their own 48 dp minimum height; keep the strip to that.
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Tapping the message itself also dismisses; say so rather than leaving an unnamed target.
+            Text(
+                text = message,
+                color = fg,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(role = Role.Button, onClickLabel = DISMISS_LABEL, onClick = onDismiss),
+            )
+            if (onQuickFix != null) {
+                // A real button: it carries the button role and the minimum touch target, which a
+                // clickable Text does not.
+                TextButton(
+                    onClick = onQuickFix,
+                    colors = ButtonDefaults.textButtonColors(contentColor = fg),
+                ) {
+                    Text(
+                        text = "💡 Quick Fix",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = EditorIcons.Close,
+                    contentDescription = DISMISS_LABEL,
+                    tint = fg.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp),
                 )
             }
-        }
-        IconButton(onClick = onDismiss) {
-            Icon(
-                imageVector = EditorIcons.Close,
-                contentDescription = DISMISS_LABEL,
-                tint = fg.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp),
-            )
         }
     }
 }

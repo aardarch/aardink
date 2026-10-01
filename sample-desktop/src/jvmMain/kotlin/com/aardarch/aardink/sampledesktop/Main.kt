@@ -138,15 +138,18 @@ private fun SampleWindow() {
     }
 
     if (showGoToLine) {
-        GoToLineDialog(
-            totalLines = state.document.lineCount,
-            onConfirm = { line ->
-                showGoToLine = false
-                // onConfirm reports a 1-based line number.
-                state.navigateTo(state.document.lineStart(line - 1))
-            },
-            onDismiss = { showGoToLine = false },
-        )
+        // Under the editor's theme, so the dialog's colours follow it.
+        CompositionLocalProvider(LocalEditorTheme provides (themes[themeName] ?: EditorThemes.VsCodeDark)) {
+            GoToLineDialog(
+                totalLines = state.document.lineCount,
+                onConfirm = { line ->
+                    showGoToLine = false
+                    // onConfirm reports a 1-based line number.
+                    state.navigateTo(state.document.lineStart(line - 1))
+                },
+                onDismiss = { showGoToLine = false },
+            )
+        }
     }
 }
 

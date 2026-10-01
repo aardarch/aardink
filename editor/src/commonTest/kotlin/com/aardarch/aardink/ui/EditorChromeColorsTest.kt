@@ -17,6 +17,7 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.TokenType
 import kotlin.test.Test
@@ -31,7 +32,7 @@ class EditorChromeColorsTest {
         assertTrue(chrome.isDark)
         for (level in 0..4) assertTrue(chrome.surface(level).luminance() < 0.2f, "surface($level) is dark")
         assertTrue(chrome.foreground.luminance() > 0.2f, "text on it is light")
-        val scheme = chrome.colorScheme(theme)
+        val scheme = chrome.colorScheme()
         assertTrue(scheme.surfaceContainerHigh.luminance() < 0.2f)
         assertTrue(scheme.onSurface.luminance() > 0.2f)
     }
@@ -84,7 +85,108 @@ class EditorChromeColorsTest {
     }
 
     @Test
-    fun `the toolbar's accent is the keyword colour`() {
-        assertEquals(EditorThemes.VsCodeDark.tokenColors[TokenType.Keyword], EditorChromeColors(EditorThemes.VsCodeDark).accent)
+    fun `the accent is the keyword colour where it reads`() {
+        assertEquals(EditorThemes.VsCodeLight.tokenColors[TokenType.Keyword], EditorChromeColors(EditorThemes.VsCodeLight).accent)
+        assertEquals(EditorThemes.MidnightOcean.tokenColors[TokenType.Keyword], EditorChromeColors(EditorThemes.MidnightOcean).accent)
+    }
+
+    @Test
+    fun `a keyword colour too dim for the chrome is lightened on a dark theme`() {
+        // VS Code Dark's #569CD6 is under 4.5:1 on the lighter surfaces.
+        val keyword = EditorThemes.VsCodeDark.tokenColors.getValue(TokenType.Keyword)
+        val accent = EditorChromeColors(EditorThemes.VsCodeDark).accent
+        assertTrue(accent.luminance() > keyword.luminance())
+    }
+
+    @Test
+    fun `the contrast ratio is WCAG's`() {
+        assertEquals(21f, contrastRatio(Color.White, Color.Black), 0.01f)
+        assertEquals(1f, contrastRatio(Color(0xFF777777), Color(0xFF777777)), 0.001f)
+        // #767676 on white is the classic 4.54:1.
+        assertEquals(4.54f, contrastRatio(Color(0xFF767676), Color.White), 0.01f)
+    }
+
+    private val allThemes: List<Pair<String, EditorTheme>> = listOf(
+        "VsCodeDark" to EditorThemes.VsCodeDark,
+        "VsCodeLight" to EditorThemes.VsCodeLight,
+        "MaterialDark" to EditorThemes.MaterialDark,
+        "MaterialLight" to EditorThemes.MaterialLight,
+        "MidnightOcean" to EditorThemes.MidnightOcean,
+        "SolarizedDark" to EditorThemes.SolarizedDark,
+        // A registered theme whose text barely shows on its background, and whose keyword
+        // and error colours are the background's own: the chrome must still read.
+        "low-contrast" to EditorThemeParser.fromJson(
+            """
+            {
+              "colors": { "editor.background": "#505050", "editor.foreground": "#707070", "editor.selectionBackground": "#606060" },
+              "tokenColors": [ { "scope": "keyword", "settings": { "foreground": "#555555" } } ]
+            }
+            """.trimIndent(),
+        )!!,
+    )
+
+    private fun assertReads(name: String, role: String, text: Color, backgrounds: List<Color>, min: Float = 4.5f) {
+        for (background in backgrounds) {
+            val ratio = contrastRatio(text, background)
+            assertTrue(ratio >= min, "$name: $role $text on $background is $ratio:1, under $min:1")
+        }
+    }
+
+    @Test
+    fun `chrome text reaches 4_5 to 1 on every surface it is drawn on`() {
+        for ((name, theme) in allThemes) {
+            val chrome = EditorChromeColors(theme)
+            val scheme = chrome.colorScheme()
+            val surfaces = listOf(
+                scheme.surface,
+                scheme.surfaceContainerLow,
+                scheme.surfaceContainer,
+                scheme.surfaceContainerHigh,
+                scheme.surfaceContainerHighest,
+            )
+            // Body and secondary text, also on a selected row (completion list, references).
+            assertReads(name, "onSurface", scheme.onSurface, surfaces + scheme.secondaryContainer)
+            assertReads(name, "onSurfaceVariant", scheme.onSurfaceVariant, surfaces + scheme.secondaryContainer)
+            assertReads(name, "onSecondaryContainer", scheme.onSecondaryContainer, listOf(scheme.secondaryContainer))
+            // Accent text: buttons, the active parameter, a focused field's label, kind badges.
+            assertReads(name, "primary", scheme.primary, surfaces)
+            assertReads(name, "secondary", scheme.secondary, surfaces)
+            assertReads(name, "tertiary", scheme.tertiary, surfaces)
+            assertReads(name, "error", scheme.error, surfaces)
+            assertReads(name, "onPrimary", scheme.onPrimary, listOf(scheme.primary))
+            assertReads(name, "onErrorContainer", scheme.onErrorContainer, listOf(scheme.errorContainer))
+            // A text field's border at rest is a control's edge: 3:1.
+            assertReads(name, "outline", scheme.outline, surfaces, min = 3f)
+            // The toolbar draws its icons and characters on surface(3).
+            assertReads(name, "toolbar", chrome.foreground, listOf(chrome.surface(3)))
+            assertReads(name, "toolbar accent", chrome.accent, listOf(chrome.surface(3)))
+        }
+    }
+
+    @Test
+    fun `diagnostic banners are tinted with the severity colour and their text reads`() {
+        for ((name, theme) in allThemes) {
+            val chrome = EditorChromeColors(theme)
+            for (severity in DiagnosticSeverity.entries) {
+                val container = chrome.severityContainer(severity)
+                assertReads(name, "$severity banner text", chrome.onColor(container), listOf(container))
+            }
+        }
+        // VS Code Dark's error banner is red-tinted and still dark.
+        val error = EditorChromeColors(EditorThemes.VsCodeDark).severityContainer(DiagnosticSeverity.Error)
+        assertTrue(error.red > error.green && error.red > error.blue, "red-tinted: $error")
+        assertTrue(error.luminance() < 0.2f, "dark: $error")
+    }
+
+    @Test
+    fun `text that already reads keeps the theme's colour`() {
+        assertEquals(EditorThemes.VsCodeDark.tokenColors[TokenType.Default], EditorChromeColors(EditorThemes.VsCodeDark).foreground)
+        assertEquals(EditorThemes.VsCodeLight.tokenColors[TokenType.Default], EditorChromeColors(EditorThemes.VsCodeLight).foreground)
+    }
+
+    @Test
+    fun `Solarized's dim text is lightened for the chrome`() {
+        val text = EditorThemes.SolarizedDark.tokenColors.getValue(TokenType.Default)
+        assertTrue(EditorChromeColors(EditorThemes.SolarizedDark).foreground.luminance() > text.luminance())
     }
 }
