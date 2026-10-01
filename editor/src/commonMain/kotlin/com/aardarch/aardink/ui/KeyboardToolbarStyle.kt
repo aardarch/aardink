@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
  * Visual styling for [KeyboardToolbarRow]. All buttons (icon and character) share the
  * same shape and size so the toolbar reads as a single, consistent surface.
  *
- * Use [KeyboardToolbarDefaults.style] to derive a style from the active [MaterialTheme],
+ * Use [KeyboardToolbarDefaults.style] to derive a style from the active [LocalEditorTheme],
  * and [copy] to override individual fields.
  */
 @Immutable
@@ -56,13 +56,19 @@ data class KeyboardToolbarStyle(
 /** Defaults for [KeyboardToolbarStyle]. */
 object KeyboardToolbarDefaults {
 
+    /**
+     * A style whose colours follow the active [LocalEditorTheme], not the host's
+     * [MaterialTheme]: a dark editor theme gets a dark toolbar. The background is the editor
+     * background a shade towards the text colour, icons and characters take the text colour, and
+     * the cursor arrows the theme's keyword colour.
+     */
     @Composable
     @ReadOnlyComposable
     fun style(
-        background: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        iconColor: Color = MaterialTheme.colorScheme.onSurface,
-        accentColor: Color = MaterialTheme.colorScheme.primary,
-        charColor: Color = MaterialTheme.colorScheme.onSurface,
+        background: Color = EditorChromeColors(LocalEditorTheme.current).surface(3),
+        iconColor: Color = EditorChromeColors(LocalEditorTheme.current).foreground,
+        accentColor: Color = EditorChromeColors(LocalEditorTheme.current).accent,
+        charColor: Color = EditorChromeColors(LocalEditorTheme.current).foreground,
         disabledAlpha: Float = 0.38f,
         buttonShape: Shape = RoundedCornerShape(8.dp),
         buttonSize: Dp = 40.dp,

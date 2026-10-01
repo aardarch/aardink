@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.EditorAnchoredPopup
+import com.aardarch.aardink.ui.EditorChromeTheme
 import com.aardarch.aardink.ui.EditorTestTags
 import kotlin.math.roundToInt
 
@@ -158,7 +159,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.rotateSquareCorner(
  * The menu over a touch selection (and over the caret after its handle is tapped): cut, copy,
  * paste, select all, and "Info" (the documentation of the symbol there) when the host offers it.
  * The editor's own rather than the platform's text toolbar, which takes no items of an app's own.
- * Hidden while a handle is dragged.
+ * Hidden while a handle is dragged. Its colours follow the active editor theme, as the keyboard
+ * toolbar's do.
  */
 @Composable
 internal fun EditorTouchMenu(controller: EditorController) {
@@ -177,45 +179,52 @@ internal fun EditorTouchMenu(controller: EditorController) {
         controller.showToolbarAtCaret = false
     }
     EditorAnchoredPopup(anchor = anchor, preferAbove = true, onDismiss = ::done) {
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            tonalElevation = 6.dp,
-            shadowElevation = 4.dp,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.testTag(EditorTestTags.TOUCH_MENU),
-        ) {
-            Row {
-                val editable = !controller.readOnly
-                val hasSelection = !selection.collapsed
-                if (editable && hasSelection) {
-                    TextButton(onClick = {
-                        done()
-                        controller.cutToClipboard()
-                    }) { Text("Cut") }
-                }
-                if (hasSelection) {
-                    TextButton(onClick = {
-                        done()
-                        controller.copyToClipboard()
-                    }) { Text("Copy") }
-                }
-                if (editable) {
-                    TextButton(onClick = {
-                        done()
-                        controller.pasteFromClipboard()
-                    }) { Text("Paste") }
-                }
+        EditorChromeTheme { TouchMenuContent(controller, ::done) }
+    }
+}
+
+@Composable
+private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
+    val state = controller.state
+    val selection = state.selection
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 4.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.testTag(EditorTestTags.TOUCH_MENU),
+    ) {
+        Row {
+            val editable = !controller.readOnly
+            val hasSelection = !selection.collapsed
+            if (editable && hasSelection) {
                 TextButton(onClick = {
                     done()
-                    state.selectAll()
-                }) { Text("Select all") }
-                val showInfo = controller.actions.onShowInfo
-                if (showInfo != null) {
-                    TextButton(onClick = {
-                        done()
-                        showInfo(selection.min)
-                    }) { Text("Info") }
-                }
+                    controller.cutToClipboard()
+                }) { Text("Cut") }
+            }
+            if (hasSelection) {
+                TextButton(onClick = {
+                    done()
+                    controller.copyToClipboard()
+                }) { Text("Copy") }
+            }
+            if (editable) {
+                TextButton(onClick = {
+                    done()
+                    controller.pasteFromClipboard()
+                }) { Text("Paste") }
+            }
+            TextButton(onClick = {
+                done()
+                state.selectAll()
+            }) { Text("Select all") }
+            val showInfo = controller.actions.onShowInfo
+            if (showInfo != null) {
+                TextButton(onClick = {
+                    done()
+                    showInfo(selection.min)
+                }) { Text("Info") }
             }
         }
     }
@@ -229,49 +238,54 @@ internal fun BoxScope.EditorContextMenu(controller: EditorController) {
         controller.contextMenuAt = null
     }
     Box(modifier = Modifier.offset { IntOffset(at.x.roundToInt(), at.y.roundToInt()) }.size(0.dp)) {
-        DropdownMenu(expanded = true, onDismissRequest = ::close) {
-            val editable = !controller.readOnly
-            DropdownMenuItem(text = { Text("Cut") }, enabled = editable, onClick = {
-                close()
-                controller.cutToClipboard()
-            })
-            DropdownMenuItem(text = { Text("Copy") }, onClick = {
-                close()
-                controller.copyToClipboard()
-            })
-            DropdownMenuItem(text = { Text("Paste") }, enabled = editable, onClick = {
-                close()
-                controller.pasteFromClipboard()
-            })
+        EditorChromeTheme { ContextMenuContent(controller, ::close) }
+    }
+}
+
+@Composable
+private fun ContextMenuContent(controller: EditorController, close: () -> Unit) {
+    DropdownMenu(expanded = true, onDismissRequest = close) {
+        val editable = !controller.readOnly
+        DropdownMenuItem(text = { Text("Cut") }, enabled = editable, onClick = {
+            close()
+            controller.cutToClipboard()
+        })
+        DropdownMenuItem(text = { Text("Copy") }, onClick = {
+            close()
+            controller.copyToClipboard()
+        })
+        DropdownMenuItem(text = { Text("Paste") }, enabled = editable, onClick = {
+            close()
+            controller.pasteFromClipboard()
+        })
+        HorizontalDivider()
+        DropdownMenuItem(text = { Text("Select All") }, onClick = {
+            close()
+            controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
+        })
+        if (controller.languageService() != null) {
+            val mac = PlatformInfo.isMacOs
             HorizontalDivider()
-            DropdownMenuItem(text = { Text("Select All") }, onClick = {
+            DropdownMenuItem(text = { Text("Go to Definition") }, trailingIcon = { Shortcut("F12") }, onClick = {
                 close()
-                controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
+                controller.actions.onGoToDefinition()
             })
-            if (controller.languageService() != null) {
-                val mac = PlatformInfo.isMacOs
-                HorizontalDivider()
-                DropdownMenuItem(text = { Text("Go to Definition") }, trailingIcon = { Shortcut("F12") }, onClick = {
+            DropdownMenuItem(text = {
+                Text("Find References")
+            }, trailingIcon = { Shortcut(if (mac) "⇧F12" else "Shift+F12") }, onClick = {
+                close()
+                controller.actions.onFindReferences()
+            })
+            val selection = controller.state.selection
+            DropdownMenuItem(
+                text = { Text(if (selection.collapsed) "Format Document" else "Format Selection") },
+                trailingIcon = { Shortcut(if (mac) "⇧⌥F" else "Shift+Alt+F") },
+                enabled = editable,
+                onClick = {
                     close()
-                    controller.actions.onGoToDefinition()
-                })
-                DropdownMenuItem(text = {
-                    Text("Find References")
-                }, trailingIcon = { Shortcut(if (mac) "⇧F12" else "Shift+F12") }, onClick = {
-                    close()
-                    controller.actions.onFindReferences()
-                })
-                val selection = controller.state.selection
-                DropdownMenuItem(
-                    text = { Text(if (selection.collapsed) "Format Document" else "Format Selection") },
-                    trailingIcon = { Shortcut(if (mac) "⇧⌥F" else "Shift+Alt+F") },
-                    enabled = editable,
-                    onClick = {
-                        close()
-                        controller.actions.onFormat()
-                    },
-                )
-            }
+                    controller.actions.onFormat()
+                },
+            )
         }
     }
 }

@@ -48,7 +48,7 @@ import com.aardarch.aardink.core.CompletionKind
  * are available. Each chip shows a kind badge + label; tapping accepts the item.
  *
  * This strip approach works well on mobile: no cursor-relative positioning complexity, and
- * it stays visible while the keyboard is up.
+ * it stays visible while the keyboard is up. Its colours follow the active [LocalEditorTheme].
  */
 @Composable
 fun CompletionDropdown(items: List<CompletionItem>, visible: Boolean, onAccept: (CompletionItem) -> Unit, modifier: Modifier = Modifier) {
@@ -59,15 +59,17 @@ fun CompletionDropdown(items: List<CompletionItem>, visible: Boolean, onAccept: 
         modifier = modifier,
     ) {
         val keys = remember(items) { completionKeys(items) }
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            itemsIndexed(items = items, key = { index, _ -> keys[index] }) { _, item ->
-                CompletionChip(item = item, onClick = { onAccept(item) })
+        EditorChromeTheme {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                itemsIndexed(items = items, key = { index, _ -> keys[index] }) { _, item ->
+                    CompletionChip(item = item, onClick = { onAccept(item) })
+                }
             }
         }
     }

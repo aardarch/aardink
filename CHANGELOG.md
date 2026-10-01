@@ -293,6 +293,12 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - XML and HTML offered element and attribute completions inside comments, CDATA sections,
   `<!DOCTYPE …>` and `<?xml …?>`, so Enter in a comment could write `android:name=""` into it.
   They offer none there now.
+- The touch chrome the editor draws itself (the keyboard toolbar, the completion strip above
+  it, the menu over a touch selection) and the right-click menu took the host's Material colours,
+  so on the web, which has no Material theme, they were light over a dark editor. They now follow
+  the active `EditorTheme`, built-in or registered: surfaces a shade off its background, text in
+  its foreground, accents in its keyword colour. `KeyboardToolbarDefaults.style()` derives its
+  defaults from `LocalEditorTheme` accordingly.
 
 ### Known issues
 
