@@ -179,6 +179,41 @@ class AutomaticDiagnosticsUiTest {
     }
 
     @Test
+    fun `revalidate asks again at once, without an edit`() = runComposeUiTest {
+        val state = CodeEditorState("one bad")
+        val service = HeldDiagnostics()
+        val reported = mutableListOf<List<Diagnostic>>()
+        show(state, service, reported = reported)
+        mainClock.advanceTimeBy(600)
+        waitUntil { service.requests.size == 1 }
+        service.requests[0].answer.complete(emptyList())
+        waitUntil { reported.size == 1 }
+
+        mainClock.autoAdvance = false
+        state.revalidate()
+        // No typing pause to wait for: the request goes out on the next frame, not 500 ms later.
+        mainClock.advanceTimeByFrame()
+        mainClock.advanceTimeByFrame()
+        assertEquals(2, service.requests.size)
+        mainClock.autoAdvance = true
+        assertEquals("one bad", service.requests[1].text)
+        service.requests[1].answer.complete(listOf(flag("one bad", "bad")))
+        waitUntil { reported.size == 2 }
+        assertEquals("no bad here", reported.last().single().message)
+    }
+
+    @Test
+    fun `revalidate does not ask while the host's list is shown`() = runComposeUiTest {
+        val state = CodeEditorState("one bad")
+        val service = HeldDiagnostics()
+        show(state, service, diagnostics = emptyList())
+        state.revalidate()
+        mainClock.advanceTimeBy(600)
+        waitForIdle()
+        assertTrue(service.requests.isEmpty())
+    }
+
+    @Test
     fun `a list from the host is shown, and the service is not asked`() = runComposeUiTest {
         val state = CodeEditorState("one bad")
         val service = HeldDiagnostics()

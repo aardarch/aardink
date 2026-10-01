@@ -372,6 +372,7 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
     final fun pushUndoStop() // com.aardarch.aardink.core/CodeEditorState.pushUndoStop|pushUndoStop(){}[0]
     final fun redo(): kotlin/String? // com.aardarch.aardink.core/CodeEditorState.redo|redo(){}[0]
     final fun requestRename(kotlin/Int = ...) // com.aardarch.aardink.core/CodeEditorState.requestRename|requestRename(kotlin.Int){}[0]
+    final fun revalidate() // com.aardarch.aardink.core/CodeEditorState.revalidate|revalidate(){}[0]
     final fun scheduleTokenization() // com.aardarch.aardink.core/CodeEditorState.scheduleTokenization|scheduleTokenization(){}[0]
     final fun setSelections(kotlin.collections/List<androidx.compose.ui.text/TextRange>) // com.aardarch.aardink.core/CodeEditorState.setSelections|setSelections(kotlin.collections.List<androidx.compose.ui.text.TextRange>){}[0]
     final fun tokensForLine(kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/CodeEditorState.tokensForLine|tokensForLine(kotlin.Int){}[0]

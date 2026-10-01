@@ -97,8 +97,9 @@ import kotlinx.coroutines.withContext
  *
  * @param options How the editor looks and behaves; see [EditorOptions].
  * @param diagnostics Diagnostics to show as gutter dots and squiggles, or null for the editor to
- *   ask [languageService] for them, 500 ms after it appears and after each pause in typing,
- *   dropping any answer for text that has changed since it was asked. Either way their ranges
+ *   ask [languageService] for them, 500 ms after it appears, after each pause in typing and at
+ *   once on [CodeEditorState.revalidate], dropping any answer for text that has changed since it
+ *   was asked. Either way their ranges
  *   move along with each edit until the next list arrives.
  * @param savedText Baseline text for the diff lane (typically the last-saved version).
  * @param onDiagnosticsChange Called with each list the editor collects from [languageService] while
@@ -161,12 +162,16 @@ fun CodeEditorLayout(
             if (diagnosticsTracker.diagnostics.isNotEmpty()) publish(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        var askedVersion: Int? = null
+        snapshotFlow { state.textVersion to state.revalidations }.collectLatest { (textVersion, _) ->
             // Asked once typing pauses, as Monaco's validation is; collectLatest drops a pass
             // still running when the next edit comes. The first pass waits too, so that it runs
             // after the editor's first frames rather than among them: on the web it shares their
-            // thread, and in among the first highlighting pass it could hold up a frame.
-            delay(DIAGNOSTICS_DEBOUNCE_MS)
+            // thread, and in among the first highlighting pass it could hold up a frame. Only a
+            // revalidate() of text already asked about goes at once.
+            val edited = textVersion != askedVersion
+            askedVersion = textVersion
+            if (edited) delay(DIAGNOSTICS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val list = if (state.exceedsAnalysisLimit) {
                 emptyList()

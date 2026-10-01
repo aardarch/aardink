@@ -177,6 +177,8 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   font first, and `preloadAardink()` fetches the font early (`AardinkWeb.preloadFont()`).
   `dispose()` takes the editor's element out of the page (the editor now mounts into an element of
   its own inside the container), which from Compose Multiplatform 1.13 releases it entirely.
+- `CodeEditorState.revalidate()` collects the language service's diagnostics again at once,
+  without waiting for an edit, for when what they depend on outside the text has changed.
 
 ### Changed
 

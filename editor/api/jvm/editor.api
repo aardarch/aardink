@@ -87,6 +87,7 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun redo ()Ljava/lang/String;
 	public final fun requestRename (I)V
 	public static synthetic fun requestRename$default (Lcom/aardarch/aardink/core/CodeEditorState;IILjava/lang/Object;)V
+	public final fun revalidate ()V
 	public final fun scheduleTokenization ()V
 	public final fun setComputeDispatcher (Lkotlinx/coroutines/CoroutineDispatcher;)V
 	public final fun setSelection-5zc-tL8 (J)V

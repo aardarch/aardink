@@ -254,6 +254,20 @@ class CodeEditorState(
         pendingRename = null
     }
 
+    /** Bumped by [revalidate]; [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] asks again on each. */
+    internal var revalidations by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Asks the language service for diagnostics again now, without waiting for an edit: for when
+     * what they depend on outside the text has changed (another file, a setting). An edit made
+     * before they arrive is asked about once typing pauses, as usual. Does nothing while the
+     * layout shows a list the host passed rather than collecting its own.
+     */
+    fun revalidate() {
+        revalidations++
+    }
+
     // ── Convenience reads ─────────────────────────────────────────────────────
 
     /**

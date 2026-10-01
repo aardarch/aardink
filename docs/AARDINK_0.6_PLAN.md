@@ -495,6 +495,8 @@ building its own wasm executable.
    alongside the existing toggles.
 10. Temporary, never released: `@ExperimentalAardinkRenderer` and a renderer switch, used in
     PRs 5–6 and deleted in PR 7.
+11. `CodeEditorState.revalidate()`: collect the language service's diagnostics again at once,
+    without an edit (added for the web's `revalidate()`, rc3).
 
 ### `:languages` — new
 
