@@ -61,6 +61,20 @@ try {
   report.checks.focus = !!document.activeElement && document.activeElement !== document.body;
   report.checks.getValueAfterSet = editor.getValue() === 'val answer = 42\n';
 
+  // An assistant's rewrite: one undo step that keeps the history, reported as an edit, not a flush.
+  const loadedAt = editor.getAlternativeVersionId();
+  const loadedVersion = events.at(-1).versionId;
+  const replaced = editor.replaceValue('val answer = 43\n');
+  await waitFor(() => events.at(-1).versionId > loadedVersion);
+  const replaceEvent = events.at(-1);
+  const edited = editor.executeEdits('smoke', [
+    { range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 }, text: 'var' },
+  ]);
+  report.checks.undoableReplace = replaced === true && edited === true && replaceEvent.isFlush === false &&
+    editor.getValue() === 'var answer = 43\n' && editor.undo() && editor.undo() &&
+    editor.getValue() === 'val answer = 42\n' && editor.getAlternativeVersionId() === loadedAt;
+  editor.setValue('val answer = 42\n'); // no history again, for undoWithNoHistory below
+
   const unsubscribe = editor.onDidChangeContent(() => {});
   unsubscribe();
 

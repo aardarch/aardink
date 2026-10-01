@@ -111,6 +111,51 @@ class WebEditorApiTest {
     }
 
     @Test
+    fun `replaceValue is an edit that undo takes back, history and all`() = runTest {
+        val handle = mount("one\ntwo\n")
+        val seen = mutableListOf<Pair<Int, String>>()
+        AardinkWeb.onContentChange(handle) { _, version, kind -> seen += version to kind }
+        handle.state.value.applyTextEdits(listOf(TextEdit(IntRange(8, 7), "three\n")))
+        awaitUntil { seen.size == 1 }
+        val typed = AardinkWeb.getAlternativeVersionId(handle)
+        AardinkWeb.setSelections(handle, listOf(WebSelection(2, 2, 2, 2)))
+
+        assertTrue(AardinkWeb.replaceValue(handle, "ONE\ntwo\nthree\n"))
+        awaitUntil { seen.size == 2 }
+        assertEquals("edit", seen[1].second, "not a flush: the history is kept")
+        assertTrue(seen[1].first > seen[0].first, "the version goes up: $seen")
+        assertEquals(listOf(WebSelection(2, 2, 2, 2)), AardinkWeb.getSelections(handle), "the caret in unchanged text stays")
+        assertNotEquals(typed, AardinkWeb.getAlternativeVersionId(handle))
+
+        assertTrue(AardinkWeb.undo(handle))
+        assertEquals("one\ntwo\nthree\n", AardinkWeb.getValue(handle))
+        assertEquals(typed, AardinkWeb.getAlternativeVersionId(handle))
+        assertTrue(AardinkWeb.undo(handle), "the edit before it is still in the history")
+        assertEquals("one\ntwo\n", AardinkWeb.getValue(handle))
+        assertFalse(AardinkWeb.replaceValue(handle, "one\ntwo\n"))
+    }
+
+    @Test
+    fun `executeEdits takes Monaco ranges and end selections, not in a read-only editor`() {
+        val handle = mount("foo bar\nbaz")
+        val edits = listOf(
+            WebEdit(WebRange(1, 5, 1, 8), "qux"),
+            // Past the end of the document: the end, as Monaco validates it.
+            WebEdit(WebRange(9, 1, 9, 1), "!"),
+            WebEdit(WebRange(2, 1, 2, 2), null),
+        )
+        assertTrue(AardinkWeb.executeEdits(handle, edits, listOf(WebSelection(1, 5, 1, 8))))
+        assertEquals("foo qux\naz!", AardinkWeb.getValue(handle))
+        assertEquals(listOf(WebSelection(1, 5, 1, 8)), AardinkWeb.getSelections(handle))
+        AardinkWeb.undo(handle)
+        assertEquals("foo bar\nbaz", AardinkWeb.getValue(handle), "one undo step")
+
+        AardinkWeb.patchOptions(handle, """{ "readOnly": true }""")
+        assertFalse(AardinkWeb.executeEdits(handle, edits))
+        assertEquals("foo bar\nbaz", AardinkWeb.getValue(handle))
+    }
+
+    @Test
     fun `format changes only what differs, as one undo step`() = runTest {
         val handle = mount("{\"a\":1,\n\"b\":[1,2]}", WebEditorOptions(language = "json"))
         val done = CompletableDeferred<Boolean>()

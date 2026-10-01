@@ -524,6 +524,10 @@ building its own wasm executable.
   `sortText`, `range` and kinds `transform` / `colorRef`, Monaco's `{ suggestions }` list with
   `exclusive`, and a hover's `example`
 - **`AardinkWeb.revalidate(handle)`** (rc3), as `revalidate()` in `index.d.ts`
+- **Undoable programmatic edits (rc3):** `AardinkWeb.replaceValue(handle, text)`,
+  `executeEdits(handle, edits, endSelections)` and `executeEditsJson`, with `WebRange` and
+  `WebEdit`; in `index.d.ts`, `replaceValue(text)`, Monaco's
+  `executeEdits(source, edits, endCursorState)` and `AardinkEditOperation`
 - **Everything above mirrored** in `ExportsTemplate.kt`, `sample-web/Exports.kt`, `index.js` and
   `index.d.ts`
 

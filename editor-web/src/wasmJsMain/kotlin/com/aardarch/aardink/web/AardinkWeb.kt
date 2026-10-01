@@ -256,9 +256,76 @@ object AardinkWeb {
     /** The editor's current text. */
     fun getValue(handle: AardinkEditorHandle): String = handle.state.value.document.text
 
-    /** Replaces the whole text and clears undo history, like Monaco's `setValue`. Fires `onChange`. */
+    /**
+     * Replaces the whole text and clears undo history, like Monaco's `setValue`. Fires `onChange`.
+     * For a replacement the user can undo, use [replaceValue].
+     */
     fun setValue(handle: AardinkEditorHandle, text: String) {
         handle.state.value.loadText(text)
+    }
+
+    /**
+     * Replaces the whole text with [text] as one undo step, keeping the history, unlike [setValue]:
+     * for a rewrite the user should be able to undo, such as an assistant's. Only what differs
+     * changes, so carets, folds and diagnostics in unchanged text stay where they are. Reported to
+     * [onContentChange] as an `"edit"` with a new version; [undo] brings the old text back, and
+     * [getAlternativeVersionId] to its value then. Works in a read-only editor, as [setValue] does.
+     * Returns whether the text changed.
+     */
+    fun replaceValue(handle: AardinkEditorHandle, text: String): Boolean = handle.state.value.replaceText(text)
+
+    /**
+     * Applies [edits] as one undo step, keeping the history, as Monaco's `executeEdits`: each is
+     * reduced to the characters it really changes, so carets, folds and diagnostics elsewhere stay
+     * put (see [CodeEditorState.executeEdits]). Afterwards the selections are [endSelections] when
+     * given, else carried through the edits. Reported to [onContentChange] as an `"edit"`.
+     *
+     * Returns false, changing nothing, in a read-only editor (as Monaco's does); true otherwise,
+     * also when the edits left the text as it was.
+     *
+     * @throws IllegalArgumentException if two edits overlap.
+     */
+    fun executeEdits(handle: AardinkEditorHandle, edits: List<WebEdit>, endSelections: List<WebSelection>? = null): Boolean {
+        if (handle.options.value.readOnly) return false
+        val state = handle.state.value
+        val document = state.document
+        state.executeEdits(
+            edits.map { edit ->
+                val range = edit.range
+                val a = offsetOf(document, range.startLineNumber, range.startColumn)
+                val b = offsetOf(document, range.endLineNumber, range.endColumn)
+                TextEdit(minOf(a, b) until maxOf(a, b), edit.text.orEmpty())
+            },
+            endSelections?.map {
+                TextRange(
+                    offsetOf(document, it.selectionStartLineNumber, it.selectionStartColumn),
+                    offsetOf(document, it.positionLineNumber, it.positionColumn),
+                )
+            },
+        )
+        return true
+    }
+
+    /**
+     * [executeEdits] from a JSON array of [WebEdit] and a JSON array of [WebSelection] or `null`.
+     *
+     * @throws IllegalArgumentException for JSON that is not that, or edits that overlap.
+     */
+    fun executeEditsJson(handle: AardinkEditorHandle, editsJson: String, endSelectionsJson: String = "null"): Boolean = executeEdits(
+        handle,
+        json.decodeFromString(editsJsonSerializer, editsJson),
+        json.decodeFromString(selectionsJsonSerializer.nullable, endSelectionsJson),
+    )
+
+    /**
+     * The offset of a 1-based [line] and [column] in [document], as Monaco validates a position: a
+     * line before the first is the start of the document, one after the last its end, and a column
+     * past the end of its line that line's end.
+     */
+    private fun offsetOf(document: CodeDocument, line: Int, column: Int): Int = when {
+        line < 1 -> 0
+        line > document.lineCount -> document.length
+        else -> document.lineColToOffset(line - 1, (column - 1).coerceAtLeast(0))
     }
 
     /** The options currently in effect. */
@@ -596,6 +663,7 @@ object AardinkWeb {
 
     private val diagnosticsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebDiagnostic.serializer())
     private val selectionsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebSelection.serializer())
+    private val editsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebEdit.serializer())
 
     private fun resolveLanguage(registry: LanguageRegistry, id: String): LanguageDefinition =
         registry.byId(id) ?: registry.byId("plaintext") ?: registry.all.first()

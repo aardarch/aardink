@@ -44,6 +44,18 @@ const savedAt = editor.getAlternativeVersionId(); // unsaved while it differs
 editor.dispose();
 ```
 
+`setValue` is for opening a file: it clears the undo history. A change the user should be able to
+undo, such as an assistant's rewrite, goes through `replaceValue` (the whole text) or Monaco's
+`executeEdits` (ranges). Either is one undo step that keeps the history before it, and changes
+only what differs, so carets and folds in unchanged text stay put:
+
+```ts
+editor.replaceValue(rewritten); // undo() brings the old text back
+editor.executeEdits('assistant', [
+  { range: { startLineNumber: 3, startColumn: 1, endLineNumber: 3, endColumn: 9 }, text: '<button/>' },
+]);
+```
+
 A language of your own is a Monarch grammar registered before use, optionally extending a built-in
 language's completions, diagnostics and folding, with Monaco's `defineTheme` for its colours:
 

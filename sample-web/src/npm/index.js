@@ -64,6 +64,25 @@ function withRange(s) {
   };
 }
 
+/** The fields of a Monaco `ISelection` the Kotlin side reads. */
+function toKotlinSelection(s) {
+  return {
+    selectionStartLineNumber: s.selectionStartLineNumber,
+    selectionStartColumn: s.selectionStartColumn,
+    positionLineNumber: s.positionLineNumber,
+    positionColumn: s.positionColumn,
+  };
+}
+
+/** The fields of a Monaco edit operation the Kotlin side reads; a Monaco `Range` is a class, so copy them. */
+function toKotlinEdit(edit) {
+  const r = edit.range;
+  return {
+    range: { startLineNumber: r.startLineNumber, startColumn: r.startColumn, endLineNumber: r.endLineNumber, endColumn: r.endColumn },
+    text: edit.text ?? null,
+  };
+}
+
 /** For debugging a grammar: the tokens of `text` in `languageId`, per line, as Monaco's tokenize gives them. */
 export async function tokenize(text, languageId) {
   const k = await load();
@@ -192,6 +211,15 @@ export async function createEditor(container, onChange, options = {}) {
   return {
     getValue: () => k.aardinkGetValue(id),
     setValue: (text) => k.aardinkSetValue(id, text),
+    replaceValue: (text) => k.aardinkReplaceValue(id, text),
+    executeEdits(source, edits, endCursorState) {
+      // `source` only names the edit in Monaco; a cursor-state computer function is not called.
+      const selections = Array.isArray(endCursorState) && endCursorState.length ? endCursorState.map(toKotlinSelection) : null;
+      const result = k.aardinkExecuteEdits(id, JSON.stringify(edits.map(toKotlinEdit)), JSON.stringify(selections));
+      if (result === 'read-only') return false;
+      if (result) throw new Error(`Aardink: ${result}`);
+      return true;
+    },
     updateOptions: (patch) => k.aardinkUpdateOptions(id, JSON.stringify(toKotlinOptions(patch))),
     onDidChangeContent(listener) {
       contentListeners.add(listener);
@@ -212,16 +240,7 @@ export async function createEditor(container, onChange, options = {}) {
     format: () => new Promise((resolve) => k.aardinkFormat(id, resolve)),
     focus: () => k.aardinkFocus(id),
     getSelections: () => JSON.parse(k.aardinkGetSelections(id)).map(withRange),
-    setSelections: (selections) =>
-      k.aardinkSetSelections(
-        id,
-        JSON.stringify(selections.map((s) => ({
-          selectionStartLineNumber: s.selectionStartLineNumber,
-          selectionStartColumn: s.selectionStartColumn,
-          positionLineNumber: s.positionLineNumber,
-          positionColumn: s.positionColumn,
-        }))),
-      ),
+    setSelections: (selections) => k.aardinkSetSelections(id, JSON.stringify(selections.map(toKotlinSelection))),
     canUndo: () => k.aardinkCanUndo(id),
     canRedo: () => k.aardinkCanRedo(id),
     pushUndoStop: () => k.aardinkPushUndoStop(id),

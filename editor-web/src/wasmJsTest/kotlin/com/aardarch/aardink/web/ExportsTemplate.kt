@@ -68,6 +68,21 @@ fun aardinkCreate(containerId: String, initialText: String, optionsJson: String)
 
 @JsExport fun aardinkSetValue(id: Int, text: String) = AardinkWeb.setValue(handle(id), text)
 
+/** Replaces the whole text as one undo step, keeping the history; returns whether it changed. */
+@JsExport fun aardinkReplaceValue(id: Int, text: String): Boolean = AardinkWeb.replaceValue(handle(id), text)
+
+/**
+ * Applies a JSON array of Monaco edits (`{ range, text }`) as one undo step, then places a JSON
+ * array of selections, or keeps the carets for `null`. Returns "" when applied, "read-only" when
+ * the editor is read-only, else what was wrong with the edits.
+ */
+@JsExport
+fun aardinkExecuteEdits(id: Int, editsJson: String, endSelectionsJson: String): String = try {
+    if (AardinkWeb.executeEditsJson(handle(id), editsJson, endSelectionsJson)) "" else "read-only"
+} catch (e: IllegalArgumentException) {
+    e.message ?: "not a list of edits"
+}
+
 /** [patchJson] holds only the options to change, like Monaco's `updateOptions`. */
 @JsExport fun aardinkUpdateOptions(id: Int, patchJson: String) = AardinkWeb.patchOptions(handle(id), patchJson)
 

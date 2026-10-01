@@ -67,6 +67,31 @@ class ExportsTemplateTest {
     }
 
     @Test
+    fun `undoable edits through the exports, refused when read-only or overlapping`() {
+        val id = aardinkCreate(container.id, "one\ntwo", "{}")
+        try {
+            assertTrue(aardinkReplaceValue(id, "one\nTWO"))
+            val edit = """[{ "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 4 }, "text": "ONE" }]"""
+            assertEquals("", aardinkExecuteEdits(id, edit, "null"))
+            assertEquals("ONE\nTWO", aardinkGetValue(id))
+            val overlapping = """[
+                { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 3 }, "text": "a" },
+                { "range": { "startLineNumber": 1, "startColumn": 2, "endLineNumber": 1, "endColumn": 4 }, "text": "b" }
+            ]"""
+            assertTrue(aardinkExecuteEdits(id, overlapping, "null").contains("Overlapping"))
+            assertTrue(aardinkExecuteEdits(id, "not json", "null").isNotEmpty())
+            assertTrue(aardinkUndo(id))
+            assertTrue(aardinkUndo(id))
+            assertEquals("one\ntwo", aardinkGetValue(id))
+            aardinkUpdateOptions(id, """{"readOnly": true}""")
+            assertEquals("read-only", aardinkExecuteEdits(id, edit, "null"))
+            assertEquals("one\ntwo", aardinkGetValue(id))
+        } finally {
+            aardinkDispose(id)
+        }
+    }
+
+    @Test
     fun `the language's own diagnostics reach the diagnostics callback as JSON`() = runTest {
         val id = aardinkCreate(container.id, "[1,]", """{"language": "json"}""")
         try {

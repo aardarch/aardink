@@ -78,3 +78,19 @@ data class WebSelection(
  */
 @Serializable
 data class WebDiagnostic(val line: Int, val startColumn: Int, val endColumn: Int, val message: String, val severity: String = "error")
+
+/**
+ * A range as a web host describes it: Monaco's `IRange`, 1-based, from [startLineNumber] and
+ * [startColumn] to [endLineNumber] and [endColumn], which is **exclusive**. A position past the end
+ * of its line is the line's end; one past the last line, the end of the document.
+ */
+@Serializable
+data class WebRange(val startLineNumber: Int, val startColumn: Int, val endLineNumber: Int, val endColumn: Int)
+
+/**
+ * An edit as a web host describes it, for [AardinkWeb.executeEdits]: Monaco's
+ * `IIdentifiedSingleEditOperation`, replacing [range] with [text]. `null` or `""` deletes the
+ * range; an empty range inserts.
+ */
+@Serializable
+data class WebEdit(val range: WebRange, val text: String? = null)

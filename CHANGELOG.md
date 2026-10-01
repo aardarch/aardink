@@ -195,6 +195,13 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   a whole new text, as one undo step that keeps the history (unlike `loadText`), each edit reduced
   to the characters it really changes so carets, folds and diagnostics in unchanged text stay put.
   Overlapping edits are refused.
+- **Web:** undoable programmatic edits. `replaceValue(text)` replaces the whole text as one undo
+  step that keeps the history, unlike `setValue`, so an assistant's rewrite can be undone without
+  losing the user's history; Monaco's `executeEdits(source, edits, endCursorState)` applies ranges
+  the same way, and returns `false` in a read-only editor. Both reach `onDidChangeContent` with
+  `isFlush: false` and a new `versionId`, and `undo()` returns `getAlternativeVersionId()` to its
+  earlier value. In Kotlin, `AardinkWeb.replaceValue` and `executeEdits` with `WebEdit` and
+  `WebRange`.
 
 ### Changed
 

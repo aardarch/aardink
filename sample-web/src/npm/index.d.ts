@@ -72,14 +72,48 @@ export interface AardinkContentChange {
   versionId: number;
   isUndoing: boolean;
   isRedoing: boolean;
-  /** The whole text was replaced (`setValue`). */
+  /** The whole text was replaced and the undo history cleared (`setValue`); `false` for `replaceValue` and `executeEdits`. */
   isFlush: boolean;
+}
+
+/**
+ * Monaco's `IIdentifiedSingleEditOperation`, for `executeEdits`: replaces `range` with `text`.
+ * `null` or `''` deletes the range; an empty range inserts. A position past the end of its line is
+ * the line's end, and one past the last line the end of the text, as Monaco validates them.
+ */
+export interface AardinkEditOperation {
+  range: AardinkRange;
+  text: string | null;
+  /** Accepted for Monaco's shape, and ignored. */
+  forceMoveMarkers?: boolean;
 }
 
 export interface AardinkEditor {
   getValue(): string;
-  /** Replaces the whole text and clears undo history. Fires the change listeners. */
+  /**
+   * Replaces the whole text and clears undo history, as when a file is opened. Fires the change
+   * listeners with `isFlush: true`. For a change the user should be able to undo, use
+   * `replaceValue` or `executeEdits`.
+   */
   setValue(text: string): void;
+  /**
+   * Replaces the whole text as one undo step, keeping the history before it: for a rewrite the user
+   * should be able to undo, such as an assistant's. Only what differs changes (lines compared, then
+   * characters), so carets, folds and diagnostics in unchanged text stay where they are. The change
+   * listeners get it with `isFlush: false` and a new `versionId`; `undo()` brings the old text back,
+   * and `getAlternativeVersionId()` its value then. Works in a read-only editor, as `setValue` does.
+   * Returns whether the text changed.
+   */
+  replaceValue(text: string): boolean;
+  /**
+   * Monaco's `executeEdits`: applies `edits` (which must not overlap) as one undo step, keeping the
+   * history, each reduced to the characters it really changes so carets and folds elsewhere stay
+   * put. Then selects `endCursorState` when given, else carries the selections through the edits;
+   * a cursor-state computer function is not called. `source` is accepted for Monaco's shape.
+   * Returns `false`, changing nothing, in a read-only editor, as Monaco does; throws for edits that
+   * overlap. Reported to the change listeners as for `replaceValue`.
+   */
+  executeEdits(source: string | null | undefined, edits: AardinkEditOperation[], endCursorState?: AardinkSelection[] | ((...args: unknown[]) => unknown)): boolean;
   updateOptions(options: Partial<AardinkOptions>): void;
   /** Full text after every change, at most once per frame, and what the change was. Returns an unsubscribe function. */
   onDidChangeContent(listener: (text: string, change: AardinkContentChange) => void): () => void;

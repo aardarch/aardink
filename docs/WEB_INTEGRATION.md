@@ -60,6 +60,8 @@ There are two ways in:
 | --- | --- |
 | `mount(containerId, initialText, options, registry, themes)` | Renders an editor into the element with that id (it fills the element) and returns a handle. |
 | `getValue` / `setValue` | Read or replace the whole text. `setValue` clears undo history, like Monaco's, and keeps the text exactly as given (CR LF included). |
+| `replaceValue(text)` | Replaces the whole text as one undo step that keeps the history, unlike `setValue`: for a rewrite the user can undo, such as an assistant's. Only what differs changes (lines compared, then characters), so carets, folds and diagnostics in unchanged text stay put. Reported as an `"edit"`; `undo` brings the old text back and `getAlternativeVersionId` its value then. Works in a read-only editor, as `setValue` does. Returns whether the text changed. |
+| `executeEdits(edits, endSelections)` / `executeEditsJson` | Monaco's `executeEdits`: `WebEdit`s (`{ range, text }`, a 1-based, end-exclusive `WebRange`) applied as one undo step that keeps the history, each reduced to what it really changes. The selections are `endSelections` when given, else carried through the edits. `false` in a read-only editor, as in Monaco; edits that overlap throw. |
 | `updateOptions(options)` / `patchOptions(json)` / `currentOptions` | Replace all options, or apply only the JSON keys given (Monaco's `updateOptions(partial)`). |
 | `onChange(callback)` | Full text after each change, typed or programmatic; at most once per frame. One listener; `null` removes it. |
 | `onContentChange(callback)` | Like `onChange`, with the text's version and what the change was: `"edit"`, `"undo"`, `"redo"` or `"flush"`. |
@@ -253,6 +255,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush }`. |
 | `getSelections` / `setSelections` | The same | Monaco's `Selection` fields. |
 | `model.canUndo`, `canRedo`, `pushStackElement`, `getAlternativeVersionId` | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | |
+| `editor.executeEdits(source, edits, endCursorState)` | `executeEdits` | The same arguments; `endCursorState` as an array of selections (a computer function is not called). Each edit is reduced to what it really changes, so carets inside an edit whose text is mostly unchanged stay put. Each call is an undo step of its own, as with `pushUndoStop` before and after. |
+| `model.pushEditOperations` over `getFullModelRange()`, to replace the text undoably | `replaceValue(text)` | One call; only what differs changes. `setValue` stays for opening a file. |
 | `getAction('editor.action.formatDocument').run()` | `format()` | Resolves with whether anything changed. |
 | `monaco.editor.tokenize` | `tokenize` | Same arguments and shape: a grammar's own names, and Monaco's names for the built-in languages' tokens (`keyword.flow`, `comment.doc`, `string.escape`, ...). |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
