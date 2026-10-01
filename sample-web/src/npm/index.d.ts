@@ -205,7 +205,12 @@ export function createEditor(
 /** For debugging a grammar: the tokens of `text` in `languageId`, per line, as Monaco's `tokenize` gives them. */
 export function tokenize(text: string, languageId: string): Promise<{ offset: number; type: string }[][]>;
 
-/** Starts loading the WebAssembly module without mounting anything. */
+/**
+ * Starts loading the WebAssembly module without mounting anything. Every call shares one load.
+ * When it fails (a network error, say), this and every call waiting on it reject, and the next
+ * call of any function here starts a new load. A browser may still hold on to a module whose
+ * download failed until the page is reloaded (Chrome does), so that new load can fail the same way.
+ */
 export function preloadAardink(): Promise<void>;
 
 /** The Aardink version this package was built from. */

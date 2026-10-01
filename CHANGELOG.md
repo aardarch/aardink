@@ -250,6 +250,10 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `#RGBA` now.
 - A touch tap in the web editor did nothing once a mouse had been over the page (a hovering mouse
   pointer never lifts, and the tap waited for it).
+- The npm package kept a failed load of its WebAssembly module, so after one network error every
+  later `createEditor`, `registerLanguage` and `registerTheme` on the page failed too. The next
+  call now loads again. Chrome still keeps a module whose download failed until the page is
+  reloaded.
 
 ### Known issues
 

@@ -52,7 +52,7 @@ sample-web/      # wasmJs executable: browser harness + builds the @aardarch/aar
   src/npm/       # index.js / index.d.ts / package.json template for the npm package
 
 tools/consumer-smoke/   # Android app depending on the PUBLISHED coordinates, not project(...)
-tools/vite-smoke/       # Vite app consuming the built npm package; `pnpm smoke` drives it in headless Chrome
+tools/vite-smoke/       # Vite app consuming the built npm package; `pnpm smoke` tests its loader in Node, then drives it in headless Chrome
 screenshots/     # Committed Roborazzi baselines -- verifyRoborazziDebug compares against these
 ```
 

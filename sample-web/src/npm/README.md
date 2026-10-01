@@ -59,7 +59,9 @@ await defineTheme('toy-dark', { base: 'vs-dark', inherit: true, rules: [{ token:
 
 The editor fills its container, so give the container a size. `createEditor` is async because
 the first call loads the WebAssembly module (about 13 MB, 4.7 MB gzipped); every editor on the
-page shares that one module. See [`index.d.ts`](./index.d.ts) for the full API, and the
+page shares that one module. If that load fails, the call rejects and the next call loads again
+(though Chrome keeps a failed module download until the page is reloaded). See
+[`index.d.ts`](./index.d.ts) for the full API, and the
 [integration guide](https://github.com/aardarch/aardink/blob/main/docs/WEB_INTEGRATION.md) for how
 Monaco's options and calls map onto it.
 

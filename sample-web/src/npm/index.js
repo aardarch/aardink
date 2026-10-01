@@ -25,15 +25,22 @@ export const CompletionItemInsertTextRule = Object.freeze({ None: 0, KeepWhitesp
 let kotlinModule;
 
 function load() {
-  // Memoised: every editor on the page shares one WebAssembly instance.
-  kotlinModule ??= import('./kotlin/aardink-web.mjs').then((k) => {
-    // Compose looks for resources relative to the page, not this package. A literal
-    // new URL(..., import.meta.url) is also what makes a bundler (Vite) emit the font file.
-    k.aardinkSetBundledFontUrl(
-      new URL('./kotlin/composeResources/com.aardarch.aardink.web.res/font/jetbrains_mono_regular.ttf', import.meta.url).href,
-    );
-    return k;
-  });
+  // Memoised: every editor on the page shares one WebAssembly instance. A failed load is
+  // forgotten, so the next call tries again rather than repeating one network blip for the
+  // page's life.
+  kotlinModule ??= import('./kotlin/aardink-web.mjs')
+    .then((k) => {
+      // Compose looks for resources relative to the page, not this package. A literal
+      // new URL(..., import.meta.url) is also what makes a bundler (Vite) emit the font file.
+      k.aardinkSetBundledFontUrl(
+        new URL('./kotlin/composeResources/com.aardarch.aardink.web.res/font/jetbrains_mono_regular.ttf', import.meta.url).href,
+      );
+      return k;
+    })
+    .catch((error) => {
+      kotlinModule = undefined;
+      throw error;
+    });
   return kotlinModule;
 }
 
