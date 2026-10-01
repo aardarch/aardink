@@ -497,6 +497,10 @@ building its own wasm executable.
     PRs 5–6 and deleted in PR 7.
 11. `CodeEditorState.revalidate()`: collect the language service's diagnostics again at once,
     without an edit (added for the web's `revalidate()`, rc3).
+12. `CodeEditorState.executeEdits(edits, selectionsAfter = null): Boolean` and
+    `replaceText(newText): Boolean`: edits, or a whole new text, as one undo step that keeps the
+    history, each reduced to what it really changes (added for the web's `executeEdits` and
+    `replaceValue`, rc3).
 
 ### `:languages` — new
 

@@ -191,6 +191,10 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - **Web:** `revalidate()` (`AardinkWeb.revalidate`) collects the language's own diagnostics again
   at once, for when what a registered language's `provideDiagnostics` depends on outside the text
   has changed.
+- `CodeEditorState.executeEdits(edits, selectionsAfter)` and `replaceText(newText)` apply edits, or
+  a whole new text, as one undo step that keeps the history (unlike `loadText`), each edit reduced
+  to the characters it really changes so carets, folds and diagnostics in unchanged text stay put.
+  Overlapping edits are refused.
 
 ### Changed
 

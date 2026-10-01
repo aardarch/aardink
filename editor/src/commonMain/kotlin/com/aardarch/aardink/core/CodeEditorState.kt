@@ -31,6 +31,7 @@ import com.aardarch.aardink.core.edit.CommandEdit
 import com.aardarch.aardink.core.edit.EditKind
 import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.LineCommands
+import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.OccurrenceFinder
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.SnippetParser
@@ -124,7 +125,8 @@ class CodeEditorState(
 
     /**
      * Bumped by every mutation that did not come from typing — every call to [applyEdit],
-     * [applyTextEdits], [loadText], [undo], [redo], and the editor's key commands.
+     * [applyTextEdits], [executeEdits], [replaceText], [loadText], [undo], [redo], and the
+     * editor's key commands.
      * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] uses this to dismiss transient
      * UI (the completion dropdown, a diagnostic tooltip, the code-action menu) whose state
      * describes text that just changed out from under it.
@@ -333,6 +335,51 @@ class CodeEditorState(
         val before = currentSelections()
         applyChanges(changes, EditKind.Other) { before.map { mapOffset(it, changes) } }
     }
+
+    /**
+     * Applies [edits] as one undo step of their own, keeping the history before it, as Monaco's
+     * `executeEdits`: [undo] takes the text back to what it was, and [alternativeVersionId] back to
+     * its value then. Each edit is first reduced to the characters it really changes (lines
+     * compared, then characters, as for a formatter's result), so carets, folds and diagnostics in
+     * text it leaves as it was stay where they are, even when an edit replaces the whole document.
+     * The selections are then [selectionsAfter] when given (clamped to the document; an empty list
+     * counts as none), and otherwise carried through the edits as [applyTextEdits] carries them.
+     * Ranges past the end of the document are clamped to it.
+     *
+     * Returns whether the text changed; when it did not, nothing is recorded and only the selections
+     * are placed.
+     *
+     * @throws IllegalArgumentException if two edits overlap (an insert may touch a replaced range).
+     */
+    fun executeEdits(edits: List<TextEdit>, selectionsAfter: List<TextRange>? = null): Boolean {
+        val requested = edits.map { edit ->
+            val start = edit.range.first.coerceIn(0, document.length)
+            TextChange(start, (edit.range.last + 1).coerceIn(start, document.length), edit.newText)
+        }
+        // Sorted by start, an edit overlaps another exactly when it overlaps the next one.
+        requested.sortedWith(compareBy({ it.start }, { it.end })).zipWithNext { a, b ->
+            require(b.start >= a.end) { "Overlapping edits: ${a.start}..${a.end} and ${b.start}..${b.end}" }
+        }
+        val changes = requested.flatMap { change ->
+            if (change.start == change.end) return@flatMap listOf(change)
+            MinimalEdits.between(document.subSequence(change.start, change.end).toString(), change.text).map {
+                TextChange(change.start + it.range.first, change.start + it.range.last + 1, it.newText)
+            }
+        }
+        val before = currentSelections()
+        val requestedAfter = selectionsAfter?.takeIf { it.isNotEmpty() }
+        return applyChanges(changes, EditKind.Other) {
+            if (requestedAfter != null) SelectionSet.of(requestedAfter) else before.map { mapOffset(it, changes) }
+        }
+    }
+
+    /**
+     * Replaces the whole text with [newText] as one undo step, keeping the history: unlike
+     * [loadText], [undo] brings the old text back. Only what differs changes, so carets, folds and
+     * diagnostics in unchanged text stay where they are (see [executeEdits]). For a whole new text
+     * from a tool or an assistant; returns whether the text changed.
+     */
+    fun replaceText(newText: String): Boolean = executeEdits(listOf(TextEdit(0 until document.length, newText)))
 
     /**
      * Undoes the most recent undo step, restoring the selections from before it, and returns the

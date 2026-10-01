@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -162,6 +163,78 @@ class CodeEditorStateTest {
 
         assertEquals("import a.forEach\nimport x\nforEach", state.text)
         assertEquals(TextRange(state.text.length), state.selection)
+    }
+
+    @Test
+    fun `replaceText is one undo step that keeps the history before it`() {
+        val state = testState("one\ntwo\n")
+        state.applyEdit(8, 0, "three\n", TextRange(14))
+        val typed = state.alternativeVersionId
+        val version = state.textVersion
+        assertTrue(state.replaceText("ONE\ntwo\nthree\nfour\n"))
+        assertEquals("ONE\ntwo\nthree\nfour\n", state.text)
+        assertEquals(EditChangeKind.Edit, state.lastChangeKind)
+        assertTrue(state.textVersion > version)
+        assertTrue(state.alternativeVersionId != typed)
+        state.undo()
+        assertEquals("one\ntwo\nthree\n", state.text)
+        assertEquals(typed, state.alternativeVersionId, "back at the version from before the replace")
+        assertTrue(state.canUndo, "the edit before the replace is still there to undo")
+        state.undo()
+        assertEquals("one\ntwo\n", state.text)
+        state.redo()
+        state.redo()
+        assertEquals("ONE\ntwo\nthree\nfour\n", state.text)
+    }
+
+    @Test
+    fun `replaceText changes only what differs, so a caret in unchanged text stays put`() {
+        val state = testState("alpha\nbeta\ngamma\ndelta\n")
+        state.selection = TextRange(13) // inside "gamma"
+        state.replaceText("ALPHA\nbeta\ngamma\nDELTA\n")
+        assertEquals(TextRange(13), state.selection)
+        state.replaceText("inserted\nALPHA\nbeta\ngamma\nDELTA\n")
+        assertEquals(TextRange(22), state.selection, "moved down by the line inserted above it")
+    }
+
+    @Test
+    fun `replaceText with the same text records nothing`() {
+        val state = testState("same")
+        assertFalse(state.replaceText("same"))
+        assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun `executeEdits places the selections it is given`() {
+        val state = testState("foo bar")
+        assertTrue(state.executeEdits(listOf(TextEdit(4..6, "baz")), listOf(TextRange(4, 7))))
+        assertEquals("foo baz", state.text)
+        assertEquals(TextRange(4, 7), state.selection)
+        state.undo()
+        assertEquals("foo bar", state.text)
+    }
+
+    @Test
+    fun `executeEdits refuses overlapping edits and leaves the text alone`() {
+        val state = testState("abcdef")
+        assertFailsWith<IllegalArgumentException> {
+            state.executeEdits(listOf(TextEdit(0..3, "x"), TextEdit(2..4, "y")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            state.executeEdits(listOf(TextEdit(0..3, "x"), TextEdit(2 until 2, "y")))
+        }
+        assertEquals("abcdef", state.text)
+        assertTrue(state.executeEdits(listOf(TextEdit(0..2, "x"), TextEdit(3 until 3, "y"), TextEdit(3 until 3, "z"))))
+        assertEquals("xyzdef", state.text)
+    }
+
+    @Test
+    fun `executeEdits undoes on its own, not with the edit before it`() {
+        val state = testState("")
+        state.applyEdit(0, 0, "a", TextRange(1))
+        state.executeEdits(listOf(TextEdit(1 until 1, "b")))
+        state.undo()
+        assertEquals("a", state.text)
     }
 
     @Test
