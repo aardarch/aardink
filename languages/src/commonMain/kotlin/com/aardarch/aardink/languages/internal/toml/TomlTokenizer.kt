@@ -16,7 +16,9 @@
 package com.aardarch.aardink.languages.internal.toml
 
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.BACKSLASH_ESCAPE
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
 /** Regex-driven TOML tokenizer. */
@@ -59,6 +61,11 @@ object TomlTokenizer : RegexTokenizer() {
         // Punctuation and operators
         Regex("[=\\[\\]{},.]") to TokenType.Punctuation,
     )
+
+    override val stringEscapes: Regex = BACKSLASH_ESCAPE
+
+    // Only basic strings ("...", """...""") have escapes; literal ones ('...') are raw.
+    override fun hasEscapes(text: String, token: Token): Boolean = text[token.start] == '"'
 
     override val commentSyntax: CommentSyntax = CommentSyntax(line = "#")
 

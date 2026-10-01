@@ -41,6 +41,8 @@ import androidx.compose.runtime.Immutable
  * @property showMinimap A zoomed-out map of the whole document at the right edge. Off by default.
  * @property tabSize Columns a tab and an indentation step are wide.
  * @property insertSpaces Tab and indentation insert spaces ([tabSize] of them) rather than a tab.
+ * @property renderWhitespace Which spaces and tabs are drawn, as faint dots and arrows in
+ *   `EditorTheme.whitespaceColor`. VS Code's default: those inside a selection.
  */
 @Immutable
 data class EditorOptions(
@@ -58,8 +60,27 @@ data class EditorOptions(
     val showMinimap: Boolean = false,
     val tabSize: Int = 4,
     val insertSpaces: Boolean = true,
+    val renderWhitespace: RenderWhitespace = RenderWhitespace.Selection,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
     }
+}
+
+/** Which whitespace [EditorOptions.renderWhitespace] draws; the values of VS Code's setting. */
+enum class RenderWhitespace {
+    /** None. */
+    None,
+
+    /** All but a single space between two words. */
+    Boundary,
+
+    /** Only inside a selection. */
+    Selection,
+
+    /** Only after a line's last non-whitespace character, or all of a blank line's. */
+    Trailing,
+
+    /** Every space and tab. */
+    All,
 }

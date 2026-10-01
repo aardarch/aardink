@@ -75,7 +75,7 @@ class StickyScrollTest {
             style = ViewStyle(
                 measurer = measurer,
                 textStyle = textStyle,
-                tokenStyles = emptyMap(),
+                tokenStyle = { null },
                 placeholderStyle = SpanStyle(color = Color.Gray),
                 metrics = EditorMetrics(
                     lineHeight = 20f,

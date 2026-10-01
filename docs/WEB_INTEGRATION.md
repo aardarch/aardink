@@ -199,10 +199,11 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   grammar highlights a line at a time, so an edit rescans only until the lines below are back in
   the state they were in. [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real
   Monaco language over this way.
-- **Colours** follow token names by dotted prefix, as in Monaco: `tag.aardflex` takes the theme's
-  `tag.aardflex` colour, else its `tag` colour, else the built-in themes' colour for Monaco's
-  standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). `comment` and
-  `string` tokens are the editor's own comments and strings.
+- **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.aardflex`
+  takes the theme's `tag.aardflex` rule, else its `tag` rule, else the built-in themes' colour for
+  Monaco's standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). A
+  name with a `comment` or `string` part (`comment.doc`, `string.format`) is a comment or a string
+  to the editor, as in Monaco: no bracket colours or matching inside it.
 - **Providers** get the whole text and a 1-based position and may answer at once or with a
   Promise; a provider that throws or rejects gives no answer rather than breaking the editor.
 
@@ -229,14 +230,15 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `getSelections` / `setSelections` | The same | Monaco's `Selection` fields. |
 | `model.canUndo`, `canRedo`, `pushStackElement`, `getAlternativeVersionId` | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | |
 | `getAction('editor.action.formatDocument').run()` | `format()` | Resolves with whether anything changed. |
-| `monaco.editor.tokenize` | `tokenize` | Same arguments and shape. Monaco's `comment.*` and `string.*` names come back as `comment` and `string`. |
+| `monaco.editor.tokenize` | `tokenize` | Same arguments and shape: a grammar's own names, and Monaco's names for the built-in languages' tokens (`keyword.flow`, `comment.doc`, `string.escape`, ...). |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
-| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. Colours only: a rule's `fontStyle` is ignored. |
+| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground` and `fontStyle` apply; its `background` is ignored. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
-| `renderWhitespace`, `fontFamily`, `automaticLayout` | None | Whitespace is not drawn; the font is the bundled JetBrains Mono; the editor always follows its container's size. |
-| Completion snippets (`insertTextRules: InsertAsSnippet`) | None | A completion inserts plain text and leaves the caret after it. |
+| `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
+| Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
+| `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
 
 ## Fonts
 
@@ -341,8 +343,6 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 
 - A disposed editor is not fully released (W-1) on Compose Multiplatform 1.12; reuse editors.
   `dispose()` takes the editor's element out of the page, which from 1.13 frees it entirely.
-- Themes are colours only, whitespace is not drawn, and completions are plain text (no snippet
-  placeholders); see the Monaco table above.
-- A grammar's comments and strings take the theme's `comment` and `string` colours: a rule for
-  `string.format` or `comment.doc` colours nothing.
+- A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
+  faces where it has them; otherwise the text renderer slants or thickens the regular face.
 - The items marked **manual** in the checklist above wait for real devices before 0.6.0.

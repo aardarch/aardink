@@ -75,18 +75,6 @@ public final class com/aardarch/aardink/languages/LanguageRegistry$Companion {
 	public final fun withBuiltIns ()Lcom/aardarch/aardink/languages/LanguageRegistry;
 }
 
-public final class com/aardarch/aardink/languages/NamedTokenType : com/aardarch/aardink/core/TokenType {
-	public static final field $stable I
-	public fun <init> (Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;)Lcom/aardarch/aardink/languages/NamedTokenType;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/NamedTokenType;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/NamedTokenType;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getName ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public abstract class com/aardarch/aardink/languages/internal/BaseLanguageService : com/aardarch/aardink/core/LanguageService {
 	public static final field $stable I
 	public fun <init> ()V
@@ -114,6 +102,8 @@ public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : c
 	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	protected fun getMultiLineConstructs ()Z
 	protected abstract fun getRules ()Ljava/util/List;
+	protected fun getStringEscapes ()Lkotlin/text/Regex;
+	protected fun hasEscapes (Ljava/lang/String;Lcom/aardarch/aardink/core/Token;)Z
 	public fun keyboardToolbarChars ()Ljava/util/List;
 	protected fun refine (Ljava/lang/String;Ljava/util/List;)V
 	public fun tokenizeFull (Ljava/lang/String;)Ljava/util/List;

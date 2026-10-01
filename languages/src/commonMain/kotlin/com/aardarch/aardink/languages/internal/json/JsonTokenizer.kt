@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages.internal.json
 
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.BACKSLASH_ESCAPE
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
 /** Regex-driven JSON tokenizer. Object keys are highlighted as [TokenType.Annotation]. */
@@ -30,6 +31,8 @@ object JsonTokenizer : RegexTokenizer() {
         Regex("-?\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b") to TokenType.Number,
         Regex("[{}\\[\\],:]") to TokenType.Punctuation,
     )
+
+    override val stringEscapes: Regex = BACKSLASH_ESCAPE
 
     override fun keyboardToolbarChars(): List<Char> = listOf('{', '}', '[', ']', '"', ':', ',')
 }

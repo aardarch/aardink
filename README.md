@@ -184,7 +184,8 @@ The [`languages/`](languages/) module is a working reference.
 
 For highlighting alone, no tokenizer code is needed: `DeclarativeTokenizer(DeclarativeGrammar.parse(json))`
 highlights from a Monarch grammar (Monaco's format) as JSON, a line at a time and incrementally.
-Its tokens are `NamedTokenType`s named by the grammar, which an `EditorTheme` colours.
+Its tokens are `NamedTokenType`s named by the grammar, which an `EditorTheme` colours by the
+longest dotted prefix it has an entry for, as Monaco's themes do.
 
 ## Sample apps
 

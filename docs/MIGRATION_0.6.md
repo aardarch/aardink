@@ -180,10 +180,12 @@ optional improvements:
   ```
 
   Its tokens are `NamedTokenType`s (`tag.aardflex.xml`, `variable.module.xml`, ...), coloured by
-  `EditorTheme.tokenColors` entries for exactly those names; `grammar.tokenNames` lists every name
-  the grammar can produce. Comments and strings are the editor's own `TokenType.Comment` and
-  `TokenType.StringLiteral`. `XmlTokenType.Expression` and `ColorRef` and the post-processing then
-  go.
+  the `EditorTheme.tokenColors` entry of the longest dotted prefix of the name that has one, as
+  Monaco does: an entry for `NamedTokenType("tag.aardflex")` colours `tag.aardflex.xml`, and
+  `TokenType.TypeName` (whose `scope` is `type`, the built-in themes' colour for `tag`) colours the
+  rest of the tags. `EditorTheme.tokenFontStyles` makes them bold in the same way.
+  `grammar.tokenNames` lists every name the grammar can produce. `XmlTokenType.Expression` and
+  `ColorRef` and the post-processing then go.
 
 Then re-run the app's screenshot tests, and check an input method (Gboard: autocorrect, voice
 input, a Samsung keyboard's deletes) and TalkBack by hand, since 0.6 replaces the text field

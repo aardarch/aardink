@@ -24,11 +24,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.em
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
@@ -65,12 +68,17 @@ internal data class EditorMetrics(
 internal data class ViewStyle(
     val measurer: TextMeasurer,
     val textStyle: TextStyle,
-    val tokenStyles: Map<TokenType, SpanStyle>,
+    /** What a token of a type is drawn with (colour and font style), or null for plain text. */
+    val tokenStyle: (TokenType) -> SpanStyle?,
     val placeholderStyle: SpanStyle,
     val metrics: EditorMetrics,
     val softWrap: Boolean,
     /** Bracket colours by nesting depth, repeating; null leaves brackets their token colour. */
     val bracketStyles: List<SpanStyle>? = null,
+    /** Columns between tab stops: a tab is as wide as the columns up to the next one. */
+    val tabSize: Int = 4,
+    /** A column's width in em of the text's font size, for a tab's width; 0 leaves tabs as the font draws them. */
+    val columnWidthEm: Float = 0f,
 )
 
 /** One line on screen: its layout, and where it starts in the document and in the content. */
@@ -506,7 +514,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         builder.append(text)
         if (tokens != null) {
             for (i in 0 until tokens.size) {
-                val spanStyle = style.tokenStyles[tokens.types[i]] ?: continue
+                val spanStyle = style.tokenStyle(tokens.types[i]) ?: continue
                 val from = tokens.start(i).coerceIn(0, text.length)
                 val to = tokens.end(i).coerceIn(from, text.length)
                 if (to > from) builder.addStyle(spanStyle, from, to)
@@ -540,8 +548,31 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             style = style.textStyle,
             softWrap = style.softWrap,
             constraints = if (style.softWrap) Constraints(maxWidth = wrapWidth) else Constraints(),
+            placeholders = tabStops(text, style),
             skipCache = true,
         )
+    }
+
+    /**
+     * Every tab of [text] as a blank as wide as the columns to the next tab stop, as code editors
+     * draw tabs; the font alone would draw one about a character wide. A placeholder covers its
+     * own character, so offsets, carets and hit-testing stay as they are.
+     */
+    private fun tabStops(text: String, style: ViewStyle): List<AnnotatedString.Range<Placeholder>> {
+        if (style.columnWidthEm <= 0f || text.indexOf('\t') < 0) return emptyList()
+        val stops = ArrayList<AnnotatedString.Range<Placeholder>>()
+        var column = 0
+        for (i in text.indices) {
+            if (text[i] == '\t') {
+                val columns = style.tabSize - column % style.tabSize
+                val placeholder = Placeholder((columns * style.columnWidthEm).em, 1.em, PlaceholderVerticalAlign.TextCenter)
+                stops += AnnotatedString.Range(placeholder, i, i + 1)
+                column += columns
+            } else {
+                column++
+            }
+        }
+        return stops
     }
 
     // ── Geometry ─────────────────────────────────────────────────────────────

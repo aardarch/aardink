@@ -47,7 +47,7 @@ final class com.aardarch.aardink.web/WebDiagnostic { // com.aardarch.aardink.web
 }
 
 final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.web/WebEditorOptions|null[0]
-    constructor <init>(kotlin/String = ..., kotlin/String = ..., kotlin/Float = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ...) // com.aardarch.aardink.web/WebEditorOptions.<init>|<init>(kotlin.String;kotlin.String;kotlin.Float;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/String = ..., kotlin/String = ..., kotlin/Float = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., kotlin/String = ...) // com.aardarch.aardink.web/WebEditorOptions.<init>|<init>(kotlin.String;kotlin.String;kotlin.Float;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;kotlin.String){}[0]
 
     final val bracketPairColorization // com.aardarch.aardink.web/WebEditorOptions.bracketPairColorization|{}bracketPairColorization[0]
         final fun <get-bracketPairColorization>(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.bracketPairColorization.<get-bracketPairColorization>|<get-bracketPairColorization>(){}[0]
@@ -63,6 +63,8 @@ final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.
         final fun <get-minimap>(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.minimap.<get-minimap>|<get-minimap>(){}[0]
     final val readOnly // com.aardarch.aardink.web/WebEditorOptions.readOnly|{}readOnly[0]
         final fun <get-readOnly>(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.readOnly.<get-readOnly>|<get-readOnly>(){}[0]
+    final val renderWhitespace // com.aardarch.aardink.web/WebEditorOptions.renderWhitespace|{}renderWhitespace[0]
+        final fun <get-renderWhitespace>(): kotlin/String // com.aardarch.aardink.web/WebEditorOptions.renderWhitespace.<get-renderWhitespace>|<get-renderWhitespace>(){}[0]
     final val showFoldMarkers // com.aardarch.aardink.web/WebEditorOptions.showFoldMarkers|{}showFoldMarkers[0]
         final fun <get-showFoldMarkers>(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.showFoldMarkers.<get-showFoldMarkers>|<get-showFoldMarkers>(){}[0]
     final val showGutter // com.aardarch.aardink.web/WebEditorOptions.showGutter|{}showGutter[0]
@@ -84,6 +86,7 @@ final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.
     final fun component12(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component12|component12(){}[0]
     final fun component13(): kotlin/Int // com.aardarch.aardink.web/WebEditorOptions.component13|component13(){}[0]
     final fun component14(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component14|component14(){}[0]
+    final fun component15(): kotlin/String // com.aardarch.aardink.web/WebEditorOptions.component15|component15(){}[0]
     final fun component2(): kotlin/String // com.aardarch.aardink.web/WebEditorOptions.component2|component2(){}[0]
     final fun component3(): kotlin/Float // com.aardarch.aardink.web/WebEditorOptions.component3|component3(){}[0]
     final fun component4(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component4|component4(){}[0]
@@ -92,7 +95,7 @@ final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.
     final fun component7(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component7|component7(){}[0]
     final fun component8(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component8|component8(){}[0]
     final fun component9(): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.component9|component9(){}[0]
-    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/Float = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ...): com.aardarch.aardink.web/WebEditorOptions // com.aardarch.aardink.web/WebEditorOptions.copy|copy(kotlin.String;kotlin.String;kotlin.Float;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/Float = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., kotlin/String = ...): com.aardarch.aardink.web/WebEditorOptions // com.aardarch.aardink.web/WebEditorOptions.copy|copy(kotlin.String;kotlin.String;kotlin.Float;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;kotlin.String){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.web/WebEditorOptions.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.web/WebEditorOptions.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.web/WebEditorOptions.toString|toString(){}[0]

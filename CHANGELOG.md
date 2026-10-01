@@ -58,7 +58,33 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   no keys at any typing speed (15 to 29 of 30 at 10 keys a second). See `docs/MIGRATION_0.6.md`.
 - `EditorOptions`, passed as `CodeEditorLayout(options = …)`: read-only, soft wrap and the gutter
   switches, plus `highlightCurrentLine`, `matchBrackets`, `bracketPairColorization`,
-  `stickyScroll`, `showMinimap`, `tabSize` and `insertSpaces`.
+  `stickyScroll`, `showMinimap`, `tabSize`, `insertSpaces` and `renderWhitespace`.
+- Whitespace drawn as VS Code draws it: `EditorOptions.renderWhitespace` (`RenderWhitespace`:
+  `None`, `Boundary`, `Selection`, `Trailing`, `All`; `Selection` by default, as in VS Code) shows
+  spaces as dots and tabs as arrows in `EditorTheme.whitespaceColor` (read from a VS Code theme's
+  `editorWhitespace.foreground`; the text colour, faint, when unset). Tabs are now as wide as the
+  columns to the next tab stop of `tabSize`, instead of about one character.
+- Snippet completions, as Monaco's `InsertAsSnippet`: a `CompletionItem` with `isSnippet` inserts
+  `insertText` in VS Code's snippet syntax (`$1`, `${1:placeholder}`, `${1|one,two|}`, `$0`,
+  `$TM_SELECTED_TEXT` and the other `TM_` variables) and selects its first tab stop. Tab and
+  Shift+Tab step through the stops, a stop written twice is edited at both places, a choice offers
+  its options in the completion list, and Escape, the final stop or a caret moved elsewhere ends
+  it. Its lines follow the indentation of the line they land on unless `keepWhitespace` is set.
+  The built-in Kotlin, XML, TOML and JSON completions use them (an XML attribute leaves the caret
+  between its quotes), and a language server's snippets (`insertTextFormat` 2) are filled in
+  instead of stripped. On the web, `insertTextRules` (`CompletionItemInsertTextRule`).
+- Token colours by Monaco's token names: `TokenType.scope` gives every type a dotted name
+  (`keyword`, `comment`, `delimiter`, ...), and a type without its own entry in
+  `EditorTheme.tokenColors` takes the entry of the longest prefix of its name that has one, so
+  `comment.doc` takes `comment`'s colour unless the theme gives it its own. `NamedTokenType` moved
+  to `:editor` (`com.aardarch.aardink.core`) for this. The built-in languages name more: KDoc and
+  JSDoc are `comment.doc`, `if`/`return`/`throw` and the other control keywords `keyword.flow`,
+  escapes in strings `string.escape`, and numbers `number.hex`, `number.binary` and
+  `number.float`; the VS Code themes colour `keyword.flow`, `string.escape` and `regexp` as Dark+
+  and Light+ do.
+- Bold, italic, underline and strikethrough in themes: `EditorTheme.tokenFontStyles`
+  (`TokenFontStyle`), found by name as colours are, and read from a VS Code theme's `fontStyle`
+  or a Monaco rule's.
 - Multiple selections: `CodeEditorState.selections` and `setSelections` (the first is the primary
   one, as in Monaco), and a settable `selection`. Ctrl/Cmd+D adds the next occurrence, Ctrl+Shift+L
   selects them all, Alt+click and Ctrl+Alt+Up/Down add carets (Alt+click on a caret removes it,
@@ -120,8 +146,9 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `include`, `@rematch`, `defaultToken`, `ignoreCase`, `tokenPostfix`, `@name` regex attributes),
   and `DeclarativeTokenizer(grammar)` highlights with it, a line at a time and incrementally.
   Lookbehind is refused when the grammar is read, with where it is. Tokens get a
-  `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`); comments and strings get the
-  editor's own types. aardflex-web-app's Monaco grammar reads unchanged and passes the cases its
+  `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`, `comment.doc`); the bare names
+  `comment` and `string` get the editor's own types, and any name with a `comment` or `string`
+  part is a comment or a string to the editor (no bracket colours inside it). aardflex-web-app's Monaco grammar reads unchanged and passes the cases its
   Monaco tests check.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
@@ -135,12 +162,12 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `registerLanguage` takes a Monarch grammar (with `extends: "xml"` to keep a built-in language's
   service) and JavaScript functions for completions, hover and diagnostics, answered at once or
   with a Promise; `defineTheme` / `registerTheme` take Monaco's theme data or VS Code theme JSON,
-  whose colours reach grammars' token names by dotted prefix (`tag.aardflex`, then `tag`). In
+  whose colours and font styles reach token names by dotted prefix (`tag.aardflex`, then `tag`). In
   Kotlin, `AardinkWeb.registerLanguage` with `WebLanguageProviders`, and `registerTheme`.
 - **Web:** more of Monaco's editor API: `getSelections` / `setSelections`, `canUndo`, `canRedo`,
   `pushUndoStop`, `getAlternativeVersionId`, `format()`, `focus()`, `setBaseline(text)` for the
   diff lane, a second `onDidChangeContent` argument (`{ versionId, isUndoing, isRedoing, isFlush }`),
-  the options `tabSize`, `insertSpaces`, `renderLineHighlight`, `bracketPairColorization`,
+  the options `tabSize`, `insertSpaces`, `renderLineHighlight`, `renderWhitespace`, `bracketPairColorization`,
   `minimap` and `stickyScroll` (in Monaco's `{ enabled }` shape or as booleans), and
   `tokenize(text, languageId)` for debugging a grammar.
 - **Web:** the language's own diagnostics show until the host calls `setDiagnostics`;
@@ -214,6 +241,10 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   anything above them was folded; each is now drawn on its own line.
 - Closed folds now follow edits above them instead of hiding the wrong lines until the next
   folding pass.
+- `EditorThemeParser` gave a built-in type the colour of whichever of its theme's rules came last,
+  so a theme with rules for both `keyword` and `keyword.control` could colour every keyword as a
+  control keyword. Each type now takes its most general rule, and the more specific ones colour
+  the sub-names.
 - `EditorThemeParser` read an 8-digit colour as `#AARRGGBB`; VS Code themes write `#RRGGBBAA`,
   so translucent colours such as a line highlight came out wrong. It also reads `#RGB` and
   `#RGBA` now.
@@ -225,8 +256,6 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
 - **Web: a disposed editor is not fully released** (about 320 KB each) on Compose Multiplatform
   1.12. Reuse one editor with `setValue` and `updateOptions` rather than mounting one per view.
   Aardink adopts Compose Multiplatform 1.13, which fixes it, once it is stable.
-- Themes are colours only, whitespace is not drawn, and completions insert plain text (no snippet
-  placeholders).
 - Some checks need real devices and a person: input methods (CJK, dead keys, Gboard and Samsung
   keyboards), touch selection, the mobile soft keyboard, browser zoom, TalkBack and NVDA. See the
   checklist in `docs/WEB_INTEGRATION.md`.

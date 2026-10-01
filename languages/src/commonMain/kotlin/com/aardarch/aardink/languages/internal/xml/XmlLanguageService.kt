@@ -265,9 +265,11 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                     CompletionItem(
                         label = attr,
                         kind = CompletionKind.Attribute,
-                        insertText = "$attr=\"\"",
+                        // The caret between the quotes, as in Monaco.
+                        insertText = "$attr=\"\$1\"",
                         documentation = "Attribute $attr",
                         replaceRange = nameStart until clampedOffset,
+                        isSnippet = true,
                     )
                 }
             }

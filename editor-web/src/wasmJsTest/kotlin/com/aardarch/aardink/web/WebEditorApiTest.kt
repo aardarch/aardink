@@ -17,6 +17,7 @@ package com.aardarch.aardink.web
 
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.ui.RenderWhitespace
 import kotlinx.browser.document
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -139,6 +140,16 @@ class WebEditorApiTest {
     }
 
     @Test
+    fun `renderWhitespace takes Monaco's values, selection by default`() {
+        val handle = mount("x", WebEditorOptions())
+        assertEquals("selection", AardinkWeb.currentOptions(handle).renderWhitespace)
+        AardinkWeb.patchOptions(handle, """{ "renderWhitespace": "all" }""")
+        assertEquals("all", AardinkWeb.currentOptions(handle).renderWhitespace)
+        assertEquals(RenderWhitespace.Boundary, renderWhitespaceOf("boundary"))
+        assertEquals(RenderWhitespace.Selection, renderWhitespaceOf("bogus"))
+    }
+
+    @Test
     fun `tokenize gives a grammar's tokens per line, gaps as the empty type`() {
         AardinkWeb.registerLanguage("""{ "id": "tokenize-toy", "grammar": { "tokenizer": { "root": [ ["\\d+", "number"] ] } } }""")
         val lines = Json.parseToJsonElement(AardinkWeb.tokenize("tokenize-toy", "a 12\n34")).jsonArray
@@ -150,7 +161,7 @@ class WebEditorApiTest {
     }
 
     @Test
-    fun `tokenize names comments, strings and the built-in types as Monaco does`() {
+    fun `tokenize gives a grammar's own names and Monaco's names for the built-in types`() {
         AardinkWeb.registerLanguage(
             """{ "id": "tokenize-names", "grammar": { "tokenPostfix": ".toy", "tokenizer": { "root": [ ["#.*", "comment"], ["'[^']*'", "string.quoted"], ["\\w+", "word"] ] } } }""",
         )
@@ -159,7 +170,8 @@ class WebEditorApiTest {
                 it.jsonObject["type"]!!.jsonPrimitive.content
             }
         }
-        assertEquals(listOf("word.toy", "", "string", "", "comment"), types("tokenize-names", "go 'x' # note"))
+        assertEquals(listOf("word.toy", "", "string.quoted.toy", "", "comment.toy"), types("tokenize-names", "go 'x' # note"))
         assertEquals("keyword", types("kotlin", "val x = 1").first())
+        assertEquals(listOf("keyword.flow", "", "string", "string.escape", "string"), types("kotlin", "return \"a\\nb\""))
     }
 }

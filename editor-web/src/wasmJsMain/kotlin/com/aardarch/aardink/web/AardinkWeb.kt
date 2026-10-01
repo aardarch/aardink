@@ -44,11 +44,11 @@ import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
-import com.aardarch.aardink.languages.NamedTokenType
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
@@ -57,6 +57,7 @@ import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
+import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.web.res.Res
 import kotlinx.browser.document
 import kotlinx.coroutines.CancellationException
@@ -162,12 +163,6 @@ object AardinkWeb {
     /** The built-in themes and every one [registerTheme] added. */
     internal val registeredThemes: MutableMap<String, EditorTheme> = builtInThemes.toMutableMap()
 
-    /** Per registered theme: its colours by scope name, for grammars' token names. */
-    internal val namedColors = HashMap<String, Map<String, Color>>()
-
-    /** Per registered language: the token names its grammar produces. */
-    internal val grammarNames = HashMap<String, Set<String>>()
-
     /** Counts registrations, so editors on screen pick up a theme or language registered again. */
     internal val registrations = mutableIntStateOf(0)
 
@@ -181,9 +176,8 @@ object AardinkWeb {
      * saying where, such as a grammar with a lookbehind.
      */
     fun registerLanguage(definitionJson: String, providers: WebLanguageProviders = WebLanguageProviders()): String {
-        val (definition, names) = languageFrom(definitionJson, providers, registry)
+        val definition = languageFrom(definitionJson, providers, registry)
         registry.register(definition)
-        grammarNames[definition.id] = names
         registrations.intValue++
         return definition.id
     }
@@ -196,9 +190,7 @@ object AardinkWeb {
      * for JSON it cannot read.
      */
     fun registerTheme(name: String, themeJson: String) {
-        val (theme, named) = themeFrom(themeJson, registeredThemes)
-        registeredThemes[name] = theme
-        namedColors[name] = named
+        registeredThemes[name] = themeFrom(themeJson, registeredThemes)
         registrations.intValue++
     }
 
@@ -491,9 +483,9 @@ object AardinkWeb {
     /**
      * For debugging a grammar: the tokens [languageId]'s tokenizer gives [text], as JSON in the shape
      * of Monaco's `tokenize`: an array per line of `{ offset, type }`, where `type` is the token's
-     * name (`""` for text no token covers). A grammar's comments and strings are the editor's own,
-     * so they come back as Monaco's standard `comment` and `string`, as the built-in languages'
-     * tokens do (`keyword`, `delimiter`, ...).
+     * name (`""` for text no token covers): a grammar's own names (`comment.doc.toy`), and
+     * Monaco's standard names for the built-in languages' tokens (`keyword`, `keyword.flow`,
+     * `delimiter`, `string.escape`, ...).
      */
     fun tokenize(languageId: String, text: String): String {
         val language = resolveLanguage(registry, languageId)
@@ -503,35 +495,10 @@ object AardinkWeb {
         return lines.build()
     }
 
-    /** A grammar's own name for its tokens; Monaco's standard name for the editor's own types. */
-    private fun nameOf(type: TokenType): String = when (type) {
-        is NamedTokenType -> type.name
-
-        TokenType.Default -> ""
-
-        TokenType.Comment -> "comment"
-
-        TokenType.StringLiteral -> "string"
-
-        TokenType.Keyword -> "keyword"
-
-        TokenType.Number -> "number"
-
-        TokenType.Identifier -> "identifier"
-
-        TokenType.TypeName -> "type"
-
-        TokenType.Operator -> "operator"
-
-        TokenType.Punctuation -> "delimiter"
-
-        TokenType.Annotation -> "annotation"
-
-        TokenType.FunctionCall -> "function"
-
-        TokenType.Invalid -> "invalid"
-
-        // A type of the host's own.
+    /** A token type's Monaco name: its scope; a host's own type without one by its class name. */
+    private fun nameOf(type: TokenType): String = when {
+        type == TokenType.Default -> ""
+        type.scope.isNotEmpty() -> type.scope
         else -> type.toString().replaceFirstChar { it.lowercase() }
     }
 
@@ -635,10 +602,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
 
     // Registering a theme or language again changes what this editor shows.
     val registrations = AardinkWeb.registrations.intValue
-    val baseTheme = handle.themes[options.theme] ?: EditorThemes.VsCodeDark
-    val theme = remember(baseTheme, options.theme, language.id, registrations) {
-        themeWithNames(baseTheme, AardinkWeb.namedColors[options.theme].orEmpty(), AardinkWeb.grammarNames[language.id].orEmpty())
-    }
+    val theme = remember(options.theme, registrations) { handle.themes[options.theme] ?: EditorThemes.VsCodeDark }
 
     // A focus() made before the editor is on screen (it waits for its font) is kept until it is.
     val focusRequester = remember { FocusRequester() }
@@ -679,6 +643,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     highlightCurrentLine = options.highlightCurrentLine,
                     tabSize = options.tabSize.coerceIn(1, 16),
                     insertSpaces = options.insertSpaces,
+                    renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
                 ),
                 onRequestGoToLine = { showGoToLine = true },
             )
@@ -787,4 +752,13 @@ private class JsonArrayBuilderLines(private val text: String) {
             }
         }
     }.toString()
+}
+
+/** Monaco's `renderWhitespace` value as the editor's; an unknown one is Monaco's default. */
+internal fun renderWhitespaceOf(value: String): RenderWhitespace = when (value) {
+    "none" -> RenderWhitespace.None
+    "boundary" -> RenderWhitespace.Boundary
+    "trailing" -> RenderWhitespace.Trailing
+    "all" -> RenderWhitespace.All
+    else -> RenderWhitespace.Selection
 }

@@ -240,9 +240,10 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
             EditorCommand.Enter -> !readOnly && true.also { type("\n") }
 
-            EditorCommand.Indent -> edit { state.indentSelection() }
+            // In a snippet, Tab and Shift+Tab step through its tab stops instead, as in Monaco.
+            EditorCommand.Indent -> edit { if (!state.moveInSnippet(forward = true)) state.indentSelection() }
 
-            EditorCommand.Outdent -> edit { state.outdentSelection() }
+            EditorCommand.Outdent -> edit { if (!state.moveInSnippet(forward = false)) state.outdentSelection() }
 
             EditorCommand.Undo -> edit { state.undo() }
 
@@ -374,6 +375,10 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     private fun escape(): Boolean {
         contextMenuAt = null
+        if (state.snippet != null) {
+            state.endSnippet()
+            return true
+        }
         if (!state.currentSelections().isSingle) {
             state.replaceSelections(state.currentSelections().collapsedToPrimary())
             return true

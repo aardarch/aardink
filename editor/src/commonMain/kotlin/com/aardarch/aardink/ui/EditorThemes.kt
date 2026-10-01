@@ -18,6 +18,7 @@ package com.aardarch.aardink.ui
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.LightBracketPairColors
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TokenType
 
 /**
@@ -53,6 +54,11 @@ object EditorThemes {
             TokenType.FunctionCall to Color(0xFFDCDCAA),
             TokenType.Annotation to Color(0xFFD7BA7D),
             TokenType.Invalid to Color(0xFFF44747),
+            // Dark+'s colours for Monaco's sub-names; the other built-in themes leave them to
+            // keyword, string and comment.
+            NamedTokenType("keyword.flow") to Color(0xFFC586C0),
+            NamedTokenType("string.escape") to Color(0xFFD7BA7D),
+            NamedTokenType("regexp") to Color(0xFFD16969),
         ),
         errorColor = Color(0xFFF44747),
         warningColor = Color(0xFFFFCC00),
@@ -80,6 +86,9 @@ object EditorThemes {
             TokenType.FunctionCall to Color(0xFF795E26),
             TokenType.Annotation to Color(0xFF808000),
             TokenType.Invalid to Color(0xFFCD3131),
+            NamedTokenType("keyword.flow") to Color(0xFFAF00DB),
+            NamedTokenType("string.escape") to Color(0xFFEE0000),
+            NamedTokenType("regexp") to Color(0xFF811F3F),
         ),
         errorColor = Color(0xFFCD3131),
         warningColor = Color(0xFF8B6914),

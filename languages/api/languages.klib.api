@@ -40,8 +40,11 @@ abstract class com.aardarch.aardink.languages.internal/RegexTokenizer : com.aard
         abstract fun <get-rules>(): kotlin.collections/List<kotlin/Pair<kotlin.text/Regex, com.aardarch.aardink.core/TokenType>> // com.aardarch.aardink.languages.internal/RegexTokenizer.rules.<get-rules>|<get-rules>(){}[0]
     open val multiLineConstructs // com.aardarch.aardink.languages.internal/RegexTokenizer.multiLineConstructs|{}multiLineConstructs[0]
         open fun <get-multiLineConstructs>(): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.multiLineConstructs.<get-multiLineConstructs>|<get-multiLineConstructs>(){}[0]
+    open val stringEscapes // com.aardarch.aardink.languages.internal/RegexTokenizer.stringEscapes|{}stringEscapes[0]
+        open fun <get-stringEscapes>(): kotlin.text/Regex? // com.aardarch.aardink.languages.internal/RegexTokenizer.stringEscapes.<get-stringEscapes>|<get-stringEscapes>(){}[0]
 
     open fun canSpanLines(kotlin/Int, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.canSpanLines|canSpanLines(kotlin.Int;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
+    open fun hasEscapes(kotlin/String, com.aardarch.aardink.core/Token): kotlin/Boolean // com.aardarch.aardink.languages.internal/RegexTokenizer.hasEscapes|hasEscapes(kotlin.String;com.aardarch.aardink.core.Token){}[0]
     open fun refine(kotlin/String, kotlin.collections/MutableList<com.aardarch.aardink.core/Token>) // com.aardarch.aardink.languages.internal/RegexTokenizer.refine|refine(kotlin.String;kotlin.collections.MutableList<com.aardarch.aardink.core.Token>){}[0]
     open fun tokenizeFull(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeFull|tokenizeFull(kotlin.String){}[0]
     open fun tokenizeLines(kotlin/String, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/Token>): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages.internal/RegexTokenizer.tokenizeLines|tokenizeLines(kotlin.String;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.Token>){}[0]
@@ -127,19 +130,6 @@ final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aa
     final object Companion { // com.aardarch.aardink.languages/LanguageRegistry.Companion|null[0]
         final fun withBuiltIns(): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.Companion.withBuiltIns|withBuiltIns(){}[0]
     }
-}
-
-final class com.aardarch.aardink.languages/NamedTokenType : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.languages/NamedTokenType|null[0]
-    constructor <init>(kotlin/String) // com.aardarch.aardink.languages/NamedTokenType.<init>|<init>(kotlin.String){}[0]
-
-    final val name // com.aardarch.aardink.languages/NamedTokenType.name|{}name[0]
-        final fun <get-name>(): kotlin/String // com.aardarch.aardink.languages/NamedTokenType.name.<get-name>|<get-name>(){}[0]
-
-    final fun component1(): kotlin/String // com.aardarch.aardink.languages/NamedTokenType.component1|component1(){}[0]
-    final fun copy(kotlin/String = ...): com.aardarch.aardink.languages/NamedTokenType // com.aardarch.aardink.languages/NamedTokenType.copy|copy(kotlin.String){}[0]
-    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/NamedTokenType.equals|equals(kotlin.Any?){}[0]
-    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/NamedTokenType.hashCode|hashCode(){}[0]
-    final fun toString(): kotlin/String // com.aardarch.aardink.languages/NamedTokenType.toString|toString(){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.css/CssTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.css/CssTokenizer|null[0]
@@ -307,7 +297,6 @@ final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop|#static{}com_aardarch_aardink_languages_LanguageDefinition$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop|#static{}com_aardarch_aardink_languages_LanguageRegistry$stableprop[0]
-final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_NamedTokenType$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_NamedTokenType$stableprop|#static{}com_aardarch_aardink_languages_NamedTokenType$stableprop[0]
 
 final fun com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(){}[0]
@@ -345,4 +334,3 @@ final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter|com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter|com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter|com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(){}[0]
-final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_NamedTokenType$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_NamedTokenType$stableprop_getter|com_aardarch_aardink_languages_NamedTokenType$stableprop_getter(){}[0]

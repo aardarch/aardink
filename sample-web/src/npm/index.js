@@ -19,6 +19,9 @@
 
 export const version = '@VERSION@';
 
+/** Monaco's flags for a completion's `insertText`. */
+export const CompletionItemInsertTextRule = Object.freeze({ None: 0, KeepWhitespace: 1, InsertAsSnippet: 4 });
+
 let kotlinModule;
 
 function load() {
@@ -112,9 +115,16 @@ function toVsCodeTheme(theme) {
     type: base === 'vscode-light' ? 'light' : 'dark',
     base: theme.inherit === false ? undefined : base,
     colors: theme.colors ?? {},
+    // A rule's colour and font style; its background is not drawn.
     tokenColors: theme.rules
-      .filter((rule) => rule.foreground)
-      .map((rule) => ({ scope: rule.token, settings: { foreground: `#${rule.foreground.replace(/^#/, '')}` } })),
+      .filter((rule) => rule.foreground || rule.fontStyle !== undefined)
+      .map((rule) => ({
+        scope: rule.token,
+        settings: {
+          ...(rule.foreground ? { foreground: `#${rule.foreground.replace(/^#/, '')}` } : {}),
+          ...(rule.fontStyle !== undefined ? { fontStyle: rule.fontStyle } : {}),
+        },
+      })),
   };
 }
 
@@ -134,7 +144,7 @@ export const defineTheme = registerTheme;
  */
 function toKotlinOptions(options) {
   const out = {};
-  for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers', 'tabSize', 'insertSpaces', 'highlightCurrentLine']) {
+  for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers', 'tabSize', 'insertSpaces', 'highlightCurrentLine', 'renderWhitespace']) {
     if (options[key] !== undefined) out[key] = options[key];
   }
   if (options.wordWrap !== undefined) out.wordWrap = options.wordWrap === 'on';

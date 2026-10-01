@@ -33,6 +33,8 @@ import kotlinx.serialization.Serializable
  * @property highlightCurrentLine Highlights the line of each caret.
  * @property tabSize The width of an indent, in spaces.
  * @property insertSpaces Tab indents with [tabSize] spaces rather than a tab character.
+ * @property renderWhitespace Which spaces and tabs are drawn, as Monaco's option: `none`,
+ *   `boundary`, `selection` (the default), `trailing` or `all`. Anything else counts as `selection`.
  */
 @Serializable
 data class WebEditorOptions(
@@ -50,6 +52,7 @@ data class WebEditorOptions(
     val highlightCurrentLine: Boolean = true,
     val tabSize: Int = 4,
     val insertSpaces: Boolean = true,
+    val renderWhitespace: String = "selection",
 )
 
 /**

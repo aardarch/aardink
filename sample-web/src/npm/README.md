@@ -102,9 +102,7 @@ the measurements and the device checklist.
 - **A disposed editor is not fully released** (about 275 KB each) until Aardink moves to Compose
   Multiplatform 1.13. Reuse one editor with `setValue` and `updateOptions` rather than mounting
   one per view.
-- Themes are colours only: bold and italic in theme rules are ignored.
-- Whitespace is not rendered (`renderWhitespace`), and a completion inserts plain text: snippet
-  placeholders such as `$1` are not expanded.
+- A theme rule's `background` is ignored; its `foreground` and `fontStyle` apply.
 
 ## Licence
 

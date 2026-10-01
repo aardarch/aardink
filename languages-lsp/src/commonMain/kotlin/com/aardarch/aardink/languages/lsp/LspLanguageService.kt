@@ -602,17 +602,17 @@ class LspLanguageService(
      */
     private fun LspCompletionItem.toCompletionItem(document: CodeDocument): CompletionItem {
         val edit = (textEdit as? JsonObject)?.let { decodeOrNull(LspCompletionEdit.serializer(), it) }
-        val rawInsert = edit?.newText ?: insertText ?: label
-        val insert = if (insertTextFormat == INSERT_TEXT_FORMAT_SNIPPET) stripSnippetSyntax(rawInsert) else rawInsert
         return CompletionItem(
             label = label,
             kind = mapCompletionKind(kind),
-            insertText = insert,
+            insertText = edit?.newText ?: insertText ?: label,
             documentation = markupText(documentation) ?: detail,
             filterText = filterText ?: label,
             replaceRange = edit?.effectiveRange?.let { offsetRangeOf(document, it) },
             // The import half of an auto-import completion; applied in the same undo batch.
             additionalEdits = additionalTextEdits.orEmpty().map { TextEdit(offsetRangeOf(document, it.range), it.newText) },
+            // The editor fills in LSP snippets itself: tab stops, placeholders and choices.
+            isSnippet = insertTextFormat == INSERT_TEXT_FORMAT_SNIPPET,
         )
     }
 
@@ -660,18 +660,6 @@ class LspLanguageService(
 
         private val DEFAULT_FORMATTING_OPTIONS = LspFormattingOptions(tabSize = 4, insertSpaces = true)
         private const val INSERT_TEXT_FORMAT_SNIPPET = 2
-
-        private val SNIPPET_CHOICE = Regex("""\$\{\d+\|([^,|}]*)[^}]*\}""")
-        private val SNIPPET_PLACEHOLDER = Regex("""\$\{\d+:([^}]*)\}""")
-        private val SNIPPET_TABSTOP = Regex("""\$\{\d+\}|\$\d+""")
-        private val SNIPPET_ESCAPE = Regex("""\\([$}\\])""")
-
-        /** Reduces LSP snippet syntax to plain text: `${1|a,b|}` → `a`, `${1:x}` → `x`, `$0` → ``. */
-        private fun stripSnippetSyntax(snippet: String): String = snippet
-            .replace(SNIPPET_CHOICE) { it.groupValues[1] }
-            .replace(SNIPPET_PLACEHOLDER) { it.groupValues[1] }
-            .replace(SNIPPET_TABSTOP, "")
-            .replace(SNIPPET_ESCAPE) { it.groupValues[1] }
 
         /** LSP `CompletionItemKind` → editor [CompletionKind]. */
         private fun mapCompletionKind(kind: Int?): CompletionKind = when (kind) {

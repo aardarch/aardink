@@ -70,20 +70,23 @@ object KotlinLanguageService : BaseLanguageService() {
         CompletionItem(
             label = "@Composable fun ...",
             kind = CompletionKind.Snippet,
-            insertText = "@Composable\nfun MyComposable() {\n    \n}",
+            insertText = "@Composable\nfun \${1:MyComposable}(\$2) {\n\t\$0\n}",
             documentation = "Jetpack Compose Composable function snippet",
+            isSnippet = true,
         ),
         CompletionItem(
             label = "fun ...() { ... }",
             kind = CompletionKind.Snippet,
-            insertText = "fun myFunction() {\n    \n}",
+            insertText = "fun \${1:myFunction}(\$2) {\n\t\$0\n}",
             documentation = "Function snippet",
+            isSnippet = true,
         ),
         CompletionItem(
             label = "when (...) { ... }",
             kind = CompletionKind.Snippet,
-            insertText = "when (val result = x) {\n    is String -> {}\n    else -> {}\n}",
+            insertText = "when (\${1:val result = x}) {\n\tis \${2:String} -> {\$3}\n\telse -> {\$0}\n}",
             documentation = "When expression snippet",
+            isSnippet = true,
         ),
     )
 

@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages
 
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.RegexTokenizer
@@ -32,6 +33,10 @@ import kotlin.test.assertTrue
  * or a line comment ending in "fun" followed by a name on the next line highlighted that name
  * as a function. `refine()` only follows a real keyword token. Neither case occurs in the corpus.
  *
+ * The sub-names added since (`comment.doc`, `keyword.flow`, `number.hex`, escapes split out of
+ * strings as `string.escape`) are folded back into the types they refine before comparing, and
+ * the reference knows `catch` and `finally` as keywords, as the tokenizer now does.
+ *
  * JVM-only on purpose: the old `(?<=\b(?:class|object|interface|enum)\s)` rule is exactly what
  * was too slow for Kotlin/wasm's regex engine, so this comparison cannot run in the browser.
  */
@@ -45,7 +50,7 @@ class KotlinTokenizerGoldenTest {
             "null", "object", "open", "operator", "out", "override", "package", "private", "protected",
             "public", "reified", "return", "sealed", "set", "super", "suspend", "tailrec", "this",
             "throw", "true", "try", "typealias", "val", "var", "when", "where", "while", "with",
-            "yield",
+            "yield", "catch", "finally",
         )
 
         override val rules: List<Pair<Regex, TokenType>> = listOf(
@@ -93,11 +98,41 @@ class KotlinTokenizerGoldenTest {
         val mismatches = (sources.map { it.path to it.readText() } + ("edge cases" to edgeCases))
             .mapNotNull { (name, text) ->
                 val expected = LookbehindKotlinTokenizer.tokenizeFull(text)
-                val actual = KotlinTokenizer.tokenizeFull(text)
+                val actual = folded(KotlinTokenizer.tokenizeFull(text))
                 if (expected == actual) null else "$name: ${firstDifference(text, expected, actual)}"
             }
 
         assertEquals(emptyList(), mismatches)
+    }
+
+    /** [tokens] with each sub-name as the built-in type it refines, and split strings whole again. */
+    private fun folded(tokens: List<Token>): List<Token> {
+        val result = ArrayList<Token>(tokens.size)
+        var joining = false
+        for (token in tokens) {
+            val scope = token.type.scope
+            val escape = scope == "string.escape"
+            val type = when {
+                escape -> TokenType.StringLiteral
+                token.type !is NamedTokenType -> token.type
+                scope.startsWith("comment") -> TokenType.Comment
+                scope.startsWith("keyword") -> TokenType.Keyword
+                scope.startsWith("number") -> TokenType.Number
+                else -> token.type
+            }
+            val last = result.lastOrNull()
+            val joins =
+                type == TokenType.StringLiteral && last?.type == TokenType.StringLiteral && last.end == token.start && (escape || joining)
+            if (joins) {
+                result[result.size - 1] = last.copy(end = token.end)
+                // A piece after an escape ends the run unless another escape follows.
+                joining = escape
+            } else {
+                result.add(token.copy(type = type))
+                joining = escape
+            }
+        }
+        return result
     }
 
     private fun firstDifference(text: String, expected: List<Token>, actual: List<Token>): String {

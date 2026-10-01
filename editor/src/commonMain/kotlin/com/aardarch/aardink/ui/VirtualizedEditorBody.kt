@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -56,6 +57,7 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.TokenStyleResolver
 import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.platform.PlatformInfo
@@ -133,13 +135,22 @@ internal fun VirtualizedEditorBody(
             )
         }
     }
-    val tokenStyles = remember(theme) { theme.tokenColors.mapValues { SpanStyle(color = it.value) } }
+    // Colours and font styles found as Monaco's themes find them: by the type, else by the
+    // longest prefix of its dotted name the theme has an entry for.
+    val tokenStyles = remember(theme) { TokenStyleResolver(theme) }
     val placeholderStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.4f), fontStyle = FontStyle.Italic) }
     val softWrap = options.softWrap
     val bracketStyles = remember(theme, options.bracketPairColorization) {
         if (options.bracketPairColorization) theme.bracketPairColors.map { SpanStyle(color = it) } else null
     }
-    val style = ViewStyle(measurer, textStyle, tokenStyles, placeholderStyle, metrics, softWrap, bracketStyles)
+    val columnWidthEm = remember(density, metrics, typography) {
+        with(density) { metrics.charWidth / typography.fontSize.toPx() }
+    }
+    val style = ViewStyle(
+        measurer, textStyle, tokenStyles::spanStyle, placeholderStyle, metrics, softWrap, bracketStyles,
+        tabSize = options.tabSize,
+        columnWidthEm = columnWidthEm,
+    )
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current
     SideEffect {
@@ -190,6 +201,11 @@ internal fun VirtualizedEditorBody(
         text = textColor,
         lineHighlight = theme.lineHighlight,
         bracketMatch = textColor.copy(alpha = 0.18f),
+        // Faint, as VS Code's (its dark theme's is a light grey at 16 %); a dot is small, so a
+        // little stronger than that.
+        whitespace = theme.whitespaceColor.takeOrElse { textColor.copy(alpha = 0.25f) },
+        // Monaco's editor.snippetTabstopHighlightBackground.
+        snippetTabStop = Color(0x4D7C7C7C),
     )
     // The pair the caret touches, worked out when the caret, the text or its tokens change, not
     // on every frame the content draws (scrolling redraws it every frame).
@@ -202,6 +218,7 @@ internal fun VirtualizedEditorBody(
         }
     }
     val highlightCaretLines = options.highlightCurrentLine
+    val renderWhitespace = options.renderWhitespace
     val currentStickyRanges = rememberUpdatedState(stickyRanges)
     val sticky: () -> List<StickyLine> = { view.stickyLines(currentStickyRanges.value) }
     SideEffect { controller.pointer.stickyLineAt = { position -> view.stickyLineAt(currentStickyRanges.value, position) } }
@@ -229,6 +246,11 @@ internal fun VirtualizedEditorBody(
                         highlightCaretLines = highlightCaretLines,
                         bracketMatch = bracketMatch,
                         link = controller.link.takeIf { controller.linkModifier },
+                        renderWhitespace = renderWhitespace,
+                        snippetTabStops = state.snippet?.let { snippet ->
+                            snippet.version
+                            snippet.placeholderRanges()
+                        }.orEmpty(),
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },
@@ -261,10 +283,9 @@ internal fun VirtualizedEditorBody(
         scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
         minimap = {
             if (options.showMinimap) {
-                val tokenColors = theme.tokenColors
                 MinimapView(
                     view = view,
-                    tokenColor = { type -> (tokenColors[type] ?: textColor).copy(alpha = 0.7f) },
+                    tokenColor = { type -> (tokenStyles.color(type) ?: textColor).copy(alpha = 0.7f) },
                     background = theme.background,
                     slider = textColor.copy(alpha = 0.12f),
                     tabSize = options.tabSize,

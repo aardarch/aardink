@@ -200,14 +200,16 @@ object TomlLanguageService : BaseLanguageService() {
                 CompletionItem(
                     label = "{ module = \"...\", version.ref = \"...\" }",
                     kind = CompletionKind.Snippet,
-                    insertText = " { module = \"\", version.ref = \"\" }",
+                    insertText = " { module = \"\$1\", version.ref = \"\$2\" }",
                     documentation = "Inline library specification with version reference",
+                    isSnippet = true,
                 ),
                 CompletionItem(
                     label = "{ id = \"...\", version.ref = \"...\" }",
                     kind = CompletionKind.Snippet,
-                    insertText = " { id = \"\", version.ref = \"\" }",
+                    insertText = " { id = \"\$1\", version.ref = \"\$2\" }",
                     documentation = "Inline plugin specification",
+                    isSnippet = true,
                 ),
             )
         }
@@ -226,9 +228,10 @@ object TomlLanguageService : BaseLanguageService() {
             CompletionItem(
                 label = name,
                 kind = CompletionKind.Property,
-                insertText = "$name = \"\"",
+                insertText = "$name = \"\$1\"",
                 documentation = doc,
                 replaceRange = keyStart until cursorOffset,
+                isSnippet = true,
             )
         }
     }

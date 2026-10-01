@@ -33,6 +33,8 @@ import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.OccurrenceFinder
 import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.core.edit.SnippetParser
+import com.aardarch.aardink.core.edit.SnippetSession
 import com.aardarch.aardink.core.edit.TextChange
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.core.edit.TypingRules
@@ -162,6 +164,7 @@ class CodeEditorState(
 
     private fun applySelections(set: SelectionSet) {
         selectionSet = set
+        leaveSnippetIfOutside()
     }
 
     /** Whether [undo] would change anything. Snapshot state: a toolbar button can observe it. */
@@ -277,6 +280,7 @@ class CodeEditorState(
      * Use this when loading a file from disk — not for user edits.
      */
     fun loadText(newText: String) {
+        endSnippet()
         document.replaceAll(newText)
         // A new document, not an edit: highlight it with a full pass.
         lastTokenizerResult = null
@@ -336,6 +340,7 @@ class CodeEditorState(
     }
 
     private fun afterHistoryStep(selections: SelectionSet, kind: EditChangeKind) {
+        endSnippet()
         placeSelections(selections.clampedTo(document.length))
         lastChangeKind = kind
         refreshHistoryState()
@@ -373,7 +378,7 @@ class CodeEditorState(
             if (runs.start(i) > column) break
             if (column < runs.end(i)) {
                 val type = runs.types[i]
-                return type != TokenType.StringLiteral && type != TokenType.Comment
+                return !type.isCommentOrString
             }
         }
         return true
@@ -463,6 +468,109 @@ class CodeEditorState(
         textVersion++
         scheduleTokenization()
     }
+
+    // ── Snippets ──────────────────────────────────────────────────────────────
+
+    /** The snippet whose tab stops Tab steps through, while one is being filled in. */
+    internal var snippet: SnippetSession? by mutableStateOf(null)
+        private set
+
+    /**
+     * Inserts [template], in VS Code's snippet syntax, in place of [target] (inclusive, as a
+     * completion's range), with [additionalEdits] in the same undo step, and selects its first tab
+     * stop. With [adjustWhitespace], the snippet's lines follow the indentation of the line it lands
+     * on and its leading tabs become [indentUnit] (Monaco does so unless `KeepWhitespace` is set).
+     */
+    internal fun insertSnippet(
+        target: IntRange,
+        template: String,
+        additionalEdits: List<TextEdit> = emptyList(),
+        adjustWhitespace: Boolean = true,
+    ) {
+        endSnippet()
+        val start = target.first.coerceIn(0, document.length)
+        val end = (target.last + 1).coerceIn(start, document.length)
+        val line = document.offsetToLineCol(start).first
+        val lineStart = document.lineStart(line)
+        val lineText = document.subSequence(lineStart, document.lineEnd(line)).toString()
+        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
+        val expanded = SnippetParser.expand(
+            template,
+            variable = { name -> snippetVariable(name, line, lineText, start - lineStart) },
+            indent = if (adjustWhitespace) indent else null,
+            indentUnit = if (adjustWhitespace) indentUnit else null,
+        )
+        val additional = additionalEdits.map { edit ->
+            val from = edit.range.first.coerceIn(0, document.length)
+            TextChange(from, (edit.range.last + 1).coerceIn(from, document.length), edit.newText)
+        }
+        val changes = additional + TextChange(start, end, expanded.text)
+        // Where the snippet's text starts once every change is in: edits above it move it, and one
+        // inserted at the same place (an import at the start of the document) lands before it.
+        val base = mapOffset(start, additional, stickToEnd = true)
+        val session = SnippetSession(base, expanded)
+        applyChanges(changes, EditKind.Other) { session.selections() }
+        // Only a final stop: the caret goes there and there is nothing to step through.
+        if (session.isAtFinal) return
+        document.addChangeListener(session)
+        snippet = session
+        history.pushStop()
+    }
+
+    /**
+     * Tab ([forward]) or Shift+Tab while a snippet is being filled in: selects the next or the
+     * previous tab stop. Reaching the final one ends the snippet. Returns false, doing nothing,
+     * when there is no snippet (or no previous stop), so the key does its usual work.
+     */
+    internal fun moveInSnippet(forward: Boolean): Boolean {
+        val session = snippet ?: return false
+        if (session.isBroken) {
+            endSnippet()
+            return false
+        }
+        if (!session.move(forward)) return false
+        history.pushStop()
+        val selections = session.selections().clampedTo(document.length)
+        if (session.isAtFinal) endSnippet()
+        applySelections(selections)
+        return true
+    }
+
+    /** Stops filling in the snippet: Escape, or the caret went elsewhere. */
+    internal fun endSnippet() {
+        val session = snippet ?: return
+        document.removeChangeListener(session)
+        snippet = null
+    }
+
+    /** Ends the snippet when the caret left its current tab stop, as Monaco does. */
+    private fun leaveSnippetIfOutside() {
+        val session = snippet ?: return
+        if (session.isBroken || !session.contains(selectionSet.primary.start) || !session.contains(selectionSet.primary.end)) endSnippet()
+    }
+
+    /** The value of the snippet variable [name] for a snippet inserted at [column] of [line]. */
+    private fun snippetVariable(name: String, line: Int, lineText: String, column: Int): String? = when (name) {
+        "TM_SELECTED_TEXT" -> selectionSet.primary.let { if (it.collapsed) "" else document.subSequence(it.min, it.max).toString() }
+
+        "TM_CURRENT_LINE" -> lineText
+
+        "TM_CURRENT_WORD" -> {
+            var from = column.coerceIn(0, lineText.length)
+            var to = from
+            while (from > 0 && lineText[from - 1].isWordChar()) from--
+            while (to < lineText.length && lineText[to].isWordChar()) to++
+            lineText.substring(from, to)
+        }
+
+        "TM_LINE_INDEX" -> line.toString()
+
+        "TM_LINE_NUMBER" -> (line + 1).toString()
+
+        else -> null
+    }
+
+    private fun Char.isWordChar(): Boolean = isLetterOrDigit() || this == '_'
 
     // ── Input (the editor's own renderer) ────────────────────────────────────
 
@@ -832,6 +940,7 @@ class CodeEditorState(
      */
     private fun placeSelections(selections: SelectionSet, external: Boolean = true) {
         selectionSet = selections
+        leaveSnippetIfOutside()
         if (external) externalEditVersion++
     }
 }

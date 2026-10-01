@@ -20,8 +20,8 @@ package com.aardarch.aardink.core
  *
  * @param label Display text shown in the dropdown.
  * @param kind Visual classification controlling the icon shown beside the label.
- * @param insertText Text inserted into the document when the item is accepted.
- *   May differ from [label] — e.g. a snippet that inserts `<text>|</text>` when the label is `text`.
+ * @param insertText Text inserted into the document when the item is accepted. May differ from
+ *   [label]; with [isSnippet] it is a snippet, such as `<text>$0</text>` for the label `text`.
  * @param documentation Optional secondary text shown below the label in the dropdown.
  * @param filterText String used for fuzzy-filtering as the user continues typing. Defaults to [label].
  * @param sortPriority Lower values sort earlier in the list (0 = highest priority).
@@ -33,6 +33,13 @@ package com.aardarch.aardink.core
  *   `additionalTextEdits`. Accepting an auto-import completion inserts the symbol *and* its import;
  *   applying only the first would leave the symbol unresolved. Offsets are into the document as it
  *   stands before the completion is accepted.
+ * @param isSnippet [insertText] is in VS Code's snippet syntax, as with Monaco's
+ *   `CompletionItemInsertTextRule.InsertAsSnippet`: `$1`, `${1:placeholder}` and `${1|one,two|}`
+ *   are tab stops that Tab and Shift+Tab step through after the item is accepted, the first one
+ *   selected, and `$0` is where the caret ends up. Its lines after the first are indented as the
+ *   line it is accepted on, and a tab in their indentation becomes the editor's indent.
+ * @param keepWhitespace With [isSnippet], insert the snippet's whitespace as written, without the
+ *   indentation adjustment (Monaco's `KeepWhitespace`).
  */
 data class CompletionItem(
     val label: String,
@@ -43,6 +50,8 @@ data class CompletionItem(
     val sortPriority: Int = 0,
     val replaceRange: IntRange? = null,
     val additionalEdits: List<TextEdit> = emptyList(),
+    val isSnippet: Boolean = false,
+    val keepWhitespace: Boolean = false,
 )
 
 enum class CompletionKind {

@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages
 
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.test.runTest

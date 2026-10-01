@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages.internal
 
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 
@@ -138,7 +139,7 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val raw = builder.build()
         val tokens = raw.toTokens()
         refine(slice, tokens)
-        return tokens.map { Token(it.start + start, it.end + start, it.type) }
+        return withEscapes(slice, tokens).map { Token(it.start + start, it.end + start, it.type) }
     }
 
     /**
@@ -207,7 +208,43 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val contextTo = (to + 1).coerceAtMost(raw.size)
         val tokens = raw.toTokens(contextFrom, contextTo)
         refine(text, tokens)
-        return ArrayList(tokens.subList(from - contextFrom, to - contextFrom))
+        return withEscapes(text, tokens.subList(from - contextFrom, to - contextFrom))
+    }
+
+    /**
+     * [tokens] with every escape sequence ([stringEscapes]) inside a string token split out as a
+     * token of its own, `string.escape`, as Monaco's languages give them. Searches each string
+     * token's own characters only.
+     */
+    private fun withEscapes(text: String, tokens: List<Token>): List<Token> {
+        val escapes = stringEscapes ?: return ArrayList(tokens)
+        val result = ArrayList<Token>(tokens.size)
+        for (token in tokens) {
+            if (token.type != TokenType.StringLiteral || !hasEscapes(text, token)) {
+                result.add(token)
+                continue
+            }
+            var pos = token.start
+            var i = token.start
+            while (i < token.end) {
+                if (text[i] != '\\') {
+                    i++
+                    continue
+                }
+                val match = escapes.matchAt(text, i)
+                if (match == null) {
+                    i++
+                    continue
+                }
+                val end = minOf(match.range.last + 1, token.end)
+                if (i > pos) result.add(Token(pos, i, TokenType.StringLiteral))
+                result.add(Token(i, end, STRING_ESCAPE))
+                pos = end
+                i = end
+            }
+            if (pos < token.end) result.add(if (pos == token.start) token else Token(pos, token.end, TokenType.StringLiteral))
+        }
+        return result
     }
 
     /**
@@ -221,6 +258,32 @@ abstract class RegexTokenizer : IncrementalTokenizer {
      */
     protected open fun refine(text: String, tokens: MutableList<Token>) {}
 
+    /**
+     * An escape sequence in a string literal (it starts with a backslash), which then gets a token
+     * of its own typed `string.escape`; null leaves strings whole.
+     */
+    protected open val stringEscapes: Regex? = null
+
+    /** Whether the string [token] can hold escapes; false for a raw string. */
+    protected open fun hasEscapes(text: String, token: Token): Boolean = true
+
     /** Always false: the incremental rescan in [tokenizeLines] tracks multi-line constructs itself. */
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
 }
+
+/** Monaco's name for an escape sequence in a string. */
+internal val STRING_ESCAPE: TokenType = NamedTokenType("string.escape")
+
+/** A backslash escape: `\uXXXX`, or a backslash and any one character. */
+internal val BACKSLASH_ESCAPE = Regex("\\\\(?:u[0-9A-Fa-f]{4}|[\\s\\S])")
+
+/** Monaco's name for a documentation comment (KDoc, JSDoc). */
+internal val COMMENT_DOC: TokenType = NamedTokenType("comment.doc")
+
+/** Monaco's name for a keyword that changes where execution goes (`if`, `return`, `throw`). */
+internal val KEYWORD_FLOW: TokenType = NamedTokenType("keyword.flow")
+
+/** Monaco's names for numbers written in hex, binary, or with a fraction or exponent. */
+internal val NUMBER_HEX: TokenType = NamedTokenType("number.hex")
+internal val NUMBER_BINARY: TokenType = NamedTokenType("number.binary")
+internal val NUMBER_FLOAT: TokenType = NamedTokenType("number.float")

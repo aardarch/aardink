@@ -161,7 +161,7 @@ internal class BracketIndex(private val document: CodeDocument, private val toke
         }
     }
 
-    private fun isText(type: TokenType): Boolean = type == TokenType.StringLiteral || type == TokenType.Comment
+    private fun isText(type: TokenType): Boolean = type.isCommentOrString
 
     companion object {
         /** How far bracket matching looks from the caret before giving up. */

@@ -345,6 +345,58 @@ class CodeEditorLayoutUiTest {
         onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertDoesNotExist()
     }
 
+    /** Offers one snippet at the start of the text: a call with two arguments, the second a choice. */
+    private object Snippets : LanguageService by Words {
+        override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> = if (cursorOffset >
+            0
+        ) {
+            emptyList()
+        } else {
+            listOf(
+                CompletionItem(
+                    label = "call",
+                    kind = CompletionKind.Snippet,
+                    insertText = "call(\${1:first}, \${2|yes,no|})\$0",
+                    isSnippet = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `a snippet completion is filled in with Tab, its choices offered in the list`() = runComposeUiTest {
+        val state = CodeEditorState("")
+        show(state, languageService = Snippets)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
+        keys { pressKey(Key.Enter) }
+        assertEquals("call(first, yes)", state.document.text)
+        assertEquals(TextRange(5, 10), state.selection)
+        editor().performTextInput("x")
+        keys { pressKey(Key.Tab) }
+        assertEquals(TextRange(8, 11), state.selection)
+        // The choice stop shows its options: the second one replaces the first.
+        onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertExists()
+        keys { pressKey(Key.DirectionDown) }
+        keys { pressKey(Key.Enter) }
+        assertEquals("call(x, no)", state.document.text)
+        keys { pressKey(Key.Tab) }
+        assertEquals(TextRange(11), state.selection)
+        assertEquals(null, state.snippet)
+    }
+
+    @Test
+    fun `escape leaves a snippet, and Tab indents again`() = runComposeUiTest {
+        val state = CodeEditorState("")
+        show(state, languageService = Snippets)
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
+        keys { pressKey(Key.Enter) }
+        keys { pressKey(Key.Escape) }
+        assertEquals(null, state.snippet)
+        // "first" is still selected: Tab indents its line, as it does anywhere else.
+        keys { pressKey(Key.Tab) }
+        assertEquals("    call(first, yes)", state.document.text)
+    }
+
     @Test
     fun `escape closes the completion list without typing`() = runComposeUiTest {
         val state = CodeEditorState("x")

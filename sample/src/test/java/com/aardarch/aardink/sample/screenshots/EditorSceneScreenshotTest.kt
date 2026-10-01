@@ -36,6 +36,7 @@ import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
+import com.aardarch.aardink.ui.RenderWhitespace
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -267,5 +268,12 @@ class EditorSceneScreenshotTest {
         val open = state.document.text.indexOf("Int {") + 4
         state.selection = TextRange(open + 1)
         capture("brackets", state)
+    }
+
+    @Test
+    fun whitespace() {
+        // Tab-indented, with a double space and trailing blanks: every kind of mark.
+        val text = "fun main() {\n\tval x  = 1   \n\t\tprintln(x)\t\n}\n"
+        capture("whitespace", stateOf(text), editorOptions = EditorOptions(renderWhitespace = RenderWhitespace.All))
     }
 }

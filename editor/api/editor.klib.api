@@ -103,6 +103,20 @@ final enum class com.aardarch.aardink.ui/KeyboardToolbarPlacement : kotlin/Enum<
     }
 }
 
+final enum class com.aardarch.aardink.ui/RenderWhitespace : kotlin/Enum<com.aardarch.aardink.ui/RenderWhitespace> { // com.aardarch.aardink.ui/RenderWhitespace|null[0]
+    enum entry All // com.aardarch.aardink.ui/RenderWhitespace.All|null[0]
+    enum entry Boundary // com.aardarch.aardink.ui/RenderWhitespace.Boundary|null[0]
+    enum entry None // com.aardarch.aardink.ui/RenderWhitespace.None|null[0]
+    enum entry Selection // com.aardarch.aardink.ui/RenderWhitespace.Selection|null[0]
+    enum entry Trailing // com.aardarch.aardink.ui/RenderWhitespace.Trailing|null[0]
+
+    final val entries // com.aardarch.aardink.ui/RenderWhitespace.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.aardarch.aardink.ui/RenderWhitespace> // com.aardarch.aardink.ui/RenderWhitespace.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.aardarch.aardink.ui/RenderWhitespace // com.aardarch.aardink.ui/RenderWhitespace.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.aardarch.aardink.ui/RenderWhitespace> // com.aardarch.aardink.ui/RenderWhitespace.values|values#static(){}[0]
+}
+
 abstract fun interface com.aardarch.aardink.core/DiffProvider { // com.aardarch.aardink.core/DiffProvider|null[0]
     abstract fun diff(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>): kotlin.collections/List<com.aardarch.aardink.core/LineDiff> // com.aardarch.aardink.core/DiffProvider.diff|diff(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>){}[0]
 }
@@ -144,13 +158,22 @@ abstract interface com.aardarch.aardink.core/LanguageService { // com.aardarch.a
 }
 
 abstract interface com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType|null[0]
+    open val scope // com.aardarch.aardink.core/TokenType.scope|{}scope[0]
+        open fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.scope.<get-scope>|<get-scope>(){}[0]
+
     final object Annotation : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Annotation|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Annotation.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Annotation.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Annotation.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Annotation.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Annotation.toString|toString(){}[0]
     }
 
     final object Comment : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Comment|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Comment.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Comment.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Comment.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Comment.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Comment.toString|toString(){}[0]
@@ -163,54 +186,81 @@ abstract interface com.aardarch.aardink.core/TokenType { // com.aardarch.aardink
     }
 
     final object FunctionCall : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.FunctionCall|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.FunctionCall.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.FunctionCall.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.FunctionCall.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.FunctionCall.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.FunctionCall.toString|toString(){}[0]
     }
 
     final object Identifier : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Identifier|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Identifier.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Identifier.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Identifier.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Identifier.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Identifier.toString|toString(){}[0]
     }
 
     final object Invalid : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Invalid|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Invalid.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Invalid.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Invalid.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Invalid.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Invalid.toString|toString(){}[0]
     }
 
     final object Keyword : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Keyword|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Keyword.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Keyword.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Keyword.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Keyword.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Keyword.toString|toString(){}[0]
     }
 
     final object Number : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Number|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Number.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Number.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Number.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Number.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Number.toString|toString(){}[0]
     }
 
     final object Operator : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Operator|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Operator.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Operator.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Operator.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Operator.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Operator.toString|toString(){}[0]
     }
 
     final object Punctuation : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.Punctuation|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.Punctuation.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.Punctuation.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.Punctuation.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.Punctuation.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.Punctuation.toString|toString(){}[0]
     }
 
     final object StringLiteral : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.StringLiteral|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.StringLiteral.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.StringLiteral.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.StringLiteral.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.StringLiteral.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.StringLiteral.toString|toString(){}[0]
     }
 
     final object TypeName : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/TokenType.TypeName|null[0]
+        final val scope // com.aardarch.aardink.core/TokenType.TypeName.scope|{}scope[0]
+            final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/TokenType.TypeName.scope.<get-scope>|<get-scope>(){}[0]
+
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenType.TypeName.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenType.TypeName.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenType.TypeName.toString|toString(){}[0]
@@ -377,7 +427,7 @@ final class com.aardarch.aardink.core/CommentSyntax { // com.aardarch.aardink.co
 }
 
 final class com.aardarch.aardink.core/CompletionItem { // com.aardarch.aardink.core/CompletionItem|null[0]
-    constructor <init>(kotlin/String, com.aardarch.aardink.core/CompletionKind, kotlin/String, kotlin/String? = ..., kotlin/String = ..., kotlin/Int = ..., kotlin.ranges/IntRange? = ..., kotlin.collections/List<com.aardarch.aardink.core/TextEdit> = ...) // com.aardarch.aardink.core/CompletionItem.<init>|<init>(kotlin.String;com.aardarch.aardink.core.CompletionKind;kotlin.String;kotlin.String?;kotlin.String;kotlin.Int;kotlin.ranges.IntRange?;kotlin.collections.List<com.aardarch.aardink.core.TextEdit>){}[0]
+    constructor <init>(kotlin/String, com.aardarch.aardink.core/CompletionKind, kotlin/String, kotlin/String? = ..., kotlin/String = ..., kotlin/Int = ..., kotlin.ranges/IntRange? = ..., kotlin.collections/List<com.aardarch.aardink.core/TextEdit> = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // com.aardarch.aardink.core/CompletionItem.<init>|<init>(kotlin.String;com.aardarch.aardink.core.CompletionKind;kotlin.String;kotlin.String?;kotlin.String;kotlin.Int;kotlin.ranges.IntRange?;kotlin.collections.List<com.aardarch.aardink.core.TextEdit>;kotlin.Boolean;kotlin.Boolean){}[0]
 
     final val additionalEdits // com.aardarch.aardink.core/CompletionItem.additionalEdits|{}additionalEdits[0]
         final fun <get-additionalEdits>(): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.core/CompletionItem.additionalEdits.<get-additionalEdits>|<get-additionalEdits>(){}[0]
@@ -387,6 +437,10 @@ final class com.aardarch.aardink.core/CompletionItem { // com.aardarch.aardink.c
         final fun <get-filterText>(): kotlin/String // com.aardarch.aardink.core/CompletionItem.filterText.<get-filterText>|<get-filterText>(){}[0]
     final val insertText // com.aardarch.aardink.core/CompletionItem.insertText|{}insertText[0]
         final fun <get-insertText>(): kotlin/String // com.aardarch.aardink.core/CompletionItem.insertText.<get-insertText>|<get-insertText>(){}[0]
+    final val isSnippet // com.aardarch.aardink.core/CompletionItem.isSnippet|{}isSnippet[0]
+        final fun <get-isSnippet>(): kotlin/Boolean // com.aardarch.aardink.core/CompletionItem.isSnippet.<get-isSnippet>|<get-isSnippet>(){}[0]
+    final val keepWhitespace // com.aardarch.aardink.core/CompletionItem.keepWhitespace|{}keepWhitespace[0]
+        final fun <get-keepWhitespace>(): kotlin/Boolean // com.aardarch.aardink.core/CompletionItem.keepWhitespace.<get-keepWhitespace>|<get-keepWhitespace>(){}[0]
     final val kind // com.aardarch.aardink.core/CompletionItem.kind|{}kind[0]
         final fun <get-kind>(): com.aardarch.aardink.core/CompletionKind // com.aardarch.aardink.core/CompletionItem.kind.<get-kind>|<get-kind>(){}[0]
     final val label // com.aardarch.aardink.core/CompletionItem.label|{}label[0]
@@ -397,6 +451,7 @@ final class com.aardarch.aardink.core/CompletionItem { // com.aardarch.aardink.c
         final fun <get-sortPriority>(): kotlin/Int // com.aardarch.aardink.core/CompletionItem.sortPriority.<get-sortPriority>|<get-sortPriority>(){}[0]
 
     final fun component1(): kotlin/String // com.aardarch.aardink.core/CompletionItem.component1|component1(){}[0]
+    final fun component10(): kotlin/Boolean // com.aardarch.aardink.core/CompletionItem.component10|component10(){}[0]
     final fun component2(): com.aardarch.aardink.core/CompletionKind // com.aardarch.aardink.core/CompletionItem.component2|component2(){}[0]
     final fun component3(): kotlin/String // com.aardarch.aardink.core/CompletionItem.component3|component3(){}[0]
     final fun component4(): kotlin/String? // com.aardarch.aardink.core/CompletionItem.component4|component4(){}[0]
@@ -404,7 +459,8 @@ final class com.aardarch.aardink.core/CompletionItem { // com.aardarch.aardink.c
     final fun component6(): kotlin/Int // com.aardarch.aardink.core/CompletionItem.component6|component6(){}[0]
     final fun component7(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/CompletionItem.component7|component7(){}[0]
     final fun component8(): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.core/CompletionItem.component8|component8(){}[0]
-    final fun copy(kotlin/String = ..., com.aardarch.aardink.core/CompletionKind = ..., kotlin/String = ..., kotlin/String? = ..., kotlin/String = ..., kotlin/Int = ..., kotlin.ranges/IntRange? = ..., kotlin.collections/List<com.aardarch.aardink.core/TextEdit> = ...): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/CompletionItem.copy|copy(kotlin.String;com.aardarch.aardink.core.CompletionKind;kotlin.String;kotlin.String?;kotlin.String;kotlin.Int;kotlin.ranges.IntRange?;kotlin.collections.List<com.aardarch.aardink.core.TextEdit>){}[0]
+    final fun component9(): kotlin/Boolean // com.aardarch.aardink.core/CompletionItem.component9|component9(){}[0]
+    final fun copy(kotlin/String = ..., com.aardarch.aardink.core/CompletionKind = ..., kotlin/String = ..., kotlin/String? = ..., kotlin/String = ..., kotlin/Int = ..., kotlin.ranges/IntRange? = ..., kotlin.collections/List<com.aardarch.aardink.core/TextEdit> = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/CompletionItem.copy|copy(kotlin.String;com.aardarch.aardink.core.CompletionKind;kotlin.String;kotlin.String?;kotlin.String;kotlin.Int;kotlin.ranges.IntRange?;kotlin.collections.List<com.aardarch.aardink.core.TextEdit>;kotlin.Boolean;kotlin.Boolean){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/CompletionItem.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/CompletionItem.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/CompletionItem.toString|toString(){}[0]
@@ -436,7 +492,7 @@ final class com.aardarch.aardink.core/Diagnostic { // com.aardarch.aardink.core/
 }
 
 final class com.aardarch.aardink.core/EditorTheme { // com.aardarch.aardink.core/EditorTheme|null[0]
-    constructor <init>(androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color>, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, kotlin.collections/List<androidx.compose.ui.graphics/Color> = ...) // com.aardarch.aardink.core/EditorTheme.<init>|<init>(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.List<androidx.compose.ui.graphics.Color>){}[0]
+    constructor <init>(androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color>, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, androidx.compose.ui.graphics/Color, kotlin.collections/List<androidx.compose.ui.graphics/Color> = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/Map<com.aardarch.aardink.core/TokenType, com.aardarch.aardink.core/TokenFontStyle> = ...) // com.aardarch.aardink.core/EditorTheme.<init>|<init>(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.List<androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,com.aardarch.aardink.core.TokenFontStyle>){}[0]
 
     final val background // com.aardarch.aardink.core/EditorTheme.background|{}background[0]
         final fun <get-background>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.background.<get-background>|<get-background>(){}[0]
@@ -460,13 +516,19 @@ final class com.aardarch.aardink.core/EditorTheme { // com.aardarch.aardink.core
         final fun <get-selectionColor>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.selectionColor.<get-selectionColor>|<get-selectionColor>(){}[0]
     final val tokenColors // com.aardarch.aardink.core/EditorTheme.tokenColors|{}tokenColors[0]
         final fun <get-tokenColors>(): kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color> // com.aardarch.aardink.core/EditorTheme.tokenColors.<get-tokenColors>|<get-tokenColors>(){}[0]
+    final val tokenFontStyles // com.aardarch.aardink.core/EditorTheme.tokenFontStyles|{}tokenFontStyles[0]
+        final fun <get-tokenFontStyles>(): kotlin.collections/Map<com.aardarch.aardink.core/TokenType, com.aardarch.aardink.core/TokenFontStyle> // com.aardarch.aardink.core/EditorTheme.tokenFontStyles.<get-tokenFontStyles>|<get-tokenFontStyles>(){}[0]
     final val warningColor // com.aardarch.aardink.core/EditorTheme.warningColor|{}warningColor[0]
         final fun <get-warningColor>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.warningColor.<get-warningColor>|<get-warningColor>(){}[0]
+    final val whitespaceColor // com.aardarch.aardink.core/EditorTheme.whitespaceColor|{}whitespaceColor[0]
+        final fun <get-whitespaceColor>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.whitespaceColor.<get-whitespaceColor>|<get-whitespaceColor>(){}[0]
 
     final fun component1(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component1|component1(){}[0]
     final fun component10(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component10|component10(){}[0]
     final fun component11(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component11|component11(){}[0]
     final fun component12(): kotlin.collections/List<androidx.compose.ui.graphics/Color> // com.aardarch.aardink.core/EditorTheme.component12|component12(){}[0]
+    final fun component13(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component13|component13(){}[0]
+    final fun component14(): kotlin.collections/Map<com.aardarch.aardink.core/TokenType, com.aardarch.aardink.core/TokenFontStyle> // com.aardarch.aardink.core/EditorTheme.component14|component14(){}[0]
     final fun component2(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component2|component2(){}[0]
     final fun component3(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component3|component3(){}[0]
     final fun component4(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component4|component4(){}[0]
@@ -475,7 +537,7 @@ final class com.aardarch.aardink.core/EditorTheme { // com.aardarch.aardink.core
     final fun component7(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component7|component7(){}[0]
     final fun component8(): kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color> // com.aardarch.aardink.core/EditorTheme.component8|component8(){}[0]
     final fun component9(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/EditorTheme.component9|component9(){}[0]
-    final fun copy(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color> = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/List<androidx.compose.ui.graphics/Color> = ...): com.aardarch.aardink.core/EditorTheme // com.aardarch.aardink.core/EditorTheme.copy|copy(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.List<androidx.compose.ui.graphics.Color>){}[0]
+    final fun copy(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/Map<com.aardarch.aardink.core/TokenType, androidx.compose.ui.graphics/Color> = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/List<androidx.compose.ui.graphics/Color> = ..., androidx.compose.ui.graphics/Color = ..., kotlin.collections/Map<com.aardarch.aardink.core/TokenType, com.aardarch.aardink.core/TokenFontStyle> = ...): com.aardarch.aardink.core/EditorTheme // com.aardarch.aardink.core/EditorTheme.copy|copy(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;kotlin.collections.List<androidx.compose.ui.graphics.Color>;androidx.compose.ui.graphics.Color;kotlin.collections.Map<com.aardarch.aardink.core.TokenType,com.aardarch.aardink.core.TokenFontStyle>){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorTheme.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorTheme.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorTheme.toString|toString(){}[0]
@@ -617,6 +679,21 @@ final class com.aardarch.aardink.core/Location { // com.aardarch.aardink.core/Lo
     final fun toString(): kotlin/String // com.aardarch.aardink.core/Location.toString|toString(){}[0]
 }
 
+final class com.aardarch.aardink.core/NamedTokenType : com.aardarch.aardink.core/TokenType { // com.aardarch.aardink.core/NamedTokenType|null[0]
+    constructor <init>(kotlin/String) // com.aardarch.aardink.core/NamedTokenType.<init>|<init>(kotlin.String){}[0]
+
+    final val name // com.aardarch.aardink.core/NamedTokenType.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.aardarch.aardink.core/NamedTokenType.name.<get-name>|<get-name>(){}[0]
+    final val scope // com.aardarch.aardink.core/NamedTokenType.scope|{}scope[0]
+        final fun <get-scope>(): kotlin/String // com.aardarch.aardink.core/NamedTokenType.scope.<get-scope>|<get-scope>(){}[0]
+
+    final fun component1(): kotlin/String // com.aardarch.aardink.core/NamedTokenType.component1|component1(){}[0]
+    final fun copy(kotlin/String = ...): com.aardarch.aardink.core/NamedTokenType // com.aardarch.aardink.core/NamedTokenType.copy|copy(kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/NamedTokenType.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/NamedTokenType.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/NamedTokenType.toString|toString(){}[0]
+}
+
 final class com.aardarch.aardink.core/ParameterInformation { // com.aardarch.aardink.core/ParameterInformation|null[0]
     constructor <init>(kotlin/String, kotlin/String? = ..., kotlin.ranges/IntRange? = ...) // com.aardarch.aardink.core/ParameterInformation.<init>|<init>(kotlin.String;kotlin.String?;kotlin.ranges.IntRange?){}[0]
 
@@ -713,8 +790,37 @@ final class com.aardarch.aardink.core/Token { // com.aardarch.aardink.core/Token
     final fun toString(): kotlin/String // com.aardarch.aardink.core/Token.toString|toString(){}[0]
 }
 
+final class com.aardarch.aardink.core/TokenFontStyle { // com.aardarch.aardink.core/TokenFontStyle|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // com.aardarch.aardink.core/TokenFontStyle.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+
+    final val bold // com.aardarch.aardink.core/TokenFontStyle.bold|{}bold[0]
+        final fun <get-bold>(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.bold.<get-bold>|<get-bold>(){}[0]
+    final val italic // com.aardarch.aardink.core/TokenFontStyle.italic|{}italic[0]
+        final fun <get-italic>(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.italic.<get-italic>|<get-italic>(){}[0]
+    final val strikethrough // com.aardarch.aardink.core/TokenFontStyle.strikethrough|{}strikethrough[0]
+        final fun <get-strikethrough>(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.strikethrough.<get-strikethrough>|<get-strikethrough>(){}[0]
+    final val underline // com.aardarch.aardink.core/TokenFontStyle.underline|{}underline[0]
+        final fun <get-underline>(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.underline.<get-underline>|<get-underline>(){}[0]
+
+    final fun component1(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.component1|component1(){}[0]
+    final fun component2(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.component3|component3(){}[0]
+    final fun component4(): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.component4|component4(){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.core/TokenFontStyle // com.aardarch.aardink.core/TokenFontStyle.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TokenFontStyle.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TokenFontStyle.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/TokenFontStyle.toString|toString(){}[0]
+
+    final object Companion { // com.aardarch.aardink.core/TokenFontStyle.Companion|null[0]
+        final val None // com.aardarch.aardink.core/TokenFontStyle.Companion.None|{}None[0]
+            final fun <get-None>(): com.aardarch.aardink.core/TokenFontStyle // com.aardarch.aardink.core/TokenFontStyle.Companion.None.<get-None>|<get-None>(){}[0]
+
+        final fun parse(kotlin/String): com.aardarch.aardink.core/TokenFontStyle // com.aardarch.aardink.core/TokenFontStyle.Companion.parse|parse(kotlin.String){}[0]
+    }
+}
+
 final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/EditorOptions|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace){}[0]
 
     final val bracketPairColorization // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization|{}bracketPairColorization[0]
         final fun <get-bracketPairColorization>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization.<get-bracketPairColorization>|<get-bracketPairColorization>(){}[0]
@@ -726,6 +832,8 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
         final fun <get-matchBrackets>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.matchBrackets.<get-matchBrackets>|<get-matchBrackets>(){}[0]
     final val readOnly // com.aardarch.aardink.ui/EditorOptions.readOnly|{}readOnly[0]
         final fun <get-readOnly>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.readOnly.<get-readOnly>|<get-readOnly>(){}[0]
+    final val renderWhitespace // com.aardarch.aardink.ui/EditorOptions.renderWhitespace|{}renderWhitespace[0]
+        final fun <get-renderWhitespace>(): com.aardarch.aardink.ui/RenderWhitespace // com.aardarch.aardink.ui/EditorOptions.renderWhitespace.<get-renderWhitespace>|<get-renderWhitespace>(){}[0]
     final val showDiagnosticAnnotations // com.aardarch.aardink.ui/EditorOptions.showDiagnosticAnnotations|{}showDiagnosticAnnotations[0]
         final fun <get-showDiagnosticAnnotations>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.showDiagnosticAnnotations.<get-showDiagnosticAnnotations>|<get-showDiagnosticAnnotations>(){}[0]
     final val showDiffMarkers // com.aardarch.aardink.ui/EditorOptions.showDiffMarkers|{}showDiffMarkers[0]
@@ -751,6 +859,7 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
     final fun component12(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component12|component12(){}[0]
     final fun component13(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.component13|component13(){}[0]
     final fun component14(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component14|component14(){}[0]
+    final fun component15(): com.aardarch.aardink.ui/RenderWhitespace // com.aardarch.aardink.ui/EditorOptions.component15|component15(){}[0]
     final fun component2(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component2|component2(){}[0]
     final fun component3(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component3|component3(){}[0]
     final fun component4(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component4|component4(){}[0]
@@ -759,7 +868,7 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
     final fun component7(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component7|component7(){}[0]
     final fun component8(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component8|component8(){}[0]
     final fun component9(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component9|component9(){}[0]
-    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.ui/EditorOptions.toString|toString(){}[0]
@@ -944,6 +1053,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_FoldState$stablepr
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop|#static{}com_aardarch_aardink_core_HoverDoc$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop|#static{}com_aardarch_aardink_core_LineDiff$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop|#static{}com_aardarch_aardink_core_Location$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_NamedTokenType$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_NamedTokenType$stableprop|#static{}com_aardarch_aardink_core_NamedTokenType$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_ParameterInformation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_ParameterInformation$stableprop|#static{}com_aardarch_aardink_core_ParameterInformation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_PlainTextTokenizer$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_PlainTextTokenizer$stableprop|#static{}com_aardarch_aardink_core_PlainTextTokenizer$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop|#static{}com_aardarch_aardink_core_SignatureHelp$stableprop[0]
@@ -951,6 +1061,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformati
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop|#static{}com_aardarch_aardink_core_SimpleDiffProvider$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop|#static{}com_aardarch_aardink_core_TextEdit$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop|#static{}com_aardarch_aardink_core_Token$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop|#static{}com_aardarch_aardink_core_TokenFontStyle$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop|#static{}com_aardarch_aardink_core_TokenType_Annotation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop|#static{}com_aardarch_aardink_core_TokenType_Comment$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop|#static{}com_aardarch_aardink_core_TokenType_Default$stableprop[0]
@@ -999,6 +1110,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_FoldState$stablepr
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop_getter|com_aardarch_aardink_core_HoverDoc$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop_getter|com_aardarch_aardink_core_LineDiff$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop_getter|com_aardarch_aardink_core_Location$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_NamedTokenType$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_NamedTokenType$stableprop_getter|com_aardarch_aardink_core_NamedTokenType$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_ParameterInformation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_ParameterInformation$stableprop_getter|com_aardarch_aardink_core_ParameterInformation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_PlainTextTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_PlainTextTokenizer$stableprop_getter|com_aardarch_aardink_core_PlainTextTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop_getter|com_aardarch_aardink_core_SignatureHelp$stableprop_getter(){}[0]
@@ -1006,6 +1118,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformati
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter|com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter|com_aardarch_aardink_core_TextEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter|com_aardarch_aardink_core_Token$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop_getter|com_aardarch_aardink_core_TokenFontStyle$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter|com_aardarch_aardink_core_TokenType_Annotation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Comment$stableprop_getter|com_aardarch_aardink_core_TokenType_Comment$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenType_Default$stableprop_getter|com_aardarch_aardink_core_TokenType_Default$stableprop_getter(){}[0]

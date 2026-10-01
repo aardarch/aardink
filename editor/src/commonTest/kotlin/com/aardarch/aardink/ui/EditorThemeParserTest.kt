@@ -16,6 +16,8 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
+import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,6 +81,13 @@ class EditorThemeParserTest {
     }
 
     @Test
+    fun `whitespace colour comes from editorWhitespace and is unspecified without it`() {
+        val json = """{ "colors": { "editorWhitespace.foreground": "#e3e4e229" } }"""
+        assertEquals(Color(0xE3, 0xE4, 0xE2, 0x29), EditorThemeParser.fromJson(json)?.whitespaceColor)
+        assertEquals(Color.Unspecified, EditorThemeParser.fromJson("{}")?.whitespaceColor)
+    }
+
+    @Test
     fun `tokenColors with a string scope maps to a token type`() {
         val json = """
             {
@@ -89,6 +98,59 @@ class EditorThemeParserTest {
         """.trimIndent()
         val theme = EditorThemeParser.fromJson(json)
         assertEquals(Color(0xff, 0x00, 0xff), theme?.tokenColors?.get(TokenType.Keyword))
+    }
+
+    @Test
+    fun `the general rule colours a built-in type, whatever order the specific ones come in`() {
+        val json = """
+            {
+              "tokenColors": [
+                { "scope": "keyword", "settings": { "foreground": "#0000ff" } },
+                { "scope": "keyword.control", "settings": { "foreground": "#ff00ff" } },
+                { "scope": "comment", "settings": { "foreground": "#00ff00", "fontStyle": "italic" } },
+                { "scope": "comment.block.documentation", "settings": { "foreground": "#008800" } },
+                { "scope": "constant.character.escape", "settings": { "foreground": "#ffff00" } }
+              ]
+            }
+        """.trimIndent()
+        val theme = EditorThemeParser.fromJson(json)!!
+        assertEquals(Color(0x00, 0x00, 0xff), theme.tokenColors[TokenType.Keyword])
+        // VS Code's scopes stand for Monaco's names: keyword.flow, comment.doc, string.escape.
+        assertEquals(Color(0xff, 0x00, 0xff), theme.tokenColors[NamedTokenType("keyword.flow")])
+        assertEquals(Color(0x00, 0x88, 0x00), theme.tokenColors[NamedTokenType("comment.doc")])
+        assertEquals(Color(0xff, 0xff, 0x00), theme.tokenColors[NamedTokenType("string.escape")])
+        assertEquals(TokenFontStyle(italic = true), theme.tokenFontStyles[TokenType.Comment])
+        // The rule's own scope is kept too, for a grammar token by that name.
+        assertEquals(Color(0xff, 0x00, 0xff), theme.tokenColors[NamedTokenType("keyword.control")])
+    }
+
+    @Test
+    fun `Monaco rule names colour the built-in types, and fontStyle alone is a rule`() {
+        val json = """
+            {
+              "tokenColors": [
+                { "scope": "number", "settings": { "foreground": "#123456" } },
+                { "scope": "delimiter", "settings": { "foreground": "#654321" } },
+                { "scope": "tag.aardflex", "settings": { "fontStyle": "bold" } }
+              ]
+            }
+        """.trimIndent()
+        val theme = EditorThemeParser.fromJson(json)!!
+        assertEquals(Color(0x12, 0x34, 0x56), theme.tokenColors[TokenType.Number])
+        assertEquals(Color(0x65, 0x43, 0x21), theme.tokenColors[TokenType.Punctuation])
+        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.aardflex")])
+    }
+
+    @Test
+    fun `a theme's own keyword colour drops the fallback's keyword sub-names`() {
+        val json = """{ "tokenColors": [ { "scope": "keyword", "settings": { "foreground": "#ff0000" } } ] }"""
+        val theme = EditorThemeParser.fromJson(json)!!
+        assertEquals(null, theme.tokenColors[NamedTokenType("keyword.flow")])
+        // Sub-names under types the theme leaves alone stay.
+        assertEquals(
+            EditorThemes.VsCodeDark.tokenColors[NamedTokenType("string.escape")],
+            theme.tokenColors[NamedTokenType("string.escape")],
+        )
     }
 
     @Test

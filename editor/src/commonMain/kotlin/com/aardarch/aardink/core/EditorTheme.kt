@@ -36,6 +36,11 @@ data class EditorTheme(
     val cursorColor: Color,
 
     // ── Tokens ────────────────────────────────────────────────────────────────
+    /**
+     * Colours by token type. A type without its own entry takes the entry of the longest dotted
+     * prefix of its [TokenType.scope] that has one (a [NamedTokenType] key, or a built-in type by
+     * its scope), as in Monaco: `comment.doc` takes `comment`'s colour unless it has its own.
+     */
     val tokenColors: Map<TokenType, Color>,
 
     // ── Diagnostics ───────────────────────────────────────────────────────────
@@ -49,6 +54,21 @@ data class EditorTheme(
      * Shown with `EditorOptions.bracketPairColorization`. VS Code's dark-theme colours by default.
      */
     val bracketPairColors: List<Color> = DefaultBracketPairColors,
+
+    // ── Whitespace ────────────────────────────────────────────────────────────
+    /**
+     * The dots and arrows `EditorOptions.renderWhitespace` draws for spaces and tabs.
+     * [Color.Unspecified], the default, takes the text colour, faint.
+     */
+    val whitespaceColor: Color = Color.Unspecified,
+
+    // ── Token styles ──────────────────────────────────────────────────────────
+    /**
+     * Bold, italic, underline and strikethrough by token type, found as [tokenColors] are: by the
+     * type, else by the longest prefix of its scope with an entry. [TokenFontStyle.None] stops a
+     * prefix's style. Empty by default: every token upright and regular.
+     */
+    val tokenFontStyles: Map<TokenType, TokenFontStyle> = emptyMap(),
 )
 
 /** VS Code's bracket-pair colours for dark themes: gold, orchid, blue. */

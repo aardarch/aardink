@@ -25,6 +25,7 @@ import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.TextEdit
@@ -33,7 +34,6 @@ import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
-import com.aardarch.aardink.languages.NamedTokenType
 import com.aardarch.aardink.ui.EditorThemeParser
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.CancellationException
@@ -52,8 +52,10 @@ import kotlinx.serialization.json.jsonObject
  * wraps). Each takes the document's text and, where it asks about a place, a 1-based line and
  * column, and answers with JSON, or null for nothing:
  *
- * - [completions]: an array of `{ label, insertText?, kind?, detail?, documentation? }`, where
- *   `kind` is one of `element`, `attribute`, `value`, `snippet`, `module`, `property`;
+ * - [completions]: an array of `{ label, insertText?, insertTextRules?, kind?, detail?, documentation? }`,
+ *   where `kind` is one of `element`, `attribute`, `value`, `snippet`, `module`, `property`, and
+ *   `insertTextRules` holds Monaco's flags: 4 (`InsertAsSnippet`) makes `insertText` a snippet,
+ *   and 1 (`KeepWhitespace`) inserts its whitespace as written;
  * - [hover]: `{ title?, contents }`;
  * - [diagnostics]: an array of [WebDiagnostic].
  *
@@ -127,6 +129,7 @@ internal class WebLanguageService(private val base: LanguageService?, private va
         (root as? JsonArray)?.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             val label = item.string("label") ?: return@mapNotNull null
+            val rules = (item["insertTextRules"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
             CompletionItem(
                 label = label,
                 kind = when (item.string("kind")?.lowercase()) {
@@ -139,6 +142,8 @@ internal class WebLanguageService(private val base: LanguageService?, private va
                 },
                 insertText = item.string("insertText") ?: label,
                 documentation = item.string("documentation") ?: item.string("detail"),
+                isSnippet = rules and INSERT_AS_SNIPPET != 0,
+                keepWhitespace = rules and KEEP_WHITESPACE != 0,
             )
         }
     }.orEmpty()
@@ -156,14 +161,14 @@ private fun parsed(json: String): JsonElement? = try {
     null
 }
 
+/** Monaco's `CompletionItemInsertTextRule` flags. */
+private const val KEEP_WHITESPACE = 1
+private const val INSERT_AS_SNIPPET = 4
+
 private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
 /** The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. */
-internal fun languageFrom(
-    definitionJson: String,
-    providers: WebLanguageProviders,
-    registry: LanguageRegistry,
-): Pair<LanguageDefinition, Set<String>> {
+internal fun languageFrom(definitionJson: String, providers: WebLanguageProviders, registry: LanguageRegistry): LanguageDefinition {
     val root = parsed(definitionJson) as? JsonObject ?: throw IllegalArgumentException("a language is a JSON object")
     val id = root.string("id")?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("id: a language needs an id")
     val base = root.string("extends")?.let { registry.byId(it) ?: throw IllegalArgumentException("extends: no language with id '$it'") }
@@ -182,15 +187,16 @@ internal fun languageFrom(
         foldingProvider = base?.foldingProvider ?: NoOpFoldingProvider,
         languageService = WebLanguageService(base?.languageService, providers),
     )
-    return definition to grammar.tokenNames
+    return definition
 }
 
 /**
- * A theme from VS Code theme JSON, and the colours it gives by scope name. What it does not set
- * comes from its base: `base` (a theme key) if given, else by its `type`, `vscode-light` for
- * light themes and `vscode-dark` otherwise.
+ * A theme from VS Code theme JSON. What it does not set comes from its base: `base` (a theme key)
+ * if given, else by its `type`, `vscode-light` for light themes and `vscode-dark` otherwise. Its
+ * rules' scopes stay in its token colours by name (`tag.aardflex`), which the editor resolves by
+ * dotted prefix as Monaco does.
  */
-internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Pair<EditorTheme, Map<String, Color>> {
+internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): EditorTheme {
     val root = parsed(themeJson) as? JsonObject ?: throw IllegalArgumentException("a theme is a JSON object")
     val parsed = EditorThemeParser.fromJson(themeJson) ?: throw IllegalArgumentException("not a VS Code theme")
     val base = root.string("base")?.let { themes[it] ?: throw IllegalArgumentException("base: no theme named '$it'") }
@@ -199,12 +205,15 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Pai
     val dark = EditorThemes.VsCodeDark
     val colors = root["colors"] as? JsonObject
     fun <T> pick(key: String, own: T, fromBase: T): T = if (colors?.get(key) != null) own else fromBase
-    val tokenColors = base.tokenColors.toMutableMap()
     val ownForeground = colors?.get("editor.foreground") != null
-    for ((type, color) in parsed.tokenColors) {
-        // A colour the theme set: one that is not the parser's fill-in (or the foreground it set).
-        if (dark.tokenColors[type] != color || (type == TokenType.Default && ownForeground)) tokenColors[type] = color
+    // The colours the theme set: those that are not the parser's fill-in (or the foreground it set).
+    val own = parsed.tokenColors.filter { (type, color) -> dark.tokenColors[type] != color || (type == TokenType.Default && ownForeground) }
+    // The base's sub-names stay, but not under a type the theme colours itself: a theme with its
+    // own keyword colour does not keep the base's `keyword.flow`.
+    val inherited = base.tokenColors.filterKeys { key ->
+        key !is NamedTokenType || own.keys.none { it !is NamedTokenType && it.scope.isNotEmpty() && key.name.startsWith(it.scope + ".") }
     }
+    val tokenColors = inherited + own
     val theme = parsed.copy(
         background = pick("editor.background", parsed.background, base.background),
         gutterBackground = if (colors?.get("editorGutter.background") != null ||
@@ -220,85 +229,10 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Pai
         findMatchColor = pick("editor.findMatchHighlightBackground", parsed.findMatchColor, base.findMatchColor),
         cursorColor = pick("editorCursor.foreground", parsed.cursorColor, base.cursorColor),
         tokenColors = tokenColors,
+        tokenFontStyles = base.tokenFontStyles + parsed.tokenFontStyles,
         errorColor = base.errorColor,
         warningColor = base.warningColor,
         infoColor = base.infoColor,
     )
-    return theme to scopeColors(root)
+    return theme
 }
-
-/** Every `tokenColors` scope's foreground, by scope name. */
-private fun scopeColors(root: JsonObject): Map<String, Color> {
-    val result = LinkedHashMap<String, Color>()
-    val entries = root["tokenColors"] as? JsonArray ?: return result
-    for (entry in entries) {
-        val obj = entry as? JsonObject ?: continue
-        val foreground = (obj["settings"] as? JsonObject)?.string("foreground") ?: continue
-        val color = hexColor(foreground) ?: continue
-        val scopes = when (val scope = obj["scope"]) {
-            is JsonArray -> scope.jsonArray.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            is JsonPrimitive -> scope.content.split(',').map { it.trim() }
-            else -> continue
-        }
-        for (scope in scopes) if (scope.isNotEmpty()) result[scope] = color
-    }
-    return result
-}
-
-private fun hexColor(hex: String): Color? {
-    val digits = hex.removePrefix("#")
-    val value = digits.toLongOrNull(16) ?: return null
-    return when (digits.length) {
-        6 -> Color(0xFF000000L or value)
-        8 -> Color(((value and 0xFF) shl 24) or (value ushr 8))
-        else -> null
-    }
-}
-
-/**
- * [theme] with a colour for each of a grammar's [names]: the most specific of the name and its
- * dotted prefixes that [named] (the theme's own scope colours) or the built-in types (by Monaco's
- * standard names: `keyword`, `tag`, `attribute.name`, ...) give a colour. A name nothing colours is
- * left to the default text colour.
- */
-internal fun themeWithNames(theme: EditorTheme, named: Map<String, Color>, names: Set<String>): EditorTheme {
-    if (names.isEmpty()) return theme
-    val extra = HashMap<TokenType, Color>()
-    for (name in names) {
-        var candidate = name
-        while (true) {
-            val color = named[candidate] ?: BUILT_IN_NAMES[candidate]?.let { theme.tokenColors[it] }
-            if (color != null) {
-                extra[NamedTokenType(name)] = color
-                break
-            }
-            val dot = candidate.lastIndexOf('.')
-            if (dot < 0) break
-            candidate = candidate.substring(0, dot)
-        }
-    }
-    return if (extra.isEmpty()) theme else theme.copy(tokenColors = theme.tokenColors + extra)
-}
-
-/** Monaco's standard token names, and the editor's types that colour them in the built-in themes. */
-private val BUILT_IN_NAMES: Map<String, TokenType> = mapOf(
-    "keyword" to TokenType.Keyword,
-    "number" to TokenType.Number,
-    "constant" to TokenType.Number,
-    "type" to TokenType.TypeName,
-    "identifier" to TokenType.Identifier,
-    "variable" to TokenType.Identifier,
-    "operator" to TokenType.Operator,
-    "delimiter" to TokenType.Punctuation,
-    "annotation" to TokenType.Annotation,
-    "metatag" to TokenType.Annotation,
-    "invalid" to TokenType.Invalid,
-    "function" to TokenType.FunctionCall,
-    "predefined" to TokenType.FunctionCall,
-    "regexp" to TokenType.StringLiteral,
-    // As the built-in XML highlighting colours them.
-    "tag" to TokenType.TypeName,
-    "attribute.name" to TokenType.Identifier,
-    "attribute.value" to TokenType.StringLiteral,
-    "entity" to TokenType.Number,
-)

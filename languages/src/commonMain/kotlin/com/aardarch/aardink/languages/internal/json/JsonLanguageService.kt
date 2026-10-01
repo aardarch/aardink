@@ -75,8 +75,8 @@ object JsonLanguageService : BaseLanguageService() {
                 CompletionItem("false", CompletionKind.Value, " false"),
                 CompletionItem("null", CompletionKind.Value, " null"),
                 CompletionItem("\"\"", CompletionKind.Value, " \"\""),
-                CompletionItem("{}", CompletionKind.Snippet, " {\n    \n}"),
-                CompletionItem("[]", CompletionKind.Snippet, " [\n    \n]"),
+                CompletionItem("{}", CompletionKind.Snippet, " {\n\t\$0\n}", isSnippet = true),
+                CompletionItem("[]", CompletionKind.Snippet, " [\n\t\$0\n]", isSnippet = true),
             )
         }
 
@@ -100,8 +100,8 @@ object JsonLanguageService : BaseLanguageService() {
                     CompletionItem("false", CompletionKind.Value, "${gap}false"),
                     CompletionItem("null", CompletionKind.Value, "${gap}null"),
                     CompletionItem("\"\"", CompletionKind.Value, "$gap\"\""),
-                    CompletionItem("{}", CompletionKind.Snippet, "$gap{\n    \n}"),
-                    CompletionItem("[]", CompletionKind.Snippet, "$gap[\n    \n]"),
+                    CompletionItem("{}", CompletionKind.Snippet, "$gap{\n\t\$0\n}", isSnippet = true),
+                    CompletionItem("[]", CompletionKind.Snippet, "$gap[\n\t\$0\n]", isSnippet = true),
                 )
             }
 

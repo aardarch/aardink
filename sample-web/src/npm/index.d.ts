@@ -35,6 +35,8 @@ export interface AardinkOptions {
   insertSpaces?: boolean;
   /** Monaco's `renderLineHighlight`: anything but `'none'` highlights each caret's line. */
   renderLineHighlight?: 'none' | 'line' | 'gutter' | 'all';
+  /** Which spaces and tabs are drawn, as dots and arrows. `'selection'` by default. */
+  renderWhitespace?: 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
   /** Colours brackets by nesting depth. On by default. */
   bracketPairColorization?: { enabled?: boolean } | boolean;
   /** A picture of the whole text at the side, with a slider over what is shown. Off by default. */
@@ -137,10 +139,21 @@ export interface AardinkLanguageDefinition {
   comments?: { lineComment?: string; blockComment?: [string, string] };
 }
 
+/** Monaco's flags for a completion's `insertText`. */
+export declare const CompletionItemInsertTextRule: {
+  readonly None: 0;
+  /** Insert the snippet's whitespace as written, rather than indented as the line it lands on. */
+  readonly KeepWhitespace: 1;
+  /** `insertText` is a snippet: `$1`, `${1:placeholder}` and `${1|a,b|}` are tab stops, `$0` the final caret. */
+  readonly InsertAsSnippet: 4;
+};
+
 export interface AardinkCompletionItem {
   label: string;
-  /** What accepting it types; the label when absent. */
+  /** What accepting it types; the label when absent. A snippet with `InsertAsSnippet`. */
   insertText?: string;
+  /** `CompletionItemInsertTextRule` flags, as in Monaco. */
+  insertTextRules?: number;
   kind?: 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property';
   detail?: string;
   documentation?: string;
@@ -161,9 +174,10 @@ export interface AardinkLanguageProviders {
 export function registerLanguage(definition: AardinkLanguageDefinition, providers?: AardinkLanguageProviders): Promise<void>;
 
 /**
- * Monaco's `defineTheme` data. Token rules name a grammar's tokens; `tag` also colours
- * `tag.aardflex`. Themes are colours only: a rule's `fontStyle` and `background` are accepted, so
- * Monaco theme data passes as it is, and ignored.
+ * Monaco's `defineTheme` data. Token rules name tokens as Monaco does, and the longest matching
+ * prefix wins: `tag` also colours `tag.aardflex`, `comment.doc` only documentation comments. A
+ * rule's `fontStyle` (`'bold'`, `'italic'`, `'underline'`, `'strikethrough'`, or `''` for none)
+ * applies too; its `background` is accepted, so Monaco theme data passes as it is, and ignored.
  */
 export interface AardinkThemeData {
   base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';

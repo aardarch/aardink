@@ -18,8 +18,9 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
-import com.aardarch.aardink.languages.NamedTokenType
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -48,7 +49,6 @@ class WebLanguagesTest {
         val tokens = language.tokenizer.tokenizeFull("shout <b")
         assertEquals(listOf(NamedTokenType("keyword.toy"), NamedTokenType("tag.toy")), tokens.map { it.type })
         assertEquals(CommentSyntax(line = "#"), language.tokenizer.commentSyntax)
-        assertEquals(setOf("keyword.toy", "tag.toy", "text.toy"), AardinkWeb.grammarNames["toy"])
     }
 
     @Test
@@ -66,18 +66,29 @@ class WebLanguagesTest {
     fun `a theme colours a grammar's names by the most specific it has, then by the built-in names`() {
         AardinkWeb.registerTheme(
             "toy-dark",
-            """{ "type": "dark", "tokenColors": [ { "scope": "keyword.toy", "settings": { "foreground": "#ff00ff" } } ] }""",
+            """{ "type": "dark", "tokenColors": [ { "scope": "keyword.toy", "settings": { "foreground": "#ff00ff", "fontStyle": "italic" } } ] }""",
         )
-        val theme = themeWithNames(
-            AardinkWeb.registeredThemes.getValue("toy-dark"),
-            AardinkWeb.namedColors.getValue("toy-dark"),
-            setOf("keyword.toy", "tag.toy", "text.toy"),
-        )
+        // The rule's name is kept for the editor, which colours `keyword.toy.x` by it, and `tag.toy` by
+        // `tag` (as the built-in themes colour element names).
+        val theme = AardinkWeb.registeredThemes.getValue("toy-dark")
         assertEquals(Color(0xFFFF00FF), theme.tokenColors[NamedTokenType("keyword.toy")])
-        // No colour of its own: tag, which the built-in themes colour as element names.
-        assertEquals(EditorThemes.VsCodeDark.tokenColors[TokenType.TypeName], theme.tokenColors[NamedTokenType("tag.toy")])
-        // Nothing colours `text`: the default text colour.
-        assertEquals(null, theme.tokenColors[NamedTokenType("text.toy")])
+        assertEquals(TokenFontStyle(italic = true), theme.tokenFontStyles[NamedTokenType("keyword.toy")])
+    }
+
+    @Test
+    fun `a theme with its own keyword colour does not keep the base's keyword sub-names`() {
+        AardinkWeb.registerTheme(
+            "toy-keywords",
+            """{ "type": "dark", "tokenColors": [ { "scope": "keyword", "settings": { "foreground": "#ff0000" } } ] }""",
+        )
+        val theme = AardinkWeb.registeredThemes.getValue("toy-keywords")
+        assertEquals(Color(0xFFFF0000), theme.tokenColors[TokenType.Keyword])
+        assertEquals(null, theme.tokenColors[NamedTokenType("keyword.flow")])
+        // The base's string.escape stays: the theme left strings alone.
+        assertEquals(
+            EditorThemes.VsCodeDark.tokenColors[NamedTokenType("string.escape")],
+            theme.tokenColors[NamedTokenType("string.escape")],
+        )
     }
 
     @Test
@@ -109,5 +120,26 @@ class WebLanguagesTest {
         assertEquals("from the host", diagnostics.first().message)
         // A provider that throws costs its answer, not the editor.
         service.hoverDoc(document, 1)
+    }
+
+    @Test
+    fun `insertTextRules makes a completion a snippet, as Monaco's flags do`() = runTest {
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-snippets", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                completions = { _, _, _ ->
+                    """[
+                      { "label": "a", "insertText": "a=\"${'$'}1\"", "insertTextRules": 4 },
+                      { "label": "b", "insertText": "b", "insertTextRules": 5 },
+                      { "label": "c" }
+                    ]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-snippets")!!.languageService!!
+        val items = service.completions(CodeDocument(""), 0)
+        assertEquals(listOf(true, true, false), items.map { it.isSnippet })
+        assertEquals(listOf(false, true, false), items.map { it.keepWhitespace })
+        assertEquals("a=\"${'$'}1\"", items[0].insertText)
     }
 }

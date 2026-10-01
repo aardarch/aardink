@@ -32,8 +32,9 @@ The work happens in that repository, in three steps: **A1** adds Aardink behind 
 | Monaco, in `setup.ts` | Aardink |
 | --- | --- |
 | The Monarch grammar (`setMonarchTokensProvider`, lines 261–346) | Unchanged. `registerLanguage` takes the same object, RegExp literals included. Its groups with their own `next` and `cases` (`(<\/?)(\w+)`, `(<\?)(xml)`) need Aardink 0.6.0 or later. |
-| `defineTheme('aardflex-dark', …)` (lines 349–365) | Unchanged. `fontStyle: 'bold'` on `tag.aardflex` is accepted and ignored: Aardink's themes are colours only. |
-| The completion provider (lines 368–447) | A function of the whole text and a 1-based line and column that returns plain items; see A1 step 4. |
+| `defineTheme('aardflex-dark', …)` (lines 349–365) | Unchanged, `fontStyle: 'bold'` on `tag.aardflex` included. |
+| The completion provider (lines 368–447) | A function of the whole text and a 1-based line and column that returns items in Monaco's shape, snippets (`insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet`) included; see A1 step 4. |
+| `renderWhitespace: 'boundary'` | The same option. |
 | `register({ id: 'aardflex-xml' })` | `registerLanguage({ id: 'aardflex-xml', extends: 'xml', … })`. With `extends`, the language also gets the built-in XML language's diagnostics, completions (after the app's own), hover, closing tags as you type, indentation, formatting, tag folding and completion trigger characters (`<`, space and `"` among them). |
 | `editor.create(container, { … })` | `await createEditor(container, onChange, { … })`: async, because the first call loads the WebAssembly module. |
 | `getValue`, `setValue`, `updateOptions`, `dispose` | The same calls. |
@@ -41,10 +42,6 @@ The work happens in that repository, in three steps: **A1** adds Aardink behind 
 
 What Aardink does not have, and the app loses with it:
 
-- **Bold** for `tag.aardflex`.
-- **`renderWhitespace: 'boundary'`**: whitespace is not drawn.
-- **Snippet placeholders.** Monaco's attribute completion inserts `name="$1"` and leaves the caret
-  between the quotes; Aardink inserts plain text and leaves the caret after it.
 - **`fontFamily`**: the editor always uses its bundled JetBrains Mono, which the current Monaco
   set-up asks for first anyway.
 - `automaticLayout` and `scrollBeyondLastLine` have no counterpart: the editor always fills its
@@ -106,7 +103,7 @@ export const aardflexTheme = {
 
 ```ts
 // src/editor/aardink/aardflexCompletions.ts
-import type { AardinkCompletionItem } from '@aardarch/aardink-web';
+import { CompletionItemInsertTextRule, type AardinkCompletionItem } from '@aardarch/aardink-web';
 import { ATTRIBUTES, ELEMENTS, MODULE_TYPES, TEXT_STYLES, TRANSFORMS } from '../aardflexData';
 
 /** setup.ts's completion provider for Aardink: the whole text, and a 1-based line and column. */
@@ -118,7 +115,15 @@ export function aardflexCompletions(text: string, line: number, column: number):
   if (/style="$/.test(beforeCursor)) return TEXT_STYLES.map((label) => ({ label, kind: 'value' }));
   if (/\|\s*$/.test(beforeCursor)) return TRANSFORMS.map((label) => ({ label, kind: 'value' }));
   const tag = /<(\w+)\s/.exec(beforeCursor);
-  if (tag) return (ATTRIBUTES[tag[1]] ?? []).map((attr) => ({ label: attr, kind: 'attribute', insertText: `${attr}=""` }));
+  if (tag) {
+    return (ATTRIBUTES[tag[1]] ?? []).map((attr) => ({
+      label: attr,
+      kind: 'attribute',
+      // As in setup.ts: the caret between the quotes.
+      insertText: `${attr}="$1"`,
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+    }));
+  }
   return [];
 }
 ```
@@ -297,11 +302,8 @@ preview channel with `curl -I`; if they do not, add a `Content-Type` header for 
   test compares `await tokenize(fixture, 'aardflex-xml')` with the same file. The Aardink test
   needs a real browser, since the package is WasmGC and loads Compose: run it in Vitest's browser
   mode with Playwright's Chromium, or as a Playwright test against `vite preview`.
-- One difference to normalise: a grammar's comments and strings are the editor's own, so Aardink
-  reports Monaco's `comment.xml` as `comment` and `string.format.xml` or `string.xml` as `string`.
-  Map every Monaco type starting with `comment` or `string` to that word before comparing.
-  Everything else, including the `.xml` postfix, the `''` gaps and the merging of neighbouring
-  tokens of one type, is as Monaco gives it.
+- The names are Monaco's, the `.xml` postfix, the `''` gaps and the merging of neighbouring
+  tokens of one type included, so the two can be compared as they are.
 - Aardink runs the same cases as `setup.test.ts` against this grammar in its own test suite
   (`DeclarativeGrammarTest`, "aardflex's grammar finds the tokens Monaco finds"), so a grammar
   feature the app relies on cannot break without Aardink noticing.

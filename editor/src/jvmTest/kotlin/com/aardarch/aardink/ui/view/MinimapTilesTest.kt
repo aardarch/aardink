@@ -50,7 +50,7 @@ class MinimapTilesTest {
             style = ViewStyle(
                 measurer = measurer,
                 textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 20.sp),
-                tokenStyles = emptyMap(),
+                tokenStyle = { null },
                 placeholderStyle = SpanStyle(color = Color.Gray),
                 metrics = EditorMetrics(
                     lineHeight = 20f,

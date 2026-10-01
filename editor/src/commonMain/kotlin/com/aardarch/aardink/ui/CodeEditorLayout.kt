@@ -47,6 +47,7 @@ import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
@@ -343,9 +344,22 @@ fun CodeEditorLayout(
     // handleSingleCharacterInsert below); every OTHER kind of edit — undo/redo, a quick fix, a
     // rename, a key command, a host-driven loadText — closes it, because its items were addressed
     // to text that just changed under it in a way typing's own re-addressing doesn't cover.
+    // A snippet's choice stop (`${1|one,two|}`) offers its choices in the same list, as Monaco's.
+    // Only on reaching the stop: once one is taken, the list stays closed.
     LaunchedEffect(state) {
-        snapshotFlow { state.externalEditVersion }.collect {
-            showCompletion = false
+        var offeredAt: Pair<Any?, Int>? = null
+        snapshotFlow { Triple(state.externalEditVersion, state.snippet, state.snippet?.version) }.collect { (_, snippet, version) ->
+            val choices = snippet?.currentChoices
+            val stop = snippet to (version ?: 0)
+            if (choices != null && stop != offeredAt) {
+                offeredAt = stop
+                val range = snippet.currentRanges().first()
+                completionJob?.cancel()
+                completionItems = choices.map { CompletionItem(it, CompletionKind.Value, it, replaceRange = range.min until range.max) }
+                showCompletion = true
+            } else {
+                showCompletion = false
+            }
         }
     }
 
@@ -941,6 +955,11 @@ private const val HOVER_DELAY_MS = 500L
 private fun applyCompletion(state: CodeEditorState, item: CompletionItem) {
     val cursor = state.selection.start
     val target = completionReplaceRange(state.document, cursor, item)
+
+    if (item.isSnippet) {
+        state.insertSnippet(target, item.insertText, item.additionalEdits, adjustWhitespace = !item.keepWhitespace)
+        return
+    }
 
     if (item.additionalEdits.isEmpty()) {
         val newSelection = TextRange(target.first + item.insertText.length)

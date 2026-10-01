@@ -27,6 +27,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.ui.drawSquiggleLine
 import kotlin.math.max
 import kotlin.math.min
@@ -45,6 +46,10 @@ internal data class EditorColors(
     val lineHighlight: Color,
     /** The fill of a matched bracket's box; its outline is the same colour, stronger. */
     val bracketMatch: Color,
+    /** The dots and arrows of drawn whitespace. */
+    val whitespace: Color = Color.Transparent,
+    /** Behind a snippet's tab stops while it is being filled in. */
+    val snippetTabStop: Color = Color.Transparent,
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -60,11 +65,15 @@ internal class EditorDecorations(
     val bracketMatch: Pair<Int, Int>? = null,
     /** The symbol under a mouse with Ctrl (Cmd) held, underlined as a link to its definition. */
     val link: TextRange? = null,
+    /** Which spaces and tabs get a dot or an arrow. */
+    val renderWhitespace: RenderWhitespace = RenderWhitespace.None,
+    /** The tab stops of a snippet being filled in. */
+    val snippetTabStops: List<TextRange> = emptyList(),
 )
 
 /**
- * The viewport's content for [frame]: the caret lines' highlight, selections, find matches and a
- * matched bracket pair's boxes under the text, the text, then squiggles and the input-method
+ * The viewport's content for [frame]: the caret lines' highlight, selections, find matches, a
+ * matched bracket pair's boxes and drawn whitespace under the text, the text, then squiggles and the input-method
  * composition underline. Carets are drawn separately
  * ([drawCarets]), so their blinking does not redraw the rest.
  */
@@ -85,6 +94,10 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
     }
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
+        for (stop in decorations.snippetTabStops) {
+            if (stop.collapsed || stop.max <= line.start || stop.min > line.end) continue
+            drawRange(line, stop.min - line.start, stop.max - line.start, colors.snippetTabStop, left, top)
+        }
         for (selection in decorations.selections) {
             if (selection.collapsed || selection.max < line.start || selection.min > line.end) continue
             drawRange(line, selection.min - line.start, selection.max - line.start, colors.selection, left, top)
@@ -99,6 +112,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         }
         // Over the selection, as in VS Code: a match inside a selection stays visible.
         drawFindMatches(line, decorations, colors, left, top)
+        drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, frame.metrics.lineHeight)
         drawText(line.layout, topLeft = Offset(left, top))
     }
     for (line in frame.lines) {

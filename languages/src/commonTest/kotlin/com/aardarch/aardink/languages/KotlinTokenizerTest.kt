@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class KotlinTokenizerTest {
@@ -50,7 +51,8 @@ class KotlinTokenizerTest {
     @Test
     fun `numbers tokenized`() {
         val tokens = KotlinTokenizer.tokenizeFull("val x = 42 + 0xFF + 1.5e3")
-        assertTrue(tokens.count { it.type == TokenType.Number } >= 3)
+        // Monaco's names: a plain number, then number.hex and number.float.
+        assertEquals(listOf("number", "number.hex", "number.float"), tokens.map { it.type.scope }.filter { it.startsWith("number") })
     }
 
     @Test

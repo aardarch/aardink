@@ -60,7 +60,7 @@ class EditorViewTest {
             style = ViewStyle(
                 measurer = measurer,
                 textStyle = textStyle,
-                tokenStyles = emptyMap(),
+                tokenStyle = { null },
                 placeholderStyle = SpanStyle(color = Color.Gray),
                 metrics = EditorMetrics(
                     lineHeight = 20f,
@@ -71,6 +71,8 @@ class EditorViewTest {
                     paddingEnd = 8f,
                 ),
                 softWrap = softWrap,
+                tabSize = 4,
+                columnWidthEm = charWidth / 14f,
             )
             this.foldState = foldState
             attach()
@@ -91,6 +93,19 @@ class EditorViewTest {
         val after = view.layoutFor(0)
         assertTrue(after !== before)
         assertTrue(after.size.width > before.size.width * 2.5f, "${after.size.width} vs ${before.size.width}")
+    }
+
+    @Test
+    fun `a tab reaches the next tab stop`() {
+        val view = viewOf("\tx\nab\tx")
+        view.prepare(400, 200)
+        // Column 0 to 4, and column 2 to 4: x is in column 4 on both lines.
+        val first = view.caretRect(1)
+        val second = view.caretRect(view.state.document.lineStart(1) + 3)
+        assertTrue(abs(first.left - (8f + 4 * charWidth)) < 1f, "first x was ${first.left}")
+        assertTrue(abs(second.left - (8f + 4 * charWidth)) < 1f, "second x was ${second.left}")
+        // The tab is still one character: the offset after it is the x.
+        assertEquals(1, view.offsetAt(Offset(8f + 4.2f * charWidth, 8f + 10f)).offset)
     }
 
     @Test

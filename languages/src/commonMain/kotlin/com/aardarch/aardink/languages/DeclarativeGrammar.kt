@@ -16,6 +16,7 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TokenType
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -27,30 +28,15 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * A token type named by a grammar ([DeclarativeGrammar]): `keyword`, `tag`, `tag.aardflex`,
- * `attribute.name`. The name is dotted, most general first, as in Monaco, so a theme can colour
- * `tag.aardflex` on its own and anything without its own colour falls back to its prefix: `tag`.
- * On the web, `registerTheme` and the built-in themes resolve colours that way; a Kotlin host
- * gives its [com.aardarch.aardink.core.EditorTheme.tokenColors] entries keyed by `NamedTokenType`.
- *
- * Names under `comment` and `string` are not named types: a grammar's comments and strings get
- * [TokenType.Comment] and [TokenType.StringLiteral], so the editor treats them as it treats any
- * language's (no bracket colours or matching inside them).
+ * The type a grammar's token [name] (with its postfix) gets: a [NamedTokenType], so a theme colours
+ * it by its name or the longest prefix of it with a colour. The bare names `comment` and `string`
+ * are the editor's own [TokenType.Comment] and [TokenType.StringLiteral].
  */
-data class NamedTokenType(val name: String) : TokenType {
-    override fun toString(): String = "NamedTokenType($name)"
-
-    internal companion object {
-        /** The type a grammar's token [name] gets. */
-        fun of(name: String): TokenType {
-            if (name.isEmpty()) return TokenType.Default
-            return when (name.substringBefore('.')) {
-                "comment" -> TokenType.Comment
-                "string" -> TokenType.StringLiteral
-                else -> NamedTokenType(name)
-            }
-        }
-    }
+internal fun grammarTokenType(name: String): TokenType = when (name) {
+    "" -> TokenType.Default
+    "comment" -> TokenType.Comment
+    "string" -> TokenType.StringLiteral
+    else -> NamedTokenType(name)
 }
 
 /**
@@ -349,7 +335,7 @@ private class GrammarReader(private val json: JsonObject) {
     private fun type(token: String): TokenType {
         val name = if (token.isEmpty()) "" else token + postfix
         if (name.isNotEmpty()) names += name
-        return NamedTokenType.of(name)
+        return grammarTokenType(name)
     }
 
     private companion object {
