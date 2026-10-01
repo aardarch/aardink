@@ -342,9 +342,10 @@ class CodeEditorState(
      * its value then. Each edit is first reduced to the characters it really changes (lines
      * compared, then characters, as for a formatter's result), so carets, folds and diagnostics in
      * text it leaves as it was stay where they are, even when an edit replaces the whole document.
-     * The selections are then [selectionsAfter] when given (clamped to the document; an empty list
-     * counts as none), and otherwise carried through the edits as [applyTextEdits] carries them.
-     * Ranges past the end of the document are clamped to it.
+     * The selections are then [selectionsAfter] when given (offsets in the text after the edits,
+     * as Monaco's `endCursorState`, clamped to it; an empty list counts as none), and otherwise
+     * carried through the edits as [applyTextEdits] carries them. Edit ranges are offsets in the
+     * text before the edits; those past its end are clamped to it.
      *
      * Returns whether the text changed; when it did not, nothing is recorded and only the selections
      * are placed.

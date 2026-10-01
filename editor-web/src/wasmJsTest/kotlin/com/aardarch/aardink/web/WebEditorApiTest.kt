@@ -34,6 +34,7 @@ import org.w3c.dom.HTMLElement
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -153,6 +154,26 @@ class WebEditorApiTest {
         AardinkWeb.patchOptions(handle, """{ "readOnly": true }""")
         assertFalse(AardinkWeb.executeEdits(handle, edits))
         assertEquals("foo bar\nbaz", AardinkWeb.getValue(handle))
+    }
+
+    @Test
+    fun `executeEdits places the end selections in the text after the edits, as Monaco does`() {
+        val handle = mount("b\nd")
+        val edits = listOf(
+            WebEdit(WebRange(1, 1, 1, 1), "a\n"),
+            WebEdit(WebRange(2, 1, 2, 1), "c\n"),
+        )
+        // Line 4 exists only after the edits: "a\nb\nc\nd".
+        assertTrue(AardinkWeb.executeEdits(handle, edits, listOf(WebSelection(4, 1, 4, 2))))
+        assertEquals("a\nb\nc\nd", AardinkWeb.getValue(handle))
+        assertEquals(listOf(WebSelection(4, 1, 4, 2)), AardinkWeb.getSelections(handle))
+
+        // Overlapping edits are still refused, with end selections too.
+        val overlapping = listOf(WebEdit(WebRange(1, 1, 1, 2), "x"), WebEdit(WebRange(1, 1, 1, 2), "y"))
+        assertFailsWith<IllegalArgumentException> {
+            AardinkWeb.executeEdits(handle, overlapping, listOf(WebSelection(1, 1, 1, 1)))
+        }
+        assertEquals("a\nb\nc\nd", AardinkWeb.getValue(handle))
     }
 
     @Test

@@ -278,7 +278,8 @@ object AardinkWeb {
      * Applies [edits] as one undo step, keeping the history, as Monaco's `executeEdits`: each is
      * reduced to the characters it really changes, so carets, folds and diagnostics elsewhere stay
      * put (see [CodeEditorState.executeEdits]). Afterwards the selections are [endSelections] when
-     * given, else carried through the edits. Reported to [onContentChange] as an `"edit"`.
+     * given (positions in the text after the edits, as Monaco's `endCursorState`), else carried
+     * through the edits. Reported to [onContentChange] as an `"edit"`.
      *
      * Returns false, changing nothing, in a read-only editor (as Monaco's does); true otherwise,
      * also when the edits left the text as it was.
@@ -289,21 +290,46 @@ object AardinkWeb {
         if (handle.options.value.readOnly) return false
         val state = handle.state.value
         val document = state.document
-        state.executeEdits(
-            edits.map { edit ->
-                val range = edit.range
-                val a = offsetOf(document, range.startLineNumber, range.startColumn)
-                val b = offsetOf(document, range.endLineNumber, range.endColumn)
-                TextEdit(minOf(a, b) until maxOf(a, b), edit.text.orEmpty())
-            },
-            endSelections?.map {
-                TextRange(
-                    offsetOf(document, it.selectionStartLineNumber, it.selectionStartColumn),
-                    offsetOf(document, it.positionLineNumber, it.positionColumn),
-                )
-            },
-        )
+        val textEdits = edits.map { edit ->
+            val range = edit.range
+            val a = offsetOf(document, range.startLineNumber, range.startColumn)
+            val b = offsetOf(document, range.endLineNumber, range.endColumn)
+            TextEdit(minOf(a, b) until maxOf(a, b), edit.text.orEmpty())
+        }
+        // As in Monaco, the end selections are positions in the text after the edits. Edits that
+        // overlap have no such text; executeEdits below refuses them.
+        val selections = endSelections?.takeIf { it.isNotEmpty() }?.let { wanted ->
+            textAfter(document, textEdits)?.let(::CodeDocument)?.let { after ->
+                wanted.map {
+                    TextRange(
+                        offsetOf(after, it.selectionStartLineNumber, it.selectionStartColumn),
+                        offsetOf(after, it.positionLineNumber, it.positionColumn),
+                    )
+                }
+            }
+        }
+        state.executeEdits(textEdits, selections)
         return true
+    }
+
+    /**
+     * The text of [document] after [edits], applied as [CodeEditorState.executeEdits] applies them
+     * (inserts at one offset in their order, before a replacement starting there); null when two
+     * of them overlap.
+     */
+    private fun textAfter(document: CodeDocument, edits: List<TextEdit>): String? {
+        val changes = edits.map { edit ->
+            val start = edit.range.first.coerceIn(0, document.length)
+            Triple(start, (edit.range.last + 1).coerceIn(start, document.length), edit.newText)
+        }.sortedWith(compareBy({ it.first }, { it.second }))
+        val text = StringBuilder()
+        var at = 0
+        for ((start, end, newText) in changes) {
+            if (start < at) return null
+            text.appendRange(document, at, start).append(newText)
+            at = end
+        }
+        return text.appendRange(document, at, document.length).toString()
     }
 
     /**

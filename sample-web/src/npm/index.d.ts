@@ -108,7 +108,8 @@ export interface AardinkEditor {
   /**
    * Monaco's `executeEdits`: applies `edits` (which must not overlap) as one undo step, keeping the
    * history, each reduced to the characters it really changes so carets and folds elsewhere stay
-   * put. Then selects `endCursorState` when given, else carries the selections through the edits;
+   * put. Then selects `endCursorState` when given (positions in the text after the edits, as in
+   * Monaco), else carries the selections through the edits;
    * a cursor-state computer function is not called. `source` is accepted for Monaco's shape.
    * Returns `false`, changing nothing, in a read-only editor, as Monaco does; throws for edits that
    * overlap. Reported to the change listeners as for `replaceValue`.
