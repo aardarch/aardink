@@ -9,7 +9,7 @@ plugin-kotlin = "2.4.20"
 plugin-spotless = "8.10.3"
 plugin-vanniktech-maven-publish = "0.37.0"
 plugin-dokka = "2.2.0"
-plugin-roborazzi = "1.75.0" # https://github.com/takahirom/roborazzi/releases
+plugin-roborazzi = "1.76.0" # https://github.com/takahirom/roborazzi/releases
 plugin-compose-multiplatform = "1.12.1" # https://github.com/JetBrains/compose-multiplatform/releases
 # Material 3 for Compose Multiplatform has its own version line; this is the one CMP 1.12.1's
 # (deprecated) compose.material3 accessor resolved to. Check the CMP release notes when bumping.
