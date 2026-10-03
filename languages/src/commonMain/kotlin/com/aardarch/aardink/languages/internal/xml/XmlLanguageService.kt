@@ -319,12 +319,15 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
     }
 
     /**
-     * Re-indents structural lines and leaves everything else alone.
+     * Re-indents markup lines and leaves content alone.
      *
-     * Only a line that starts a tag and is markup from end to end can be safely re-indented.
-     * Whitespace in a text node is content — no schema here says otherwise — and the inside of a
-     * comment, a CDATA section or a tag spread over several lines is likewise not this formatter's
-     * to rewrite, so those lines are emitted verbatim.
+     * A line that starts a tag and is markup from end to end is re-indented to its depth. A tag
+     * spread over several lines is re-indented as a block: its first line moves to its depth and
+     * the lines continuing it move by the same amount, keeping their alignment, unless they start
+     * inside an attribute value. Whitespace in a text node is content — no schema here says
+     * otherwise — and so is the inside of a comment or a CDATA section, so those lines are emitted
+     * verbatim. Every line's tags still count toward the depth of the lines after it, whether the
+     * line was re-indented or not.
      */
     override suspend fun format(document: CodeDocument): String {
         val text = document.text
@@ -333,102 +336,171 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val lines = text.lines()
         val states = lineStates(lines)
         val result = mutableListOf<String>()
-        var depth = 0
+        // How far the first line of the multi-line tag being continued moved.
+        var shift = 0
 
         for ((index, line) in lines.withIndex()) {
-            if (!states[index].isStructural) {
-                result.add(line)
-                continue
-            }
+            val state = states[index]
+            if (!state.continuesTag) shift = 0
+            val indent = " ".repeat(state.indentDepth * 4)
+            when {
+                state.isStructural -> result.add(if (line.isBlank()) "" else indent + line.trim())
 
-            val trimmed = line.trim()
-            if (trimmed.isEmpty()) {
-                result.add("")
-                continue
-            }
+                state.opensTag -> {
+                    val content = line.trimStart()
+                    shift = indent.length - (line.length - content.length)
+                    result.add(indent + content)
+                }
 
-            if (trimmed.startsWith("<?") || trimmed.startsWith("<!--") || trimmed.startsWith("<!")) {
-                result.add(" ".repeat(depth * 4) + trimmed)
-                continue
-            }
+                state.continuesTag && !state.startsInValue -> result.add(shifted(line, shift))
 
-            // The line's own tags decide both where it sits and how far it shifts what follows.
-            // The tags it closes before opening anything pull the line itself left - that is what
-            // puts `</a>` under its opener - and the net of all its tags moves everything after it,
-            // so `<a><b>` opens two levels where classifying the line as "an opener" saw one.
-            val (net, leadingCloses) = tagBalance(trimmed)
-            val lineDepth = (depth - leadingCloses).coerceAtLeast(0)
-            result.add(" ".repeat(lineDepth * 4) + trimmed)
-            depth = (lineDepth + net + leadingCloses).coerceAtLeast(0)
+                else -> result.add(line)
+            }
         }
 
         return result.joinToString("\n")
     }
 
+    /** [line] moved right by [shift] columns, or left by as much of [shift] as its indent allows. */
+    private fun shifted(line: String, shift: Int): String = when {
+        line.isBlank() -> ""
+        shift >= 0 -> " ".repeat(shift) + line
+        else -> line.drop(minOf(-shift, line.length - line.trimStart().length))
+    }
+
     /**
+     * @param depth Elements open when the line starts.
+     * @param leadingCloses Closing tags the line ends before its first opening tag; they pull the
+     *   line itself left, which is what puts `</a>` under its opener.
      * @param isStructural The line is markup the formatter owns: blank, or opening with `<` and
      *   closing its last tag on the same line, with nothing but markup in between. Everything else
      *   — text nodes, mixed content, and continuation lines of a comment, CDATA section or
      *   multi-line tag — is content and must survive verbatim.
+     * @param opensTag The line starts with markup and ends inside a tag that continues on the next.
+     * @param continuesTag The line starts inside a tag begun on an earlier line.
+     * @param startsInValue The line starts inside a quoted attribute value, whose whitespace is
+     *   content.
      */
-    private data class XmlLineState(val isStructural: Boolean)
+    private data class XmlLineState(
+        val depth: Int,
+        val leadingCloses: Int,
+        val isStructural: Boolean,
+        val opensTag: Boolean,
+        val continuesTag: Boolean,
+        val startsInValue: Boolean,
+    ) {
+        val indentDepth: Int get() = (depth - leadingCloses).coerceAtLeast(0)
+    }
 
-    /** Classifies every line in one pass, carrying comment / CDATA / open-tag state across lines. */
+    private enum class TagKind { Open, Close, Other }
+
+    /**
+     * Classifies every line in one pass, carrying comment / CDATA / tag / attribute-value state and
+     * the element depth across lines, so a tag counts toward the depth wherever it ends.
+     *
+     * Self-closing tags, void HTML elements, declarations, processing instructions and comments
+     * count for nothing. Attribute values are skipped, so a `<` or `>` inside one is not markup.
+     */
     private fun lineStates(lines: List<String>): List<XmlLineState> {
         val states = ArrayList<XmlLineState>(lines.size)
+        var depth = 0
         var inComment = false
         var inCdata = false
         var inTag = false
+        var quote: Char? = null
+        var tagKind = TagKind.Other
+        var tagName = ""
+        // The last non-blank character inside the current tag; `/` there makes it self-closing.
+        var lastInTag = ' '
 
         for (line in lines) {
+            val startDepth = depth
+            val startedInTag = inTag
+            val startedInValue = quote != null
             val startedMidConstruct = inComment || inCdata || inTag
+            var leadingCloses = 0
+            var seenOpener = false
             var i = 0
 
             while (i < line.length) {
                 when {
                     inComment -> {
-                        val close = line.indexOf("-->", i)
+                        val close = line.indexOf(COMMENT_CLOSE, i)
                         if (close < 0) {
                             i = line.length
                         } else {
                             inComment = false
-                            i = close + 3
+                            i = close + COMMENT_CLOSE.length
                         }
                     }
 
                     inCdata -> {
-                        val close = line.indexOf("]]>", i)
+                        val close = line.indexOf(CDATA_CLOSE, i)
                         if (close < 0) {
                             i = line.length
                         } else {
                             inCdata = false
-                            i = close + 3
+                            i = close + CDATA_CLOSE.length
+                        }
+                    }
+
+                    quote != null -> {
+                        val close = line.indexOf(quote, i)
+                        if (close < 0) {
+                            i = line.length
+                        } else {
+                            quote = null
+                            lastInTag = ' '
+                            i = close + 1
                         }
                     }
 
                     inTag -> {
                         val c = line[i]
-                        if (c == '"' || c == '\'') {
-                            val close = line.indexOf(c, i + 1)
-                            i = if (close < 0) line.length else close + 1
-                        } else {
-                            if (c == '>') inTag = false
-                            i++
+                        when {
+                            c == '"' || c == '\'' -> quote = c
+
+                            c == '>' -> {
+                                inTag = false
+                                when (tagKind) {
+                                    TagKind.Close -> {
+                                        if (!seenOpener) leadingCloses++
+                                        depth = (depth - 1).coerceAtLeast(0)
+                                    }
+
+                                    TagKind.Open -> if (lastInTag != '/' && !isVoidElement(tagName)) depth++
+
+                                    TagKind.Other -> Unit
+                                }
+                            }
+
+                            !c.isWhitespace() -> lastInTag = c
                         }
+                        i++
                     }
 
-                    line.startsWith("<!--", i) -> {
+                    line.startsWith(COMMENT_OPEN, i) -> {
                         inComment = true
-                        i += 4
+                        i += COMMENT_OPEN.length
                     }
 
-                    line.startsWith("<![CDATA[", i) -> {
+                    line.startsWith(CDATA_OPEN, i) -> {
                         inCdata = true
-                        i += 9
+                        i += CDATA_OPEN.length
                     }
 
                     line[i] == '<' -> {
                         inTag = true
+                        lastInTag = ' '
+                        tagKind = when (line.getOrNull(i + 1)) {
+                            '/' -> TagKind.Close
+                            '!', '?' -> TagKind.Other
+                            else -> TagKind.Open
+                        }
+                        if (tagKind == TagKind.Open) {
+                            seenOpener = true
+                            tagName = tagNameOf(line.substring(i + 1))
+                        }
                         i++
                     }
 
@@ -441,74 +513,23 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             // `>` is a text node, and its surrounding whitespace belongs to the document.
             val trimmed = line.trim()
             val wholeLineMarkup = trimmed.isEmpty() || (trimmed.startsWith("<") && trimmed.endsWith(">"))
-            states.add(XmlLineState(!startedMidConstruct && !inComment && !inCdata && !inTag && wholeLineMarkup))
+            val endsMidConstruct = inComment || inCdata || inTag
+            states.add(
+                XmlLineState(
+                    depth = startDepth,
+                    leadingCloses = leadingCloses,
+                    isStructural = !startedMidConstruct && !endsMidConstruct && wholeLineMarkup,
+                    opensTag = !startedMidConstruct && inTag && trimmed.startsWith("<"),
+                    continuesTag = startedInTag,
+                    startsInValue = startedInValue,
+                ),
+            )
         }
         return states
     }
 
     /** Element name at the start of [tagContent] (the text just inside `<`), without attributes. */
     private fun tagNameOf(tagContent: String): String = tagContent.trimStart().takeWhile { !it.isWhitespace() && it != '/' && it != '>' }
-
-    /**
-     * The indentation effect of the tags on [trimmedLine].
-     *
-     * [net] is openers minus closers over the whole line; [leadingCloses] counts only the closers
-     * that come before the line's first opener, which is how far the line itself is outdented.
-     * Self-closing tags, void HTML elements, declarations, processing instructions and comments
-     * count for nothing. Attribute values are skipped, so a `<` or `>` inside one is not markup.
-     */
-    private data class TagBalance(val net: Int, val leadingCloses: Int)
-
-    private fun tagBalance(trimmedLine: String): TagBalance {
-        var net = 0
-        var leadingCloses = 0
-        var seenOpener = false
-        var i = 0
-        while (i < trimmedLine.length) {
-            if (trimmedLine[i] != '<') {
-                i++
-                continue
-            }
-            val end = indexOfTagEnd(trimmedLine, i)
-            if (end < 0) break
-            val raw = trimmedLine.substring(i + 1, end)
-            when {
-                raw.startsWith("!") || raw.startsWith("?") -> Unit
-
-                raw.startsWith("/") -> {
-                    net--
-                    if (!seenOpener) leadingCloses++
-                }
-
-                raw.trimEnd().endsWith("/") || isVoidElement(tagNameOf(raw)) -> seenOpener = true
-
-                else -> {
-                    net++
-                    seenOpener = true
-                }
-            }
-            i = end + 1
-        }
-        return TagBalance(net, leadingCloses)
-    }
-
-    /** Index of the `>` closing the tag that opens at [start], skipping quoted values; -1 if none. */
-    private fun indexOfTagEnd(text: String, start: Int): Int {
-        var i = start + 1
-        while (i < text.length) {
-            when (val c = text[i]) {
-                '"', '\'' -> {
-                    val close = text.indexOf(c, i + 1)
-                    i = if (close < 0) text.length else close + 1
-                }
-
-                '>' -> return i
-
-                else -> i++
-            }
-        }
-        return -1
-    }
 
     /**
      * Whether [afterEq] is a quoted attribute value the cursor is still inside.
