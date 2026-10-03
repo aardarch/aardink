@@ -292,7 +292,8 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   key, and a built-in language no longer repeats a completion the extending language offers.
 - XML and HTML offered element and attribute completions inside comments, CDATA sections,
   `<!DOCTYPE …>` and `<?xml …?>`, so Enter in a comment could write `android:name=""` into it.
-  They offer none there now.
+  They offer none there now, and a `<!--` inside a closed CDATA section (or a `<![CDATA[` inside
+  a closed comment) no longer turns them off for the rest of the document.
 - The touch chrome the editor draws itself (the keyboard toolbar, the completion strip above
   it, the menu over a touch selection) and the right-click menu took the host's Material colours,
   so on the web, which has no Material theme, they were light over a dark editor. They now follow
