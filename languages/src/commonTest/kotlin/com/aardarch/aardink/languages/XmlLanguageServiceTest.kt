@@ -252,6 +252,35 @@ class XmlLanguageServiceTest {
     }
 
     @Test
+    fun `format counts a tag spread over several lines`() = runTest {
+        // The opener's lines were left out of the depth, but its </b> still closed a level, so
+        // every line after it sat one level too far left.
+        val src = "<a>\n<b x=\"1\"\n   y=\"2\">\ntext\n</b>\n<c/>\n</a>"
+        assertEquals(
+            "<a>\n    <b x=\"1\"\n       y=\"2\">\ntext\n    </b>\n    <c/>\n</a>",
+            XmlLanguageService.format(CodeDocument(src)),
+        )
+    }
+
+    @Test
+    fun `format moves a multi-line tag as a block`() = runTest {
+        val src = "<a>\n            <b x=\"1\"\n                 y=\"2\"/>\n</a>"
+        assertEquals("<a>\n    <b x=\"1\"\n         y=\"2\"/>\n</a>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
+    fun `format leaves a multi-line attribute value alone`() = runTest {
+        val src = "<a>\n<b x=\"one\n      two\">\n</b>\n</a>"
+        assertEquals("<a>\n    <b x=\"one\n      two\">\n    </b>\n</a>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
+    fun `format counts the closing tag at the end of a text line`() = runTest {
+        val src = "<a>\n<b>\ntext</b>\n<c/>\n</a>"
+        assertEquals("<a>\n    <b>\ntext</b>\n    <c/>\n</a>", XmlLanguageService.format(CodeDocument(src)))
+    }
+
+    @Test
     fun `unescaped ampersand in an attribute value flagged`() = runTest {
         // The scan jumps past a whole tag, so the text-node check never saw attribute values.
         val diags = xml("""<a label="A & B"/>""")
