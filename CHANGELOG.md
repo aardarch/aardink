@@ -325,18 +325,18 @@ failed module load can be retried, the editor follows its container's size, find
 keyboard focus, registered languages set their own completion trigger characters and can drop
 their base language's completions, completion items take Monaco's `range`, `filterText` and
 `sortText`, `revalidate()`, and `replaceValue`/`executeEdits` keep the undo history. Popups,
-panels and touch chrome follow the editor theme. Its changes are the ones under [Unreleased].
+panels and touch chrome follow the editor theme. Its changes are listed under [0.6.0].
 
 ## [0.6.0-rc2] - 2026-10-01
 
 The second release candidate for 0.6.0, on Maven Central and on npm's `next` tag, with
 whitespace rendering, snippet completions, and theme colours and font styles by token sub-name.
-Its changes are the ones under [Unreleased], which become 0.6.0.
+Its changes are listed under [0.6.0].
 
 ## [0.6.0-rc1] - 2026-09-27
 
-A release candidate for 0.6.0, on Maven Central and on npm's `next` tag. Its changes are the
-ones under [Unreleased], which become 0.6.0.
+A release candidate for 0.6.0, on Maven Central and on npm's `next` tag. Its changes are
+listed under [0.6.0].
 
 ## [0.5.0] - 2026-09-27
 
