@@ -304,9 +304,10 @@ preview channel with `curl -I`; if they do not, add a `Content-Type` header for 
   mode with Playwright's Chromium, or as a Playwright test against `vite preview`.
 - The names are Monaco's, the `.xml` postfix, the `''` gaps and the merging of neighbouring
   tokens of one type included, so the two can be compared as they are.
-- Aardink runs the same cases as `setup.test.ts` against this grammar in its own test suite
-  (`DeclarativeGrammarTest`, "aardflex's grammar finds the tokens Monaco finds"), so a grammar
-  feature the app relies on cannot break without Aardink noticing.
+- Aardink checks a copy of the shared grammar (`aardflex/shared/grammar/`) against its golden
+  tokens, and runs the cases of the former `setup.test.ts`, in its own test suite
+  (`AardflexGrammarTest`, `languages/src/jvmTest/`), so a grammar feature the app relies on
+  cannot break without Aardink noticing.
 - Record the production bundle with each editor (`VITE_EDITOR=monaco pnpm build` and
   `VITE_EDITOR=aardink pnpm build`): the JS and CSS, and for Aardink the two `.wasm` files and the
   font, each raw and gzipped.
