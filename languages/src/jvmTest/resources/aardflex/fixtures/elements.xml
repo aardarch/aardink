@@ -1,0 +1,25 @@
+<wallpaper name="Every element">
+  <themes>
+    <theme id="night">
+      <colors><primary>#ff8800</primary></colors>
+      <typography defaultFontFamily="main"><title fontSize="24"/></typography>
+      <radius><card>12</card></radius>
+      <elevation><card>2</card></elevation>
+      <spacing><gap>8</gap></spacing>
+      <border><thin>1</thin></border>
+      <opacity><dim>0.6</dim></opacity>
+    </theme>
+  </themes>
+  <page index="0">
+    <layer>
+      <theme id="night">
+        <polar radius="120"><text>N</text></polar>
+        <path d="M0 0 L10 10" stroke="@primary"/>
+        <skyplot size="200"/>
+        <orbitdisc size="160"/>
+        <effect type="blur"/>
+        <include component="clock"/>
+      </theme>
+    </layer>
+  </page>
+</wallpaper>

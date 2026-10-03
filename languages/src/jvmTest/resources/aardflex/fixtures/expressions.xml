@@ -1,0 +1,7 @@
+<text>{hourWords}</text>
+<text>{$hourWords}</text>
+<text color="{theme:colors.onBackground}">
+<text color="{colors:accent}" visible="{system:battery | gte:20}">
+<font name="main" provider="system" />
+<text>{oops</text>
+<var name="x">ok</var>

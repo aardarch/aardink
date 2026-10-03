@@ -1,0 +1,7 @@
+<colors>
+  <color name="accent" value="#FF6D00" />
+</colors>
+<text color="@accent" background='@surface_dim'>@accent on @surface</text>
+<layer gradient="@accent @primary 45" />
+<text>mail me at a@ b</text>
+<text color="{colors:accent}">no @ref inside {moon:phase | uppercase}</text>

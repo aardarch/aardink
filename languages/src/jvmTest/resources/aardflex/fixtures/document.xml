@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A comment
+     spanning lines -->
+<widget name='Single quoted' tags="a b">
+  <unknown attr="value">text</unknown>
+  <row gap="8"><spacer flex="1"/></row>
+</widget>

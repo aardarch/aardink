@@ -1,0 +1,10 @@
+<wallpaper name="Textytime Dashboard" themeId="bundled-material-dark">
+  <variables>
+    <var name="hourWords">{dt:hour | toWords}</var>
+    <var name="minuteWords">{dt:minute | toWords | replace: :}</var>
+    <var name="dayRest">{dt:date:EEEE | substr:3 | lowercase}</var>
+    <var name="dayNum">{dt:date:d}</var>
+    <var name="moonIllum">{moon:illumination}%</var>
+    <var name="riseTime">{sun:sunrise:HHmm}</var>
+  </variables>
+</wallpaper>
