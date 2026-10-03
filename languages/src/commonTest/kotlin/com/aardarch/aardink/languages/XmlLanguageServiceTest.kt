@@ -221,6 +221,17 @@ class XmlLanguageServiceTest {
     }
 
     @Test
+    fun `a comment opener inside a CDATA section is text, and the reverse`() = runTest {
+        // Searched for separately, the `<!--` in the closed section looked like an open comment.
+        for (src in listOf("<a><![CDATA[<!-- literal]]></a> <b ", "<!-- <![CDATA[ literal --> <b ")) {
+            assertTrue(XmlLanguageService.completions(CodeDocument(src), src.length).isNotEmpty(), src)
+        }
+        // A section inside a comment that is still open is text too: the comment holds the caret.
+        val stillInComment = "<!-- <![CDATA[ x ]]> <b "
+        assertEquals(emptyList(), XmlLanguageService.completions(CodeDocument(stillInComment), stillInComment.length))
+    }
+
+    @Test
     fun `format counts every tag on a line`() = runTest {
         // <a><b> opens two levels, so </b> closes back to one - inside <a>. Treating the whole
         // line as a single opener counted one level and left </b> at column 0.

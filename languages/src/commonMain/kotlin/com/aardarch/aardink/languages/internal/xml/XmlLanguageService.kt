@@ -229,7 +229,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val textBefore = text.take(clampedOffset)
         // A comment or CDATA section holds text, not markup: nothing there is an element or an
         // attribute, and accepting one would write markup into it.
-        if (isInsideUnclosed(textBefore, "<!--", "-->") || isInsideUnclosed(textBefore, "<![CDATA[", "]]>")) return emptyList()
+        if (isInsideCommentOrCData(textBefore)) return emptyList()
 
         val lastLt = textBefore.lastIndexOf('<')
         val lastGt = textBefore.lastIndexOf('>')
@@ -523,12 +523,27 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
     }
 
     /**
-     * Whether the end of [textBefore] lies inside a construct [open] started and [close] has not
-     * ended yet: the last [open] has no [close] after it.
+     * Whether the end of [textBefore] lies inside a comment or a CDATA section that has not ended
+     * yet. They are followed in order, each through its own terminator, so a `<!--` inside a
+     * CDATA section (or a `<![CDATA[` inside a comment) is only text.
      */
-    private fun isInsideUnclosed(textBefore: String, open: String, close: String): Boolean {
-        val start = textBefore.lastIndexOf(open)
-        return start >= 0 && textBefore.indexOf(close, start + open.length) < 0
+    private fun isInsideCommentOrCData(textBefore: String): Boolean {
+        var i = 0
+        // The next of each opener, searched again only once the scan has passed it.
+        var comment = textBefore.indexOf(COMMENT_OPEN)
+        var cdata = textBefore.indexOf(CDATA_OPEN)
+        while (true) {
+            if (comment in 0 until i) comment = textBefore.indexOf(COMMENT_OPEN, i)
+            if (cdata in 0 until i) cdata = textBefore.indexOf(CDATA_OPEN, i)
+            if (comment < 0 && cdata < 0) return false
+            val isComment = cdata < 0 || comment in 0 until cdata
+            val start = if (isComment) comment else cdata
+            val open = if (isComment) COMMENT_OPEN else CDATA_OPEN
+            val close = if (isComment) COMMENT_CLOSE else CDATA_CLOSE
+            val end = textBefore.indexOf(close, start + open.length)
+            if (end < 0) return true
+            i = end + close.length
+        }
     }
 
     /** Start of the attribute name being typed at [offset] — [offset] itself when none is. */
@@ -724,6 +739,11 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
     private companion object {
         val ENTITY_REGEX = Regex("&(?:[a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);")
+
+        const val COMMENT_OPEN = "<!--"
+        const val COMMENT_CLOSE = "-->"
+        const val CDATA_OPEN = "<![CDATA["
+        const val CDATA_CLOSE = "]]>"
 
         val HTML_VOID_ELEMENTS = setOf(
             "area", "base", "br", "col", "embed", "hr", "img", "input",
