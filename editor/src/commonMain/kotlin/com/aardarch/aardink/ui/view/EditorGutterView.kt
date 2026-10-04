@@ -60,6 +60,13 @@ internal class GutterContent(
      */
     val reserveFoldLane: Boolean,
     val diffAnnotations: Map<Int, LineDiffKind>,
+    /**
+     * Keeps the diff lane while there is a baseline, so the text does not shift sideways when the
+     * first line changes or when a save clears the last bar.
+     */
+    val reserveDiffLane: Boolean,
+    /** Keeps the diagnostic lane while diagnostics can arrive, so the text does not shift as they come and go. */
+    val reserveAnnotationLane: Boolean,
     val showLineNumbers: Boolean,
     val onToggleFold: (Int) -> Unit,
     val onAnnotationTap: (Int) -> Unit,
@@ -77,6 +84,8 @@ internal fun EditorGutterView(
     lineCount: Int,
     background: Color,
     foreground: Color,
+    /** A diagnostic dot's colour by severity: the theme's, as the squiggles use. */
+    severityColor: (GutterAnnotationKind) -> Color,
     content: GutterContent,
     modifier: Modifier = Modifier,
     sticky: () -> List<StickyLine> = { emptyList() },
@@ -92,9 +101,9 @@ internal fun EditorGutterView(
             color = foreground,
         )
     }
-    val hasDiffLane = content.diffAnnotations.isNotEmpty()
+    val hasDiffLane = content.reserveDiffLane || content.diffAnnotations.isNotEmpty()
     val hasFoldLane = content.reserveFoldLane || content.foldableLines.isNotEmpty()
-    val hasAnnotationLane = content.annotations.isNotEmpty()
+    val hasAnnotationLane = content.reserveAnnotationLane || content.annotations.isNotEmpty()
     val width =
         rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, content.showLineNumbers, density, measurer, textStyle)
     val diffLane = with(density) { if (hasDiffLane) DIFF_LANE_WIDTH.toPx() else 0f }
@@ -167,7 +176,12 @@ internal fun EditorGutterView(
                     }
                     val annotation = shown.annotations[line.line]
                     if (annotation != null && annotationLane > 0f) {
-                        drawAnnotationDot(annotation, centerX = diffLane + foldLane + annotationLane / 2f, centerY = top + lineHeight / 2f)
+                        drawAnnotationDot(
+                            severityColor(annotation),
+                            centerX = diffLane + foldLane + annotationLane / 2f,
+                            centerY =
+                            top + lineHeight / 2f,
+                        )
                     }
                 }
                 // Sticky scroll's lines, with their numbers, over the rows at the top.

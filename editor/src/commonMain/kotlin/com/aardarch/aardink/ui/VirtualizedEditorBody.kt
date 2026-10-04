@@ -229,7 +229,21 @@ internal fun VirtualizedEditorBody(
         modifier = modifier,
         gutter = {
             if (gutter != null) {
-                EditorGutterView(view, lineCount, theme.gutterBackground, theme.gutterForeground, gutter, sticky = sticky)
+                EditorGutterView(
+                    view,
+                    lineCount,
+                    theme.gutterBackground,
+                    theme.gutterForeground,
+                    severityColor = { kind ->
+                        when (kind) {
+                            GutterAnnotationKind.Error -> colors.error
+                            GutterAnnotationKind.Warning -> colors.warning
+                            GutterAnnotationKind.Info -> colors.info
+                        }
+                    },
+                    content = gutter,
+                    sticky = sticky,
+                )
             }
         },
         viewport = {

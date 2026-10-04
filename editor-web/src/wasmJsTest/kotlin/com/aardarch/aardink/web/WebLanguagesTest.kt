@@ -104,6 +104,14 @@ class WebLanguagesTest {
     }
 
     @Test
+    fun `a theme's diagnostic colours replace its base's, and those it leaves out stay the base's`() {
+        AardinkWeb.registerTheme("toy-diagnostics", """{ "base": "vscode-dark", "colors": { "editorInfo.foreground": "#89b4fa" } }""")
+        val theme = AardinkWeb.registeredThemes.getValue("toy-diagnostics")
+        assertEquals(Color(0xFF89B4FA), theme.infoColor)
+        assertEquals(EditorThemes.VsCodeDark.errorColor, theme.errorColor)
+    }
+
+    @Test
     fun `the host's answers come first, then those of the language it extends`() = runTest {
         AardinkWeb.registerLanguage(
             """{ "id": "toy-xml", "extends": "xml", "grammar": { "tokenizer": { "root": [ ["<\\w+", "tag"] ] } } }""",

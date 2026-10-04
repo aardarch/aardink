@@ -116,14 +116,15 @@ Current stack, from `gradle/libs.versions.toml`:
 | vanniktech | 0.37.0 |
 | Roborazzi | 1.75.0 |
 | JVM toolchain | 21 |
-| Web tooling | Vite 8.3, puppeteer-core 25.12, Node 24, pnpm 11 |
+| Web tooling | Vite 8.3, puppeteer-core 25.12, Node 24, pnpm 12 |
 
 Policy for this plan:
 
 - **PR 1** takes every available stable bump, including a CMP 1.12.x patch if one exists.
   Checked 2026-09-27: every catalog entry, Gradle 9.8.0 and every GitHub Action were already on
-  their newest stable release. pnpm stays on 11 (as in astro-components); pnpm 12 is a major
-  with a new lockfile and gains nothing here.
+  their newest stable release. pnpm stayed on 11 (as in astro-components) until after 0.6.0,
+  then moved to 12 (2026-10-04) to match the local toolchain. pnpm 12.8.1 accepts and keeps the
+  existing `lockfileVersion: '9.0'` lockfile, so `tools/vite-smoke/pnpm-lock.yaml` is unchanged.
   - CMP 1.13.0-alpha01 already compiles, and `:editor:jvmTest` passes, with no source change
     (local canary run).
 - **CMP 1.13 is wanted for 0.6.0.** It fixes W-1 (§1), and its web text input moved to a

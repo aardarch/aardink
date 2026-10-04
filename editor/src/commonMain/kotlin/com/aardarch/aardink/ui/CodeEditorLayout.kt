@@ -847,6 +847,8 @@ fun CodeEditorLayout(
                     foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
                     reserveFoldLane = options.showFoldMarkers && foldState != null && foldingProvider !== NoOpFoldingProvider,
                     diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
+                    reserveDiffLane = options.showDiffMarkers && savedText.isNotEmpty(),
+                    reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
                     onAnnotationTap = { lineIndex ->

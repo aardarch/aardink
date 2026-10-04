@@ -382,9 +382,9 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Edi
         cursorColor = pick("editorCursor.foreground", parsed.cursorColor, base.cursorColor),
         tokenColors = tokenColors,
         tokenFontStyles = base.tokenFontStyles + parsed.tokenFontStyles,
-        errorColor = base.errorColor,
-        warningColor = base.warningColor,
-        infoColor = base.infoColor,
+        errorColor = pick("editorError.foreground", parsed.errorColor, base.errorColor),
+        warningColor = pick("editorWarning.foreground", parsed.warningColor, base.warningColor),
+        infoColor = pick("editorInfo.foreground", parsed.infoColor, base.infoColor),
     )
     return theme
 }

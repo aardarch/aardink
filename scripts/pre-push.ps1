@@ -75,18 +75,27 @@ try {
         $Patterns = @(
             '(?i)SIGNING_STORE_PASSWORD\s*=\s*\S+',
             '(?i)SIGNING_KEY_PASSWORD\s*=\s*\S+',
-            '(?i)api[_-]?key\s*[:=]\s*["\x27][A-Za-z0-9]{16,}',
-            '(?i)client[_-]?secret\s*[:=]\s*["\x27]\S+',
+            # The optional quote after the name lets a JSON key ("api_key": "...") match too.
+            '(?i)api[_-]?key["\x27]?\s*[:=]\s*["\x27][A-Za-z0-9]{16,}',
+            '(?i)client[_-]?secret["\x27]?\s*[:=]\s*["\x27]\S+',
             '(?i)mavenCentralPassword\s*=\s*\S+',
             '(?i)signingInMemoryKeyPassword\s*=\s*\S+'
         )
 
+        # The files a push could carry: tracked plus untracked-but-not-ignored. Walking the disk
+        # instead would descend into tools/vite-smoke/node_modules, whose pnpm store holds
+        # dangling links for other platforms' optional packages; .gitignore already covers
+        # build/, .gradle/, .kotlin/, local.properties and keystore.properties.
+        $Extensions = '.kt', '.kts', '.properties', '.xml', '.json', '.toml'
+        $Files = git -C $ProjectRoot ls-files --cached --others --exclude-standard |
+            Where-Object { $Extensions -contains [System.IO.Path]::GetExtension($_) } |
+            ForEach-Object { Join-Path $ProjectRoot $_ } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+        if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed' }
+
         $Hits = @()
         foreach ($Pattern in $Patterns) {
-            $Found = Get-ChildItem -Path $ProjectRoot -Recurse -Include '*.kt', '*.kts', '*.properties', '*.xml', '*.json', '*.toml' |
-                Where-Object { $_.FullName -notmatch '[\\/](build|\.gradle|\.idea|\.kotlin)[\\/]' } |
-                Where-Object { $_.Name -ne 'local.properties' -and $_.Name -ne 'keystore.properties' } |
-                Select-String -Pattern $Pattern -List
+            $Found = if ($Files) { Select-String -LiteralPath $Files -Pattern $Pattern -List }
             if ($Found) { $Hits += $Found }
         }
 
@@ -175,6 +184,15 @@ try {
 
             # The npm package in a real Vite app, in headless Chrome. Needs pnpm on PATH.
             Invoke-Check 'Web npm package + Vite smoke test' {
+                # pnpm 11+ puts its shims in $PNPM_HOME\bin; a shell started before that folder
+                # joined PATH can't see them, so look there before giving up.
+                if (-not (Get-Command pnpm -ErrorAction SilentlyContinue) -and $env:PNPM_HOME) {
+                    $PnpmBin = Join-Path $env:PNPM_HOME 'bin'
+                    if (Test-Path $PnpmBin) { $env:Path = "$PnpmBin$([System.IO.Path]::PathSeparator)$env:Path" }
+                }
+                if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+                    throw 'pnpm not found on PATH or in $PNPM_HOME\bin - install pnpm 12 (https://pnpm.io/installation)'
+                }
                 & $Gradlew ':sample-web:npmPackage' ':sample-web:verifyExportsMatchTemplate' --quiet 2>&1 | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw 'Building the npm package failed' }
                 Push-Location (Join-Path $ProjectRoot 'tools' 'vite-smoke')

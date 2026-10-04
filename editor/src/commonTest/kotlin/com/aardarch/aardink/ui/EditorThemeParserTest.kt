@@ -55,6 +55,25 @@ class EditorThemeParserTest {
     }
 
     @Test
+    fun `diagnostic colors come from the editorError, editorWarning and editorInfo foregrounds`() {
+        val json = """
+            {
+              "colors": {
+                "editorError.foreground": "#f38ba8",
+                "editorWarning.foreground": "#f9e2af",
+                "editorInfo.foreground": "#89b4fa"
+              }
+            }
+        """.trimIndent()
+        val theme = EditorThemeParser.fromJson(json)
+        assertEquals(Color(0xFFF38BA8), theme?.errorColor)
+        assertEquals(Color(0xFFF9E2AF), theme?.warningColor)
+        assertEquals(Color(0xFF89B4FA), theme?.infoColor)
+        // Unset, they are VS Code Dark's.
+        assertEquals(EditorThemes.VsCodeDark.infoColor, EditorThemeParser.fromJson("{}")?.infoColor)
+    }
+
+    @Test
     fun `8-digit hex colors carry alpha last, as VS Code writes them`() {
         val json = """{ "colors": { "editor.background": "#10203080" } }"""
         val theme = EditorThemeParser.fromJson(json)

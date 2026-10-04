@@ -50,12 +50,8 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFoldTriangle(
     drawPath(path, color = color.copy(alpha = 0.7f))
 }
 
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(
-    kind: GutterAnnotationKind,
-    centerX: Float,
-    centerY: Float,
-) {
-    drawCircle(color = kind.color, radius = 4.dp.toPx(), center = Offset(centerX, centerY))
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(color: Color, centerX: Float, centerY: Float) {
+    drawCircle(color = color, radius = 4.dp.toPx(), center = Offset(centerX, centerY))
 }
 
 // ── Width calculation ─────────────────────────────────────────────────────────
@@ -111,7 +107,9 @@ internal fun rememberGutterWidth(
 // ── Annotation kinds ──────────────────────────────────────────────────────────
 
 /**
- * Severity classification for gutter annotation dots.
+ * Severity classification for gutter annotation dots. The editor draws a dot in its theme's
+ * [EditorTheme.errorColor], [EditorTheme.warningColor] or [EditorTheme.infoColor], as it does the
+ * squiggles; [color] is a fixed palette for hosts drawing their own.
  */
 enum class GutterAnnotationKind(val color: Color) {
     Error(Color(0xFFFF6B6B)),
