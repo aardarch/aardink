@@ -36,6 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The XML formatter left a tag spread over several lines out of the depth, but its closing tag
+  still closed a level, so every line after it sat one level too far left. Depth now counts every
+  line's tags, and a multi-line tag is re-indented as a block, keeping its continuation lines'
+  alignment and leaving lines inside an attribute value alone.
+- `EditorThemeParser` and the web's `registerTheme` ignored a theme's `editorError.foreground`,
+  `editorWarning.foreground` and `editorInfo.foreground`, so squiggles always took the default
+  colours. They now take the theme's, and fall back to the base theme's when unset.
+- The gutter's diagnostic dots were drawn in `GutterAnnotationKind`'s fixed palette; they now use
+  the theme's `errorColor`, `warningColor` and `infoColor`, as the squiggles do.
+- The text shifted sideways as the gutter's diff and diagnostic lanes appeared and disappeared
+  (on the first edit, after a save cleared the last diff bar, or as diagnostics came and went).
+  The lanes now stay while there is a saved baseline or a source of diagnostics.
+
 ## [0.6.0] - 2026-10-03
 
 0.6.0 replaces the editor's text field with a renderer and text input of its own on every
