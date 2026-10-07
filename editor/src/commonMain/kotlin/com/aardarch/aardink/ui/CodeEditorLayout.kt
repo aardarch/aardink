@@ -17,6 +17,8 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -42,6 +44,10 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
@@ -78,6 +84,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * The code editor.
@@ -745,10 +752,23 @@ fun CodeEditorLayout(
         }
     }
 
+    // How far the layout's bottom edge sits above the bottom of the window. A host that puts its
+    // own bars below the editor already has that much of the window under the keyboard, so only
+    // the rest of the IME inset may push the content up: plain imePadding() would lift the
+    // keyboard toolbar by the whole keyboard height and leave a gap the size of the host's bars.
+    var bottomGapPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(theme.background)
+            .onGloballyPositioned { coordinates ->
+                val rootHeight = coordinates.findRootCoordinates().size.height
+                val bottom = coordinates.positionInRoot().y + coordinates.size.height
+                bottomGapPx = (rootHeight - bottom).roundToInt().coerceAtLeast(0)
+            }
+            .consumeWindowInsets(PaddingValues(bottom = with(density) { bottomGapPx.toDp() }))
             .imePadding(),
     ) {
         // ── Find/Replace panel (slides down from the top) ────────────────────

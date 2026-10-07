@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On Android, when a host put its own bars below `CodeEditorLayout`, the keyboard toolbar
+  floated above the soft keyboard with a gap the height of those bars, because the editor
+  padded itself by the whole keyboard height. It now pads only by the part of the keyboard
+  that covers it, so the toolbar sits right on the keyboard.
+
 ## [0.6.1] - 2026-10-04
 
 ### Fixed
