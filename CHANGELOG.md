@@ -38,8 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Web:** F8 typed a `w` while the editor's canvas had the focus, and the other function keys,
+  Insert, a numpad key without NumLock and a dead key typed a character too. Compose gives such a
+  key the code of the physical key as its character, which the editor took for typing; a
+  character equal to its key's code is now typed only for a letter, a digit or a space on its own
+  key.
+- Find's regex replacement was inserted as written, so `$1` stayed `$1`. In regex mode it now
+  reads VS Code's syntax: `$0` or `$&` for the match, `$1` to `$99` for groups, `$$` for a dollar
+  sign, and `\n`, `\t` and `\\`. Replace and Replace All leave out a match the text no longer has
+  instead of replacing the text now at its place.
+- An accessibility service's "set text" replaced the whole document with the 101 lines around
+  the caret it is shown, so in a longer document every other line was lost. It now replaces only
+  those lines, and of them only what changed.
 - The KDoc of `AardinkWeb.updateOptions` and `docs/WEB_INTEGRATION.md` said changing the language
   starts a new undo history; the text, the selection and the undo history are all kept.
+
+### Changed
+
+- Compose Multiplatform 1.12.2.
 
 ## [0.6.2] - 2026-10-12
 

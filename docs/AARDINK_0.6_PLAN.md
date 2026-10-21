@@ -1,7 +1,9 @@
 # Aardink 0.6.0 plan: virtualised editor, feature wave, npm, aardflex switch-over
 
-Status: **draft for review** (2026-09-27). Supersedes `KMP_MIGRATION_PLAN.md` §11 and its
-"Post-release" note; that document stays as the record of 0.5.0.
+Status: **complete except CMP 1.13** (0.6.2 released 2026-10-12; the CMP 1.13 adoption is
+tracked in [`AARDINK_ROADMAP.md`](AARDINK_ROADMAP.md) §4, which continues this plan). Drafted
+2026-09-27. Supersedes `KMP_MIGRATION_PLAN.md` §11 and its "Post-release" note; that document
+stays as the record of 0.5.0.
 
 ## Progress
 

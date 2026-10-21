@@ -125,8 +125,10 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **No cross-module imports** — `editor` must not import from `sample` or any external module
 - **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
   and commit the updated dumps under `*/api/`. Every public symbol added, changed or removed
-  must be in the API ledger of [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5 and, if
-  it breaks consumers, in `docs/MIGRATION_0.6.md`. Nothing public is added without that.
+  must be in the current version's API ledger, [docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md)
+  §11 for 0.7 (the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
+  if it breaks consumers, in that version's `docs/MIGRATION_0.x.md`. Nothing public is added
+  without that.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
 - Formatting: Spotless + ktlint (function naming and wildcard imports disabled, see `editor/build.gradle.kts`)
 - Tests: `kotlin.test` (`@Test` from `kotlin.test`) in `commonTest`; `runTest` rather than
@@ -204,7 +206,8 @@ introduce breaking changes lightly. After any intentional public API change, run
 [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md)). Removals and signature changes are
 allowed on the 0.6 line only when they are in the plan's §5 API ledger, and each one gets a
 before/after entry in `docs/MIGRATION_0.6.md` in the same PR. Mark breaking commits with `!`
-(`feat(editor)!:`).
+(`feat(editor)!:`). What comes after 0.6 (0.6.3, 0.7, 0.8, 0.9, 0.10, 1.0) is planned in
+[docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md), with the same ledger rule per version.
 
 The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the

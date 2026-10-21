@@ -786,16 +786,16 @@ fun CodeEditorLayout(
                 onReplace = {
                     val idx = findReplaceState.currentMatchIndex
                     val match = findReplaceState.matches.getOrNull(idx) ?: return@FindReplacePanel
-                    val replacement = findReplaceState.replacement
-                    val newSel = TextRange(match.first + replacement.length)
-                    state.applyEdit(match.first, match.last - match.first + 1, replacement, newSel)
+                    val edit = findReplaceState.replaceEdits(state.text, listOf(match)).firstOrNull()
+                        ?: return@FindReplacePanel
+                    val newSel = TextRange(match.first + edit.newText.length)
+                    state.applyEdit(match.first, match.last - match.first + 1, edit.newText, newSel)
                 },
                 onReplaceAll = {
                     val all = findReplaceState.matches
                     if (all.isEmpty()) return@FindReplacePanel
-                    val replacement = findReplaceState.replacement
                     // One batch: one undo step for the whole replacement.
-                    state.applyTextEdits(all.map { TextEdit(it, replacement) })
+                    state.applyTextEdits(findReplaceState.replaceEdits(state.text, all))
                 },
                 onClose = {
                     findReplaceState.hide()

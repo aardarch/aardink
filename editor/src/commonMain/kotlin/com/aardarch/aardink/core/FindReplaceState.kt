@@ -93,4 +93,8 @@ class FindReplaceState {
     }
 
     fun toOptions(): FindEngine.Options = FindEngine.Options(caseSensitive, wholeWord, useRegex)
+
+    /** The edits that replace [targets] in [text] with [replacement], groups expanded in regex mode. */
+    internal fun replaceEdits(text: CharSequence, targets: List<IntRange>): List<TextEdit> =
+        FindEngine.replaceEdits(text, targets, query, replacement, toOptions())
 }

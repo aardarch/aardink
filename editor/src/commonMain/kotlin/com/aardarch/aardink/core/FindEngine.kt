@@ -69,6 +69,91 @@ object FindEngine {
 
     private const val YIELD_EVERY_CHARS = 64 * 1024
 
+    /**
+     * The edits that replace [matches] of [query] in [text] with [replacement].
+     *
+     * Without [Options.useRegex] every match becomes [replacement] as it is. With it, the
+     * replacement is read as VS Code reads it: `$0` or `$&` is the whole match, `$1` to `$99` a
+     * group (two digits when the pattern has that many groups, else one; a group that took no part
+     * in the match is empty), `$$` a dollar sign, and `\n`, `\t` and `\\` a line break, a tab and
+     * a backslash. Anything else is literal. The groups come from matching [query] again at each
+     * match's start, so a match that no longer matches there (the text changed since the search)
+     * is left out rather than replacing the wrong text.
+     */
+    internal fun replaceEdits(
+        text: CharSequence,
+        matches: List<IntRange>,
+        query: String,
+        replacement: String,
+        options: Options,
+    ): List<TextEdit> {
+        if (!options.useRegex) return matches.map { TextEdit(it, replacement) }
+        val pattern = buildPattern(query, options) ?: return emptyList()
+        return matches.mapNotNull { range ->
+            if (range.first !in 0..text.length) return@mapNotNull null
+            val match = pattern.matchAt(text, range.first) ?: return@mapNotNull null
+            if (match.range != range) return@mapNotNull null
+            TextEdit(range, expandReplacement(replacement, match))
+        }
+    }
+
+    private fun expandReplacement(replacement: String, match: MatchResult): String {
+        val groupCount = match.groups.size - 1
+        val out = StringBuilder(replacement.length)
+        var i = 0
+        while (i < replacement.length) {
+            val c = replacement[i]
+            val next = replacement.getOrNull(i + 1)
+            when {
+                c == '$' && next == '$' -> {
+                    out.append('$')
+                    i += 2
+                }
+
+                c == '$' && next == '&' -> {
+                    out.append(match.value)
+                    i += 2
+                }
+
+                c == '$' && next != null && next.isAsciiDigit() -> {
+                    val one = next - '0'
+                    val second = replacement.getOrNull(i + 2)
+                    val two = if (second != null && second.isAsciiDigit()) one * 10 + (second - '0') else -1
+                    val group = if (two in 1..groupCount) two else one
+                    if (group > groupCount) {
+                        out.append(c).append(next)
+                    } else {
+                        out.append(match.groups[group]?.value.orEmpty())
+                    }
+                    i += if (group == two) 3 else 2
+                }
+
+                c == '\\' && next == 'n' -> {
+                    out.append('\n')
+                    i += 2
+                }
+
+                c == '\\' && next == 't' -> {
+                    out.append('\t')
+                    i += 2
+                }
+
+                c == '\\' && next == '\\' -> {
+                    out.append('\\')
+                    i += 2
+                }
+
+                else -> {
+                    out.append(c)
+                    i++
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    private fun Char.isAsciiDigit() = this in '0'..'9'
+
     private fun buildPattern(query: String, options: Options): Regex? {
         val raw = if (options.useRegex) query else Regex.escape(query)
         val withWordBoundary = if (options.wholeWord) """\b$raw\b""" else raw

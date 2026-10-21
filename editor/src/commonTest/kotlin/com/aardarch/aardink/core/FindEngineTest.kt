@@ -78,4 +78,59 @@ class FindEngineTest {
         )
         assertTrue(matches.isEmpty())
     }
+
+    private val regex = FindEngine.Options(useRegex = true)
+
+    /** Replaces every match of [query] in [text] as Replace All does. */
+    private fun replaceAll(text: String, query: String, replacement: String, options: FindEngine.Options = regex): String {
+        val edits = FindEngine.replaceEdits(text, FindEngine.findAll(text, query, options), query, replacement, options)
+        var out = text
+        for (edit in edits.sortedByDescending { it.range.first }) {
+            out = out.substring(0, edit.range.first) + edit.newText + out.substring(edit.range.last + 1)
+        }
+        return out
+    }
+
+    @Test
+    fun `regex replacement expands numbered groups`() {
+        assertEquals("b=a, d=c", replaceAll("a=b, c=d", """(\w)=(\w)""", "$2=$1"))
+    }
+
+    @Test
+    fun `regex replacement expands the whole match`() {
+        assertEquals("[ab] [cd]", replaceAll("ab cd", """\w+""", "[$0]"))
+        assertEquals("[ab] [cd]", replaceAll("ab cd", """\w+""", "[$&]"))
+    }
+
+    @Test
+    fun `regex replacement takes two digits only when that group exists`() {
+        val elevenGroups = "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)"
+        assertEquals("k", replaceAll("abcdefghijk", elevenGroups, "$11"))
+        assertEquals("x0", replaceAll("x", "(x)", "$10"))
+    }
+
+    @Test
+    fun `regex replacement leaves a missing group literal and an unmatched one empty`() {
+        assertEquals("$5", replaceAll("x", "(x)", "$5"))
+        assertEquals("<>", replaceAll("x", "(y)?x", "<$1>"))
+    }
+
+    @Test
+    fun `regex replacement reads dollar and backslash escapes`() {
+        assertEquals("$1", replaceAll("x", "(x)", "$$1"))
+        assertEquals("a\nb\tc\\d", replaceAll("abcd", "(b)(c)", "\\n$1\\t$2\\\\"))
+    }
+
+    @Test
+    fun `literal replacement is never expanded`() {
+        assertEquals("$1 \\n", replaceAll("x", "x", "$1 \\n", FindEngine.Options()))
+    }
+
+    @Test
+    fun `a match the text no longer has is left out`() {
+        val query = "(o+)"
+        val stale = FindEngine.findAll("foo boo", query, regex)
+        val edits = FindEngine.replaceEdits("fxx boo", stale, query, "<$1>", regex)
+        assertEquals(listOf(TextEdit(5..6, "<oo>")), edits)
+    }
 }

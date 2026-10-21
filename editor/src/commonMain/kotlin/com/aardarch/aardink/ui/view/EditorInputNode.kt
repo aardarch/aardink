@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.textSelectionRange
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.platform.runEditorTextInput
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -202,8 +203,11 @@ internal class EditorInputNode(private var controller: EditorController) :
             true
         }
         if (!controller.readOnly) {
+            // The text a service sets is the window it was shown, not the document: replace only
+            // that window, and of it only what differs (executeEdits trims the rest), so carets,
+            // folds and diagnostics outside the change stay where they are.
             setText { text ->
-                state.applyEdit(0, document.length, text.text, TextRange(text.length))
+                state.executeEdits(listOf(TextEdit(start until end, text.text)), listOf(TextRange(start + text.length)))
                 true
             }
             insertTextAtCursor { text ->

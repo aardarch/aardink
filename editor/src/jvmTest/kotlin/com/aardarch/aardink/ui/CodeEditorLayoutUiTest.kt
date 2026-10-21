@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -33,6 +34,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -100,6 +102,31 @@ class CodeEditorLayoutUiTest {
         waitForIdle()
         assertEquals("abc", state.document.text)
         assertEquals(TextRange(3), state.selection)
+    }
+
+    @Test
+    fun `an accessibility service's set text replaces the text it was shown`() = runComposeUiTest {
+        val state = CodeEditorState("old")
+        show(state)
+        editor().performTextReplacement("new")
+        waitForIdle()
+        assertEquals("new", state.document.text)
+    }
+
+    @Test
+    fun `set text in a long document leaves the lines outside its window alone`() = runComposeUiTest {
+        val original = (0 until 300).joinToString("\n") { "line $it" }
+        val state = CodeEditorState(original)
+        show(state)
+        state.selection = TextRange(state.document.lineStart(150))
+        waitForIdle()
+        // The node shows 50 lines each side of the caret, not the document.
+        val shown = editor().fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        assertTrue(shown.startsWith("line 100\n") && shown.endsWith("\nline 200"), shown.take(40))
+        editor().performTextReplacement(shown.replace("line 150\n", "LINE 150\n"))
+        waitForIdle()
+        assertEquals(original.replace("line 150\n", "LINE 150\n"), state.document.text)
+        assertEquals(TextRange(state.document.lineEnd(200)), state.selection)
     }
 
     @Test
