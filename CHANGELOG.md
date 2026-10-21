@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The KDoc of `AardinkWeb.updateOptions` and `docs/WEB_INTEGRATION.md` said changing the language
+  starts a new undo history; the text, the selection and the undo history are all kept.
+
 ## [0.6.2] - 2026-10-12
 
 ### Fixed

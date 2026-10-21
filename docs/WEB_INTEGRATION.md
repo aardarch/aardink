@@ -87,7 +87,7 @@ There are two ways in:
 `showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`,
 `bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
-`AardinkWeb.builtInThemes`. Changing `language` keeps the text but starts a new undo history.
+`AardinkWeb.builtInThemes`. Changing `language` keeps the text, the selection and the undo history.
 
 Typed and pasted text has its line endings normalised to LF (a Windows or browser paste delivers
 CR LF). Text a host passes to `setValue` is kept verbatim.

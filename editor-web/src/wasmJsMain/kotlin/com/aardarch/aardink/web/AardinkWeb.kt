@@ -100,8 +100,8 @@ class AardinkEditorHandle internal constructor(
     internal val findReplaceState = FindReplaceState()
     internal val foldState = FoldState()
 
-    // Replaced, not mutated, when the language changes: a state's tokenizer is fixed at
-    // construction.
+    // One state for the editor's life: a language change sets its tokenizer, which keeps the text,
+    // the selection and the undo history.
     internal val state: MutableState<CodeEditorState> = mutableStateOf(initialState)
     internal val language: MutableState<LanguageDefinition> = mutableStateOf(initialLanguage)
     internal val options: MutableState<WebEditorOptions> = mutableStateOf(initialOptions)
@@ -358,8 +358,8 @@ object AardinkWeb {
     fun currentOptions(handle: AardinkEditorHandle): WebEditorOptions = handle.options.value
 
     /**
-     * Replaces every option. Changing [WebEditorOptions.language] keeps the text but starts a
-     * fresh undo history, because the editor state is rebuilt around the new tokenizer.
+     * Replaces every option. Changing [WebEditorOptions.language] keeps the text, the selection
+     * and the undo history: the editor's state takes the new language's tokenizer.
      */
     fun updateOptions(handle: AardinkEditorHandle, options: WebEditorOptions) {
         if (options.language != handle.options.value.language) {
