@@ -46,11 +46,11 @@ class EditorInputTest {
 
         override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = null
 
-        override suspend fun format(document: CodeDocument): String = document.text
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = if (charTyped == '(') ")" else null
 
-        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 4
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = " ".repeat(4)
     }
 
     private fun CodeEditorState.type(text: String) {
@@ -92,6 +92,33 @@ class EditorInputTest {
         state.type("\n")
         assertEquals("x\n    ", state.text)
         assertEquals(TextRange(6), state.selection)
+    }
+
+    @Test
+    fun `enter in a CR LF document inserts CR LF and still indents`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        state.type("\n")
+        assertEquals("x\r\n    \r\ny", state.text)
+        assertEquals(TextRange(7), state.selection)
+    }
+
+    @Test
+    fun `the eol option overrides the document's line ending`() {
+        val state = stateFor("x\r\ny")
+        state.lineEndingOverride = LineEnding.LF
+        state.selection = TextRange(1)
+        state.applyInput(1, 1, "\r\n")
+        assertEquals("x\n\r\ny", state.text)
+    }
+
+    @Test
+    fun `pasting into a CR LF document gives the pasted lines CR LF`() {
+        val state = stateFor("a\r\nb")
+        state.selection = TextRange(4)
+        state.paste("1\n2\r\n3")
+        assertEquals("a\r\nb1\r\n2\r\n3", state.text)
+        assertEquals(TextRange(11), state.selection)
     }
 
     @Test

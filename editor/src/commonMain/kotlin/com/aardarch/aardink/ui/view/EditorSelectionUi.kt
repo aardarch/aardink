@@ -17,11 +17,13 @@ package com.aardarch.aardink.ui.view
 
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.EditorAnchoredPopup
@@ -194,7 +197,7 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.testTag(EditorTestTags.TOUCH_MENU),
     ) {
-        Row {
+        Row(Modifier.horizontalScroll(rememberScrollState())) {
             val editable = !controller.readOnly
             val hasSelection = !selection.collapsed
             if (editable && hasSelection) {
@@ -217,7 +220,7 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
             }
             TextButton(onClick = {
                 done()
-                state.selectAll()
+                state.withSelectionReason(SelectionChangeReason.Pointer) { state.selectAll() }
             }) { Text("Select all") }
             val showInfo = controller.actions.onShowInfo
             if (showInfo != null) {
@@ -225,6 +228,23 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
                     done()
                     showInfo(selection.min)
                 }) { Text("Info") }
+            }
+            // Format and quick fixes, which a phone has no keys for.
+            if (editable && controller.languageService() != null) {
+                TextButton(onClick = {
+                    done()
+                    controller.actions.onFormat()
+                }) { Text("Format") }
+                TextButton(onClick = {
+                    done()
+                    controller.actions.onQuickFix()
+                }) { Text("Quick Fix") }
+            }
+            for (item in controller.touchMenuItems) {
+                TextButton(enabled = controller.canRun(item), onClick = {
+                    done()
+                    controller.runMenuItem(item)
+                }) { Text(item.label) }
             }
         }
     }
@@ -261,7 +281,9 @@ private fun ContextMenuContent(controller: EditorController, close: () -> Unit) 
         HorizontalDivider()
         DropdownMenuItem(text = { Text("Select All") }, onClick = {
             close()
-            controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
+            controller.state.withSelectionReason(SelectionChangeReason.Pointer) {
+                controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
+            }
         })
         if (controller.languageService() != null) {
             val mac = PlatformInfo.isMacOs
@@ -286,6 +308,27 @@ private fun ContextMenuContent(controller: EditorController, close: () -> Unit) 
                     controller.actions.onFormat()
                 },
             )
+            if (controller.languageService()?.supportsRename == true) {
+                DropdownMenuItem(text = { Text("Rename Symbol") }, trailingIcon = { Shortcut("F2") }, enabled = editable, onClick = {
+                    close()
+                    controller.actions.onRename()
+                })
+            }
+            DropdownMenuItem(text = {
+                Text("Quick Fix…")
+            }, trailingIcon = { Shortcut(if (mac) "⌘." else "Ctrl+.") }, enabled = editable, onClick = {
+                close()
+                controller.actions.onQuickFix()
+            })
+        }
+        if (controller.contextMenuItems.isNotEmpty()) {
+            HorizontalDivider()
+            for (item in controller.contextMenuItems) {
+                DropdownMenuItem(text = { Text(item.label) }, enabled = controller.canRun(item), onClick = {
+                    close()
+                    controller.runMenuItem(item)
+                })
+            }
         }
     }
 }

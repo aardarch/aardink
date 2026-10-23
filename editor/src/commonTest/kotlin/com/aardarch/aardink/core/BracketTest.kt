@@ -93,13 +93,13 @@ class BracketTest {
     @Test
     fun `tab indents by the configured unit and shift tab removes it`() {
         val state = stateOf("a\nb")
-        state.indentUnit = "\t"
+        state.formattingOptions = FormattingOptions(insertSpaces = false)
         state.selection = TextRange(0, 3)
         state.indentSelection()
         assertEquals("\ta\n\tb", state.text)
         state.outdentSelection()
         assertEquals("a\nb", state.text)
-        state.indentUnit = "  "
+        state.formattingOptions = FormattingOptions(tabSize = 2)
         state.selection = TextRange(0)
         state.indentSelection()
         assertEquals("  a\nb", state.text)

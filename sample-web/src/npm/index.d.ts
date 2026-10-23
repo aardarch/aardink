@@ -43,15 +43,48 @@ export interface AardinkOptions {
   minimap?: { enabled?: boolean } | boolean;
   /** The first lines of the blocks the top of the view is inside stay pinned at the top. Off by default. */
   stickyScroll?: { enabled?: boolean } | boolean;
+  /**
+   * Typing a letter in code (not in a string or comment) opens the completion list, as Monaco's
+   * option; Monaco's `{ other, comments, strings }` works too, `other` deciding. Off by default.
+   */
+  quickSuggestions?: boolean | { other?: boolean | 'on' | 'off' | 'inline'; comments?: unknown; strings?: unknown };
 }
 
-/** Monaco-marker shape: 1-based line and columns, `endColumn` exclusive. */
+/**
+ * Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. A Monaco `IMarkerData`
+ * passes as it is: `startLineNumber` for `line`, a `MarkerSeverity` number for `severity`, `code`
+ * as `{ value, target }`. Reported diagnostics carry both `line` and `startLineNumber`.
+ */
 export interface AardinkDiagnostic {
-  line: number;
+  /** The first line; or give `startLineNumber`. */
+  line?: number;
+  startLineNumber?: number;
   startColumn: number;
+  /** The last line, `line` when absent. */
+  endLineNumber?: number;
   endColumn: number;
   message: string;
-  severity: 'error' | 'warning' | 'info';
+  /** `'error'` when absent; Monaco's `MarkerSeverity` numbers (8, 4, 2, 1) work too. A hint gets three dots under its start and no gutter dot. */
+  severity?: 'error' | 'warning' | 'info' | 'hint' | 1 | 2 | 4 | 8;
+  /** Shown with the message, e.g. `'xml'`. */
+  source?: string;
+  /** The producer's identifier for this kind of problem, shown after `source`. Monaco's `{ value, target }` works too. */
+  code?: string | { value: string; target: string };
+  /** Where `code` is explained (Monaco's `code.target`). */
+  codeHref?: string;
+  /** Monaco's `MarkerTag`s: `1` unnecessary (drawn faded), `2` deprecated (struck through). */
+  tags?: (1 | 2)[];
+  relatedInformation?: AardinkRelatedInformation[];
+}
+
+/** Monaco's `IRelatedInformation`, with the resource as a string (a Monaco `Uri` is turned into one). */
+export interface AardinkRelatedInformation {
+  resource: string | { toString(): string };
+  message: string;
+  startLineNumber: number;
+  startColumn: number;
+  endLineNumber: number;
+  endColumn: number;
 }
 
 /** Monaco's `Selection`: from where it started to where the caret is, 1-based, with the range from start to end. */
@@ -66,6 +99,17 @@ export interface AardinkSelection {
   readonly endColumn?: number;
 }
 
+/**
+ * One change to the text, as Monaco's `IModelContentChange`: `range` (1-based, `endColumn`
+ * exclusive), or `rangeOffset` and `rangeLength`, was replaced by `text`.
+ */
+export interface AardinkModelContentChange {
+  range: AardinkRange;
+  rangeOffset: number;
+  rangeLength: number;
+  text: string;
+}
+
 /** What a content change was, as Monaco's `IModelContentChangedEvent` says it. */
 export interface AardinkContentChange {
   /** Goes up with every change. */
@@ -74,6 +118,29 @@ export interface AardinkContentChange {
   isRedoing: boolean;
   /** The whole text was replaced and the undo history cleared (`setValue`); `false` for `replaceValue` and `executeEdits`. */
   isFlush: boolean;
+  /**
+   * The changes since the last event, in the order they were made. Unlike Monaco's, each change's
+   * range is in the text as the changes before it in the list left it, so applying them in order
+   * to the previous text gives this one. Several edits within one frame come in one event.
+   */
+  changes: AardinkModelContentChange[];
+}
+
+/** Monaco's `IPosition`: 1-based. */
+export interface AardinkPosition {
+  lineNumber: number;
+  column: number;
+}
+
+/** Monaco's `ICursorSelectionChangedEvent`, with the reason as a word. */
+export interface AardinkSelectionChangeEvent {
+  /** The primary selection. */
+  selection: AardinkSelection;
+  secondarySelections: AardinkSelection[];
+  /** Why they changed. */
+  reason: 'keyboard' | 'pointer' | 'edit' | 'undo' | 'redo' | 'flush' | 'api';
+  /** Monaco's source: `'model'` when an edit, an undo or a new text moved them. */
+  source: 'keyboard' | 'mouse' | 'api' | 'model';
 }
 
 /**
@@ -120,6 +187,52 @@ export interface AardinkEditor {
   onDidChangeContent(listener: (text: string, change: AardinkContentChange) => void): () => void;
   /** 1-based caret position. Returns an unsubscribe function. */
   onDidChangeCursor(listener: (line: number, column: number) => void): () => void;
+  /** Every change to the selections, with why. Not called when they are set to what they already were. Returns an unsubscribe function. */
+  onDidChangeCursorSelection(listener: (event: AardinkSelectionChangeEvent) => void): () => void;
+  /** The text gained the keyboard focus. Returns an unsubscribe function. */
+  onDidFocusEditorText(listener: () => void): () => void;
+  /** The text lost the keyboard focus. Returns an unsubscribe function. */
+  onDidBlurEditorText(listener: () => void): () => void;
+  /** The primary caret. */
+  getPosition(): AardinkPosition;
+  /** One caret at `position`, clamped to the text; it does not scroll (see `revealPosition`). */
+  setPosition(position: AardinkPosition): void;
+  /** Scrolls `line` into view without moving the caret. */
+  revealLine(line: number): void;
+  /** Scrolls `line` to the middle of the view without moving the caret. */
+  revealLineInCenter(line: number): void;
+  /** Scrolls the start of `range` into view without moving the caret. */
+  revealRange(range: AardinkRange): void;
+  /** Scrolls the start of `range` to the middle of the view without moving the caret. */
+  revealRangeInCenter(range: AardinkRange): void;
+  /**
+   * Monaco's `trigger`: runs an action by its id, one you added with `addAction` or `addCommand`,
+   * or one of the editor's own by Monaco's id: `editor.action.formatDocument`,
+   * `editor.action.formatSelection`, `editor.action.triggerSuggest`, `editor.action.showHover`,
+   * `editor.action.quickFix`, `editor.action.rename`, `editor.action.revealDefinition`,
+   * `editor.action.goToReferences`, `editor.action.marker.next`, `editor.action.marker.prev`,
+   * `actions.find`, `editor.action.startFindReplaceAction`, `editor.action.gotoLine`,
+   * `editor.foldAll`, `editor.unfoldAll`, `editor.foldLevel1` to `7`, `undo`, `redo`,
+   * `editor.action.commentLine`, `editor.action.selectHighlights`, and
+   * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
+   * Returns whether it ran.
+   */
+  trigger(source: string | null | undefined, handlerId: string, payload?: unknown): boolean;
+  /**
+   * Monaco's `addCommand`: `handler` runs when `keybinding` is pressed in the editor, ahead of the
+   * editor's own binding for it. A keybinding is text such as `'CtrlCmd+S'`, `'Shift+Alt+F'` or
+   * `'F8'` (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere; `Ctrl` is Ctrl everywhere), or Monaco's
+   * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+   * Returns the command's id, for `trigger`; null for a keybinding it cannot read.
+   */
+  addCommand(keybinding: string | number, handler: () => void): string | null;
+  /**
+   * Monaco's `addAction`: `run` is called by `trigger(…, id)`, by its keybindings, and from the
+   * right-click menu when it has a `contextMenuGroupId`. Adding an id again replaces it.
+   */
+  addAction(descriptor: AardinkActionDescriptor): { dispose(): void };
+  /** An action by its id, yours or the editor's own (see `trigger`); null for an id neither has. */
+  getAction(id: string): AardinkAction | null;
   /**
    * Shows these diagnostics in place of the language's own; `null` goes back to the language's
    * own. Either way they move along with the text as it is edited, until the next list.
@@ -167,6 +280,27 @@ export interface AardinkEditor {
   dispose(): void;
 }
 
+/** What `addAction` takes, as Monaco's `IActionDescriptor`. */
+export interface AardinkActionDescriptor {
+  id: string;
+  label: string;
+  /** As `addCommand`'s keybinding. */
+  keybindings?: (string | number)[];
+  /** Any value puts the action in the right-click menu. */
+  contextMenuGroupId?: string;
+  contextMenuOrder?: number;
+  run(editor: AardinkEditor): void | Promise<void>;
+}
+
+/** Monaco's `IEditorAction`. */
+export interface AardinkAction {
+  id: string;
+  label: string;
+  /** Whether it can run now. */
+  isSupported(): boolean;
+  run(): Promise<void>;
+}
+
 /** A language highlighted by a grammar, for `registerLanguage`. */
 export interface AardinkLanguageDefinition {
   /** What `createEditor`'s `language` option names it by. Registering an id again replaces it. */
@@ -192,6 +326,46 @@ export interface AardinkLanguageDefinition {
   extensions?: string[];
   /** As in Monaco's language configuration: what Ctrl/Cmd+/ comments with. */
   comments?: { lineComment?: string; blockComment?: [string, string] };
+  /**
+   * An XML dialect's vocabulary. Completions (elements by what the element at the caret may hold,
+   * with their required attributes; attributes; values), hover documentation and checks (unknown
+   * elements and attributes, elements out of place, values not among an attribute's, required
+   * attributes left out) come from it, ahead of the language it `extends` (or built-in XML's
+   * checks, closing tags and formatting when it extends none). Your providers still come first.
+   */
+  schema?: AardinkXmlSchema;
+}
+
+/** An XML vocabulary, for `registerLanguage`'s `schema`. */
+export interface AardinkXmlSchema {
+  /** The elements a document may start with; any when absent. */
+  roots?: string[];
+  /** Report elements and attributes the schema does not have. `true` by default. */
+  strict?: boolean;
+  /** A regex source: attribute values matching it (expressions, placeholders) are not checked. */
+  dynamicValue?: string;
+  elements: Record<string, AardinkXmlElement>;
+}
+
+export interface AardinkXmlElement {
+  doc?: string;
+  /** The elements it may hold; any when absent, none for `[]` (it is then completed self-closing). */
+  children?: string[];
+  attributes?: Record<string, AardinkXmlAttribute>;
+  /** What completing it inserts after `<`, as a snippet, instead of its name, required attributes and end. */
+  snippet?: string;
+  /** Report attributes it does not have. `true` by default. */
+  strictAttributes?: boolean;
+}
+
+export interface AardinkXmlAttribute {
+  doc?: string;
+  /** Its values; any when absent. */
+  values?: (string | { value: string; doc?: string })[];
+  /** Report it missing, and insert it when the element is completed. */
+  required?: boolean;
+  /** What its value is, e.g. `'color'`. */
+  type?: string;
 }
 
 /** Monaco's flags for a completion's `insertText`. */
@@ -218,12 +392,19 @@ export interface AardinkCompletionItem {
   /** `CompletionItemInsertTextRule` flags, as in Monaco. */
   insertTextRules?: number;
   /**
-   * The icon. `'function'` is another name for `'transform'`, and `'color'` for `'colorRef'`, as
-   * Monaco calls them; any other name shows as `'value'`.
+   * The icon. `'function'` is another name for `'transform'`, and `'color'` for `'colorRef'`, as in
+   * 0.6. Monaco's other kind names (`'method'`, `'class'`, `'keyword'`, ...) and its
+   * `CompletionItemKind` numbers work too; an unknown name shows as `'value'`.
    */
-  kind?: 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property' | 'transform' | 'function' | 'colorRef' | 'color';
-  /** Shown beside the label when there is no `documentation`. */
+  kind?:
+    | 'element' | 'attribute' | 'value' | 'snippet' | 'module' | 'property' | 'transform' | 'function' | 'colorRef' | 'color'
+    | 'method' | 'constructor' | 'field' | 'variable' | 'class' | 'struct' | 'interface' | 'enum' | 'enumMember' | 'keyword'
+    | 'text' | 'file' | 'folder' | 'reference' | 'constant' | 'event' | 'operator' | 'typeParameter' | 'unit' | 'user' | 'issue'
+    | number;
+  /** A short line about the item, such as a type or a signature, shown beside the label. */
   detail?: string;
+  /** Characters that, typed while this item is selected, accept it and are then typed after it. Not for snippets. */
+  commitCharacters?: string[];
   /** Shown beside the label; Monaco's `{ value }` is shown as plain text. */
   documentation?: string | { value: string };
   /**
@@ -247,7 +428,11 @@ export interface AardinkCompletionItem {
 export interface AardinkCompletionList {
   suggestions: AardinkCompletionItem[];
   exclusive?: boolean;
-  /** Accepted for Monaco's shape, and ignored: your provider is asked again on each letter typed anyway. */
+  /**
+   * `false`: this list is complete for the word being typed, so your provider is asked once per
+   * word and the editor narrows the list by `filterText` (or `label`) as letters are typed. Absent
+   * or `true`: your provider is asked again on each letter, as in 0.6.
+   */
   incomplete?: boolean;
 }
 

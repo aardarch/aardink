@@ -103,7 +103,7 @@ class SnippetSessionTest {
     @Test
     fun `the inserted lines follow the indentation of the line`() {
         val state = stateOf("    ")
-        state.indentUnit = "  "
+        state.formattingOptions = FormattingOptions(tabSize = 2)
         state.insertSnippet(4 until 4, "if (\$1) {\n\t\$0\n}")
         assertEquals("    if () {\n      \n    }", state.document.text)
         state.moveInSnippet(forward = true)

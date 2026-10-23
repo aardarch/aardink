@@ -34,6 +34,7 @@ import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.platform.PlatformInfo
@@ -54,8 +55,14 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** The host's folds, for opening one from its placeholder. */
     var foldState: FoldState? = null
 
+    /** Runs [block] with the selection changes it makes reported as the pointer's. */
+    fun <T> pointer(block: EditorPointerHandler.() -> T): T = view.state.withSelectionReason(SelectionChangeReason.Pointer) { block() }
+
     /** Called on every press in the text, before it moves the selection: focus and the keyboard. */
     var onPress: (touch: Boolean) -> Unit = {}
+
+    /** A single tap (touch), after it placed the caret at an offset. */
+    var onTap: (offset: Int) -> Unit = {}
 
     /** A right click at a point (viewport coordinates): open the context menu there. */
     var onContextMenu: (Offset) -> Unit = {}
@@ -138,6 +145,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
                 state.replaceSelections(SelectionSet.caret(hit.offset))
                 // Ctrl (Cmd) + click: to the definition, and no drag selection after it.
                 if (link && onLinkClick()) origin = null
+                if (touch) onTap(hit.offset)
             }
 
             clicks == 2 -> {
@@ -270,18 +278,18 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             (down.position - lastClickPosition).getDistance() <= viewConfiguration.touchSlop * 2
         if (!touch) {
             if (currentEvent.buttons.isSecondaryPressed) {
-                handler.secondaryPress(down.position)
+                handler.pointer { secondaryPress(down.position) }
                 down.consume()
                 return@awaitEachGesture
             }
             if (currentEvent.buttons.isTertiaryPressed) {
-                handler.columnPress(down.position)
+                handler.pointer { columnPress(down.position) }
                 down.consume()
                 drag(down.id) { change ->
-                    handler.drag(change.position)
+                    handler.pointer { drag(change.position) }
                     change.consume()
                 }
-                handler.release()
+                handler.pointer { release() }
                 return@awaitEachGesture
             }
             if (!currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
@@ -290,34 +298,34 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             lastClickPosition = down.position
             val modifiers = currentEvent.keyboardModifiers
             val link = if (PlatformInfo.isMacOs) modifiers.isMetaPressed else modifiers.isCtrlPressed
-            handler.press(down.position, clickCount, modifiers.isShiftPressed, modifiers.isAltPressed, link = link)
+            handler.pointer { press(down.position, clickCount, modifiers.isShiftPressed, modifiers.isAltPressed, link = link) }
             down.consume()
             drag(down.id) { change ->
-                handler.drag(change.position)
+                handler.pointer { drag(change.position) }
                 change.consume()
             }
-            handler.release()
+            handler.pointer { release() }
             return@awaitEachGesture
         }
         val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUp(down.id) }
         when {
             // Held still: a long press.
             up == null && currentEvent.changes.any { it.id == down.id && it.pressed && !it.isConsumed } -> {
-                handler.longPress(down.position)
+                handler.pointer { longPress(down.position) }
                 clickCount = 0
                 drag(down.id) { change ->
-                    handler.drag(change.position)
+                    handler.pointer { drag(change.position) }
                     change.consume()
                 }
-                handler.release()
+                handler.pointer { release() }
             }
 
             up != null -> {
                 clickCount = if (repeated && clickCount == 1) 2 else 1
                 lastClickTime = up.uptimeMillis
                 lastClickPosition = up.position
-                handler.press(up.position, clickCount, shift = false, alt = false, touch = true)
-                handler.release()
+                handler.pointer { press(up.position, clickCount, shift = false, alt = false, touch = true) }
+                handler.pointer { release() }
                 up.consume()
             }
         }

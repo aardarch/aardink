@@ -13,10 +13,10 @@ abstract class com.aardarch.aardink.languages.internal.xml/TagValidator : com.aa
         open fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.xml/TagValidator.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     open fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.xml/TagValidator.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.xml/TagValidator.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.xml/TagValidator.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     open suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.xml/TagValidator.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.xml/TagValidator.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
-    open suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.xml/TagValidator.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.xml/TagValidator.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
 }
 
 abstract class com.aardarch.aardink.languages.internal/BaseLanguageService : com.aardarch.aardink.core/LanguageService { // com.aardarch.aardink.languages.internal/BaseLanguageService|null[0]
@@ -26,10 +26,10 @@ abstract class com.aardarch.aardink.languages.internal/BaseLanguageService : com
         open fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal/BaseLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     open fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal/BaseLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal/BaseLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal/BaseLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     open suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal/BaseLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal/BaseLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
-    open suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal/BaseLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal/BaseLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
     open suspend fun hoverDoc(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/HoverDoc? // com.aardarch.aardink.languages.internal/BaseLanguageService.hoverDoc|hoverDoc(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
 }
 
@@ -113,6 +113,10 @@ final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageDefinition.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageDefinition.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.toString|toString(){}[0]
+
+    final object Companion { // com.aardarch.aardink.languages/LanguageDefinition.Companion|null[0]
+        final fun extending(com.aardarch.aardink.languages/LanguageDefinition, com.aardarch.aardink.core/LanguageService, kotlin/Boolean = ..., kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<kotlin/String> = ..., com.aardarch.aardink.core/IncrementalTokenizer = ...): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.Companion.extending|extending(com.aardarch.aardink.languages.LanguageDefinition;com.aardarch.aardink.core.LanguageService;kotlin.Boolean;kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer){}[0]
+    }
 }
 
 final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aardink.languages/LanguageRegistry|null[0]
@@ -130,6 +134,108 @@ final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aa
     final object Companion { // com.aardarch.aardink.languages/LanguageRegistry.Companion|null[0]
         final fun withBuiltIns(): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.Companion.withBuiltIns|withBuiltIns(){}[0]
     }
+}
+
+final class com.aardarch.aardink.languages/XmlSchema { // com.aardarch.aardink.languages/XmlSchema|null[0]
+    constructor <init>(kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Element>, kotlin.collections/List<kotlin/String> = ..., kotlin/Boolean = ..., kotlin.text/Regex? = ...) // com.aardarch.aardink.languages/XmlSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,com.aardarch.aardink.languages.XmlSchema.Element>;kotlin.collections.List<kotlin.String>;kotlin.Boolean;kotlin.text.Regex?){}[0]
+
+    final val dynamicValue // com.aardarch.aardink.languages/XmlSchema.dynamicValue|{}dynamicValue[0]
+        final fun <get-dynamicValue>(): kotlin.text/Regex? // com.aardarch.aardink.languages/XmlSchema.dynamicValue.<get-dynamicValue>|<get-dynamicValue>(){}[0]
+    final val elements // com.aardarch.aardink.languages/XmlSchema.elements|{}elements[0]
+        final fun <get-elements>(): kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Element> // com.aardarch.aardink.languages/XmlSchema.elements.<get-elements>|<get-elements>(){}[0]
+    final val roots // com.aardarch.aardink.languages/XmlSchema.roots|{}roots[0]
+        final fun <get-roots>(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/XmlSchema.roots.<get-roots>|<get-roots>(){}[0]
+    final val strict // com.aardarch.aardink.languages/XmlSchema.strict|{}strict[0]
+        final fun <get-strict>(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.strict.<get-strict>|<get-strict>(){}[0]
+
+    final fun component1(): kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Element> // com.aardarch.aardink.languages/XmlSchema.component1|component1(){}[0]
+    final fun component2(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/XmlSchema.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.component3|component3(){}[0]
+    final fun component4(): kotlin.text/Regex? // com.aardarch.aardink.languages/XmlSchema.component4|component4(){}[0]
+    final fun copy(kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Element> = ..., kotlin.collections/List<kotlin/String> = ..., kotlin/Boolean = ..., kotlin.text/Regex? = ...): com.aardarch.aardink.languages/XmlSchema // com.aardarch.aardink.languages/XmlSchema.copy|copy(kotlin.collections.Map<kotlin.String,com.aardarch.aardink.languages.XmlSchema.Element>;kotlin.collections.List<kotlin.String>;kotlin.Boolean;kotlin.text.Regex?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/XmlSchema.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.toString|toString(){}[0]
+
+    final class Attribute { // com.aardarch.aardink.languages/XmlSchema.Attribute|null[0]
+        constructor <init>(kotlin/String, kotlin/String? = ..., kotlin.collections/List<com.aardarch.aardink.languages/XmlSchema.Value> = ..., kotlin/Boolean = ..., kotlin/String? = ...) // com.aardarch.aardink.languages/XmlSchema.Attribute.<init>|<init>(kotlin.String;kotlin.String?;kotlin.collections.List<com.aardarch.aardink.languages.XmlSchema.Value>;kotlin.Boolean;kotlin.String?){}[0]
+
+        final val documentation // com.aardarch.aardink.languages/XmlSchema.Attribute.documentation|{}documentation[0]
+            final fun <get-documentation>(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Attribute.documentation.<get-documentation>|<get-documentation>(){}[0]
+        final val name // com.aardarch.aardink.languages/XmlSchema.Attribute.name|{}name[0]
+            final fun <get-name>(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Attribute.name.<get-name>|<get-name>(){}[0]
+        final val required // com.aardarch.aardink.languages/XmlSchema.Attribute.required|{}required[0]
+            final fun <get-required>(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Attribute.required.<get-required>|<get-required>(){}[0]
+        final val type // com.aardarch.aardink.languages/XmlSchema.Attribute.type|{}type[0]
+            final fun <get-type>(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Attribute.type.<get-type>|<get-type>(){}[0]
+        final val values // com.aardarch.aardink.languages/XmlSchema.Attribute.values|{}values[0]
+            final fun <get-values>(): kotlin.collections/List<com.aardarch.aardink.languages/XmlSchema.Value> // com.aardarch.aardink.languages/XmlSchema.Attribute.values.<get-values>|<get-values>(){}[0]
+
+        final fun component1(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Attribute.component1|component1(){}[0]
+        final fun component2(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Attribute.component2|component2(){}[0]
+        final fun component3(): kotlin.collections/List<com.aardarch.aardink.languages/XmlSchema.Value> // com.aardarch.aardink.languages/XmlSchema.Attribute.component3|component3(){}[0]
+        final fun component4(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Attribute.component4|component4(){}[0]
+        final fun component5(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Attribute.component5|component5(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String? = ..., kotlin.collections/List<com.aardarch.aardink.languages/XmlSchema.Value> = ..., kotlin/Boolean = ..., kotlin/String? = ...): com.aardarch.aardink.languages/XmlSchema.Attribute // com.aardarch.aardink.languages/XmlSchema.Attribute.copy|copy(kotlin.String;kotlin.String?;kotlin.collections.List<com.aardarch.aardink.languages.XmlSchema.Value>;kotlin.Boolean;kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Attribute.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/XmlSchema.Attribute.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Attribute.toString|toString(){}[0]
+    }
+
+    final class Element { // com.aardarch.aardink.languages/XmlSchema.Element|null[0]
+        constructor <init>(kotlin/String, kotlin/String? = ..., kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Attribute> = ..., kotlin.collections/List<kotlin/String>? = ..., kotlin/String? = ..., kotlin/Boolean = ...) // com.aardarch.aardink.languages/XmlSchema.Element.<init>|<init>(kotlin.String;kotlin.String?;kotlin.collections.Map<kotlin.String,com.aardarch.aardink.languages.XmlSchema.Attribute>;kotlin.collections.List<kotlin.String>?;kotlin.String?;kotlin.Boolean){}[0]
+
+        final val attributes // com.aardarch.aardink.languages/XmlSchema.Element.attributes|{}attributes[0]
+            final fun <get-attributes>(): kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Attribute> // com.aardarch.aardink.languages/XmlSchema.Element.attributes.<get-attributes>|<get-attributes>(){}[0]
+        final val children // com.aardarch.aardink.languages/XmlSchema.Element.children|{}children[0]
+            final fun <get-children>(): kotlin.collections/List<kotlin/String>? // com.aardarch.aardink.languages/XmlSchema.Element.children.<get-children>|<get-children>(){}[0]
+        final val documentation // com.aardarch.aardink.languages/XmlSchema.Element.documentation|{}documentation[0]
+            final fun <get-documentation>(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Element.documentation.<get-documentation>|<get-documentation>(){}[0]
+        final val name // com.aardarch.aardink.languages/XmlSchema.Element.name|{}name[0]
+            final fun <get-name>(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Element.name.<get-name>|<get-name>(){}[0]
+        final val snippet // com.aardarch.aardink.languages/XmlSchema.Element.snippet|{}snippet[0]
+            final fun <get-snippet>(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Element.snippet.<get-snippet>|<get-snippet>(){}[0]
+        final val strictAttributes // com.aardarch.aardink.languages/XmlSchema.Element.strictAttributes|{}strictAttributes[0]
+            final fun <get-strictAttributes>(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Element.strictAttributes.<get-strictAttributes>|<get-strictAttributes>(){}[0]
+
+        final fun component1(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Element.component1|component1(){}[0]
+        final fun component2(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Element.component2|component2(){}[0]
+        final fun component3(): kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Attribute> // com.aardarch.aardink.languages/XmlSchema.Element.component3|component3(){}[0]
+        final fun component4(): kotlin.collections/List<kotlin/String>? // com.aardarch.aardink.languages/XmlSchema.Element.component4|component4(){}[0]
+        final fun component5(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Element.component5|component5(){}[0]
+        final fun component6(): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Element.component6|component6(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String? = ..., kotlin.collections/Map<kotlin/String, com.aardarch.aardink.languages/XmlSchema.Attribute> = ..., kotlin.collections/List<kotlin/String>? = ..., kotlin/String? = ..., kotlin/Boolean = ...): com.aardarch.aardink.languages/XmlSchema.Element // com.aardarch.aardink.languages/XmlSchema.Element.copy|copy(kotlin.String;kotlin.String?;kotlin.collections.Map<kotlin.String,com.aardarch.aardink.languages.XmlSchema.Attribute>;kotlin.collections.List<kotlin.String>?;kotlin.String?;kotlin.Boolean){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Element.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/XmlSchema.Element.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Element.toString|toString(){}[0]
+    }
+
+    final class Value { // com.aardarch.aardink.languages/XmlSchema.Value|null[0]
+        constructor <init>(kotlin/String, kotlin/String? = ...) // com.aardarch.aardink.languages/XmlSchema.Value.<init>|<init>(kotlin.String;kotlin.String?){}[0]
+
+        final val documentation // com.aardarch.aardink.languages/XmlSchema.Value.documentation|{}documentation[0]
+            final fun <get-documentation>(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Value.documentation.<get-documentation>|<get-documentation>(){}[0]
+        final val value // com.aardarch.aardink.languages/XmlSchema.Value.value|{}value[0]
+            final fun <get-value>(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Value.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Value.component1|component1(){}[0]
+        final fun component2(): kotlin/String? // com.aardarch.aardink.languages/XmlSchema.Value.component2|component2(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String? = ...): com.aardarch.aardink.languages/XmlSchema.Value // com.aardarch.aardink.languages/XmlSchema.Value.copy|copy(kotlin.String;kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/XmlSchema.Value.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/XmlSchema.Value.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/XmlSchema.Value.toString|toString(){}[0]
+    }
+
+    final object Companion { // com.aardarch.aardink.languages/XmlSchema.Companion|null[0]
+        final fun parse(kotlin/String): com.aardarch.aardink.languages/XmlSchema // com.aardarch.aardink.languages/XmlSchema.Companion.parse|parse(kotlin.String){}[0]
+    }
+}
+
+final class com.aardarch.aardink.languages/XmlSchemaLanguageService : com.aardarch.aardink.core/CompositeLanguageService { // com.aardarch.aardink.languages/XmlSchemaLanguageService|null[0]
+    constructor <init>(com.aardarch.aardink.languages/XmlSchema, com.aardarch.aardink.core/LanguageService? = ...) // com.aardarch.aardink.languages/XmlSchemaLanguageService.<init>|<init>(com.aardarch.aardink.languages.XmlSchema;com.aardarch.aardink.core.LanguageService?){}[0]
+
+    final val schema // com.aardarch.aardink.languages/XmlSchemaLanguageService.schema|{}schema[0]
+        final fun <get-schema>(): com.aardarch.aardink.languages/XmlSchema // com.aardarch.aardink.languages/XmlSchemaLanguageService.schema.<get-schema>|<get-schema>(){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.css/CssTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.css/CssTokenizer|null[0]
@@ -163,10 +269,10 @@ final object com.aardarch.aardink.languages.internal.json/JsonLanguageService : 
         final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.json/JsonLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.json/JsonLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.json/JsonLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.json/JsonLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
-    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.json/JsonLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.json/JsonLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.json/JsonTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.json/JsonTokenizer|null[0]
@@ -178,10 +284,10 @@ final object com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageServic
         final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
-    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.kotlin/KotlinLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.kotlin/KotlinTokenizer|null[0]
@@ -203,10 +309,10 @@ final object com.aardarch.aardink.languages.internal.toml/TomlLanguageService : 
         final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
-    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.internal.toml/TomlLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
 }
 
 final object com.aardarch.aardink.languages.internal.toml/TomlTokenizer : com.aardarch.aardink.languages.internal/RegexTokenizer { // com.aardarch.aardink.languages.internal.toml/TomlTokenizer|null[0]
@@ -297,6 +403,11 @@ final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop|#static{}com_aardarch_aardink_languages_LanguageDefinition$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop|#static{}com_aardarch_aardink_languages_LanguageRegistry$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop|#static{}com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema_Element$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema_Value$stableprop[0]
 
 final fun com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(){}[0]
@@ -334,3 +445,8 @@ final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter|com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter|com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter|com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter|com_aardarch_aardink_languages_XmlSchema$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop_getter|com_aardarch_aardink_languages_XmlSchemaLanguageService$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop_getter|com_aardarch_aardink_languages_XmlSchema_Attribute$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop_getter|com_aardarch_aardink_languages_XmlSchema_Element$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop_getter|com_aardarch_aardink_languages_XmlSchema_Value$stableprop_getter(){}[0]

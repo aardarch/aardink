@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.SetComposingTextCommand
 import androidx.compose.ui.text.input.SetSelectionCommand
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.edit.TextChange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -323,10 +324,10 @@ class EditorImeAdapterTest {
 
         override suspend fun hoverDoc(document: CodeDocument, offset: Int): com.aardarch.aardink.core.HoverDoc? = null
 
-        override suspend fun format(document: CodeDocument): String = document.text
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = if (charTyped == '(') ")" else null
 
-        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 }

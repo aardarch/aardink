@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages
 
+import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
@@ -45,4 +46,31 @@ data class LanguageDefinition(
     val foldingProvider: FoldingProvider = NoOpFoldingProvider,
     val languageService: LanguageService? = null,
     val keyboardToolbarChars: List<Char> = tokenizer.keyboardToolbarChars(),
-)
+) {
+    companion object {
+        /**
+         * A language built on [base]: [overlay] answers first and [base]'s language service fills in
+         * what it does not, by [CompositeLanguageService]'s rules, so a dialect keeps its base's
+         * diagnostics, closing tags, indentation and formatting (the Kotlin side of the web's
+         * `registerLanguage({ extends })`). Without [inheritCompletions], [base]'s completions are
+         * left out. Everything else comes from [base] unless given: a dialect usually has an [id]
+         * and a [tokenizer] (a grammar) of its own.
+         */
+        fun extending(
+            base: LanguageDefinition,
+            overlay: LanguageService,
+            inheritCompletions: Boolean = true,
+            id: String = base.id,
+            displayName: String = base.displayName,
+            fileExtensions: List<String> = base.fileExtensions,
+            tokenizer: IncrementalTokenizer = base.tokenizer,
+        ): LanguageDefinition = base.copy(
+            id = id,
+            displayName = displayName,
+            fileExtensions = fileExtensions,
+            tokenizer = tokenizer,
+            languageService = base.languageService?.let { CompositeLanguageService(overlay, it, inheritCompletions) } ?: overlay,
+            keyboardToolbarChars = if (tokenizer === base.tokenizer) base.keyboardToolbarChars else tokenizer.keyboardToolbarChars(),
+        )
+    }
+}

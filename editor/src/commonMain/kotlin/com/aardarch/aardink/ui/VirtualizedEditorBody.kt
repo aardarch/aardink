@@ -206,6 +206,7 @@ internal fun VirtualizedEditorBody(
         whitespace = theme.whitespaceColor.takeOrElse { textColor.copy(alpha = 0.25f) },
         // Monaco's editor.snippetTabstopHighlightBackground.
         snippetTabStop = Color(0x4D7C7C7C),
+        background = theme.background,
     )
     // The pair the caret touches, worked out when the caret, the text or its tokens change, not
     // on every frame the content draws (scrolling redraws it every frame).

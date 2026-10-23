@@ -63,6 +63,15 @@ class CodeDocument(initialText: String = "") : CharSequence {
     internal var version: Long = 0
         private set
 
+    /**
+     * The line ending the text was created or last replaced ([replaceAll]) with, from its first
+     * line break: what the editor's Enter, typing and pasting insert into it unless
+     * [EditorOptions.eol][com.aardarch.aardink.ui.EditorOptions.eol] says otherwise. Edits do not
+     * change it.
+     */
+    var eol: LineEnding = LineEnding.detect(initialText)
+        private set
+
     private var cachedText: String? = null
     private var cachedSnapshot: CodeDocument? = null
     private var listeners: List<DocumentChangeListener> = emptyList()
@@ -209,6 +218,8 @@ class CodeDocument(initialText: String = "") : CharSequence {
         val buffer = writableBuffer()
         val oldLength = buffer.length
         val oldLineCount = lineCount
+        val oldTailColumn = oldLength - lines!!.lineStart(oldLineCount - 1)
+        eol = LineEnding.detect(newText)
         buffer.clear()
         buffer.insert(0, newText)
         lines!!.reset(newText)
@@ -222,7 +233,7 @@ class CodeDocument(initialText: String = "") : CharSequence {
                 startColumn = 0,
                 removedLines = oldLineCount - 1,
                 addedLines = lineCount - 1,
-                oldTailColumn = 0,
+                oldTailColumn = oldTailColumn,
                 tailColumn = 0,
                 version = version + 1,
                 isReset = true,
@@ -234,15 +245,17 @@ class CodeDocument(initialText: String = "") : CharSequence {
 
     /**
      * A read-only copy of this document as it is now, for work that runs on another thread or
-     * outlives the next edit. Shares the text with [text]; the same snapshot is returned until
-     * the document changes.
+     * outlives the next edit: what the editor hands a [LanguageService]. Cheap: it shares the text
+     * with [text], and the same snapshot is returned until the document changes. Editing it throws
+     * [IllegalStateException]; a snapshot's snapshot is itself.
      */
-    internal fun snapshot(): CodeDocument {
+    fun snapshot(): CodeDocument {
         if (buffer == null) return this
         cachedSnapshot?.let { if (it.version == version) return it }
         return CodeDocument(text, lines!!.toArray())
             .also {
                 it.version = version
+                it.eol = eol
                 cachedSnapshot = it
             }
     }

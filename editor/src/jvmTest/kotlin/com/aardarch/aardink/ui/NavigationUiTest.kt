@@ -41,6 +41,7 @@ import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
@@ -75,9 +76,10 @@ class NavigationUiTest {
             return Regex("\\b$word\\b").findAll(document.text).map { Location("file:///this.kt", it.range) }.toList()
         }
 
-        override suspend fun format(document: CodeDocument): String = document.text.replace(Regex("\\s*=\\s*"), " = ")
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String =
+            document.text.replace(Regex("\\s*=\\s*"), " = ")
 
-        override suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> =
+        override suspend fun formatRange(document: CodeDocument, range: IntRange, options: FormattingOptions): List<TextEdit> =
             listOf(TextEdit(range, document.text.substring(range.first, range.last + 1).uppercase()))
 
         private fun word(document: CodeDocument, offset: Int): String {
@@ -95,7 +97,7 @@ class NavigationUiTest {
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
-        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 
     private fun ComposeUiTest.show(state: CodeEditorState, opened: MutableList<Location> = mutableListOf()) {

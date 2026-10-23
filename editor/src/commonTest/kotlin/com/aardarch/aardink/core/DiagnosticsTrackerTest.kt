@@ -24,8 +24,8 @@ class DiagnosticsTrackerTest {
 
     // "val bad = 1\nval worse = 2": "bad" is 4..6 on line 0, "worse" is 16..20 on line 1.
     private val text = "val bad = 1\nval worse = 2"
-    private val bad = Diagnostic(4..6, 0, "bad", DiagnosticSeverity.Error)
-    private val worse = Diagnostic(16..20, 1, "worse", DiagnosticSeverity.Warning)
+    private val bad = Diagnostic(4..6, "bad", DiagnosticSeverity.Error)
+    private val worse = Diagnostic(16..20, "worse", DiagnosticSeverity.Warning)
 
     private fun tracked(): Pair<CodeDocument, DiagnosticsTracker> {
         val document = CodeDocument(text)
@@ -38,12 +38,22 @@ class DiagnosticsTrackerTest {
     private fun DiagnosticsTracker.marked(document: CodeDocument): List<String> =
         diagnostics.map { document.text.substring(it.range.first, it.range.last + 1) }
 
+    @Suppress("DEPRECATION")
+    @Test
+    fun `the 0_6 constructor still builds a diagnostic and ignores its line`() {
+        assertEquals(Diagnostic(4..6, "bad", DiagnosticSeverity.Error), Diagnostic(4..6, 9, "bad", DiagnosticSeverity.Error))
+        assertEquals(
+            1,
+            Diagnostic(range = 4..6, lineNumber = 7, message = "m", severity = DiagnosticSeverity.Info).lineIn(CodeDocument("ab\ncdef")),
+        )
+    }
+
     @Test
     fun `typing above moves the ranges and their lines along`() {
         val (document, tracker) = tracked()
         document.insert(0, "// note\n")
         assertEquals(listOf("bad", "worse"), tracker.marked(document))
-        assertEquals(listOf(1, 2), tracker.diagnostics.map { it.lineNumber })
+        assertEquals(listOf(1, 2), tracker.diagnostics.map { it.lineIn(document) })
     }
 
     @Test
@@ -89,7 +99,7 @@ class DiagnosticsTrackerTest {
         val (document, tracker) = tracked()
         document.delete(11, 1)
         assertEquals("worse", tracker.marked(document)[1])
-        assertEquals(0, tracker.diagnostics[1].lineNumber)
+        assertEquals(0, tracker.diagnostics[1].lineIn(document))
     }
 
     @Test

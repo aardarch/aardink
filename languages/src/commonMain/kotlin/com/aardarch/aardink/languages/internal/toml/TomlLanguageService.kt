@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -92,7 +93,6 @@ object TomlLanguageService : BaseLanguageService() {
                     diags.add(
                         Diagnostic(
                             range = start..end,
-                            lineNumber = i,
                             message = "Unclosed table header",
                             severity = DiagnosticSeverity.Error,
                             source = "toml",
@@ -124,7 +124,6 @@ object TomlLanguageService : BaseLanguageService() {
                 diags.add(
                     Diagnostic(
                         range = start..end,
-                        lineNumber = i,
                         message = "Expected '=' in key-value declaration",
                         severity = DiagnosticSeverity.Error,
                         source = "toml",
@@ -140,7 +139,6 @@ object TomlLanguageService : BaseLanguageService() {
                 diags.add(
                     Diagnostic(
                         range = start..end,
-                        lineNumber = i,
                         message = "Missing key name before '='",
                         severity = DiagnosticSeverity.Error,
                         source = "toml",
@@ -152,7 +150,6 @@ object TomlLanguageService : BaseLanguageService() {
                 diags.add(
                     Diagnostic(
                         range = keyOffset..keyEnd,
-                        lineNumber = i,
                         message = "Duplicate key '$rawKey' in section $currentSection",
                         severity = DiagnosticSeverity.Warning,
                         source = "toml",
@@ -251,19 +248,15 @@ object TomlLanguageService : BaseLanguageService() {
         else -> null
     }
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
-        if (lineIndex <= 0) return 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String {
+        if (lineIndex <= 0) return ""
         val prevLine = document.lineText(lineIndex - 1)
-        val prevIndent = prevLine.takeWhile { it.isWhitespace() }.length
         val trimmed = prevLine.trim()
-        return if (trimmed.endsWith("{") || trimmed.endsWith("[") || trimmed.endsWith("=")) {
-            prevIndent + 4
-        } else {
-            prevIndent
-        }
+        val opens = trimmed.endsWith("{") || trimmed.endsWith("[") || trimmed.endsWith("=")
+        return options.indentAfter(prevLine, if (opens) 1 else 0)
     }
 
-    override suspend fun format(document: CodeDocument): String {
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
         val lineCount = document.lineCount
         if (lineCount == 0) return ""
 

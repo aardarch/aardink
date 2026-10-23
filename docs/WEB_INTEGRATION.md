@@ -64,8 +64,14 @@ There are two ways in:
 | `executeEdits(edits, endSelections)` / `executeEditsJson` | Monaco's `executeEdits`: `WebEdit`s (`{ range, text }`, a 1-based, end-exclusive `WebRange`) applied as one undo step that keeps the history, each reduced to what it really changes. The selections are `endSelections` when given (positions in the text after the edits, as Monaco's `endCursorState`), else carried through the edits. `false` in a read-only editor, as in Monaco; edits that overlap throw. |
 | `updateOptions(options)` / `patchOptions(json)` / `currentOptions` | Replace all options, or apply only the JSON keys given (Monaco's `updateOptions(partial)`). |
 | `onChange(callback)` | Full text after each change, typed or programmatic; at most once per frame. One listener; `null` removes it. |
-| `onContentChange(callback)` | Like `onChange`, with the text's version and what the change was: `"edit"`, `"undo"`, `"redo"` or `"flush"`. |
+| `onContentChange(callback)` | Like `onChange`, with the text's version, what the change was (`"edit"`, `"undo"`, `"redo"` or `"flush"`) and the changes since the last call as JSON, in Monaco's `IModelContentChange` shape (`{ range, rangeOffset, rangeLength, text }`), each in the text the ones before it left. |
 | `onCursorChange(callback)` | 1-based line and column. |
+| `onSelectionChange(callback)` | Every change to the selections, as JSON `{ selections, reason, source }`: `reason` is `keyboard`, `pointer`, `edit`, `undo`, `redo`, `flush` or `api`, `source` Monaco's. |
+| `onFocusChange(callback)` | `true` when the text gains the keyboard focus, `false` when it loses it. |
+| `getPosition` / `setPosition(line, column)` | The primary caret, 1-based; `setPosition` places one caret without scrolling. |
+| `revealLine(line, center)` / `revealPosition(line, column, center)` | Scroll a place into view, to the middle with `center`, without moving the caret. |
+| `trigger(actionId, payloadJson)` / `canTrigger` / `actionLabel` | Monaco's `trigger`: an action the host added, or one of the editor's own by Monaco's id (`editor.action.formatDocument`, `editor.action.marker.next`, `editor.foldLevel2`, `editor.action.insertSnippet` with `{ snippet }`, ...). |
+| `addCommand(keybinding, run)` / `addAction(id, label, keybindings, inContextMenu, run)` / `removeAction` | Monaco's `addCommand` and `addAction`: keys (`"CtrlCmd+S"`, `"Shift+F8"`, or Monaco's `KeyMod \| KeyCode` number) that run a host function ahead of the editor's own binding, and actions that `trigger` runs, with keys and a right-click menu entry. |
 | `setDiagnostics(list)` / `setDiagnosticsJson(json)` | Squiggles and gutter markers, in Monaco-marker shape: 1-based lines and columns, `endColumn` exclusive. They replace the language's own diagnostics, which show until then; `null` (`"null"` in JSON) goes back to those. Either way they move with the text as it is edited. |
 | `onDiagnosticsChange(callback)` | The language's own diagnostics, as a JSON array in the same shape, each time they are collected: 500 ms after the editor appears, after each pause in typing, and on `revalidate`. Not called while the host's list is shown. One listener; `null` removes it. |
 | `revalidate` | Collects the language's own diagnostics again at once, without an edit: for when what they depend on outside the text has changed. They reach `onDiagnosticsChange`. Nothing happens while the host's list is shown. |
@@ -79,18 +85,20 @@ There are two ways in:
 | `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. A grammar's comments and strings, being the editor's own, come back as `comment` and `string`, and the built-in languages' tokens under Monaco's standard names. |
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
-| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, and `triggerCharacters` open the completion list. `WebLanguageProviders` answers completions, hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, and `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover and diagnostics as JSON. Editors mounted with the default registry see it. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
 `showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`,
-`bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`. An unknown `language` falls back to plain
+`bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`, `renderWhitespace`,
+`quickSuggestions`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
 `AardinkWeb.builtInThemes`. Changing `language` keeps the text, the selection and the undo history.
 
-Typed and pasted text has its line endings normalised to LF (a Windows or browser paste delivers
-CR LF). Text a host passes to `setValue` is kept verbatim.
+Typed and pasted text gets the document's line endings: those of the text's first line break
+when it was set (a CR LF file stays CR LF), LF otherwise. Text a host passes to `setValue` is
+kept verbatim.
 
 ## The export template
 
@@ -252,21 +260,29 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `renderLineHighlight` | `renderLineHighlight` / `highlightCurrentLine` | Anything but `'none'` highlights each caret's line. |
 | `tabSize`, `insertSpaces` | `tabSize`, `insertSpaces` | |
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
-| `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush }`. |
+| `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush, changes }`. `changes` are Monaco's `IModelContentChange`s, each in the text the ones before it left, so applying them in order rebuilds the text. |
+| `onDidChangeCursorSelection` | The same | `{ selection, secondarySelections, reason, source }`; `reason` is a word (`'keyboard'`, `'pointer'`, `'edit'`, `'undo'`, `'redo'`, `'flush'`, `'api'`). |
+| `onDidFocusEditorText`, `onDidBlurEditorText` | The same | |
+| `getPosition`, `setPosition` | The same | `setPosition` does not scroll. |
+| `revealLine`, `revealLineInCenter`, `revealRange`, `revealRangeInCenter` | The same | Scroll without moving the caret; a range by its start. |
+| `trigger(source, handlerId, payload)` | The same | Your actions, and the editor's own by Monaco's ids (see `index.d.ts`). |
+| `addCommand(keybinding, handler)` | The same | `'CtrlCmd+S'`-style text, or Monaco's `KeyMod \| KeyCode` number for a letter, digit, function, navigation or punctuation key. Runs ahead of the editor's own binding. |
+| `addAction(descriptor)`, `getAction(id)` | The same | `keybindings`, and `contextMenuGroupId` for a right-click menu entry; `getAction` also knows the editor's own actions. |
+| `quickSuggestions` | `quickSuggestions` | A boolean, or Monaco's `{ other, comments, strings }` of which `other` decides; off by default. |
 | `getSelections` / `setSelections` | The same | Monaco's `Selection` fields. |
 | `model.canUndo`, `canRedo`, `pushStackElement`, `getAlternativeVersionId` | `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId` | |
 | `editor.executeEdits(source, edits, endCursorState)` | `executeEdits` | The same arguments; `endCursorState` as an array of selections (a computer function is not called). Each edit is reduced to what it really changes, so carets inside an edit whose text is mostly unchanged stay put. Each call is an undo step of its own, as with `pushUndoStop` before and after. |
 | `model.pushEditOperations` over `getFullModelRange()`, to replace the text undoably | `replaceValue(text)` | One call; only what differs changes. `setValue` stays for opening a file. |
 | `getAction('editor.action.formatDocument').run()` | `format()` | Resolves with whether anything changed. |
 | `monaco.editor.tokenize` | `tokenize` | Same arguments and shape: a grammar's own names, and Monaco's names for the built-in languages' tokens (`keyword.flow`, `comment.doc`, `string.escape`, ...). |
-| `monaco.editor.setModelMarkers` | `setDiagnostics` | Same 1-based, end-exclusive shape. `null` shows the language's own again. |
+| `monaco.editor.setModelMarkers` | `setDiagnostics` | Monaco's `IMarkerData` as it is: `startLineNumber` to `endLineNumber`, `MarkerSeverity` numbers, `code` (or `{ value, target }`), `tags`, `relatedInformation`. `null` shows the language's own again. One owner. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
 | `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground` and `fontStyle` apply; its `background` is ignored. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | Re-running a model's validation | `revalidate()` | Monaco has no single call; this asks the language's diagnostics again without an edit. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
-| `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`. |
+| `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`, `detail`, `commitCharacters` and Monaco's `kind` names or numbers. Answer `{ suggestions, incomplete: false }` to be asked once per word, Monaco's behaviour; without it your provider is asked on each letter, as in 0.6. |
 | Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
 | `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
 

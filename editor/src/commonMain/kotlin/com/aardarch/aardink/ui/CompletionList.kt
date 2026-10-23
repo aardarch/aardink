@@ -90,7 +90,7 @@ internal fun CompletionList(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                         )
-                        item.documentation?.let {
+                        (item.detail ?: item.documentation)?.let {
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.labelSmall,

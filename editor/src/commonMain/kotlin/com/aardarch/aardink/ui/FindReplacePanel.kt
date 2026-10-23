@@ -36,7 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +55,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.FindReplaceState
 
@@ -93,9 +98,14 @@ fun FindReplacePanel(
         ) {
             val findFocus = remember { FocusRequester() }
             val replaceFocus = remember { FocusRequester() }
-            // On opening, and again on each show() while open (Ctrl+F pressed in the editor).
+            // The find field's own value, so its text can be selected; the query stays the truth.
+            var queryField by remember { mutableStateOf(TextFieldValue(state.query)) }
+            if (queryField.text != state.query) queryField = TextFieldValue(state.query, TextRange(state.query.length))
+            // On opening, and again on each show() while open (Ctrl+F pressed in the editor): the
+            // query selected, as VS Code does, so what is typed next replaces it.
             LaunchedEffect(state.showRequests) {
                 if (!state.visible) return@LaunchedEffect
+                queryField = TextFieldValue(state.query, TextRange(0, state.query.length))
                 // The fields (the replace row may be new) are attached from the next frame.
                 withFrameNanos { }
                 val target = if (state.replaceMode && state.query.isNotEmpty()) replaceFocus else findFocus
@@ -135,8 +145,11 @@ fun FindReplacePanel(
                             Text(if (state.replaceMode) "▾" else "▸", modifier = Modifier.clearAndSetSemantics { })
                         }
                         OutlinedTextField(
-                            value = state.query,
-                            onValueChange = { state.query = it },
+                            value = queryField,
+                            onValueChange = {
+                                queryField = it
+                                state.query = it.text
+                            },
                             placeholder = { Text("Find") },
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(

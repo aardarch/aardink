@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.text.input.TextFieldValue
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
 import kotlin.math.max
 import kotlin.math.min
@@ -283,11 +284,13 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     fun finishComposition() {
         if (composition == null) return
         composition = null
-        state.endComposition()
+        state.withSelectionReason(SelectionChangeReason.Keyboard) { state.endComposition() }
         state.pushUndoStop()
     }
 
-    private fun flush() {
+    private fun flush() = state.withSelectionReason(SelectionChangeReason.Keyboard) { flushInput() }
+
+    private fun flushInput() {
         val change = buffer.change()
         val selection = buffer.selection
         val newComposition = buffer.composition

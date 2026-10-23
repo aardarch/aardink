@@ -20,6 +20,8 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.languages.XmlSchema
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -60,7 +62,6 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                     diags.add(
                         Diagnostic(
                             range = i..(i + 1),
-                            lineNumber = line,
                             message = "Unescaped '&' character; use '&amp;' instead",
                             severity = DiagnosticSeverity.Warning,
                             source = sourceLabel,
@@ -250,7 +251,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                     // The editor's token scan would stop at the '@' in "@string/", so name the
                     // range: everything typed after the opening quote.
                     val valueStart = clampedOffset - afterEq.length + (if (afterEq.isEmpty()) 0 else 1)
-                    return COMMON_ATTR_VALUES.map { value ->
+                    return DEFAULT_SCHEMA_VALUES.map { value ->
                         CompletionItem(
                             label = value,
                             kind = CompletionKind.Value,
@@ -267,7 +268,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 // ':' and '.' are token boundaries to the editor, so an "android:" already typed
                 // would be kept and duplicated — name the range covering the partial name instead.
                 val nameStart = startOfAttributeName(text, clampedOffset)
-                return COMMON_XML_ATTRIBUTES.map { attr ->
+                return DEFAULT_SCHEMA_ATTRIBUTES.map { attr ->
                     CompletionItem(
                         label = attr,
                         kind = CompletionKind.Attribute,
@@ -282,7 +283,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
             // 3. Tag name completion after '<'
             if (!tagContent.startsWith("/") && !tagContent.startsWith("!") && !tagContent.startsWith("?")) {
-                return COMMON_XML_ELEMENTS.map { elem ->
+                return DEFAULT_SCHEMA.elements.keys.map { elem ->
                     CompletionItem(
                         label = elem,
                         kind = CompletionKind.Element,
@@ -296,10 +297,9 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         return emptyList()
     }
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
-        if (lineIndex <= 0) return 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String {
+        if (lineIndex <= 0) return ""
         val prevLine = document.lineText(lineIndex - 1)
-        val prevIndent = prevLine.takeWhile { it.isWhitespace() }.length
         val trimmedPrev = prevLine.trim()
         val currLine = document.lineText(lineIndex).trim()
 
@@ -312,10 +312,10 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             !trimmedPrev.endsWith("/>") &&
             !trimmedPrev.contains("</")
 
-        var indent = prevIndent
-        if (prevIsOpenTag) indent += 4
-        if (isClosingTag) indent = (indent - 4).coerceAtLeast(0)
-        return indent
+        var levels = 0
+        if (prevIsOpenTag) levels++
+        if (isClosingTag) levels--
+        return options.indentAfter(prevLine, levels)
     }
 
     /**
@@ -329,7 +329,7 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
      * verbatim. Every line's tags still count toward the depth of the lines after it, whether the
      * line was re-indented or not.
      */
-    override suspend fun format(document: CodeDocument): String {
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
         val text = document.text
         if (text.isBlank()) return text
 
@@ -342,17 +342,16 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         for ((index, line) in lines.withIndex()) {
             val state = states[index]
             if (!state.continuesTag) shift = 0
-            val indent = " ".repeat(state.indentDepth * 4)
+            val indent = options.indentOf(state.indentDepth * options.tabSize)
             when {
                 state.isStructural -> result.add(if (line.isBlank()) "" else indent + line.trim())
 
                 state.opensTag -> {
-                    val content = line.trimStart()
-                    shift = indent.length - (line.length - content.length)
-                    result.add(indent + content)
+                    shift = options.indentWidth(indent) - options.indentWidth(line)
+                    result.add(indent + line.trimStart())
                 }
 
-                state.continuesTag && !state.startsInValue -> result.add(shifted(line, shift))
+                state.continuesTag && !state.startsInValue -> result.add(shifted(line, shift, options))
 
                 else -> result.add(line)
             }
@@ -362,11 +361,8 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
     }
 
     /** [line] moved right by [shift] columns, or left by as much of [shift] as its indent allows. */
-    private fun shifted(line: String, shift: Int): String = when {
-        line.isBlank() -> ""
-        shift >= 0 -> " ".repeat(shift) + line
-        else -> line.drop(minOf(-shift, line.length - line.trimStart().length))
-    }
+    private fun shifted(line: String, shift: Int, options: FormattingOptions): String =
+        if (line.isBlank()) "" else options.indentOf(options.indentWidth(line) + shift) + line.trimStart()
 
     /**
      * @param depth Elements open when the line starts.
@@ -630,7 +626,6 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 diags.add(
                     Diagnostic(
                         range = attrOffset..(attrOffset + attrName.length),
-                        lineNumber = line,
                         message = "Duplicate attribute '$attrName'",
                         severity = DiagnosticSeverity.Error,
                         source = sourceLabel,
@@ -675,7 +670,6 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
                 diags.add(
                     Diagnostic(
                         range = offset..(offset + 1),
-                        lineNumber = line,
                         message = "Unescaped '&' character; use '&amp;' instead",
                         severity = DiagnosticSeverity.Warning,
                         source = sourceLabel,
@@ -749,7 +743,6 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         val (line, _) = document.offsetToLineCol(start)
         return Diagnostic(
             range = start..(end - 1).coerceAtLeast(start),
-            lineNumber = line,
             message = message,
             severity = DiagnosticSeverity.Error,
             source = sourceLabel,
@@ -791,6 +784,27 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
             "match_parent", "wrap_content", "true", "false", "singleTask", "singleTop",
             "@string/", "@color/", "@style/", "@mipmap/", "@drawable/",
         )
+
+        /**
+         * What the built-in XML language suggests, as an [XmlSchema] that checks nothing: a few
+         * Android elements, each taking the common Android attributes, each of those the common
+         * values. A dialect brings its own through [com.aardarch.aardink.languages.XmlSchemaLanguageService].
+         */
+        val DEFAULT_SCHEMA = XmlSchema(
+            elements = COMMON_XML_ELEMENTS.associateWith { name ->
+                XmlSchema.Element(
+                    name = name,
+                    attributes = COMMON_XML_ATTRIBUTES.associateWith { attr ->
+                        XmlSchema.Attribute(attr, values = COMMON_ATTR_VALUES.map { XmlSchema.Value(it) })
+                    },
+                )
+            },
+            strict = false,
+        )
+
+        val DEFAULT_SCHEMA_ATTRIBUTES: List<String> = DEFAULT_SCHEMA.elements.values.first().attributes.keys.toList()
+
+        val DEFAULT_SCHEMA_VALUES: List<String> = DEFAULT_SCHEMA.elements.values.first().attributes.values.first().values.map { it.value }
     }
 }
 

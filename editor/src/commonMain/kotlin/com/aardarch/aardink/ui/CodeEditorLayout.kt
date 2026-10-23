@@ -51,22 +51,26 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
@@ -134,6 +138,9 @@ fun CodeEditorLayout(
     toolbarStyle: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
     keyboardToolbarPlacement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.BottomHover,
     onRequestGoToLine: () -> Unit = {},
+    keyboardToolbarItems: List<KeyboardToolbarItem> = emptyList(),
+    touchMenuItems: List<EditorMenuItem> = emptyList(),
+    contextMenuItems: List<EditorMenuItem> = emptyList(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
@@ -201,10 +208,13 @@ fun CodeEditorLayout(
     if (diagnostics != null) {
         SideEffect { if (diagnosticsTracker.given !== diagnostics) diagnosticsTracker.replace(diagnostics) }
     }
+    val currentShownDiagnostics = rememberUpdatedState(shownDiagnostics)
 
     // Completion state. With a hardware keyboard the list sits at the caret and the arrows move
     // its selection; on a touch device it is a strip above the keyboard.
     var completionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
+    // What the service answered, before the editor sorted (and perhaps filtered) it into completionItems.
+    var allCompletionItems by remember { mutableStateOf<List<CompletionItem>>(emptyList()) }
     var showCompletion by remember { mutableStateOf(false) }
     var completionJob by remember { mutableStateOf<Job?>(null) }
     var completionSelected by remember { mutableIntStateOf(0) }
@@ -221,6 +231,9 @@ fun CodeEditorLayout(
 
     // Code actions, Signature help & Rename state
     var showCodeActionsMenu by remember { mutableStateOf(false) }
+    // What the code-action menu offers, and the offset it opens at: set by whatever opened it.
+    var menuActions by remember { mutableStateOf<List<CodeAction>>(emptyList()) }
+    var menuAnchor by remember { mutableIntStateOf(-1) }
     var currentSignatureHelp by remember { mutableStateOf<SignatureHelp?>(null) }
     var showSignatureHelp by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -285,8 +298,10 @@ fun CodeEditorLayout(
         showSignatureHelp = sig != null && sig.signatures.isNotEmpty()
     }
 
-    // Annotation tooltip: shown when user taps a gutter dot
+    // Annotation tooltip: shown when user taps a gutter dot or a squiggle, or reaches a problem with F8
     var tooltipDiagnostic by remember { mutableStateOf<Diagnostic?>(null) }
+    // With F8: which problem of how many the tooltip shows.
+    var problemCounter by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     // Quick fixes for the tapped diagnostic — the only way the action menu is opened. Tapping a
     // gutter dot doesn't move the cursor, so actions are fetched for the diagnostic's own range,
@@ -325,16 +340,17 @@ fun CodeEditorLayout(
         }
     }
 
-    // Gutter annotations: highest-severity diagnostic per line
+    // Gutter annotations: the most severe diagnostic starting on each line; hints get none.
     val gutterAnnotations = remember(shownDiagnostics) {
+        val document = state.document
         shownDiagnostics
-            .groupBy { it.lineNumber }
+            .filter { it.severity != DiagnosticSeverity.Hint }
+            .groupBy { it.lineIn(document) }
             .mapValues { (_, diags) ->
-                val worst = diags.maxBy { it.severity.ordinal }
-                when (worst.severity) {
+                when (diags.minOf { it.severity }) {
                     DiagnosticSeverity.Error -> GutterAnnotationKind.Error
                     DiagnosticSeverity.Warning -> GutterAnnotationKind.Warning
-                    DiagnosticSeverity.Info -> GutterAnnotationKind.Info
+                    else -> GutterAnnotationKind.Info
                 }
             }
     }
@@ -368,6 +384,7 @@ fun CodeEditorLayout(
                 val range = snippet.currentRanges().first()
                 completionJob?.cancel()
                 completionItems = choices.map { CompletionItem(it, CompletionKind.Value, it, replaceRange = range.min until range.max) }
+                allCompletionItems = completionItems
                 showCompletion = true
             } else {
                 showCompletion = false
@@ -455,20 +472,35 @@ fun CodeEditorLayout(
     val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
 
     // ── Hover: the documentation of the symbol under a resting mouse ─────────
+    // ── Hover: the diagnostics and the documentation under a resting mouse ───
     val showHover: suspend (Int) -> Unit = hover@{ offset ->
-        val service = languageService ?: return@hover
+        val service = languageService
+        val here = currentShownDiagnostics.value
+            .filter { offset in it.range.first..it.range.last + 1 }
+            .sortedBy { it.severity }
         val word = TextNavigator.wordAt(state.document, offset)
-        if (word.isEmpty()) return@hover
+        if (here.isEmpty() && (service == null || word.isEmpty())) return@hover
         val version = state.textVersion
         val document = state.document.snapshot()
-        val doc = withContext(state.computeDispatcher) { service.hoverDoc(document, offset) } ?: return@hover
-        if (state.textVersion != version) return@hover
-        hover = HoverShown(doc, word.first, word.last + 1)
+        val doc = if (service != null && !word.isEmpty()) {
+            withContext(state.computeDispatcher) { service.hoverDoc(document, offset) }
+        } else {
+            null
+        }
+        val actions = if (service != null && here.isNotEmpty()) {
+            withContext(state.computeDispatcher) { service.codeActions(document, here.first().range) }
+        } else {
+            emptyList()
+        }
+        if (state.textVersion != version || (doc == null && here.isEmpty())) return@hover
+        val start = (here.map { it.range.first } + listOfNotNull(word.first.takeUnless { word.isEmpty() })).min()
+        val end = (here.map { it.range.last + 1 } + listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })).max()
+        hover = HoverShown(doc, start, end, here, actions)
     }
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
             hover = null
-            if (at == null || languageService == null) return@collectLatest
+            if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
             showHover(view.offsetAt(at).offset)
         }
@@ -517,23 +549,76 @@ fun CodeEditorLayout(
     // Shift+Alt+F: the selection through formatRange, else the whole document through format,
     // whose result is reduced to the lines that change, so carets and folds elsewhere stay put.
     // Either way one undo step.
-    val format: () -> Boolean = format@{
+    val formatWith: (selectionOnly: Boolean) -> Boolean = format@{ selectionOnly ->
         val service = languageService ?: return@format false
         val selection = state.selection
+        if (selectionOnly && selection.collapsed) return@format false
+        val formatting = state.formattingOptions
         coroutineScope.launch {
             val version = state.textVersion
             val document = state.document.snapshot()
             val edits = withContext(state.computeDispatcher) {
-                if (selection.collapsed) {
-                    MinimalEdits.between(document.text, service.format(document))
+                if (!selectionOnly) {
+                    MinimalEdits.between(document.text, service.format(document, formatting))
                 } else {
-                    service.formatRange(document, selection.min until selection.max)
+                    service.formatRange(document, selection.min until selection.max, formatting)
                 }
             }
             if (state.textVersion == version && edits.isNotEmpty()) state.applyTextEdits(edits)
         }
         true
     }
+    val format: () -> Boolean = { formatWith(!state.selection.collapsed) }
+    // Ctrl+.: the quick fixes for the most severe diagnostic at the caret, else for the selection.
+    val showCodeActions: () -> Boolean = actions@{
+        val service = languageService ?: return@actions false
+        val caret = state.selection
+        val target = currentShownDiagnostics.value
+            .filter { caret.min in it.range.first..it.range.last + 1 }
+            .minByOrNull { it.severity }
+        val range = target?.range ?: (caret.min until caret.max)
+        coroutineScope.launch {
+            val version = state.textVersion
+            val document = state.document.snapshot()
+            val actions = withContext(state.computeDispatcher) { service.codeActions(document, range) }
+            if (state.textVersion != version || actions.isEmpty()) return@launch
+            menuActions = actions
+            menuAnchor = if (range.isEmpty()) caret.min else range.first
+            showCodeActionsMenu = true
+        }
+        true
+    }
+    // VS Code's "Fold Level N": the ranges nested N deep, 1 the outermost.
+    val foldLevel: (Int) -> Boolean = level@{ level ->
+        val folds = foldState ?: return@level false
+        val ranges = folds.foldableRanges
+        fun encloses(outer: FoldRange, inner: FoldRange) = outer !== inner &&
+            outer.startLine <= inner.startLine && outer.endLine >= inner.endLine &&
+            (outer.startLine != inner.startLine || outer.endLine != inner.endLine)
+        val atLevel = ranges.filter { range -> ranges.count { encloses(it, range) } == level - 1 }
+        for (range in atLevel) if (!folds.isFolded(range.startLine)) folds.toggle(range.startLine)
+        atLevel.isNotEmpty()
+    }
+    // F8 / Shift+F8: the next or previous problem after the caret, wrapping, selected and shown in
+    // the tooltip with its place in the list; hints are not problems.
+    val goToProblem: (Boolean) -> Boolean = problem@{ forward ->
+        val problems = currentShownDiagnostics.value
+            .filter { it.severity != DiagnosticSeverity.Hint }
+            .sortedWith(compareBy({ it.range.first }, { it.severity }))
+        if (problems.isEmpty()) return@problem false
+        val caret = state.selection.min
+        val index = if (forward) {
+            problems.indexOfFirst { it.range.first > caret }.takeIf { it >= 0 } ?: 0
+        } else {
+            problems.indexOfLast { it.range.first < caret }.takeIf { it >= 0 } ?: problems.lastIndex
+        }
+        val target = problems[index]
+        state.navigateTo(target.range.first, TextRange(target.range.first, target.range.last + 1))
+        problemCounter = index + 1 to problems.size
+        tooltipDiagnostic = target
+        true
+    }
+
     // The references list goes when the text changes under it.
     LaunchedEffect(state) {
         snapshotFlow { state.textVersion }.collect { references = null }
@@ -573,39 +658,96 @@ fun CodeEditorLayout(
     val currentLanguageService = rememberUpdatedState(languageService)
     val currentTriggerChars = rememberUpdatedState(triggerChars)
 
+    val currentQuickSuggestions = rememberUpdatedState(options.quickSuggestions)
+    // What the list shows of a service's answer: sorted, and filtered by what was typed when the
+    // service is asked once per word rather than per keystroke.
+    val arrangeCompletions: (List<CompletionItem>, LanguageService) -> List<CompletionItem> = { all, service ->
+        val cursor = state.selection.start
+        CompletionFilter.arrange(all, filter = !service.completionsAreIncomplete) { item ->
+            val start = completionReplaceRange(state.document, cursor, item).first
+            if (start < cursor) state.document.subSequence(start, cursor).toString() else ""
+        }
+    }
+
     val handleSingleCharacterInsert: (Int, Char, Int) -> Unit = handler@{ insertedAt, typedChar, autoCloseLength ->
         val service = currentLanguageService.value
         if (service == null) {
             showCompletion = false
             return@handler
         }
+        // A commit character of the selected item accepts it, in front of the character just typed.
+        val committed = completionItems.getOrNull(completionSelected)
+            ?.takeIf { completionAtCaret && showCompletion && !it.isSnippet && typedChar in it.commitCharacters }
+        if (committed != null) {
+            var item = committed.shiftedForInsert(insertedAt, 1, absorbing = false)
+            if (autoCloseLength > 0) item = item.shiftedForInsert(insertedAt + 1, autoCloseLength, absorbing = false)
+            applyCompletion(state, item, cursor = insertedAt)
+            state.withSelectionReason(SelectionChangeReason.Edit) {
+                state.selection = TextRange((state.selection.end + 1).coerceAtMost(state.document.length))
+            }
+            showCompletion = false
+            completionItems = emptyList()
+            allCompletionItems = emptyList()
+            if (typedChar in currentTriggerChars.value) {
+                val at = state.selection.start
+                completionJob?.cancel()
+                completionJob = coroutineScope.launch {
+                    val items = service.completions(state.document.snapshot(), at)
+                    allCompletionItems = items
+                    completionItems = arrangeCompletions(items, service)
+                    showCompletion = completionItems.isNotEmpty()
+                }
+            }
+            return@handler
+        }
         val cursor = state.selection.start
+
         // The list stays up while a fresh request is in flight, so an item accepted in between
         // comes from a list addressed to the text before this keystroke. Re-address the ranges a
         // provider gave: the typed character joins the token being completed, and any auto-closed
         // character inserted right after the cursor must not be swallowed by it.
-        var carried = completionItems.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
-        if (autoCloseLength > 0) {
-            carried = carried.map { it.shiftedForInsert(insertedAt + 1, autoCloseLength, absorbing = false) }
+        fun carry(items: List<CompletionItem>): List<CompletionItem> {
+            var carried = items.map { it.shiftedForInsert(insertedAt, 1, absorbing = true) }
+            if (autoCloseLength > 0) {
+                carried = carried.map { it.shiftedForInsert(insertedAt + 1, autoCloseLength, absorbing = false) }
+            }
+            return carried
         }
+        val carried = carry(completionItems)
         when {
             typedChar in currentTriggerChars.value -> {
                 completionItems = carried
                 completionJob?.cancel()
                 completionJob = coroutineScope.launch {
                     val items = service.completions(state.document.snapshot(), cursor)
-                    completionItems = items
-                    showCompletion = items.isNotEmpty()
+                    allCompletionItems = items
+                    completionItems = arrangeCompletions(items, service)
+                    showCompletion = completionItems.isNotEmpty()
                 }
+            }
+
+            // The list asked once for this word: narrowed as the word grows, without asking again.
+            (typedChar.isLetterOrDigit() || typedChar == '_') && !service.completionsAreIncomplete && showCompletion &&
+                allCompletionItems.isNotEmpty() -> {
+                allCompletionItems = carry(allCompletionItems)
+                completionItems = arrangeCompletions(allCompletionItems, service)
+                if (completionItems.isEmpty()) showCompletion = false
             }
 
             typedChar.isLetterOrDigit() || typedChar == '_' -> {
                 completionItems = carried
                 completionJob?.cancel()
+                // Quick suggestions open the list on a letter in code; otherwise letters refresh it.
+                val open = currentQuickSuggestions.value && state.isCode(insertedAt)
                 completionJob = coroutineScope.launch {
                     val items = service.completions(state.document.snapshot(), cursor)
-                    completionItems = items
-                    if (items.isEmpty()) showCompletion = false
+                    allCompletionItems = items
+                    completionItems = arrangeCompletions(items, service)
+                    if (completionItems.isEmpty()) {
+                        showCompletion = false
+                    } else if (open) {
+                        showCompletion = true
+                    }
                 }
             }
 
@@ -629,8 +771,9 @@ fun CodeEditorLayout(
             completionJob?.cancel()
             completionJob = coroutineScope.launch {
                 val items = service.completions(state.document.snapshot(), cursor)
-                completionItems = items
-                showCompletion = items.isNotEmpty()
+                allCompletionItems = items
+                completionItems = arrangeCompletions(items, service)
+                showCompletion = completionItems.isNotEmpty()
             }
         }
     }
@@ -675,14 +818,137 @@ fun CodeEditorLayout(
         }
         true
     }
+    // Ctrl+F / Ctrl+H: a selection on one line becomes the query, as in VS Code.
+    val seedFind: (FindReplaceState) -> Unit = { find ->
+        val selection = state.selection
+        if (!selection.collapsed && selection.length <= FIND_SEED_LIMIT) {
+            val selected = state.document.subSequence(selection.min, selection.max).toString()
+            if ('\n' !in selected) find.query = selected
+        }
+    }
+    // F3 / Shift+F3: the next or previous match; with none to go to, the find panel.
+    val findNext: (Boolean) -> Boolean = next@{ forward ->
+        val find = findReplaceState ?: return@next false
+        val match = if (find.matches.isEmpty()) {
+            null
+        } else if (forward) {
+            find.nextMatch()
+        } else {
+            find.prevMatch()
+        }
+        if (match == null) {
+            seedFind(find)
+            find.show()
+        } else {
+            state.navigateTo(match.first, TextRange(match.first, match.last + 1))
+        }
+        true
+    }
+    // Alt+Enter: a selection at every match the find panel has found.
+    val selectAllMatches: () -> Boolean = all@{
+        val find = findReplaceState?.takeIf { it.visible } ?: return@all false
+        val matches = find.matches.takeIf { it.isNotEmpty() } ?: return@all false
+        state.withSelectionReason(SelectionChangeReason.Keyboard) {
+            state.setSelections(matches.map { TextRange(it.first, it.last + 1) })
+        }
+        true
+    }
+
+    // What CodeEditorState.execute hands the layout: the commands that need the view, the language
+    // service, the find panel or the folds.
+    val runUiCommand: (EditorCommand) -> Boolean = { command ->
+        when (command) {
+            EditorCommand.Format -> formatWith(false)
+
+            EditorCommand.FormatSelection -> formatWith(true)
+
+            EditorCommand.TriggerSuggest -> true.also { requestCompletions() }
+
+            EditorCommand.ShowHover -> true.also {
+                hoverJob?.cancel()
+                val at = state.selection.end
+                hoverJob = coroutineScope.launch { showHover(at) }
+            }
+
+            EditorCommand.ShowCodeActions -> showCodeActions()
+
+            EditorCommand.Rename -> true.also { state.requestRename() }
+
+            EditorCommand.GoToDefinition -> goToDefinition()
+
+            EditorCommand.FindReferences -> findReferences()
+
+            EditorCommand.NextProblem -> goToProblem(true)
+
+            EditorCommand.PreviousProblem -> goToProblem(false)
+
+            EditorCommand.ShowFind -> findReplaceState?.let {
+                seedFind(it)
+                it.show()
+            } != null
+
+            EditorCommand.ShowReplace -> findReplaceState?.let {
+                seedFind(it)
+                it.show(replace = true)
+            } != null
+
+            EditorCommand.GoToLine -> true.also { onRequestGoToLine() }
+
+            EditorCommand.FoldAll -> foldState?.foldAll() != null
+
+            EditorCommand.UnfoldAll -> foldState?.unfoldAll() != null
+
+            is EditorCommand.FoldLevel -> foldLevel(command.level)
+
+            is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
+
+            else -> false
+        }
+    }
+    val uiCommands = buildSet {
+        val editable = !options.readOnly
+        if (languageService != null) {
+            if (editable) {
+                addAll(listOf(EditorCommand.Format, EditorCommand.FormatSelection))
+                addAll(listOf(EditorCommand.TriggerSuggest, EditorCommand.ShowCodeActions))
+            }
+            addAll(listOf(EditorCommand.ShowHover, EditorCommand.GoToDefinition, EditorCommand.FindReferences))
+            if (editable && languageService.supportsRename) add(EditorCommand.Rename)
+        }
+        addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
+        if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
+        if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll))
+    }
+    DisposableEffect(state) {
+        onDispose {
+            state.uiCommandHandler = null
+            state.uiCommandsAvailable = emptySet()
+        }
+    }
     SideEffect {
-        state.indentUnit = if (options.insertSpaces) " ".repeat(options.tabSize) else "\t"
+        state.readOnly = options.readOnly
+        state.uiCommandHandler = runUiCommand
+        if (state.uiCommandsAvailable != uiCommands) state.uiCommandsAvailable = uiCommands
+        state.formattingOptions = FormattingOptions(options.tabSize, options.insertSpaces)
+        state.lineEndingOverride = options.eol
         controller.readOnly = options.readOnly
         controller.scope = coroutineScope
         controller.languageService = { currentLanguageService.value }
+        controller.touchMenuItems = touchMenuItems
+        controller.contextMenuItems = contextMenuItems
         controller.actions = EditorHostActions(
-            onFind = { findReplaceState?.show() },
-            onReplace = { findReplaceState?.show(replace = true) },
+            onFind = {
+                findReplaceState?.let {
+                    seedFind(it)
+                    it.show()
+                }
+            },
+            onReplace = {
+                findReplaceState?.let {
+                    seedFind(it)
+                    it.show(replace = true)
+                }
+            },
             onGoToLine = onRequestGoToLine,
             onEscape = {
                 // Consume Escape only when it actually dismissed something, so a host's own
@@ -698,7 +964,31 @@ fun CodeEditorLayout(
                         true
                     }
 
+                    hover != null -> {
+                        hover = null
+                        true
+                    }
+
+                    tooltipDiagnostic != null -> {
+                        tooltipDiagnostic = null
+                        true
+                    }
+
                     else -> false
+                }
+            },
+            onGoToProblem = goToProblem,
+            onQuickFix = showCodeActions,
+            onRename = { (languageService?.supportsRename == true).also { if (it) state.requestRename() } },
+            onFindNext = findNext,
+            onSelectAllMatches = selectAllMatches,
+            onTapText = { offset ->
+                val tapped = currentShownDiagnostics.value
+                    .filter { it.severity != DiagnosticSeverity.Hint && offset in it.range.first..it.range.last + 1 }
+                    .minByOrNull { it.severity }
+                if (tapped != null) {
+                    problemCounter = null
+                    tooltipDiagnostic = tapped
                 }
             },
             onTriggerSuggest = requestCompletions,
@@ -735,16 +1025,21 @@ fun CodeEditorLayout(
                 },
                 onMoveCursorLeft = {
                     val newPos = (state.selection.start - 1).coerceAtLeast(0)
-                    state.selection = TextRange(newPos)
+                    state.withSelectionReason(SelectionChangeReason.Keyboard) { state.selection = TextRange(newPos) }
                     showCompletion = false
                 },
                 onMoveCursorRight = {
                     val newPos = (state.selection.start + 1).coerceAtMost(state.document.length)
-                    state.selection = TextRange(newPos)
+                    state.withSelectionReason(SelectionChangeReason.Keyboard) { state.selection = TextRange(newPos) }
                     showCompletion = false
                 },
                 onUndo = { state.undo() },
                 onRedo = { state.redo() },
+                items = keyboardToolbarItems,
+                onAction = { action ->
+                    val command = action.command
+                    if (command != null) state.execute(command) else action.onClick()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 style = toolbarStyle,
                 alwaysVisible = keyboardToolbarPlacement != KeyboardToolbarPlacement.BottomHover,
@@ -809,12 +1104,17 @@ fun CodeEditorLayout(
         // ── Annotation tooltip (shown when gutter dot is tapped) ─────────────
         val tooltip = tooltipDiagnostic
         if (tooltip != null) {
+            val counter = problemCounter
             AnnotationTooltip(
-                message = tooltip.message,
+                message = if (counter != null) "${tooltip.message}  (${counter.first} of ${counter.second})" else tooltip.message,
                 severity = tooltip.severity,
                 onDismiss = { tooltipDiagnostic = null },
                 onQuickFix = if (tooltipCodeActions.isNotEmpty()) {
-                    { showCodeActionsMenu = true }
+                    {
+                        menuActions = tooltipCodeActions
+                        menuAnchor = tooltip.range.first
+                        showCodeActionsMenu = true
+                    }
                 } else {
                     null
                 },
@@ -872,9 +1172,10 @@ fun CodeEditorLayout(
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
                     onAnnotationTap = { lineIndex ->
+                        problemCounter = null
                         tooltipDiagnostic = shownDiagnostics
-                            .filter { it.lineNumber == lineIndex }
-                            .maxByOrNull { it.severity.ordinal }
+                            .filter { it.severity != DiagnosticSeverity.Hint && it.lineIn(state.document) == lineIndex }
+                            .minByOrNull { it.severity }
                     },
                 )
             } else {
@@ -915,7 +1216,22 @@ fun CodeEditorLayout(
                     EditorAnchoredPopup(
                         anchor = Rect(start.left, start.top, maxOf(end.right, start.left + 1f), start.bottom),
                         onDismiss = { hover = null },
-                    ) { HoverDocCard(shown.doc) }
+                    ) {
+                        EditorHoverCard(
+                            diagnostics = shown.diagnostics,
+                            doc = shown.doc,
+                            onQuickFix = if (shown.actions.isNotEmpty()) {
+                                {
+                                    hover = null
+                                    menuActions = shown.actions
+                                    menuAnchor = shown.start
+                                    showCodeActionsMenu = true
+                                }
+                            } else {
+                                null
+                            },
+                        )
+                    }
                 }
                 references?.let { shown ->
                     EditorAnchoredPopup(anchor = view.caretRect(shown.offset), onDismiss = { references = null }) {
@@ -929,15 +1245,14 @@ fun CodeEditorLayout(
                         )
                     }
                 }
-                val tooltipTarget = tooltipDiagnostic
-                if (showCodeActionsMenu && tooltipCodeActions.isNotEmpty()) {
+                if (showCodeActionsMenu && menuActions.isNotEmpty()) {
                     EditorAnchoredPopup(
-                        anchor = view.caretRect(tooltipTarget?.range?.first ?: state.selection.end),
+                        anchor = view.caretRect(if (menuAnchor >= 0) menuAnchor else state.selection.end),
                         focusable = true,
                         onDismiss = { showCodeActionsMenu = false },
                     ) {
                         CodeActionCard(
-                            actions = tooltipCodeActions,
+                            actions = menuActions,
                             onSelectAction = { action ->
                                 state.applyTextEdits(action.edits)
                                 showCodeActionsMenu = false
@@ -972,8 +1287,14 @@ fun CodeEditorLayout(
     }
 }
 
-/** Hover documentation on screen, for the symbol from [start] to [end]. */
-private class HoverShown(val doc: HoverDoc, val start: Int, val end: Int)
+/** Hover on screen: the [diagnostics] and the documentation of what is from [start] to [end], and quick fixes. */
+private class HoverShown(
+    val doc: HoverDoc?,
+    val start: Int,
+    val end: Int,
+    val diagnostics: List<Diagnostic> = emptyList(),
+    val actions: List<CodeAction> = emptyList(),
+)
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
 private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
@@ -983,8 +1304,7 @@ private const val HOVER_DELAY_MS = 500L
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
-private fun applyCompletion(state: CodeEditorState, item: CompletionItem) {
-    val cursor = state.selection.start
+private fun applyCompletion(state: CodeEditorState, item: CompletionItem, cursor: Int = state.selection.start) {
     val target = completionReplaceRange(state.document, cursor, item)
 
     if (item.isSnippet) {
@@ -1006,7 +1326,7 @@ private fun applyCompletion(state: CodeEditorState, item: CompletionItem) {
         .filter { it.range.first <= target.first }
         .sumOf { it.newText.length - (it.range.last - it.range.first + 1) }
     val caret = (target.first + shiftBefore + item.insertText.length).coerceIn(0, state.document.length)
-    state.selection = TextRange(caret)
+    state.withSelectionReason(SelectionChangeReason.Edit) { state.selection = TextRange(caret) }
 }
 
 /**
@@ -1060,6 +1380,9 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
 }
 
 // ── Signature help context ─────────────────────────────────────────────────────
+
+/** The longest selection Ctrl+F takes as its query, as VS Code's. */
+private const val FIND_SEED_LIMIT = 200
 
 /** Delay before the language service is asked for diagnostics, after the editor appears or an edit. */
 private const val DIAGNOSTICS_DEBOUNCE_MS = 500L

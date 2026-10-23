@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.CooperativePacer
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
@@ -47,21 +48,16 @@ object JsonLanguageService : BaseLanguageService() {
         else -> null
     }
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
-        if (lineIndex <= 0) return 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String {
+        if (lineIndex <= 0) return ""
         val prevLine = document.lineText(lineIndex - 1)
-        val prevIndent = prevLine.takeWhile { it.isWhitespace() }.length
         val trimmedPrev = prevLine.trim()
         val currLine = document.lineText(lineIndex).trim()
 
-        var indent = prevIndent
-        if (trimmedPrev.endsWith("{") || trimmedPrev.endsWith("[") || trimmedPrev.endsWith(":")) {
-            indent += 4
-        }
-        if (currLine.startsWith("}") || currLine.startsWith("]")) {
-            indent = (indent - 4).coerceAtLeast(0)
-        }
-        return indent
+        var levels = 0
+        if (trimmedPrev.endsWith("{") || trimmedPrev.endsWith("[") || trimmedPrev.endsWith(":")) levels++
+        if (currLine.startsWith("}") || currLine.startsWith("]")) levels--
+        return options.indentAfter(prevLine, levels)
     }
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
@@ -135,7 +131,7 @@ object JsonLanguageService : BaseLanguageService() {
         return open.lastOrNull()
     }
 
-    override suspend fun format(document: CodeDocument): String {
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
         val text = document.text
         if (text.isBlank()) return text
 
@@ -171,13 +167,13 @@ object JsonLanguageService : BaseLanguageService() {
                     sb.append(c)
                     depth++
                     sb.append('\n')
-                    sb.append(" ".repeat(depth * 4))
+                    sb.append(options.indentOf(depth * options.tabSize))
                 }
 
                 '}', ']' -> {
                     depth = (depth - 1).coerceAtLeast(0)
                     sb.append('\n')
-                    sb.append(" ".repeat(depth * 4))
+                    sb.append(options.indentOf(depth * options.tabSize))
                     sb.append(c)
                 }
 
@@ -188,7 +184,7 @@ object JsonLanguageService : BaseLanguageService() {
                 ',' -> {
                     sb.append(',')
                     sb.append('\n')
-                    sb.append(" ".repeat(depth * 4))
+                    sb.append(options.indentOf(depth * options.tabSize))
                 }
 
                 ' ', '\t', '\r', '\n' -> {
@@ -210,7 +206,6 @@ object JsonLanguageService : BaseLanguageService() {
             val (line, _) = document.offsetToLineCol(start)
             return Diagnostic(
                 range = start..end,
-                lineNumber = line,
                 message = message,
                 severity = DiagnosticSeverity.Error,
                 source = "json",

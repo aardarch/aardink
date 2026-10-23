@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.xml.HtmlLanguageService
 import com.aardarch.aardink.languages.internal.xml.XmlLanguageService
 import kotlinx.coroutines.test.runTest
@@ -110,6 +111,13 @@ class XmlLanguageServiceTest {
         val doc = CodeDocument("<a>\n<b>\n</b>\n</a>")
         val formatted = XmlLanguageService.format(doc)
         assertEquals("<a>\n    <b>\n    </b>\n</a>", formatted)
+    }
+
+    @Test
+    fun `format indents nested tags with tabs`() = runTest {
+        val doc = CodeDocument("<a>\n<b>\n</b>\n</a>")
+        val formatted = XmlLanguageService.format(doc, FormattingOptions(insertSpaces = false))
+        assertEquals("<a>\n\t<b>\n\t</b>\n</a>", formatted)
     }
 
     @Test

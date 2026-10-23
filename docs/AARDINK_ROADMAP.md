@@ -25,9 +25,9 @@ facts about the aardflex apps are as of the same day (Android on 0.6.2, aardflex
 
 | Version | State | Notes |
 | --- | --- | --- |
-| 0.6.3 | Done, not released | §4 items 1–5 in `[Unreleased]`: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
-| 0.7 | Planned | §5: host integration (events, commands, touch chrome), diagnostics model, completion engine, Kotlin language composition, the schema-driven XML service, Monaco theme data. API ledger in §11. |
-| 0.8 | Planned | §6: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
+| 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
+| 0.7 | Done, not released (branch `feat/0.7`, 2026-10-22) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
+| 0.8 | Planned; ledger drafted (§14), not approved | §6: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Planned | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
 | 0.10 | Planned | §8: more built-in languages, web provider parity, view options, find extras, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
@@ -82,13 +82,15 @@ facts about the aardflex apps are as of the same day (Android on 0.6.2, aardflex
 - Compose Multiplatform was pinned at 1.12.1; 1.12.2 came out on 2026-10-15. 1.13, which fixes
   the W-1 leak (about 320 KB per disposed web editor), is at `1.13.0-alpha02` (published
   2026-10-06), so the leak stays until 1.13 is stable. The 50-cycle heap test in `checklist.mjs` is still owed.
-- **CI's web performance gate has failed on `main` since Chrome 155** (first seen 2026-10-07).
-  The same 0.6.1 code measured key to idle p95 16 ms on Chrome 154.0.8037.92 and 232 ms on
-  155.0.8059.39; `setValueToIdleMs` went from 18 to about 85 ms and the longest task grew, while
-  key to change stayed at 3 ms. Reproduced locally on 155.0.8059.86 with the 0.6.2 code on
-  Compose 1.12.1 and 1.12.2 alike, so it is neither 0.6.3's changes nor the Compose bump. About
-  225 ms is the 150 ms tokenize debounce plus one long frame: start with a trace of the pass that
-  follows the debounce.
+- **Chrome 155 broke the web performance gate**, which failed on `main` from 2026-10-07 to
+  2026-10-21. The same 0.6.1 code measured key to idle p95 16 ms on Chrome 154.0.8037.92 and
+  232 ms on 155.0.8059.39; `setValueToIdleMs` went from 18 to about 85 ms and the longest task
+  grew, while key to change stayed at 3 ms. It reproduces locally on 155.0.8059.86 with the 0.6.2
+  code on Compose 1.12.1 and 1.12.2 alike, so it is neither 0.6.3's changes nor the Compose bump.
+  About 225 ms is the 150 ms tokenize debounce plus one long frame. Chrome fixed it upstream:
+  CI's 156.0.8078.47 measures 15 ms with the same code (2026-10-21, the v0.6.3 run included), so
+  the gate is unchanged; a machine still on Chrome 155 fails it locally until Chrome updates. If
+  key to idle comes back on a later Chrome, trace the pass that follows the debounce.
 - The manual Gboard, Samsung, TalkBack and NVDA passes have not been run.
 - TypeScript regexp literals are not tokenized.
 - The KDoc of `AardinkWeb.updateOptions` says a language change starts a fresh undo history; the
@@ -572,6 +574,33 @@ Every line needs approval before it is written, as in the 0.6 plan's §5. Run
 | --- | --- | --- |
 | `LspLanguageService.format`, `formatRange` | honour `FormattingOptions` | §5.10 |
 
+### 11.1 As built
+
+The 0.7 work follows the ledger above, with these differences and additions, each forced by the
+design or found while building it:
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `Diagnostic.lineNumber` a computed property | Removed; `Diagnostic.lineIn(document)`, and the 0.6 constructor kept, deprecated, ignoring the line | A line cannot be computed from a range without the document; the deprecated constructor keeps 0.6 callers compiling |
+| `smartIndent` returns `String` | `smartIndent(document, lineIndex, options: FormattingOptions): String` | Tabs or spaces need the editor's options; the same `FormattingOptions` as `format` |
+| `FormattingOptions(tabSize, insertSpaces)` | With `indentUnit`, `indentOf`, `indentWidth`, `indentAfter` | So a service turns columns into the editor's whitespace without its own code |
+| `EditorThemeParser.parseMonaco` | `EditorThemeParser.fromMonacoJson` | Named as the existing `fromJson`. A rule's `background` is still not drawn: `EditorTheme` has no field for it |
+| `KeyboardToolbarItem.Action` | Sealed `KeyboardToolbarItem` with `Character` and `Action`; `CodeEditorLayout(keyboardToolbarItems)`; `KeyboardToolbarRow(items, onAction)` | The items need a way into the layout; a host also adds characters (aardflex's pipe, colon and dollar) |
+| Commands as pending requests | `execute` hands UI commands to a handler the layout installs while it shows the state | A synchronous result for `execute`'s return value; the same lifetime rule |
+| `EditorCommand` members | Also `Reveal(offset, center)` | The web's `revealLine` and `revealRange` reach the view only through `:editor`'s public API |
+| Completions filtered by the editor always | Ordered always; filtered only for a service with `completionsAreIncomplete = false` | The web app showed a word-start filter dropping matches a service had chosen; filtering is opt-in with the flag that also stops the re-asking |
+| `quickSuggestions` | Off by default | 0.6's behaviour, so an upgrade does not change how phones open the list |
+| `WebLanguageService` drops its filter | Keeps it for items with `filterText`, as 0.6 documented; `incomplete: false` turns on the editor's | The npm contract says items without `filterText` are not filtered |
+| Diagnostic dots on every line a range spans | One dot, on its first line | As VS Code; a range over a whole file would otherwise fill the gutter |
+| — | `XmlSchema.Element`, `.Attribute`, `.Value`; `XmlSchemaLanguageService(schema, base)` | The schema's model, named under it |
+| — | `LspDiagnostic.codeDescription`, `tags`, `relatedInformation`; `LspCodeDescription`, `LspDiagnosticRelatedInformation`; `LspCompletionItem.commitCharacters` | The LSP fields the new `Diagnostic` and `CompletionItem` fields come from |
+| — | `WebPosition`; `WebDiagnostic.endLineNumber`, `source`, `code`, `codeHref`, `tags`, `relatedInformation`; `WebRelatedInformation`; `WebEditorOptions.quickSuggestions` | The web shapes of the approved web lines |
+| — | `AardinkWeb.onSelectionChange`, `onFocusChange`, `getPosition(Json)`, `setPosition`, `trigger`, `canTrigger`, `actionLabel`, `addAction`, `removeAction`, `addCommand`, `revealLine`, `revealPosition`; `onContentChange`'s callback takes the changes | The Kotlin side of the approved npm lines |
+
+Also changed without new API: the gutter dot shows a line's most severe diagnostic (it showed the
+least); Escape closes the hover and the diagnostic banner; the find field selects its query when
+the panel opens; the built-in XML completions come from a default `XmlSchema`.
+
 ## 12. Downstream follow-ups (in the aardflex repositories)
 
 Found during the audits; none of them is Aardink's to fix.
@@ -589,6 +618,53 @@ Found during the audits; none of them is Aardink's to fix.
   `diagnostics.ts`.
 - **aardflex specs:** `specs/index.md` still lists the syntax highlighter as in progress and the
   Monaco web editor as built; `specs/roadmap.md` row 0.6 still says "regex-based highlighting".
+
+## 14. API ledger for 0.8 (draft, for approval)
+
+Drafted from §6 once 0.7 was built. Nothing here is written until it is approved, line by line
+or as a whole, as 0.7's was.
+
+### `:editor`, new
+
+| Symbol | Item |
+| --- | --- |
+| `DocumentSymbol(name, kind, range, selectionRange, detail, children)`; `SymbolKind` (LSP's kinds) | §6.2 |
+| `LanguageService.documentSymbols(document): List<DocumentSymbol>`, default empty | §6.2 |
+| `CodeEditorState.symbols` (snapshot state), `symbolPathAt(offset): List<DocumentSymbol>` | §6.2: the caret-to-preview mapping |
+| `EditorCommand.GoToSymbol` (Ctrl+Shift+O); `EditorOptions.breadcrumbs` | §6.2 |
+| `Decoration(range, style)`; `DecorationStyle(background, underline, border, wholeLine, gutterColor, minimapColor, overviewRulerColor, hoverMessage)`; `CodeEditorState.setDecorations(owner, list)`, `decorations(owner)`, `clearDecorations(owner)` | §6.3 |
+| `EditorOptions.overviewRuler`; `EditorTheme.overviewRulerColors` or keys read by the parser | §6.4 |
+| `LanguageService.documentHighlights`, `selectionRanges`, `linkedEditingRanges`, `documentLinks`; `DocumentLink(range, target)`; `CodeEditorLayout(onOpenLink)` | §6.5 |
+| `EditorOptions.occurrencesHighlight`, `linkedEditing`; `EditorCommand.ExpandSelection`, `ShrinkSelection` | §6.5 |
+| `LanguageService.documentColors`, `colorPresentations`; `ColorInfo(range, color)`; `EditorOptions.colorDecorators` | §6.6 |
+| `FoldRange.kind`, `FoldKind`; `EditorCommand.Fold`, `Unfold` at the caret | §6.7 |
+| `EditorKeyBinding(chord, command)`, a public `KeyChord`; `EditorOptions.keyBindings` (overrides and additions) | §6.8 |
+| `EditorOptions.fontSize`, `lineHeight`, `pinchToZoom`, `fontLigatures`; `CodeEditorLayout(onFontSizeChange)` | §6.9 |
+| `EditorTheme.fromColorScheme(ColorScheme, dark)`; `CodeBlock(text, tokenizer, modifier)` | §6.9 |
+
+### `:languages`, new
+
+| Symbol | Item |
+| --- | --- |
+| Document symbols and links in the built-in XML, HTML, JSON, TOML, Kotlin and Markdown services, and in `XmlSchemaLanguageService` | §6.2, §6.5 |
+| Colours for `#rgb`-style values, and `XmlSchema.Attribute.type == "color"` in `XmlSchemaLanguageService` | §6.6 |
+| `FoldingRegionMarkers` on `LanguageDefinition`; an indentation folding provider | §6.7 |
+
+### `:editor-web` and the npm package, new
+
+| Symbol | Item |
+| --- | --- |
+| `deltaDecorations`, `createDecorationsCollection` | §6.3 |
+| `getVisibleRanges`, `onDidScrollChange`, `getScrollTop`, `setScrollTop`, `layout` | §6.10 |
+| `setDiagnostics(list, owner)`, Monaco's `setModelMarkers` with several owners | §6.10 |
+| `provideDocumentSymbols`, `provideDocumentColors` in `registerLanguage`'s providers | §6.2, §6.6 |
+
+### Breaking
+
+| Symbol | Change | Item |
+| --- | --- | --- |
+| `FoldRange` | gains `kind` (data class signature) | §6.7 |
+| `EditorOptions` | gains the fields above (data class signature) | §6.3 to §6.9 |
 
 ## 13. Verification
 

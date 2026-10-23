@@ -117,13 +117,40 @@ private fun CompletionChip(item: CompletionItem, onClick: () -> Unit) {
 internal fun CompletionKindBadge(kind: CompletionKind) {
     val (badgeLabel, badgeColor) = when (kind) {
         CompletionKind.Element -> "E" to MaterialTheme.colorScheme.primary
+
         CompletionKind.Attribute -> "A" to MaterialTheme.colorScheme.secondary
+
         CompletionKind.Value -> "V" to MaterialTheme.colorScheme.tertiary
+
         CompletionKind.Snippet -> "S" to MaterialTheme.colorScheme.error
+
         CompletionKind.Module -> "M" to MaterialTheme.colorScheme.primary
+
         CompletionKind.Property -> "P" to MaterialTheme.colorScheme.secondary
+
         CompletionKind.Transform -> "T" to MaterialTheme.colorScheme.tertiary
+
         CompletionKind.ColorRef -> "C" to MaterialTheme.colorScheme.error
+
+        CompletionKind.Method, CompletionKind.Function, CompletionKind.Constructor -> "ƒ" to MaterialTheme.colorScheme.tertiary
+
+        CompletionKind.Field, CompletionKind.Variable, CompletionKind.Constant -> "v" to MaterialTheme.colorScheme.secondary
+
+        CompletionKind.Class, CompletionKind.Struct, CompletionKind.Interface, CompletionKind.TypeParameter ->
+            "C" to
+                MaterialTheme.colorScheme.primary
+
+        CompletionKind.Enum, CompletionKind.EnumMember -> "E" to MaterialTheme.colorScheme.secondary
+
+        CompletionKind.Keyword, CompletionKind.Operator -> "K" to MaterialTheme.colorScheme.primary
+
+        CompletionKind.Color -> "#" to MaterialTheme.colorScheme.error
+
+        CompletionKind.File, CompletionKind.Folder, CompletionKind.Reference -> "F" to MaterialTheme.colorScheme.tertiary
+
+        CompletionKind.Text, CompletionKind.Unit, CompletionKind.Event, CompletionKind.User, CompletionKind.Issue ->
+            "·" to
+                MaterialTheme.colorScheme.outline
     }
     Surface(
         shape = RoundedCornerShape(3.dp),

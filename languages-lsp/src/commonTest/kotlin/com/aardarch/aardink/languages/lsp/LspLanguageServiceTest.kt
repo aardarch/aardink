@@ -19,6 +19,8 @@ import com.aardarch.aardink.core.CodeActionKind
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.TextEdit
 import kotlinx.coroutines.CompletableDeferred
@@ -183,7 +185,7 @@ class LspLanguageServiceTest {
         assertEquals(3, diagnostics.size)
 
         assertEquals(14..14, diagnostics[0].range)
-        assertEquals(1, diagnostics[0].lineNumber)
+        assertEquals(1, diagnostics[0].lineIn(doc))
         assertEquals("unused", diagnostics[0].message)
         assertEquals(DiagnosticSeverity.Warning, diagnostics[0].severity)
         assertEquals("kotlin", diagnostics[0].source)
@@ -193,7 +195,7 @@ class LspLanguageServiceTest {
         assertEquals("kotlinc", diagnostics[1].source)
 
         assertEquals(9..9, diagnostics[2].range, "zero-width diagnostics still cover one character")
-        assertEquals(DiagnosticSeverity.Info, diagnostics[2].severity)
+        assertEquals(DiagnosticSeverity.Hint, diagnostics[2].severity)
     }
 
     @Test
@@ -257,12 +259,32 @@ class LspLanguageServiceTest {
         assertEquals("println(${'$'}1)${'$'}0", items[0].insertText, "a snippet is kept for the editor to fill in")
         assertTrue(items[0].isSnippet)
         assertFalse(items[1].isSnippet)
-        assertEquals(CompletionKind.Element, items[0].kind)
-        assertEquals("fun println()", items[0].documentation)
+        assertEquals(CompletionKind.Function, items[0].kind)
+        assertEquals("fun println()", items[0].detail)
+        assertEquals(null, items[0].documentation)
+        assertFalse(service.completionsAreIncomplete, "a plain array is a complete list")
+        assertTrue(items[0].sortPriority < items[1].sortPriority, "ordered by sortText, else label")
         assertEquals("size", items[1].label)
         assertEquals(CompletionKind.Property, items[1].kind)
         assertEquals("Size doc", items[1].documentation)
         assertEquals("sz", items[1].filterText)
+    }
+
+    @Test
+    fun `diagnostics carry the code, its description, tags and related information`() = withServer("val a = 1\nval b = 2") {
+        publish(
+            URI,
+            """[{"range":${range(1, 4, 1, 5)},"message":"unused","severity":2,"code":"W100",
+              "codeDescription":{"href":"https://example.com/W100"},"tags":[1,2],
+              "relatedInformation":[{"location":{"uri":"$URI","range":${range(0, 4, 0, 5)}},"message":"declared here"}]}]""",
+        )
+        val diagnostic = service.diagnostics(doc).single()
+        assertEquals("W100", diagnostic.code)
+        assertEquals("https://example.com/W100", diagnostic.codeDescription?.href)
+        assertEquals(setOf(DiagnosticTag.Unnecessary, DiagnosticTag.Deprecated), diagnostic.tags)
+        val related = diagnostic.relatedInformation.single()
+        assertEquals("declared here", related.message)
+        assertEquals(4..4, related.location.range)
     }
 
     @Test
@@ -398,6 +420,15 @@ class LspLanguageServiceTest {
         assertEquals(4, sent.params["options"]!!.jsonObject["tabSize"]!!.jsonPrimitive.int)
         assertEquals("// header\nval x = 1\nval y = 2", formatted)
         assertEquals("val x=1\nval y=2", doc.text, "format must not mutate the document")
+    }
+
+    @Test
+    fun `format sends the editor's tab size and tabs`() = withServer("val x=1") {
+        val server = async { respond("textDocument/formatting", "[]") }
+        service.format(doc, FormattingOptions(tabSize = 2, insertSpaces = false))
+        val options = server.await().params["options"]!!.jsonObject
+        assertEquals(2, options["tabSize"]!!.jsonPrimitive.int)
+        assertEquals("false", options["insertSpaces"]!!.jsonPrimitive.content)
     }
 
     @Test

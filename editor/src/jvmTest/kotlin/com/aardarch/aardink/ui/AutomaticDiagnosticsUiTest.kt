@@ -35,6 +35,7 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import kotlinx.coroutines.CompletableDeferred
@@ -74,17 +75,17 @@ class AutomaticDiagnosticsUiTest {
 
         override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = null
 
-        override suspend fun format(document: CodeDocument): String = document.text
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
-        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 
     /** An error on the first [word] in [text]. */
     private fun flag(text: String, word: String): Diagnostic {
         val start = text.indexOf(word)
-        return Diagnostic(start until start + word.length, text.take(start).count { it == '\n' }, "no $word here", DiagnosticSeverity.Error)
+        return Diagnostic(start until start + word.length, "no $word here", DiagnosticSeverity.Error)
     }
 
     private fun ComposeUiTest.show(

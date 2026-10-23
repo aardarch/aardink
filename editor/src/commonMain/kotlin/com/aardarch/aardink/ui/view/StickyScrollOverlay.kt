@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
 import kotlin.math.min
@@ -83,7 +84,7 @@ internal fun EditorView.openStickyLine(sticky: StickyLine) {
     scroll.scrollToY(contentTop(sticky.line, metrics) - sticky.top.coerceAtLeast(0f))
     val document = state.document
     val caret = TextNavigator.smartHome(document, document.lineStart(sticky.line))
-    state.replaceSelections(SelectionSet.single(TextRange(caret)))
+    state.withSelectionReason(SelectionChangeReason.Pointer) { state.replaceSelections(SelectionSet.single(TextRange(caret))) }
 }
 
 /**

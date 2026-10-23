@@ -233,4 +233,32 @@ class EditorThemeParserTest {
             theme?.gutterBackground,
         )
     }
+
+    @Test
+    fun `Monaco's defineTheme data reads as a theme`() {
+        val theme = EditorThemeParser.fromMonacoJson(
+            """{
+              "base": "vs-dark",
+              "inherit": true,
+              "rules": [
+                { "token": "tag.aardflex", "foreground": "C586C0", "fontStyle": "bold" },
+                { "token": "comment", "foreground": "#6A9955", "fontStyle": "italic", "background": "000000" },
+                { "token": "", "foreground": "D4D4D4" }
+              ],
+              "colors": { "editor.background": "#1E1E2E" }
+            }""",
+        )!!
+        assertEquals(Color(0xFF1E1E2E), theme.background)
+        assertEquals(Color(0xFFC586C0), theme.tokenColors[NamedTokenType("tag.aardflex")])
+        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.aardflex")])
+        assertEquals(Color(0xFF6A9955), theme.tokenColors[TokenType.Comment])
+        assertEquals(Color(0xFFD4D4D4), theme.tokenColors[TokenType.Default], "the empty token sets the default text colour")
+    }
+
+    @Test
+    fun `a Monaco light base fills in from the light theme`() {
+        val theme = EditorThemeParser.fromMonacoJson("""{ "base": "vs", "rules": [] }""")!!
+        assertEquals(EditorThemes.VsCodeLight.background, theme.background)
+        assertNull(EditorThemeParser.fromMonacoJson("not json"))
+    }
 }

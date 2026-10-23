@@ -44,12 +44,18 @@ import com.aardarch.aardink.core.edit.applyChanges
 import com.aardarch.aardink.core.edit.mapOffset
 import com.aardarch.aardink.core.edit.reapply
 import com.aardarch.aardink.core.edit.revert
+import com.aardarch.aardink.core.text.DocumentChangeListener
 import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
@@ -107,10 +113,23 @@ class CodeEditorState(
     }
 
     /**
-     * What Tab inserts and one indentation step is: [EditorOptions.tabSize][com.aardarch.aardink.ui.EditorOptions]
-     * spaces, or a tab without `insertSpaces`. Set by the layout from its options.
+     * How the editor indents, from [EditorOptions.tabSize][com.aardarch.aardink.ui.EditorOptions]
+     * and `insertSpaces`; set by the layout from its options, and passed to the language service
+     * for Enter and formatting.
      */
-    internal var indentUnit: String = LineCommands.INDENT
+    internal var formattingOptions: FormattingOptions = FormattingOptions()
+
+    /** What Tab inserts and one indentation step is: `tabSize` spaces, or a tab without `insertSpaces`. */
+    internal val indentUnit: String
+        get() = formattingOptions.indentUnit
+
+    /** [EditorOptions.eol][com.aardarch.aardink.ui.EditorOptions.eol], set by the layout. */
+    internal var lineEndingOverride: LineEnding? = null
+
+    /** The line ending typing and pasting insert: the option's, or the document's own. */
+    internal val lineEnding: LineEnding
+        get() = lineEndingOverride ?: document.eol
+
     private val history = UndoHistory()
 
     // ── Snapshot-backed observable state ──────────────────────────────────────
@@ -165,8 +184,10 @@ class CodeEditorState(
     internal fun currentSelections(): SelectionSet = selectionSet
 
     private fun applySelections(set: SelectionSet) {
+        val changed = set != selectionSet
         selectionSet = set
         leaveSnippetIfOutside()
+        if (changed) emitSelectionChange(selectionReasonContext ?: SelectionChangeReason.Api)
     }
 
     /** Whether [undo] would change anything. Snapshot state: a toolbar button can observe it. */
@@ -270,6 +291,182 @@ class CodeEditorState(
         revalidations++
     }
 
+    // ── Change events ─────────────────────────────────────────────────────────
+
+    /**
+     * Whether the editor's text has the keyboard focus. Snapshot state: a toolbar can observe it.
+     * Set by [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout]; false while no layout
+     * shows this state.
+     */
+    var isFocused by mutableStateOf(false)
+        internal set
+
+    private var contentListeners: List<(List<ContentChange>) -> Unit> = emptyList()
+    private var selectionListeners: List<(List<TextRange>, SelectionChangeReason) -> Unit> = emptyList()
+
+    /** What the document reported since the last time the listeners were told, while any listen. */
+    private val pendingContentChanges = ArrayList<ContentChange>()
+
+    private val contentRecorder = DocumentChangeListener { change ->
+        if (contentListeners.isEmpty()) return@DocumentChangeListener
+        val inserted = if (change.isReset) {
+            document.text
+        } else {
+            document.subSequence(
+                change.offset,
+                change.offset + change.insertedLength,
+            ).toString()
+        }
+        pendingContentChanges += ContentChange(
+            offset = change.offset,
+            deletedLength = change.deletedLength,
+            insertedText = inserted,
+            startLine = change.startLine,
+            startColumn = change.startColumn,
+            oldEndLine = change.startLine + change.removedLines,
+            oldEndColumn = change.oldTailColumn,
+            version = change.version,
+            kind = EditChangeKind.Edit,
+            isReset = change.isReset,
+        )
+    }
+
+    /**
+     * Calls [listener] after every change to the text with the [ContentChange]s that made it, in
+     * order, once the state is consistent again: the selections are placed and [textVersion],
+     * [canUndo] and [lastChangeKind] are up to date. One edit at several carets, a Replace All or
+     * an undo step is one call. It runs on the thread that edited, before the editor redraws.
+     *
+     * Do not edit the document from inside [listener]. A change made straight through the public
+     * [CodeDocument] methods, bypassing this state, is reported with the next edit the state makes.
+     */
+    fun addContentListener(listener: (List<ContentChange>) -> Unit) {
+        contentListeners = contentListeners + listener
+    }
+
+    /** Stops calling [listener], added with [addContentListener]. */
+    fun removeContentListener(listener: (List<ContentChange>) -> Unit) {
+        contentListeners = contentListeners - listener
+        if (contentListeners.isEmpty()) pendingContentChanges.clear()
+    }
+
+    /**
+     * The changes [addContentListener] reports, as a cold [Flow]: each collector listens while it
+     * collects, and none of the changes is dropped however slowly it collects.
+     */
+    fun contentChanges(): Flow<List<ContentChange>> = callbackFlow {
+        val listener: (List<ContentChange>) -> Unit = { trySend(it) }
+        addContentListener(listener)
+        awaitClose { removeContentListener(listener) }
+    }.buffer(Channel.UNLIMITED)
+
+    /**
+     * Calls [listener] whenever the selections change, with all of them (primary first, as
+     * [selections]) and why. Not called when they are set to what they already were.
+     */
+    fun addSelectionListener(listener: (List<TextRange>, SelectionChangeReason) -> Unit) {
+        selectionListeners = selectionListeners + listener
+    }
+
+    /** Stops calling [listener], added with [addSelectionListener]. */
+    fun removeSelectionListener(listener: (List<TextRange>, SelectionChangeReason) -> Unit) {
+        selectionListeners = selectionListeners - listener
+    }
+
+    /**
+     * The reason selections set while it is not null are reported with; the input layer sets it
+     * around a key, a pointer gesture or an input method's edit.
+     */
+    internal var selectionReasonContext: SelectionChangeReason? = null
+
+    /** Runs [block] with selection changes it makes reported as [reason]. */
+    internal fun <T> withSelectionReason(reason: SelectionChangeReason, block: () -> T): T {
+        val previous = selectionReasonContext
+        selectionReasonContext = reason
+        try {
+            return block()
+        } finally {
+            selectionReasonContext = previous
+        }
+    }
+
+    private fun emitContentChanges(kind: EditChangeKind) {
+        if (pendingContentChanges.isEmpty()) return
+        val changes = pendingContentChanges.map { if (it.kind == kind) it else it.copy(kind = kind) }
+        pendingContentChanges.clear()
+        for (listener in contentListeners) listener(changes)
+    }
+
+    private fun emitSelectionChange(reason: SelectionChangeReason) {
+        if (selectionListeners.isEmpty()) return
+        val ranges = selectionSet.ranges
+        for (listener in selectionListeners) listener(ranges, reason)
+    }
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    /** Read-only, as the layout's options say: the editing commands do nothing then, as their keys do. */
+    internal var readOnly by mutableStateOf(false)
+
+    /** Runs the commands that need a layout; set by the layout showing this state, null while none does. */
+    internal var uiCommandHandler: ((EditorCommand) -> Boolean)? = null
+
+    /** The layout's commands it can run now (its language service formats, its folds fold...); set by it. */
+    internal var uiCommandsAvailable by mutableStateOf<Set<EditorCommand>>(emptySet())
+
+    /**
+     * The commands without parameters that [execute] would run now, for a host's toolbar or menu to
+     * enable its buttons by. Snapshot state: reading it in composition recomposes when it changes
+     * (after an undo, when the language service changes). [EditorCommand.InsertSnippet],
+     * [EditorCommand.FoldLevel] and [EditorCommand.Reveal] are not listed; ask [canExecute].
+     */
+    val availableCommands: Set<EditorCommand>
+        get() = buildSet {
+            if (!readOnly) {
+                if (canUndo) add(EditorCommand.Undo)
+                if (canRedo) add(EditorCommand.Redo)
+                if (tokenizer.commentSyntax != null) add(EditorCommand.ToggleComment)
+            }
+            add(EditorCommand.SelectAllOccurrences)
+            addAll(uiCommandsAvailable)
+        }
+
+    /** Whether [execute] would run [command] now. */
+    fun canExecute(command: EditorCommand): Boolean = when (command) {
+        is EditorCommand.InsertSnippet -> !readOnly
+        is EditorCommand.FoldLevel -> command.level >= 1 && EditorCommand.FoldAll in uiCommandsAvailable
+        is EditorCommand.Reveal -> uiCommandHandler != null
+        else -> command in availableCommands
+    }
+
+    /**
+     * Runs [command] as its key, menu item or button would, and returns whether it did anything.
+     * Text commands work on this state alone; the others go to the
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing it, and return false while
+     * none does. Commands that ask the language service (format, hover, quick fixes, definition)
+     * return once they have asked; the answer arrives a moment later.
+     */
+    fun execute(command: EditorCommand): Boolean {
+        if (!canExecute(command)) return false
+        return when (command) {
+            EditorCommand.Undo -> undo() != null
+
+            EditorCommand.Redo -> redo() != null
+
+            EditorCommand.ToggleComment -> toggleComment()
+
+            EditorCommand.SelectAllOccurrences -> selectAllOccurrences()
+
+            is EditorCommand.InsertSnippet -> {
+                val primary = selection
+                insertSnippet(primary.min until primary.max, command.snippet)
+                true
+            }
+
+            else -> uiCommandHandler?.invoke(command) ?: false
+        }
+    }
+
     // ── Convenience reads ─────────────────────────────────────────────────────
 
     /**
@@ -301,11 +498,13 @@ class CodeEditorState(
         // A new document, not an edit: highlight it with a full pass.
         lastTokenizerResult = null
         history.clear()
-        placeSelections(SelectionSet.caret(0))
+        val moved = placeSelections(SelectionSet.caret(0))
         lastChangeKind = EditChangeKind.Flush
         refreshHistoryState()
         textVersion++
         scheduleTokenization(debounce = false)
+        emitContentChanges(EditChangeKind.Flush)
+        if (moved) emitSelectionChange(SelectionChangeReason.Flush)
     }
 
     /**
@@ -403,11 +602,13 @@ class CodeEditorState(
 
     private fun afterHistoryStep(selections: SelectionSet, kind: EditChangeKind) {
         endSnippet()
-        placeSelections(selections.clampedTo(document.length))
+        val moved = placeSelections(selections.clampedTo(document.length))
         lastChangeKind = kind
         refreshHistoryState()
         textVersion++
         scheduleTokenization()
+        emitContentChanges(kind)
+        if (moved) emitSelectionChange(if (kind == EditChangeKind.Redo) SelectionChangeReason.Redo else SelectionChangeReason.Undo)
     }
 
     // -- Line commands --------------------------------------------------------
@@ -524,11 +725,13 @@ class CodeEditorState(
 
     /** What every edit ends with: the selections placed, history state and versions updated, tokenization scheduled. */
     private fun afterEdit(selections: SelectionSet, external: Boolean) {
-        placeSelections(selections, external)
+        val moved = placeSelections(selections, external)
         lastChangeKind = EditChangeKind.Edit
         refreshHistoryState()
         textVersion++
         scheduleTokenization()
+        emitContentChanges(EditChangeKind.Edit)
+        if (moved) emitSelectionChange(SelectionChangeReason.Edit)
     }
 
     // ── Snippets ──────────────────────────────────────────────────────────────
@@ -659,7 +862,8 @@ class CodeEditorState(
         composing: Boolean = false,
         service: LanguageService? = null,
     ): TypedInput? {
-        val normalized = TypingRules.normalizeLineEndings(text)
+        val eol = lineEnding
+        val normalized = TypingRules.withLineEnding(TypingRules.normalizeLineEndings(text), eol)
         val from = start.coerceIn(0, document.length)
         val to = end.coerceIn(from, document.length)
         val before = currentSelections()
@@ -692,7 +896,9 @@ class CodeEditorState(
             applySelections(after)
             return null
         }
-        val typed = normalized.singleOrNull()?.takeIf { changes.all { it.start == it.end } }
+        // Enter in a CR LF document inserts two characters, and is still a typed line break.
+        val typedChar = if (normalized == eol.text) '\n' else normalized.singleOrNull()
+        val typed = typedChar?.takeIf { changes.all { it.start == it.end } }
         var autoCloseLength = 0
         if (typed != null && service != null && !composing) {
             // The follow-up at each caret the character was typed at, in document order; every
@@ -704,7 +910,7 @@ class CodeEditorState(
                 val position = caret.end + shift
                 placed[index] = TextRange(position)
                 if (position == 0 || document[position - 1] != typed) continue
-                val followUp = TypingRules.afterTyping(document, service, position - 1, typed) ?: continue
+                val followUp = TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions) ?: continue
                 applied += document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
                 placed[index] = TextRange(followUp.caret)
                 shift += followUp.text.length
@@ -838,7 +1044,7 @@ class CodeEditorState(
 
     /** Pastes [text] at every selection; see [EditingCommands.paste] for [wholeLines] and spreading lines. */
     internal fun paste(text: String, wholeLines: Boolean = false): Boolean {
-        val edit = EditingCommands.paste(document, currentSelections(), text, wholeLines) ?: return false
+        val edit = EditingCommands.paste(document, currentSelections(), text, wholeLines, lineEnding) ?: return false
         return applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }
     }
 
@@ -908,6 +1114,7 @@ class CodeEditorState(
     internal var visibleLines: IntRange? = null
 
     init {
+        document.addChangeListener(contentRecorder)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)
@@ -1000,10 +1207,12 @@ class CodeEditorState(
      * Places the selections after a change to the text, and bumps [externalEditVersion] when the
      * change did not come from typing ([external]).
      */
-    private fun placeSelections(selections: SelectionSet, external: Boolean = true) {
+    private fun placeSelections(selections: SelectionSet, external: Boolean = true): Boolean {
+        val changed = selections != selectionSet
         selectionSet = selections
         leaveSnippetIfOutside()
         if (external) externalEditVersion++
+        return changed
     }
 }
 

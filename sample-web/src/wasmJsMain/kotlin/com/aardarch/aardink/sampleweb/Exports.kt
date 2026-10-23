@@ -127,9 +127,52 @@ fun aardinkRegisterTheme(name: String, themeJson: String): String = try {
     e.message ?: "not a theme"
 }
 
-/** Full text, the text's version and what the change was ("edit", "undo", "redo", "flush"), after each change. */
+/**
+ * Full text, the text's version, what the change was ("edit", "undo", "redo", "flush") and a JSON
+ * array of Monaco-shaped changes since the last call, after each change.
+ */
 @JsExport
-fun aardinkOnContentChange(id: Int, callback: (String, Int, String) -> Unit) = AardinkWeb.onContentChange(handle(id), callback)
+fun aardinkOnContentChange(id: Int, callback: (String, Int, String, String) -> Unit) = AardinkWeb.onContentChange(handle(id), callback)
+
+/** JSON `{ selections, reason, source }` whenever the selections change. */
+@JsExport
+fun aardinkOnSelectionChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onSelectionChange(handle(id), callback)
+
+/** True when the text gains the keyboard focus, false when it loses it. */
+@JsExport fun aardinkOnFocusChange(id: Int, callback: (Boolean) -> Unit) = AardinkWeb.onFocusChange(handle(id), callback)
+
+/** The primary caret as JSON `{ lineNumber, column }`, 1-based. */
+@JsExport fun aardinkGetPosition(id: Int): String = AardinkWeb.getPositionJson(handle(id))
+
+/** One caret at a 1-based position, without scrolling. */
+@JsExport fun aardinkSetPosition(id: Int, line: Int, column: Int) = AardinkWeb.setPosition(handle(id), line, column)
+
+/** Monaco's trigger: an action by its id, the host's or the editor's own; [payloadJson] is JSON or "null". */
+@JsExport
+fun aardinkTrigger(id: Int, actionId: String, payloadJson: String): Boolean = AardinkWeb.trigger(handle(id), actionId, payloadJson)
+
+@JsExport fun aardinkCanTrigger(id: Int, actionId: String): Boolean = AardinkWeb.canTrigger(handle(id), actionId)
+
+/** An action's label; "" for an id with none. */
+@JsExport fun aardinkActionLabel(id: Int, actionId: String): String = AardinkWeb.actionLabel(handle(id), actionId).orEmpty()
+
+/** Monaco's addAction: [keybindings] is the action's keybindings, one per line. */
+@JsExport
+fun aardinkAddAction(id: Int, actionId: String, label: String, keybindings: String, inContextMenu: Boolean, run: () -> Unit) =
+    AardinkWeb.addAction(handle(id), actionId, label, keybindings.lines().filter { it.isNotBlank() }, inContextMenu, run)
+
+@JsExport fun aardinkRemoveAction(id: Int, actionId: String) = AardinkWeb.removeAction(handle(id), actionId)
+
+/** Monaco's addCommand: the command's id, or "" for a keybinding it cannot read. */
+@JsExport
+fun aardinkAddCommand(id: Int, keybinding: String, run: () -> Unit): String = AardinkWeb.addCommand(handle(id), keybinding, run).orEmpty()
+
+/** Scrolls a 1-based line into view without moving the caret; in the middle with [center]. */
+@JsExport fun aardinkRevealLine(id: Int, line: Int, center: Boolean) = AardinkWeb.revealLine(handle(id), line, center)
+
+/** Scrolls a 1-based position into view without moving the caret; in the middle with [center]. */
+@JsExport
+fun aardinkRevealRange(id: Int, line: Int, column: Int, center: Boolean) = AardinkWeb.revealPosition(handle(id), line, column, center)
 
 /** The text the diff lane compares with; "" turns it off. */
 @JsExport fun aardinkSetBaseline(id: Int, text: String) = AardinkWeb.setBaseline(handle(id), text)

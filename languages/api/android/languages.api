@@ -36,6 +36,7 @@ public final class com/aardarch/aardink/languages/DeclarativeTokenizer : com/aar
 
 public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/LanguageDefinition$Companion;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -59,6 +60,11 @@ public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/languages/LanguageDefinition$Companion {
+	public final fun extending (Lcom/aardarch/aardink/languages/LanguageDefinition;Lcom/aardarch/aardink/core/LanguageService;ZLjava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public static synthetic fun extending$default (Lcom/aardarch/aardink/languages/LanguageDefinition$Companion;Lcom/aardarch/aardink/languages/LanguageDefinition;Lcom/aardarch/aardink/core/LanguageService;ZLjava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+}
+
 public final class com/aardarch/aardink/languages/LanguageRegistry {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/languages/LanguageRegistry$Companion;
@@ -75,6 +81,96 @@ public final class com/aardarch/aardink/languages/LanguageRegistry$Companion {
 	public final fun withBuiltIns ()Lcom/aardarch/aardink/languages/LanguageRegistry;
 }
 
+public final class com/aardarch/aardink/languages/XmlSchema {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/XmlSchema$Companion;
+	public fun <init> (Ljava/util/Map;Ljava/util/List;ZLkotlin/text/Regex;)V
+	public synthetic fun <init> (Ljava/util/Map;Ljava/util/List;ZLkotlin/text/Regex;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Z
+	public final fun component4 ()Lkotlin/text/Regex;
+	public final fun copy (Ljava/util/Map;Ljava/util/List;ZLkotlin/text/Regex;)Lcom/aardarch/aardink/languages/XmlSchema;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/XmlSchema;Ljava/util/Map;Ljava/util/List;ZLkotlin/text/Regex;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/XmlSchema;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDynamicValue ()Lkotlin/text/Regex;
+	public final fun getElements ()Ljava/util/Map;
+	public final fun getRoots ()Ljava/util/List;
+	public final fun getStrict ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/XmlSchema$Attribute {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ZLjava/lang/String;)Lcom/aardarch/aardink/languages/XmlSchema$Attribute;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/XmlSchema$Attribute;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ZLjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/XmlSchema$Attribute;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getRequired ()Z
+	public final fun getType ()Ljava/lang/String;
+	public final fun getValues ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/XmlSchema$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/aardarch/aardink/languages/XmlSchema;
+}
+
+public final class com/aardarch/aardink/languages/XmlSchema$Element {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;Z)Lcom/aardarch/aardink/languages/XmlSchema$Element;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/XmlSchema$Element;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;ZILjava/lang/Object;)Lcom/aardarch/aardink/languages/XmlSchema$Element;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSnippet ()Ljava/lang/String;
+	public final fun getStrictAttributes ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/XmlSchema$Value {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/aardarch/aardink/languages/XmlSchema$Value;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/XmlSchema$Value;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/XmlSchema$Value;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentation ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/XmlSchemaLanguageService : com/aardarch/aardink/core/CompositeLanguageService {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/XmlSchema;Lcom/aardarch/aardink/core/LanguageService;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/XmlSchema;Lcom/aardarch/aardink/core/LanguageService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getSchema ()Lcom/aardarch/aardink/languages/XmlSchema;
+}
+
 public abstract class com/aardarch/aardink/languages/internal/BaseLanguageService : com/aardarch/aardink/core/LanguageService {
 	public static final field $stable I
 	public fun <init> ()V
@@ -83,8 +179,9 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getCompletionsAreIncomplete ()Z
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -92,7 +189,7 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
 public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
@@ -163,9 +260,9 @@ public final class com/aardarch/aardink/languages/internal/json/JsonLanguageServ
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
-	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/languages/internal/json/JsonTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
@@ -180,9 +277,9 @@ public final class com/aardarch/aardink/languages/internal/kotlin/KotlinLanguage
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
-	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/languages/internal/kotlin/KotlinTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
@@ -205,9 +302,9 @@ public final class com/aardarch/aardink/languages/internal/toml/TomlLanguageServ
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
-	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/languages/internal/toml/TomlTokenizer : com/aardarch/aardink/languages/internal/RegexTokenizer {
@@ -235,9 +332,9 @@ public abstract class com/aardarch/aardink/languages/internal/xml/TagValidator :
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
-	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;I)I
+	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/languages/internal/xml/XmlLanguageService : com/aardarch/aardink/languages/internal/xml/TagValidator {

@@ -83,6 +83,43 @@ function toKotlinEdit(edit) {
   };
 }
 
+/** Monaco's MarkerSeverity numbers, as the words the Kotlin side reads. */
+const MARKER_SEVERITY = { 1: 'hint', 2: 'info', 4: 'warning', 8: 'error' };
+
+/**
+ * A diagnostic in the Kotlin side's shape, from ours or a Monaco marker: `startLineNumber` for
+ * `line`, a numeric severity, `code` as `{ value, target }`, related information with a Uri.
+ */
+function toKotlinDiagnostic(d) {
+  const code = d.code;
+  const codeIsObject = code != null && typeof code === 'object';
+  return {
+    line: d.line ?? d.startLineNumber,
+    startColumn: d.startColumn,
+    endColumn: d.endColumn,
+    endLineNumber: d.endLineNumber,
+    message: d.message,
+    severity: typeof d.severity === 'number' ? (MARKER_SEVERITY[d.severity] ?? 'info') : d.severity,
+    source: d.source,
+    code: code == null ? undefined : String(codeIsObject ? code.value : code),
+    codeHref: d.codeHref ?? (codeIsObject && code.target != null ? String(code.target) : undefined),
+    tags: d.tags,
+    relatedInformation: d.relatedInformation?.map((r) => ({
+      resource: String(r.resource ?? ''),
+      message: r.message,
+      startLineNumber: r.startLineNumber,
+      startColumn: r.startColumn,
+      endLineNumber: r.endLineNumber,
+      endColumn: r.endColumn,
+    })),
+  };
+}
+
+/** A diagnostic the Kotlin side reports, with Monaco's `startLineNumber` beside `line`. */
+function fromKotlinDiagnostic(d) {
+  return { startLineNumber: d.line, ...d };
+}
+
 /** For debugging a grammar: the tokens of `text` in `languageId`, per line, as Monaco's tokenize gives them. */
 export async function tokenize(text, languageId) {
   const k = await load();
@@ -125,13 +162,19 @@ export async function registerLanguage(definition, providers = {}) {
       displayName: definition.displayName,
       extensions: definition.extensions,
       inheritCompletions: definition.inheritCompletions,
+      schema: definition.schema,
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
       grammar,
     }),
     (text, line, column) => answer(providers.provideCompletionItems, text, line, column),
     (text, line, column) => answer(providers.provideHover, text, line, column),
-    (text) => answer(providers.provideDiagnostics, text),
+    (text) =>
+      answer(
+        providers.provideDiagnostics &&
+          ((t) => Promise.resolve(providers.provideDiagnostics(t)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic)))),
+        text,
+      ),
   );
   if (error) throw new Error(`Aardink: ${error}`);
 }
@@ -178,6 +221,12 @@ function toKotlinOptions(options) {
   }
   if (options.wordWrap !== undefined) out.wordWrap = options.wordWrap === 'on';
   if (options.renderLineHighlight !== undefined) out.highlightCurrentLine = options.renderLineHighlight !== 'none';
+  if (options.quickSuggestions !== undefined) {
+    // Monaco's { other, comments, strings }: the editor opens the list in code, so `other` decides.
+    const value = options.quickSuggestions;
+    const other = typeof value === 'object' && value !== null ? value.other : value;
+    out.quickSuggestions = other !== false && other !== 'off' && other !== undefined;
+  }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];
     if (value !== undefined) out[key] = typeof value === 'object' && value !== null ? value.enabled !== false : !!value;
@@ -194,21 +243,39 @@ export async function createEditor(container, onChange, options = {}) {
   const contentListeners = new Set();
   const cursorListeners = new Set();
   const diagnosticsListeners = new Set();
-  k.aardinkOnContentChange(id, (text, versionId, kind) => {
-    const event = { versionId, isUndoing: kind === 'undo', isRedoing: kind === 'redo', isFlush: kind === 'flush' };
+  const selectionListeners = new Set();
+  const focusListeners = new Set();
+  const blurListeners = new Set();
+  k.aardinkOnContentChange(id, (text, versionId, kind, changesJson) => {
+    if (contentListeners.size === 0) return;
+    const event = {
+      versionId,
+      isUndoing: kind === 'undo',
+      isRedoing: kind === 'redo',
+      isFlush: kind === 'flush',
+      changes: JSON.parse(changesJson),
+    };
     contentListeners.forEach((listener) => listener(text, event));
   });
   k.aardinkOnCursorChange(id, (line, column) => cursorListeners.forEach((listener) => listener(line, column)));
+  k.aardinkOnSelectionChange(id, (json) => {
+    if (selectionListeners.size === 0) return;
+    const { selections, reason, source } = JSON.parse(json);
+    const all = selections.map(withRange);
+    const event = { selection: all[0], secondarySelections: all.slice(1), reason, source };
+    selectionListeners.forEach((listener) => listener(event));
+  });
+  k.aardinkOnFocusChange(id, (focused) => (focused ? focusListeners : blurListeners).forEach((listener) => listener()));
   k.aardinkOnDiagnosticsChange(id, (json) => {
     if (diagnosticsListeners.size === 0) return;
-    const diagnostics = JSON.parse(json);
+    const diagnostics = JSON.parse(json).map(fromKotlinDiagnostic);
     diagnosticsListeners.forEach((listener) => listener(diagnostics));
   });
   if (onChange) contentListeners.add(onChange);
 
   let disposed = false;
 
-  return {
+  const editor = {
     getValue: () => k.aardinkGetValue(id),
     setValue: (text) => k.aardinkSetValue(id, text),
     replaceValue: (text) => k.aardinkReplaceValue(id, text),
@@ -229,7 +296,45 @@ export async function createEditor(container, onChange, options = {}) {
       cursorListeners.add(listener);
       return () => cursorListeners.delete(listener);
     },
-    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics ?? null)),
+    onDidChangeCursorSelection(listener) {
+      selectionListeners.add(listener);
+      return () => selectionListeners.delete(listener);
+    },
+    onDidFocusEditorText(listener) {
+      focusListeners.add(listener);
+      return () => focusListeners.delete(listener);
+    },
+    onDidBlurEditorText(listener) {
+      blurListeners.add(listener);
+      return () => blurListeners.delete(listener);
+    },
+    getPosition: () => JSON.parse(k.aardinkGetPosition(id)),
+    setPosition: (position) => k.aardinkSetPosition(id, position.lineNumber, position.column),
+    revealLine: (line) => k.aardinkRevealLine(id, line, false),
+    revealLineInCenter: (line) => k.aardinkRevealLine(id, line, true),
+    revealRange: (range) => k.aardinkRevealRange(id, range.startLineNumber, range.startColumn, false),
+    revealRangeInCenter: (range) => k.aardinkRevealRange(id, range.startLineNumber, range.startColumn, true),
+    trigger: (source, handlerId, payload) => k.aardinkTrigger(id, handlerId, JSON.stringify(payload ?? null)),
+    addCommand(keybinding, handler) {
+      const commandId = k.aardinkAddCommand(id, String(keybinding), () => handler());
+      return commandId || null;
+    },
+    addAction(descriptor) {
+      const keybindings = (descriptor.keybindings ?? []).map(String);
+      k.aardinkAddAction(id, descriptor.id, descriptor.label, keybindings.join('\n'), descriptor.contextMenuGroupId != null, () => descriptor.run(editor));
+      return { dispose: () => k.aardinkRemoveAction(id, descriptor.id) };
+    },
+    getAction(actionId) {
+      const label = k.aardinkActionLabel(id, actionId);
+      if (!label) return null;
+      return {
+        id: actionId,
+        label,
+        isSupported: () => k.aardinkCanTrigger(id, actionId),
+        run: () => Promise.resolve(void k.aardinkTrigger(id, actionId, 'null')),
+      };
+    },
+    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic))),
     onDidChangeDiagnostics(listener) {
       diagnosticsListeners.add(listener);
       return () => diagnosticsListeners.delete(listener);
@@ -254,7 +359,11 @@ export async function createEditor(container, onChange, options = {}) {
       contentListeners.clear();
       cursorListeners.clear();
       diagnosticsListeners.clear();
+      selectionListeners.clear();
+      focusListeners.clear();
+      blurListeners.clear();
       k.aardinkDispose(id);
     },
   };
+  return editor;
 }

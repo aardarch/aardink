@@ -29,8 +29,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Parses a VS Code theme JSON string into an [EditorTheme].
@@ -55,16 +58,70 @@ object EditorThemeParser {
      * required keys are missing; the caller should fall back to a built-in theme.
      */
     fun fromJson(json: String): EditorTheme? = try {
-        parseTheme(Json.parseToJsonElement(json).jsonObject)
+        parseTheme(Json.parseToJsonElement(json).jsonObject, EditorThemes.VsCodeDark)
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
         null
     }
 
-    private fun parseTheme(root: JsonObject): EditorTheme {
+    /**
+     * Parses [json] as Monaco's `defineTheme` data, `{ base, inherit, rules, colors }`, so one theme
+     * file serves a Monaco-shaped web editor and a Kotlin one alike. `base` picks what the theme
+     * leaves unset: [EditorThemes.VsCodeLight] for `vs` and `hc-light`, [EditorThemes.VsCodeDark]
+     * otherwise. Each rule's `token` names tokens as a grammar or the built-in languages do
+     * (`keyword`, `tag.aardflex`; the longest matching prefix wins), with its `foreground` (with or
+     * without `#`) and `fontStyle`; a rule with the empty token sets the default text colour. A
+     * rule's `background` is not drawn. `colors` takes VS Code's color keys, as [fromJson] does.
+     * Returns null if the JSON is malformed.
+     */
+    fun fromMonacoJson(json: String): EditorTheme? = try {
+        val root = Json.parseToJsonElement(json).jsonObject
+        val base = when ((root["base"] as? JsonPrimitive)?.contentOrNull) {
+            "vs", "hc-light" -> EditorThemes.VsCodeLight
+            else -> EditorThemes.VsCodeDark
+        }
+        val colors = (root["colors"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
+        val tokenColors = buildJsonArray {
+            for (rule in (root["rules"] as? JsonArray).orEmpty()) {
+                val obj = rule as? JsonObject ?: continue
+                val token = (obj["token"] as? JsonPrimitive)?.contentOrNull ?: continue
+                val foreground = (obj["foreground"] as? JsonPrimitive)?.contentOrNull?.let { "#" + it.removePrefix("#") }
+                val fontStyle = (obj["fontStyle"] as? JsonPrimitive)?.contentOrNull
+                if (token.isEmpty()) {
+                    if (foreground != null && "editor.foreground" !in colors) colors["editor.foreground"] = JsonPrimitive(foreground)
+                    continue
+                }
+                if (foreground == null && fontStyle == null) continue
+                add(
+                    buildJsonObject {
+                        put("scope", token)
+                        put(
+                            "settings",
+                            buildJsonObject {
+                                if (foreground != null) put("foreground", foreground)
+                                if (fontStyle != null) put("fontStyle", fontStyle)
+                            },
+                        )
+                    },
+                )
+            }
+        }
+        parseTheme(
+            buildJsonObject {
+                put("colors", JsonObject(colors))
+                put("tokenColors", tokenColors)
+            },
+            base,
+        )
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+    private fun parseTheme(root: JsonObject, fallback: EditorTheme): EditorTheme {
         val colors = root["colors"]?.jsonObject ?: JsonObject(emptyMap())
-        val fallback = EditorThemes.VsCodeDark
 
         val background = colors.hexColor("editor.background") ?: fallback.background
         val foreground = colors.hexColor("editor.foreground") ?: fallback.tokenColors[TokenType.Default]!!

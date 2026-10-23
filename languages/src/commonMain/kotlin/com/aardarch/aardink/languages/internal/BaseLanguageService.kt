@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages.internal
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 
@@ -31,13 +32,13 @@ abstract class BaseLanguageService : LanguageService {
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = emptyList()
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = null
 
-    override suspend fun format(document: CodeDocument): String = document.text
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
     override val triggerCharacters: Set<Char> get() = emptySet()
 }

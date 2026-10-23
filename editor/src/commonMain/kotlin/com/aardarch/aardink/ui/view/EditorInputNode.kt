@@ -97,14 +97,17 @@ internal class EditorInputNode(private var controller: EditorController) :
     override fun onDetach() {
         stopInput()
         controller.focused = false
+        controller.state.isFocused = false
     }
 
     fun update(controller: EditorController) {
         if (controller === this.controller) return
         stopInput()
         this.controller.focused = false
+        this.controller.state.isFocused = false
         this.controller = controller
         controller.focused = focused
+        controller.state.isFocused = focused
         syncSession()
         observe()
         invalidateSemantics()
@@ -130,6 +133,7 @@ internal class EditorInputNode(private var controller: EditorController) :
         if (now == focused) return
         focused = now
         controller.focused = now
+        controller.state.isFocused = now
         syncSession()
         invalidateSemantics()
     }

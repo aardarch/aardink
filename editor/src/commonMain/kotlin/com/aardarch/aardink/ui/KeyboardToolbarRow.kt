@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -41,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 
 /**
  * A horizontally scrollable row of quick-input buttons that slides in above the IME.
@@ -69,6 +72,9 @@ import androidx.compose.ui.semantics.Role
  * @param alwaysVisible When true, the toolbar is always shown regardless of IME state. When
  *   false (default), it slides in/out tied to IME visibility — appropriate when anchored just
  *   above the keyboard.
+ * @param items The host's buttons, after [quickChars]: characters typed through [onInsertChar], and
+ *   actions handed to [onAction].
+ * @param onAction Called when the user taps one of [items]' actions.
  */
 @Composable
 fun KeyboardToolbarRow(
@@ -83,6 +89,8 @@ fun KeyboardToolbarRow(
     modifier: Modifier = Modifier,
     style: KeyboardToolbarStyle = KeyboardToolbarDefaults.style(),
     alwaysVisible: Boolean = false,
+    items: List<KeyboardToolbarItem> = emptyList(),
+    onAction: (KeyboardToolbarItem.Action) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -104,6 +112,8 @@ fun KeyboardToolbarRow(
             onUndo = onUndo,
             onRedo = onRedo,
             style = style,
+            items = items,
+            onAction = onAction,
         )
     }
 }
@@ -119,8 +129,11 @@ private fun ToolbarContent(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     style: KeyboardToolbarStyle,
+    items: List<KeyboardToolbarItem>,
+    onAction: (KeyboardToolbarItem.Action) -> Unit,
 ) {
     val insertChar by rememberUpdatedState(onInsertChar)
+    val runAction by rememberUpdatedState(onAction)
 
     LazyRow(
         modifier = Modifier.background(style.background),
@@ -179,6 +192,43 @@ private fun ToolbarContent(
                 style = style,
                 onClick = { insertChar(char) },
             )
+        }
+
+        if (items.isNotEmpty()) {
+            item { SectionGap(style) }
+        }
+
+        items(items.size) { index ->
+            when (val item = items[index]) {
+                is KeyboardToolbarItem.Character -> CharToolbarButton(char = item.char, style = style, onClick = { insertChar(item.char) })
+
+                is KeyboardToolbarItem.Action -> {
+                    val icon = item.icon
+                    if (icon != null) {
+                        IconToolbarButton(icon = icon, tint = style.iconColor, contentDescription = item.label, style = style, onClick = {
+                            runAction(item)
+                        })
+                    } else {
+                        LabelToolbarButton(label = item.label, style = style, onClick = { runAction(item) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A host's action without an icon: its label, as wide as it needs. */
+@Composable
+private fun LabelToolbarButton(label: String, style: KeyboardToolbarStyle, onClick: () -> Unit) {
+    Surface(
+        shape = style.buttonShape,
+        color = Color.Transparent,
+        modifier = Modifier
+            .height(style.buttonSize)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
+    ) {
+        Box(modifier = Modifier.height(style.buttonSize).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+            Text(text = label, fontSize = style.charFontSize, color = style.charColor, maxLines = 1)
         }
     }
 }

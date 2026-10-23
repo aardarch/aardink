@@ -36,6 +36,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.7 makes the editor controllable and observable by its host, on a phone as well as with a
+keyboard, and turns an XML dialect's vocabulary into a language service. It breaks source in three
+places: `LanguageService.smartIndent`, `format` and `formatRange` take `FormattingOptions`
+(`smartIndent` returning the indentation as a string), `Diagnostic.lineNumber` is gone, and
+`CompletionKind` and `DiagnosticSeverity` have new entries. [`docs/MIGRATION_0.7.md`](docs/MIGRATION_0.7.md)
+has every change with a before and after.
+
+### Added
+
+- **Content and selection events.** `CodeEditorState.addContentListener` (and `contentChanges()`,
+  a `Flow`) reports every edit as `ContentChange`s: the range replaced, in lines and columns too,
+  the text inserted, the document's version and whether it was an edit, an undo, a redo or a new
+  text, enough for a language server's incremental sync. `addSelectionListener` reports the
+  selections with a `SelectionChangeReason` (keyboard, pointer, edit, undo, redo, flush, API).
+  `isFocused` is snapshot state, and `CodeDocument.snapshot()` is public.
+- **Commands.** `CodeEditorState.execute(EditorCommand)` runs what a key or a menu would: undo,
+  redo, toggle comment, select all occurrences, insert a snippet, format the document or the
+  selection, open completions, show hover, quick fixes, rename, go to definition, find
+  references, next and previous problem, find, replace, go to line, fold all, unfold all, fold a
+  level, and reveal an offset without moving the caret. `canExecute` and `availableCommands`
+  (snapshot state) enable a host's buttons.
+- **Host items in the touch chrome.** `CodeEditorLayout(keyboardToolbarItems = …)` adds
+  characters and actions (`KeyboardToolbarItem.Character`, `KeyboardToolbarItem.Action` with an
+  icon or a label, running an `EditorCommand` or a click) after the language's own characters;
+  `touchMenuItems` and `contextMenuItems` (`EditorMenuItem`) add to the touch menu and the
+  right-click menu. The touch menu offers Format and Quick Fix when a language service can, and
+  scrolls sideways when it does not fit.
+- **Diagnostics** carry a `code` and its `codeDescription`, `tags` (unnecessary code is drawn
+  faded, deprecated code struck through), `relatedInformation`, and a `Hint` severity, drawn as
+  three dots under its start with no gutter dot. A range may run over several lines. Resting the
+  mouse on a squiggle shows its message, source and code above the hover documentation, with a
+  Quick Fix button; tapping one on a touch screen opens its banner. **F8** and **Shift+F8** select
+  the next and previous problem and show it in the banner with its place in the list; Escape
+  closes it.
+- **The completion list is arranged by the editor.** Items are ordered by `sortPriority`, keeping
+  the service's order among equals. A service that answers `completionsAreIncomplete = false` is
+  asked once per word and the editor narrows its list as the word grows, by `filterText`, as VS
+  Code filters. `EditorOptions.quickSuggestions` opens the list on letters typed in code.
+  `CompletionItem.detail` is shown beside the label; `commitCharacters` accept the selected item
+  when typed. `CompletionKind` has Monaco's kinds too.
+- **Language composition in Kotlin.** `CompositeLanguageService(primary, fallback)` and
+  `LanguageDefinition.extending(base, overlay)` put a dialect's service over a base language's:
+  completions merged, diagnostics both, hover, definition and auto-close from the dialect else the
+  base, indentation and formatting from the base when the dialect has none, as the web's
+  `extends` does.
+- **XML from a schema.** `XmlSchema` describes a dialect's elements, attributes, values, nesting,
+  required attributes and documentation, read from JSON with `XmlSchema.parse`;
+  `XmlSchemaLanguageService` turns it into completions (elements by what the element at the caret
+  may hold, inserted with their required attributes and a choice of their values; attributes;
+  values), hover documentation, and checks for unknown elements and attributes, elements out of
+  place, values not among an attribute's and required attributes left out, over the built-in XML
+  language's well-formedness checks, closing tags, indentation and formatting.
+- **Monaco theme data in Kotlin.** `EditorThemeParser.fromMonacoJson` reads `defineTheme`'s
+  `{ base, inherit, rules, colors }`, so one theme file serves the web editor and a Kotlin one.
+- **Formatting options.** `FormattingOptions(tabSize, insertSpaces)` is what the editor passes to
+  `smartIndent`, `format` and `formatRange`, with helpers (`indentOf`, `indentWidth`,
+  `indentAfter`, `indentUnit`) that measure indentation in columns and write it as spaces or tabs.
+- **Line endings.** `CodeDocument.eol` (`LineEnding.LF` or `CRLF`, from the text's first line
+  break) is what Enter, typing and pasting insert, or `EditorOptions.eol` when set, so editing a
+  CR LF file no longer mixes in LF.
+- **Keys:** F2 renames (also in the right-click menu), Ctrl/Cmd+. shows the quick fixes at the
+  caret (also in the menus), F3 and Shift+F3 go to the next and previous find match, Alt+Enter
+  selects every match, and Ctrl+F and Ctrl+H take a selection on one line as the query, selected
+  in the find field so typing replaces it.
+- **Web:** `onDidChangeContent`'s event has `changes`, in Monaco's `IModelContentChange` shape;
+  `onDidChangeCursorSelection`, `onDidFocusEditorText` and `onDidBlurEditorText`; `getPosition`
+  and `setPosition`; `revealLine`, `revealLineInCenter`, `revealRange` and
+  `revealRangeInCenter`; `trigger` with Monaco's action ids; `addCommand` (`'CtrlCmd+S'` or
+  Monaco's `KeyMod | KeyCode`), `addAction` (with keybindings and a right-click menu entry) and
+  `getAction`; the `quickSuggestions` option; completion answers with `incomplete: false`, items
+  with `detail` and `commitCharacters`, Monaco's kind names and numbers; diagnostics with
+  `endLineNumber`, `source`, `code`, `tags`, `relatedInformation` and `hint`, and Monaco's marker
+  shape accepted as it is; `registerLanguage({ schema })` for an XML dialect.
+- **Language servers:** formatting sends the editor's tab size; diagnostics keep their code, its
+  description, tags and related information, and severity 4 is a hint; completions keep their
+  kind, `detail` and `commitCharacters`, are ordered by `sortText`, and a complete list is asked
+  for once per word.
+
+### Changed
+
+- **Breaking:** `LanguageService.smartIndent(document, lineIndex, options)` returns a `String`;
+  `format` and `formatRange` take `FormattingOptions`. The built-in formatters and Enter
+  indentation follow `EditorOptions.tabSize` and `insertSpaces`, tabs included, instead of four
+  spaces.
+- **Breaking:** `Diagnostic` has no `lineNumber`; `lineIn(document)` works it out. The 0.6
+  constructor still compiles, deprecated.
+- **Breaking:** `CompletionKind` and `DiagnosticSeverity` have new entries.
+- **Web, export template:** `AardinkWeb.onContentChange`'s callback takes the changes as a fourth
+  argument.
+- The built-in XML language's completions come from a default `XmlSchema` (the same Android
+  elements, attributes and values as before).
+
+### Fixed
+
+- A gutter dot showed the least severe of its line's diagnostics; it shows the most severe.
+- On the web, a reported diagnostic running over several lines ended at the end of its first.
+
 ## [0.6.3] - 2026-10-22
 
 ### Fixed
