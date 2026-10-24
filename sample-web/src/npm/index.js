@@ -274,6 +274,9 @@ export async function createEditor(container, onChange, options = {}) {
   if (onChange) contentListeners.add(onChange);
 
   let disposed = false;
+  // What the last host action run returned, so getAction().run() can wait for it: the Kotlin
+  // side calls `run` as a () -> Unit and drops the value.
+  let actionResult;
 
   const editor = {
     getValue: () => k.aardinkGetValue(id),
@@ -321,7 +324,9 @@ export async function createEditor(container, onChange, options = {}) {
     },
     addAction(descriptor) {
       const keybindings = (descriptor.keybindings ?? []).map(String);
-      k.aardinkAddAction(id, descriptor.id, descriptor.label, keybindings.join('\n'), descriptor.contextMenuGroupId != null, () => descriptor.run(editor));
+      k.aardinkAddAction(id, descriptor.id, descriptor.label, keybindings.join('\n'), descriptor.contextMenuGroupId != null, () => {
+        actionResult = descriptor.run(editor);
+      });
       return { dispose: () => k.aardinkRemoveAction(id, descriptor.id) };
     },
     getAction(actionId) {
@@ -331,7 +336,18 @@ export async function createEditor(container, onChange, options = {}) {
         id: actionId,
         label,
         isSupported: () => k.aardinkCanTrigger(id, actionId),
-        run: () => Promise.resolve(void k.aardinkTrigger(id, actionId, 'null')),
+        run() {
+          actionResult = undefined;
+          try {
+            k.aardinkTrigger(id, actionId, 'null');
+          } catch (e) {
+            return Promise.reject(e);
+          }
+          const result = actionResult;
+          actionResult = undefined;
+          // Settles with a host action's own promise; one of the editor's own has only started.
+          return Promise.resolve(result).then(() => undefined);
+        },
       };
     },
     setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic))),

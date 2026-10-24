@@ -298,6 +298,11 @@ export interface AardinkAction {
   label: string;
   /** Whether it can run now. */
   isSupported(): boolean;
+  /**
+   * Runs it. For an action added with `addAction`, settles when the promise its `run` returned
+   * does, and rejects with it; for the editor's own, once it has started (use `format()` to wait
+   * for formatting).
+   */
   run(): Promise<void>;
 }
 
