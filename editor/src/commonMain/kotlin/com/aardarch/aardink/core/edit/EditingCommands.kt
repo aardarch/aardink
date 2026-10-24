@@ -17,6 +17,7 @@ package com.aardarch.aardink.core.edit
 
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.LineEnding
 
 /**
  * What Backspace, Delete, cut, copy and paste do, over every selection at once. Pure functions of
@@ -103,19 +104,27 @@ internal object EditingCommands {
      * Ctrl+V. The text replaces every selection, and each caret ends up after it. With several
      * selections and exactly as many lines of text, each selection gets its own line. Text copied
      * as [wholeLines] goes in above each caret's line instead, the carets staying where they were.
+     * The text's line breaks become [eol].
      */
-    fun paste(document: CodeDocument, selections: SelectionSet, text: String, wholeLines: Boolean): CommandEdit? {
+    fun paste(
+        document: CodeDocument,
+        selections: SelectionSet,
+        text: String,
+        wholeLines: Boolean,
+        eol: LineEnding = LineEnding.LF,
+    ): CommandEdit? {
         val normalized = TypingRules.normalizeLineEndings(text)
         if (normalized.isEmpty()) return null
+        val inserted = TypingRules.withLineEnding(normalized, eol)
         val ordered = selections.inDocumentOrder
         if (wholeLines && ordered.all { it.collapsed }) {
             val lineStarts = ordered.map { document.lineStart(document.offsetToLineCol(it.end).first) }.distinct()
-            val changes = lineStarts.map { TextChange(it, it, normalized) }
+            val changes = lineStarts.map { TextChange(it, it, inserted) }
             return CommandEdit(changes, selections.map { mapOffset(it, changes) })
         }
         val lines = normalized.removeSuffix("\n").split('\n')
         val spread = ordered.size > 1 && lines.size == ordered.size
-        val changes = ordered.mapIndexed { i, range -> TextChange(range.min, range.max, if (spread) lines[i] else normalized) }
+        val changes = ordered.mapIndexed { i, range -> TextChange(range.min, range.max, if (spread) lines[i] else inserted) }
         return CommandEdit(changes, SelectionSet.of(selections.ranges.map { TextRange(mapOffset(it.max, changes)) }))
     }
 

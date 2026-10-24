@@ -16,7 +16,9 @@
 package com.aardarch.aardink.core.edit
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.LineEnding
 
 /**
  * What typing does beyond inserting the character: line-ending normalisation, smart indent after
@@ -25,8 +27,12 @@ import com.aardarch.aardink.core.LanguageService
  */
 internal object TypingRules {
 
-    /** CR LF and lone CR as LF: what user input (a paste, the IME) is stored as. */
+    /** CR LF and lone CR as LF: user input (a paste, the IME), before [withLineEnding]. */
     fun normalizeLineEndings(text: String): String = if ('\r' in text) text.replace("\r\n", "\n").replace('\r', '\n') else text
+
+    /** [normalized] text (LF only) with its line breaks as [eol]: what user input is stored as. */
+    fun withLineEnding(normalized: String, eol: LineEnding): String =
+        if (eol == LineEnding.LF || '\n' !in normalized) normalized else normalized.replace("\n", eol.text)
 
     /** What to insert after a typed character, and where the caret goes. */
     class FollowUp(val insertAt: Int, val text: String, val caret: Int)
@@ -35,14 +41,21 @@ internal object TypingRules {
      * The follow-up to typing [typed] at [offset] (the document already contains it), or null.
      * Enter indents the new line as [service] says; other characters may be auto-closed, with the
      * caret left between the pair. Nothing while an IME composition is in progress: the composed
-     * text is not final.
+     * text is not final. [options] are passed on to [LanguageService.smartIndent].
      */
-    fun afterTyping(document: CodeDocument, service: LanguageService?, offset: Int, typed: Char, composing: Boolean = false): FollowUp? {
+    fun afterTyping(
+        document: CodeDocument,
+        service: LanguageService?,
+        offset: Int,
+        typed: Char,
+        composing: Boolean = false,
+        options: FormattingOptions = FormattingOptions(),
+    ): FollowUp? {
         if (service == null || composing) return null
         return if (typed == '\n') {
             val newLine = document.offsetToLineCol(offset + 1).first
-            val spaces = service.smartIndent(document, newLine)
-            if (spaces <= 0) null else FollowUp(offset + 1, " ".repeat(spaces), offset + 1 + spaces)
+            val indent = service.smartIndent(document, newLine, options)
+            if (indent.isEmpty()) null else FollowUp(offset + 1, indent, offset + 1 + indent.length)
         } else {
             val closing = service.autoClose(document, offset, typed) ?: return null
             FollowUp(offset + 1, closing, offset + 1)

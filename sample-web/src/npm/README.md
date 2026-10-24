@@ -72,10 +72,41 @@ await registerLanguage(
 await defineTheme('toy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: 'ff00ff' }] });
 ```
 
-Completion items take Monaco's `filterText`, `sortText` and `range` too, and
-`inheritCompletions: false` in the definition leaves out the extended language's completions
-(XML's are Android-flavoured) while keeping its diagnostics and folding. A hover can carry an
-`example`, shown as code.
+Completion items take Monaco's `filterText`, `sortText`, `range`, `detail`, `commitCharacters` and
+`kind` names or numbers too, and `inheritCompletions: false` in the definition leaves out the
+extended language's completions (XML's are Android-flavoured) while keeping its diagnostics and
+folding. Answer `{ suggestions, incomplete: false }` to be asked once per word and let the editor
+narrow the list as letters are typed. A hover can carry an `example`, shown as code.
+
+An XML dialect can describe its vocabulary as a `schema` instead of answering completions by hand:
+elements by what they may hold, attributes, values, required attributes and documentation. The
+editor completes, documents and checks from it:
+
+```ts
+await registerLanguage({
+  id: 'toy-markup',
+  extends: 'xml',
+  grammar,
+  schema: {
+    roots: ['page'],
+    elements: {
+      page: { doc: 'A page.', children: ['text'] },
+      text: { children: [], attributes: { value: { required: true }, align: { values: ['start', 'end'] } } },
+    },
+  },
+});
+```
+
+The editor answers to your keys and actions as Monaco's does, and tells you what changed:
+
+```ts
+editor.addCommand('CtrlCmd+S', save);
+editor.addAction({ id: 'app.preview', label: 'Preview', keybindings: ['F5'], contextMenuGroupId: 'app', run: preview });
+editor.trigger('toolbar', 'editor.action.formatDocument');
+editor.onDidChangeContent((text, { changes }) => mirror.apply(changes));
+editor.onDidChangeCursorSelection(({ selection, reason }) => syncPreview(selection, reason));
+editor.revealLineInCenter(42);
+```
 
 The editor fills its container, so give the container a size. `createEditor` is async because
 the first call loads the WebAssembly module (about 13 MB, 4.7 MB gzipped); every editor on the

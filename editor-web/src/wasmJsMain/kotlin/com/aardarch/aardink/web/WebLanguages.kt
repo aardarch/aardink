@@ -20,8 +20,10 @@ import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
@@ -30,10 +32,13 @@ import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.XmlSchema
+import com.aardarch.aardink.languages.XmlSchemaLanguageService
 import com.aardarch.aardink.ui.EditorThemeParser
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.CancellationException
@@ -87,75 +92,95 @@ class WebLanguageProviders(
 )
 
 /**
- * A registered language's service: the host's providers first, then what [base] (the language it
- * extends) has. With [inheritCompletions] the base's completions follow the host's, and
- * [ownTriggerCharacters] (those the definition gave, if any) add to the base's; without it, they
- * replace them.
+ * A registered language's service: the host's providers ([JsProviderService]) first, then what
+ * [base] (the language it extends) has, by [CompositeLanguageService]'s rules. With
+ * [inheritCompletions] the base's completions follow the host's, and [ownTriggerCharacters] (those
+ * the definition gave, if any) add to the base's; without it, they replace them. On top of the
+ * composite's rules: an answer `{ suggestions, exclusive: true }` leaves out the base's
+ * completions for that request, and whether the list is asked for again on each keystroke is the
+ * host's answer's `incomplete` alone.
  */
 internal class WebLanguageService(
-    private val base: LanguageService?,
-    private val providers: WebLanguageProviders,
-    private val ownTriggerCharacters: Set<Char>? = null,
-    private val inheritCompletions: Boolean = true,
-) : LanguageService {
+    base: LanguageService?,
+    providers: WebLanguageProviders,
+    ownTriggerCharacters: Set<Char>? = null,
+    inheritCompletions: Boolean = true,
+) : CompositeLanguageService(
+    primary = JsProviderService(providers, ownTriggerCharacters ?: base?.triggerCharacters.orEmpty()),
+    fallback = base ?: NoLanguageService,
+    inheritCompletions = inheritCompletions,
+) {
+    private val js: JsProviderService get() = primary as JsProviderService
 
-    override val triggerCharacters: Set<Char> = run {
-        val inherited = base?.triggerCharacters.orEmpty()
-        when {
-            ownTriggerCharacters == null -> inherited
-            inheritCompletions -> ownTriggerCharacters + inherited
-            else -> ownTriggerCharacters
-        }
-    }
-
-    override val supportsRename: Boolean get() = base?.supportsRename ?: false
+    override val completionsAreIncomplete: Boolean
+        get() = js.lastIncomplete
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
+        val own = js.completions(document, cursorOffset)
+        if (!inheritCompletions || js.lastExclusive) return own
+        return merged(own, fallback.completions(document, cursorOffset))
+    }
+}
+
+/** No language at all: what a registered language without `extends` falls back to. */
+private object NoLanguageService : LanguageService {
+    override val triggerCharacters: Set<Char> get() = emptySet()
+
+    override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> = emptyList()
+
+    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = emptyList()
+
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
+
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
+
+    override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = null
+
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
+}
+
+/**
+ * What a host's JavaScript providers answer, and nothing else: completions, hover and diagnostics.
+ * [triggerCharacters] are the definition's own, or the extended language's when it gave none.
+ */
+private class JsProviderService(private val providers: WebLanguageProviders, override val triggerCharacters: Set<Char>) : LanguageService {
+
+    /** False only after an answer of `{ suggestions, incomplete: false }`: asked once per word then. */
+    var lastIncomplete = true
+        private set
+
+    /** The last answer was `{ suggestions, exclusive: true }`. */
+    var lastExclusive = false
+        private set
+
+    override val completionsAreIncomplete: Boolean
+        get() = lastIncomplete
+
+    override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
+        lastIncomplete = true
+        lastExclusive = false
         val (line, column) = document.offsetToLineCol(cursorOffset)
         val answer = asked {
             providers.completions?.invoke(document.text, line + 1, column + 1)
         }?.let { parseCompletions(it, document, cursorOffset) }
-        val own = answer?.items.orEmpty()
-        if (!inheritCompletions || answer?.exclusive == true) return own
-        val inherited = base?.completions(document, cursorOffset).orEmpty()
-        if (own.isEmpty()) return inherited
-        val offered = own.mapTo(HashSet()) { it.kind to it.label }
-        return own + inherited.filterNot { (it.kind to it.label) in offered }
+        lastExclusive = answer?.exclusive == true
+        return answer?.items.orEmpty()
     }
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
         val (line, column) = document.offsetToLineCol(offset)
-        return asked { providers.hover?.invoke(document.text, line + 1, column + 1) }?.let(::parseHover) ?: base?.hoverDoc(document, offset)
+        return asked { providers.hover?.invoke(document.text, line + 1, column + 1) }?.let(::parseHover)
     }
 
-    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
-        val own = asked {
-            providers.diagnostics?.invoke(document.text)
-        }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
-        return own + base?.diagnostics(document).orEmpty()
-    }
+    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = asked {
+        providers.diagnostics?.invoke(document.text)
+    }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = base?.smartIndent(document, lineIndex) ?: 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 
-    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = base?.autoClose(document, offset, charTyped)
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
-    override suspend fun format(document: CodeDocument): String = base?.format(document) ?: document.text
-
-    override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> =
-        base?.codeActions(document, range).orEmpty()
-
-    override suspend fun definition(document: CodeDocument, offset: Int): Location? = base?.definition(document, offset)
-
-    override suspend fun references(document: CodeDocument, offset: Int): List<Location> = base?.references(document, offset).orEmpty()
-
-    override suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? = base?.signatureHelp(document, offset)
-
-    override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = base?.prepareRename(document, offset)
-
-    override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> =
-        base?.rename(document, offset, newName).orEmpty()
-
-    override suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> = base?.formatRange(document, range).orEmpty()
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
     /** What a host's provider answered; nothing when it failed (a rejected Promise), which costs its answer, not the editor. */
     private suspend fun asked(provider: suspend () -> String?): String? = try {
@@ -185,18 +210,22 @@ internal class WebLanguageService(
             Offered(
                 CompletionItem(
                     label = label,
-                    kind = completionKind(item.string("kind")),
+                    kind = completionKind(item.string("kind") ?: item.int("kind")?.toString()),
                     insertText = item.string("insertText") ?: label,
-                    documentation = item.text("documentation") ?: item.string("detail"),
+                    documentation = item.text("documentation"),
                     filterText = filterText ?: label,
                     replaceRange = rangeIn(document, item["range"]),
                     isSnippet = rules and INSERT_AS_SNIPPET != 0,
                     keepWhitespace = rules and KEEP_WHITESPACE != 0,
+                    detail = item.string("detail"),
+                    commitCharacters = (item["commitCharacters"] as? JsonArray).orEmpty()
+                        .mapNotNullTo(mutableSetOf()) { (it as? JsonPrimitive)?.contentOrNull?.singleOrNull() },
                 ),
                 filterText = filterText,
                 sortText = item.string("sortText"),
             )
         }
+        if ((list?.get("incomplete") as? JsonPrimitive)?.booleanOrNull == false) lastIncomplete = false
         val kept = offered.filter { it.filterText == null || fuzzyMatches(typedFor(document, cursor, it.item), it.filterText) }
         val ordered = if (kept.any { it.sortText != null }) kept.sortedBy { it.sortText ?: it.item.label } else kept
         return Answer(ordered.map { it.item }, exclusive = (list?.get("exclusive") as? JsonPrimitive)?.booleanOrNull == true)
@@ -215,17 +244,56 @@ internal class WebLanguageService(
     }
 }
 
-/** A completion's `kind` by its name in `index.d.ts`, or Monaco's `CompletionItemKind` name for the same thing. */
-private fun completionKind(name: String?): CompletionKind = when (name?.lowercase()) {
-    "element" -> CompletionKind.Element
-    "attribute" -> CompletionKind.Attribute
-    "snippet" -> CompletionKind.Snippet
-    "module" -> CompletionKind.Module
-    "property" -> CompletionKind.Property
-    "transform", "function" -> CompletionKind.Transform
-    "colorref", "color" -> CompletionKind.ColorRef
-    else -> CompletionKind.Value
+/**
+ * A completion's `kind` by its name in `index.d.ts`, Monaco's `CompletionItemKind` name for the
+ * same thing, or Monaco's `CompletionItemKind` number. `function` and `color` stay the aardflex
+ * names for `transform` and `colorRef` they were in 0.6.
+ */
+private fun completionKind(name: String?): CompletionKind {
+    name?.toIntOrNull()?.let { return MONACO_KINDS.getOrElse(it) { CompletionKind.Value } }
+    return when (name?.lowercase()) {
+        "element" -> CompletionKind.Element
+        "attribute" -> CompletionKind.Attribute
+        "snippet" -> CompletionKind.Snippet
+        "module" -> CompletionKind.Module
+        "property" -> CompletionKind.Property
+        "transform", "function" -> CompletionKind.Transform
+        "colorref", "color" -> CompletionKind.ColorRef
+        "method" -> CompletionKind.Method
+        "constructor" -> CompletionKind.Constructor
+        "field" -> CompletionKind.Field
+        "variable" -> CompletionKind.Variable
+        "class" -> CompletionKind.Class
+        "struct" -> CompletionKind.Struct
+        "interface" -> CompletionKind.Interface
+        "enum" -> CompletionKind.Enum
+        "enummember" -> CompletionKind.EnumMember
+        "keyword" -> CompletionKind.Keyword
+        "text" -> CompletionKind.Text
+        "file" -> CompletionKind.File
+        "folder" -> CompletionKind.Folder
+        "reference" -> CompletionKind.Reference
+        "constant" -> CompletionKind.Constant
+        "event" -> CompletionKind.Event
+        "operator" -> CompletionKind.Operator
+        "typeparameter" -> CompletionKind.TypeParameter
+        "unit" -> CompletionKind.Unit
+        "user" -> CompletionKind.User
+        "issue" -> CompletionKind.Issue
+        else -> CompletionKind.Value
+    }
 }
+
+/** Monaco's `CompletionItemKind`, by number. */
+private val MONACO_KINDS = listOf(
+    CompletionKind.Method, CompletionKind.Function, CompletionKind.Constructor, CompletionKind.Field,
+    CompletionKind.Variable, CompletionKind.Class, CompletionKind.Struct, CompletionKind.Interface,
+    CompletionKind.Module, CompletionKind.Property, CompletionKind.Event, CompletionKind.Operator,
+    CompletionKind.Unit, CompletionKind.Value, CompletionKind.Constant, CompletionKind.Enum,
+    CompletionKind.EnumMember, CompletionKind.Keyword, CompletionKind.Text, CompletionKind.Color,
+    CompletionKind.File, CompletionKind.Reference, CompletionKind.Color, CompletionKind.Folder,
+    CompletionKind.TypeParameter, CompletionKind.User, CompletionKind.Issue, CompletionKind.Snippet,
+)
 
 /**
  * Monaco's `IRange` (1-based, end-exclusive), or the `replace` range of its `{ insert, replace }`,
@@ -331,13 +399,26 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull
             ?: throw IllegalArgumentException("inheritCompletions: true or false")
     } ?: true
+    // An XML dialect's vocabulary: completions, hover and checks from it, over the language extended.
+    val schema = root.given("schema")?.let { value ->
+        val obj = value as? JsonObject ?: throw IllegalArgumentException("schema: an XML schema object")
+        try {
+            XmlSchema.parse(obj.toString())
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("schema: ${e.message}", e)
+        }
+    }
+    val baseService = when {
+        schema != null -> XmlSchemaLanguageService(schema, base?.languageService ?: BuiltInLanguages.Xml.languageService)
+        else -> base?.languageService
+    }
     val definition = LanguageDefinition(
         id = id,
         displayName = root.string("displayName") ?: id,
         fileExtensions = extensions,
         tokenizer = DeclarativeTokenizer(grammar),
-        foldingProvider = base?.foldingProvider ?: NoOpFoldingProvider,
-        languageService = WebLanguageService(base?.languageService, providers, triggerCharacters, inheritCompletions),
+        foldingProvider = base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else NoOpFoldingProvider,
+        languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
     )
     return definition
 }

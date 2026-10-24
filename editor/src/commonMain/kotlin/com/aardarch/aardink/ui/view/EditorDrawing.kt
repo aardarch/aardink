@@ -27,6 +27,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticTag
 import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.ui.drawSquiggleLine
 import kotlin.math.max
@@ -50,6 +51,8 @@ internal data class EditorColors(
     val whitespace: Color = Color.Transparent,
     /** Behind a snippet's tab stops while it is being filled in. */
     val snippetTabStop: Color = Color.Transparent,
+    /** The editor's background, laid over unnecessary code to fade it. */
+    val background: Color = Color.Transparent,
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -165,18 +168,58 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
         val color = when (diagnostic.severity) {
             DiagnosticSeverity.Error -> colors.error
             DiagnosticSeverity.Warning -> colors.warning
-            DiagnosticSeverity.Info -> colors.info
+            DiagnosticSeverity.Info, DiagnosticSeverity.Hint -> colors.info
         }
+        val unnecessary = DiagnosticTag.Unnecessary in diagnostic.tags
+        val deprecated = DiagnosticTag.Deprecated in diagnostic.tags
         val firstRow = layout.rowFor(a)
         val lastRow = layout.rowFor(max(a, b - 1))
         for (row in firstRow..lastRow) {
             val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
             var x1 = if (row == lastRow && b > a) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
+            // A tagged diagnostic shows by its tag, as in VS Code: no box drawn wider than its text.
+            if (unnecessary || deprecated) {
+                if (x1 > x0 && unnecessary) {
+                    // Faded: the background laid over the text, so it is not laid out again.
+                    drawRect(
+                        colors.background.copy(alpha = UNNECESSARY_FADE),
+                        Offset(left + x0, top + layout.getLineTop(row)),
+                        Size(
+                            x1 - x0,
+                            layout.getLineBottom(row) - layout.getLineTop(row),
+                        ),
+                    )
+                }
+                if (x1 > x0 && deprecated) {
+                    val y = top + (layout.getLineTop(row) + layout.getLineBottom(row)) / 2f
+                    drawLine(colors.text, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = 1.dp.toPx())
+                }
+                if (diagnostic.severity != DiagnosticSeverity.Hint && !unnecessary) {
+                    if (x1 <= x0) x1 = x0 + minWidth
+                    drawSquiggleLine(left + x0, left + x1, top + layout.getLineBottom(row) + 1.dp.toPx(), color)
+                }
+                continue
+            }
+            if (diagnostic.severity == DiagnosticSeverity.Hint) {
+                // Three dots under the start, as VS Code draws a hint: only on the line it starts on.
+                if (row == firstRow && start >= line.start) drawHintDots(left + x0, top + layout.getLineBottom(row), color)
+                continue
+            }
             if (x1 <= x0) x1 = x0 + minWidth
             drawSquiggleLine(left + x0, left + x1, top + layout.getLineBottom(row) + 1.dp.toPx(), color)
         }
     }
 }
+
+/** VS Code's hint mark: three small dots at [x], just below the text's bottom [y]. */
+private fun DrawScope.drawHintDots(x: Float, y: Float, color: Color) {
+    val radius = 1.dp.toPx()
+    val step = 3.dp.toPx()
+    for (i in 0 until 3) drawCircle(color, radius, Offset(x + radius + i * step, y))
+}
+
+/** How strongly unnecessary code is faded: VS Code draws it at about 60 % opacity. */
+private const val UNNECESSARY_FADE = 0.4f
 
 /** A thin line under [range], as an input method's composition and a link are drawn. */
 private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: Color, left: Float, top: Float) {

@@ -123,7 +123,17 @@ data class LspDiagnostic(
     val source: String? = null,
     val code: JsonElement? = null,
     val data: JsonElement? = null,
+    val codeDescription: LspCodeDescription? = null,
+    /** `1` unnecessary, `2` deprecated. */
+    val tags: List<Int>? = null,
+    val relatedInformation: List<LspDiagnosticRelatedInformation>? = null,
 )
+
+@Serializable
+data class LspCodeDescription(val href: String)
+
+@Serializable
+data class LspDiagnosticRelatedInformation(val location: LspLocation, val message: String)
 
 @Serializable
 data class LspPublishDiagnosticsParams(val uri: String, val version: Int? = null, val diagnostics: List<LspDiagnostic> = emptyList())
@@ -162,6 +172,7 @@ data class LspCompletionItem(
     val additionalTextEdits: List<LspTextEdit>? = null,
     val filterText: String? = null,
     val sortText: String? = null,
+    val commitCharacters: List<String>? = null,
 )
 
 @Serializable

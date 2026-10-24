@@ -36,31 +36,30 @@ internal object TextNavigator {
         else -> CharClass.Regular
     }
 
-    /** One character left, never splitting a surrogate pair. */
+    /** One character left, never splitting a surrogate pair or a `\r\n` line break. */
     fun charLeft(document: CharSequence, offset: Int): Int {
         if (offset <= 0) return 0
         val previous = offset - 1
-        return if (previous > 0 && document[previous].isLowSurrogate() &&
-            document[previous - 1].isHighSurrogate()
-        ) {
-            previous - 1
-        } else {
-            previous
-        }
+        val pair = previous > 0 && document[previous].isLowSurrogate() && document[previous - 1].isHighSurrogate()
+        return if (pair || (previous > 0 && isCrlf(document, previous - 1))) previous - 1 else previous
     }
 
-    /** One character right, never splitting a surrogate pair. */
+    /** One character right, never splitting a surrogate pair or a `\r\n` line break. */
     fun charRight(document: CharSequence, offset: Int): Int {
         if (offset >= document.length) return document.length
         val next = offset + 1
-        return if (next < document.length && document[offset].isHighSurrogate() && document[next].isLowSurrogate()) next + 1 else next
+        val pair = next < document.length && document[offset].isHighSurrogate() && document[next].isLowSurrogate()
+        return if (pair || isCrlf(document, offset)) next + 1 else next
     }
+
+    private fun isCrlf(document: CharSequence, at: Int): Boolean =
+        document[at] == '\r' && at + 1 < document.length && document[at + 1] == '\n'
 
     /** Ctrl+Left: to the start of the word before [offset], skipping whitespace first. */
     fun wordLeft(document: CharSequence, offset: Int): Int {
         var i = offset
         while (i > 0 && classOf(document[i - 1]) == CharClass.Whitespace && document[i - 1] != '\n') i--
-        if (i > 0 && document[i - 1] == '\n') return if (i == offset) i - 1 else i
+        if (i > 0 && document[i - 1] == '\n') return if (i == offset) charLeft(document, i) else i
         if (i == 0) return 0
         val cls = classOf(document[i - 1])
         while (i > 0 && classOf(document[i - 1]) == cls) i--
@@ -71,8 +70,8 @@ internal object TextNavigator {
     fun wordRight(document: CharSequence, offset: Int): Int {
         var i = offset
         val length = document.length
-        while (i < length && classOf(document[i]) == CharClass.Whitespace && document[i] != '\n') i++
-        if (i < length && document[i] == '\n') return if (i == offset) i + 1 else i
+        while (i < length && classOf(document[i]) == CharClass.Whitespace && document[i] != '\n' && !isCrlf(document, i)) i++
+        if (i < length && (document[i] == '\n' || isCrlf(document, i))) return if (i == offset) charRight(document, i) else i
         if (i == length) return length
         val cls = classOf(document[i])
         while (i < length && classOf(document[i]) == cls) i++

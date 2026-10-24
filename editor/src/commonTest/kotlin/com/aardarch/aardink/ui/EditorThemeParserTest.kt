@@ -22,6 +22,7 @@ import com.aardarch.aardink.core.TokenType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class EditorThemeParserTest {
 
@@ -232,5 +233,47 @@ class EditorThemeParserTest {
             },
             theme?.gutterBackground,
         )
+    }
+
+    @Test
+    fun `Monaco's defineTheme data reads as a theme`() {
+        val theme = EditorThemeParser.fromMonacoJson(
+            """{
+              "base": "vs-dark",
+              "inherit": true,
+              "rules": [
+                { "token": "tag.aardflex", "foreground": "C586C0", "fontStyle": "bold" },
+                { "token": "comment", "foreground": "#6A9955", "fontStyle": "italic", "background": "000000" },
+                { "token": "", "foreground": "D4D4D4" }
+              ],
+              "colors": { "editor.background": "#1E1E2E" }
+            }""",
+        )!!
+        assertEquals(Color(0xFF1E1E2E), theme.background)
+        assertEquals(Color(0xFFC586C0), theme.tokenColors[NamedTokenType("tag.aardflex")])
+        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.aardflex")])
+        assertEquals(Color(0xFF6A9955), theme.tokenColors[TokenType.Comment])
+        assertEquals(Color(0xFFD4D4D4), theme.tokenColors[TokenType.Default], "the empty token sets the default text colour")
+    }
+
+    @Test
+    fun `a Monaco theme that does not inherit keeps the base's UI colours but not its token rules`() {
+        val theme = EditorThemeParser.fromMonacoJson(
+            """{ "base": "vs-dark", "inherit": false, "rules": [{ "token": "keyword", "foreground": "FF0000" }] }""",
+        )!!
+        assertEquals(EditorThemes.VsCodeDark.background, theme.background)
+        assertEquals(EditorThemes.VsCodeDark.tokenColors[TokenType.Default], theme.tokenColors[TokenType.Default])
+        assertEquals(Color(0xFFFF0000), theme.tokenColors[TokenType.Keyword])
+        assertNull(theme.tokenColors[TokenType.Comment])
+        assertTrue(theme.tokenFontStyles.isEmpty())
+        val inheriting = EditorThemeParser.fromMonacoJson("""{ "base": "vs-dark", "rules": [] }""")!!
+        assertEquals(EditorThemes.VsCodeDark.tokenColors[TokenType.Comment], inheriting.tokenColors[TokenType.Comment])
+    }
+
+    @Test
+    fun `a Monaco light base fills in from the light theme`() {
+        val theme = EditorThemeParser.fromMonacoJson("""{ "base": "vs", "rules": [] }""")!!
+        assertEquals(EditorThemes.VsCodeLight.background, theme.background)
+        assertNull(EditorThemeParser.fromMonacoJson("not json"))
     }
 }

@@ -24,7 +24,7 @@ import com.aardarch.aardink.core.text.DocumentChangeListener
 
 /**
  * The diagnostics on screen, kept on their text from one list to the next. Every edit moves their
- * ranges (and line numbers) along, as Monaco moves its markers, so a squiggle stays under its word
+ * ranges along, as Monaco moves its markers, so a squiggle stays under its word
  * while the user types above it rather than drifting until the next list arrives. Replacing the
  * whole text drops them: they describe text that is gone.
  */
@@ -54,11 +54,7 @@ internal class DiagnosticsTracker(private val document: CodeDocument) : Document
         }
         diagnostics = current.map { diagnostic ->
             val range = mapRange(diagnostic.range, change)
-            if (range == diagnostic.range) {
-                diagnostic
-            } else {
-                diagnostic.copy(range = range, lineNumber = document.offsetToLineCol(range.first).first)
-            }
+            if (range == diagnostic.range) diagnostic else diagnostic.copy(range = range)
         }
     }
 

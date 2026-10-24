@@ -100,7 +100,7 @@ class WebEditorApiTest {
     fun `the detailed change listener says what each change was`() = runTest {
         val handle = mount("x")
         val seen = mutableListOf<Pair<Int, String>>()
-        AardinkWeb.onContentChange(handle) { _, version, kind -> seen += version to kind }
+        AardinkWeb.onContentChange(handle) { _, version, kind, _ -> seen += version to kind }
         handle.state.value.applyTextEdits(listOf(TextEdit(IntRange(1, 0), "y")))
         awaitUntil { seen.size == 1 }
         AardinkWeb.undo(handle)
@@ -112,10 +112,47 @@ class WebEditorApiTest {
     }
 
     @Test
+    fun `the content listener gets the changes in Monaco's shape`() = runTest {
+        val handle = mount("ab\ncd")
+        val reports = mutableListOf<String>()
+        AardinkWeb.onContentChange(handle) { _, _, _, changes -> reports += changes }
+        handle.state.value.applyEdit(1, 3, "X", TextRange(2))
+        awaitUntil { reports.size == 1 }
+        val changes = Json.parseToJsonElement(reports.single()).jsonArray.map { it.jsonObject }
+        val delete = changes.first { it["rangeLength"]!!.jsonPrimitive.int == 3 }
+        val range = delete["range"]!!.jsonObject
+        assertEquals(
+            listOf(1, 2, 2, 2),
+            listOf("startLineNumber", "startColumn", "endLineNumber", "endColumn").map {
+                range[it]!!.jsonPrimitive.int
+            },
+        )
+        assertEquals(1, delete["rangeOffset"]!!.jsonPrimitive.int)
+        assertEquals("X", changes.last()["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `selection changes are reported with their reason, and the position comes and goes`() {
+        val handle = mount("one\ntwo")
+        val events = mutableListOf<String>()
+        AardinkWeb.onSelectionChange(handle) { events += it }
+        AardinkWeb.setPosition(handle, 2, 3)
+        assertEquals(WebPosition(2, 3), AardinkWeb.getPosition(handle))
+        assertEquals(TextRange(6), handle.state.value.selection)
+        handle.state.value.applyEdit(6, 0, "!", TextRange(7))
+        val reasons = events.map { Json.parseToJsonElement(it).jsonObject }
+        assertEquals(listOf("api", "edit"), reasons.map { it["reason"]!!.jsonPrimitive.content })
+        assertEquals(listOf("api", "model"), reasons.map { it["source"]!!.jsonPrimitive.content })
+        val primary = reasons.last()["selections"]!!.jsonArray.first().jsonObject
+        assertEquals(4, primary["positionColumn"]!!.jsonPrimitive.int)
+        assertEquals("{\"lineNumber\":2,\"column\":4}", AardinkWeb.getPositionJson(handle))
+    }
+
+    @Test
     fun `replaceValue is an edit that undo takes back, history and all`() = runTest {
         val handle = mount("one\ntwo\n")
         val seen = mutableListOf<Pair<Int, String>>()
-        AardinkWeb.onContentChange(handle) { _, version, kind -> seen += version to kind }
+        AardinkWeb.onContentChange(handle) { _, version, kind, _ -> seen += version to kind }
         handle.state.value.applyTextEdits(listOf(TextEdit(IntRange(8, 7), "three\n")))
         awaitUntil { seen.size == 1 }
         val typed = AardinkWeb.getAlternativeVersionId(handle)

@@ -29,6 +29,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** Languages and themes registered from the page: grammars, their colours, and the providers. */
@@ -125,7 +126,7 @@ class WebLanguagesTest {
         val document = CodeDocument("<root>\n  <")
         val completions = service.completions(document, document.length)
         assertEquals("myTag", completions.first().label)
-        assertEquals("at 2:4", completions.first().documentation)
+        assertEquals("at 2:4", completions.first().detail)
         assertTrue(completions.size > 1, "the XML service's own completions follow")
         val diagnostics = service.diagnostics(document)
         assertEquals("from the host", diagnostics.first().message)
@@ -294,7 +295,7 @@ class WebLanguagesTest {
             completions = """[
               { "label": "a", "kind": "transform" }, { "label": "b", "kind": "function" },
               { "label": "c", "kind": "colorRef" }, { "label": "d", "kind": "color" },
-              { "label": "e", "kind": "keyword" },
+              { "label": "e", "kind": "no-such-kind" },
               { "label": "f", "documentation": { "value": "from Monaco's IMarkdownString" } }
             ]""",
         )
@@ -311,6 +312,45 @@ class WebLanguagesTest {
             items.map { it.kind },
         )
         assertEquals("from Monaco's IMarkdownString", items.last().documentation)
+    }
+
+    @Test
+    fun `Monaco kind numbers, detail, commit characters and a complete answer`() = runTest {
+        val service = register(
+            "toy-monaco",
+            completions = """{ "incomplete": false, "suggestions": [
+              { "label": "m", "kind": 0, "detail": "fun m()", "commitCharacters": [".", "("] },
+              { "label": "k", "kind": 17 }
+            ] }""",
+        )
+        assertTrue(service.completionsAreIncomplete, "not asked yet")
+        val items = service.completions(CodeDocument(""), 0)
+        assertEquals(listOf(CompletionKind.Method, CompletionKind.Keyword), items.map { it.kind })
+        assertEquals("fun m()", items.first().detail)
+        assertEquals(setOf('.', '('), items.first().commitCharacters)
+        assertFalse(service.completionsAreIncomplete, "incomplete: false is asked for once per word")
+    }
+
+    @Test
+    fun `a registered schema completes, documents and checks an XML dialect`() = runTest {
+        val service = register(
+            "toy-schema",
+            """, "extends": "xml", "schema": {
+              "roots": ["page"],
+              "elements": {
+                "page": { "doc": "A page.", "children": ["note"] },
+                "note": { "children": [], "attributes": { "text": { "required": true } } }
+              }
+            }""",
+        )
+        assertEquals(listOf("page"), service.completions(CodeDocument("<"), 1).map { it.label })
+        val inPage = CodeDocument("<page>\n<")
+        assertEquals(listOf("note"), service.completions(inPage, inPage.length).map { it.label })
+        assertEquals("A page.", service.hoverDoc(CodeDocument("<page/>"), 2)?.content)
+        val problems = service.diagnostics(CodeDocument("<page><note/><other/></page>")).map { it.message }
+        assertTrue("<note> needs the attribute 'text'" in problems, problems.toString())
+        assertTrue("Unknown element <other>" in problems, problems.toString())
+        assertFailsWith<IllegalArgumentException> { register("toy-bad-schema", """, "schema": { "nothing": 1 }""") }
     }
 
     @Test

@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.kotlin.KotlinLanguageService
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -100,6 +101,28 @@ class KotlinLanguageServiceTest {
         val doc = CodeDocument("fun foo() {\nval x = 1\n}")
         val formatted = KotlinLanguageService.format(doc)
         assertEquals("fun foo() {\n    val x = 1\n}", formatted)
+    }
+
+    @Test
+    fun `format indents with the editor's tab size and tabs`() = runTest {
+        val src = "fun foo() {\nif (x) {\nval y = 1\n}\n}"
+        assertEquals(
+            "fun foo() {\n\tif (x) {\n\t\tval y = 1\n\t}\n}",
+            KotlinLanguageService.format(CodeDocument(src), FormattingOptions(insertSpaces = false)),
+        )
+        assertEquals(
+            "fun foo() {\n  if (x) {\n    val y = 1\n  }\n}",
+            KotlinLanguageService.format(CodeDocument(src), FormattingOptions(tabSize = 2)),
+        )
+    }
+
+    @Test
+    fun `enter indents one level more after a brace, in tabs or spaces`() {
+        val doc = CodeDocument("\tfun foo() {\n")
+        assertEquals("\t\t", KotlinLanguageService.smartIndent(doc, 1, FormattingOptions(insertSpaces = false)))
+        assertEquals("        ", KotlinLanguageService.smartIndent(doc, 1, FormattingOptions()))
+        val closing = CodeDocument("    if (x) {\n}")
+        assertEquals("    ", KotlinLanguageService.smartIndent(closing, 1, FormattingOptions()))
     }
 
     @Test

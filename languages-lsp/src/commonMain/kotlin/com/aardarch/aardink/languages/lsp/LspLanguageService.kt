@@ -17,11 +17,15 @@ package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeActionKind
+import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
@@ -114,6 +118,16 @@ class LspLanguageService(
     @Volatile
     private var lspDiagnostics: List<LspDiagnostic> = emptyList()
 
+    /** The last completion answer's `isIncomplete`; a plain array is complete. */
+    private var lastCompletionsIncomplete = true
+
+    /**
+     * The last answer's `isIncomplete`, as the protocol means it: a complete list is asked for
+     * once per word and filtered by the editor, an incomplete one again on each keystroke.
+     */
+    override val completionsAreIncomplete: Boolean
+        get() = lastCompletionsIncomplete
+
     /** Version last sent to the server; diagnostics computed against an older one are stale. */
     @Volatile
     private var sentVersion: Int = 0
@@ -190,12 +204,15 @@ class LspLanguageService(
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val result = request("textDocument/completion", positionParams(document, cursorOffset)) ?: return emptyList()
-        val items = when (result) {
-            is JsonArray -> decodeOrNull(ListSerializer(LspCompletionItem.serializer()), result)
-            is JsonObject -> decodeOrNull(LspCompletionList.serializer(), result)?.items
+        val list = when (result) {
+            is JsonArray -> decodeOrNull(ListSerializer(LspCompletionItem.serializer()), result)?.let { LspCompletionList(false, it) }
+            is JsonObject -> decodeOrNull(LspCompletionList.serializer(), result)
             else -> null
         } ?: return emptyList()
-        return items.map { it.toCompletionItem(document) }
+        lastCompletionsIncomplete = list.isIncomplete
+        // The server orders by sortText (the label when it has none); the editor by sortPriority.
+        val ranks = list.items.map { it.sortText ?: it.label }.distinct().sorted().withIndex().associate { (i, key) -> key to i }
+        return list.items.map { it.toCompletionItem(document).copy(sortPriority = ranks.getValue(it.sortText ?: it.label)) }
     }
 
     /**
@@ -207,21 +224,32 @@ class LspLanguageService(
         Diagnostic(
             // Squiggles need at least one character to attach to.
             range = range.first..range.last.coerceAtLeast(range.first),
-            lineNumber = document.offsetToLineCol(range.first).first,
             message = d.message,
             severity = when (d.severity) {
                 1 -> DiagnosticSeverity.Error
                 2 -> DiagnosticSeverity.Warning
+                4 -> DiagnosticSeverity.Hint
                 else -> DiagnosticSeverity.Info
             },
             source = d.source ?: languageId,
+            code = (d.code as? JsonPrimitive)?.content,
+            codeDescription = d.codeDescription?.let { CodeDescription(it.href) },
+            tags = d.tags.orEmpty().mapNotNullTo(mutableSetOf()) {
+                when (it) {
+                    1 -> DiagnosticTag.Unnecessary
+                    2 -> DiagnosticTag.Deprecated
+                    else -> null
+                }
+            },
+            relatedInformation = d.relatedInformation.orEmpty().map { related ->
+                DiagnosticRelatedInformation(related.location.toLocation(document), related.message)
+            },
         )
     }
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
-        if (lineIndex <= 0) return 0
-        val prevLine = document.lineText(lineIndex - 1)
-        return prevLine.takeWhile { it.isWhitespace() }.length
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String {
+        if (lineIndex <= 0) return ""
+        return options.indentAfter(document.lineText(lineIndex - 1))
     }
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = when (charTyped) {
@@ -244,16 +272,16 @@ class LspLanguageService(
         )
     }
 
-    override suspend fun format(document: CodeDocument): String {
-        val params = LspDocumentFormattingParams(textDocument, DEFAULT_FORMATTING_OPTIONS)
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
+        val params = LspDocumentFormattingParams(textDocument, options.toLsp())
         val result = request("textDocument/formatting", encode(LspDocumentFormattingParams.serializer(), params))
             ?: return document.text
         val edits = decodeOrNull(ListSerializer(LspTextEdit.serializer()), result) ?: return document.text
         return applyLspEdits(document, edits)
     }
 
-    override suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> {
-        val params = LspDocumentRangeFormattingParams(textDocument, lspRangeOf(document, range), DEFAULT_FORMATTING_OPTIONS)
+    override suspend fun formatRange(document: CodeDocument, range: IntRange, options: FormattingOptions): List<TextEdit> {
+        val params = LspDocumentRangeFormattingParams(textDocument, lspRangeOf(document, range), options.toLsp())
         val result = request("textDocument/rangeFormatting", encode(LspDocumentRangeFormattingParams.serializer(), params))
             ?: return emptyList()
         val edits = decodeOrNull(ListSerializer(LspTextEdit.serializer()), result) ?: return emptyList()
@@ -606,7 +634,9 @@ class LspLanguageService(
             label = label,
             kind = mapCompletionKind(kind),
             insertText = edit?.newText ?: insertText ?: label,
-            documentation = markupText(documentation) ?: detail,
+            documentation = markupText(documentation),
+            detail = detail,
+            commitCharacters = commitCharacters.orEmpty().mapNotNullTo(mutableSetOf()) { it.singleOrNull() },
             filterText = filterText ?: label,
             replaceRange = edit?.effectiveRange?.let { offsetRangeOf(document, it) },
             // The import half of an auto-import completion; applied in the same undo batch.
@@ -658,26 +688,37 @@ class LspLanguageService(
             }
         }
 
-        private val DEFAULT_FORMATTING_OPTIONS = LspFormattingOptions(tabSize = 4, insertSpaces = true)
+        private fun FormattingOptions.toLsp() = LspFormattingOptions(tabSize = tabSize, insertSpaces = insertSpaces)
         private const val INSERT_TEXT_FORMAT_SNIPPET = 2
 
-        /** LSP `CompletionItemKind` → editor [CompletionKind]. */
+        /** LSP's `CompletionItemKind` numbers. */
         private fun mapCompletionKind(kind: Int?): CompletionKind = when (kind) {
-            5, 10 -> CompletionKind.Property
-
-            // Field, Property
-            7, 8, 9, 13, 22 -> CompletionKind.Module
-
-            // Class, Interface, Module, Enum, Struct
-            12, 20, 21 -> CompletionKind.Value
-
-            // Value, EnumMember, Constant
+            1 -> CompletionKind.Text
+            2 -> CompletionKind.Method
+            3 -> CompletionKind.Function
+            4 -> CompletionKind.Constructor
+            5 -> CompletionKind.Field
+            6 -> CompletionKind.Variable
+            7 -> CompletionKind.Class
+            8 -> CompletionKind.Interface
+            9 -> CompletionKind.Module
+            10 -> CompletionKind.Property
+            11 -> CompletionKind.Unit
+            12 -> CompletionKind.Value
+            13 -> CompletionKind.Enum
+            14 -> CompletionKind.Keyword
             15 -> CompletionKind.Snippet
-
-            16 -> CompletionKind.ColorRef
-
-            // Color
-            else -> CompletionKind.Element
+            16 -> CompletionKind.Color
+            17 -> CompletionKind.File
+            18 -> CompletionKind.Reference
+            19 -> CompletionKind.Folder
+            20 -> CompletionKind.EnumMember
+            21 -> CompletionKind.Constant
+            22 -> CompletionKind.Struct
+            23 -> CompletionKind.Event
+            24 -> CompletionKind.Operator
+            25 -> CompletionKind.TypeParameter
+            else -> CompletionKind.Text
         }
 
         /**

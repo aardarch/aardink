@@ -179,16 +179,16 @@ class ColumnSelectionTest {
         val view = viewOf("abcdef\nabcdef\nabcdef")
         val controller = EditorController(view.state, view)
         view.state.selection = TextRange(1)
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectDown))
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectDown))
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectRight))
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectRight))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectDown))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectDown))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectRight))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectRight))
         assertEquals(listOf("bc", "bc", "bc"), view.selectedTexts())
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectUp))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectUp))
         assertEquals(listOf("bc", "bc"), view.selectedTexts())
         // Anything else moving the selections starts the next box afresh, from the primary one.
         view.state.selection = TextRange(9)
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectDown))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectDown))
         assertEquals(listOf(TextRange(16), TextRange(9)), view.state.selections)
     }
 
@@ -199,7 +199,7 @@ class ColumnSelectionTest {
         controller.pointer.columnPress(at(row = 0, column = 1))
         controller.pointer.drag(at(row = 1, column = 3))
         controller.pointer.release()
-        controller.execute(KeyBinding(EditorCommand.ColumnSelectDown))
+        controller.execute(KeyBinding(KeyCommand.ColumnSelectDown))
         assertEquals(listOf("bc", "bc", "bc"), view.selectedTexts())
     }
 }

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
@@ -39,6 +40,7 @@ import com.aardarch.aardink.platform.editorClipboardFromKeys
 import com.aardarch.aardink.platform.editorImeWindowed
 import com.aardarch.aardink.platform.readPlainText
 import com.aardarch.aardink.platform.writePlainText
+import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.input.EditorImeAdapter
 import com.aardarch.aardink.ui.input.EditorImeGeometry
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +65,18 @@ internal class EditorHostActions(
     val onPopupKey: (KeyEvent) -> Boolean = { false },
     /** Show the documentation of the symbol at an offset (the touch menu's "Info"). Null: no such item. */
     val onShowInfo: ((Int) -> Unit)? = null,
+    /** F8 (forward) / Shift+F8: to the next or previous problem; returns whether there was one. */
+    val onGoToProblem: (forward: Boolean) -> Boolean = { false },
+    /** Ctrl+.: the quick fixes at the caret. */
+    val onQuickFix: () -> Boolean = { false },
+    /** F2: rename the symbol at the caret. */
+    val onRename: () -> Boolean = { false },
+    /** F3 (forward) / Shift+F3: the next or previous find match. */
+    val onFindNext: (forward: Boolean) -> Boolean = { false },
+    /** Alt+Enter while the find panel shows matches: a selection at every one. */
+    val onSelectAllMatches: () -> Boolean = { false },
+    /** A single tap (touch) placed the caret at an offset in the text. */
+    val onTapText: (Int) -> Unit = {},
 )
 
 /**
@@ -116,6 +130,19 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     var actions = EditorHostActions()
 
+    /** The host's items in the touch menu and the right-click menu, after the editor's own. */
+    var touchMenuItems: List<EditorMenuItem> = emptyList()
+    var contextMenuItems: List<EditorMenuItem> = emptyList()
+
+    /** Runs a host's menu item: its command through the state, else its click. */
+    fun runMenuItem(item: EditorMenuItem) {
+        val command = item.command
+        if (command != null) state.execute(command) else item.onClick()
+    }
+
+    /** Whether a host's menu item can be chosen now. */
+    fun canRun(item: EditorMenuItem): Boolean = item.enabled && (item.command?.let(state::canExecute) ?: true)
+
     var languageService: () -> LanguageService? = { null }
 
     var clipboard: Clipboard? = null
@@ -150,6 +177,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
         pointer.onLinkClick = { actions.onGoToDefinition() }
+        pointer.onTap = { offset -> actions.onTapText(offset) }
     }
 
     /** A selection handle dragged to [position] (viewport coordinates): that end of the selection follows it. */
@@ -168,7 +196,9 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     // ── Keys ─────────────────────────────────────────────────────────────────
 
-    fun onKeyEvent(event: KeyEvent): Boolean {
+    fun onKeyEvent(event: KeyEvent): Boolean = state.withSelectionReason(SelectionChangeReason.Keyboard) { handleKey(event) }
+
+    private fun handleKey(event: KeyEvent): Boolean {
         linkModifier = if (PlatformInfo.isMacOs) event.isMetaPressed else event.isCtrlPressed
         showToolbarAtCaret = false
         if (actions.onPopupKey(event)) return true
@@ -197,113 +227,127 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     fun execute(binding: KeyBinding): Boolean {
         val document = state.document
         val select = binding.select
-        val vertical = binding.command == EditorCommand.LineUp || binding.command == EditorCommand.LineDown ||
-            binding.command == EditorCommand.PageUp || binding.command == EditorCommand.PageDown
+        val vertical = binding.command == KeyCommand.LineUp || binding.command == KeyCommand.LineDown ||
+            binding.command == KeyCommand.PageUp || binding.command == KeyCommand.PageDown
         if (!vertical) preferredX = null
         val handled = when (binding.command) {
-            EditorCommand.CharLeft -> move(select) { if (!select && !it.collapsed) it.min else TextNavigator.charLeft(document, it.end) }
+            KeyCommand.CharLeft -> move(select) { if (!select && !it.collapsed) it.min else TextNavigator.charLeft(document, it.end) }
 
-            EditorCommand.CharRight -> move(select) { if (!select && !it.collapsed) it.max else TextNavigator.charRight(document, it.end) }
+            KeyCommand.CharRight -> move(select) { if (!select && !it.collapsed) it.max else TextNavigator.charRight(document, it.end) }
 
-            EditorCommand.WordLeft -> move(select) { TextNavigator.wordLeft(document, it.end) }
+            KeyCommand.WordLeft -> move(select) { TextNavigator.wordLeft(document, it.end) }
 
-            EditorCommand.WordRight -> move(select) { TextNavigator.wordRight(document, it.end) }
+            KeyCommand.WordRight -> move(select) { TextNavigator.wordRight(document, it.end) }
 
-            EditorCommand.LineStart -> move(select) { TextNavigator.smartHome(document, it.end) }
+            KeyCommand.LineStart -> move(select) { TextNavigator.smartHome(document, it.end) }
 
-            EditorCommand.LineEnd -> move(select) { TextNavigator.lineEnd(document, it.end) }
+            KeyCommand.LineEnd -> move(select) { TextNavigator.lineEnd(document, it.end) }
 
-            EditorCommand.DocumentStart -> single(select, 0)
+            KeyCommand.DocumentStart -> single(select, 0)
 
-            EditorCommand.DocumentEnd -> single(select, document.length)
+            KeyCommand.DocumentEnd -> single(select, document.length)
 
-            EditorCommand.LineUp -> vertical(select, -1)
+            KeyCommand.LineUp -> vertical(select, -1)
 
-            EditorCommand.LineDown -> vertical(select, 1)
+            KeyCommand.LineDown -> vertical(select, 1)
 
-            EditorCommand.PageUp -> page(select, -1)
+            KeyCommand.PageUp -> page(select, -1)
 
-            EditorCommand.PageDown -> page(select, 1)
+            KeyCommand.PageDown -> page(select, 1)
 
-            EditorCommand.DeleteLeft -> edit { state.deleteLeft() }
+            KeyCommand.DeleteLeft -> edit { state.deleteLeft() }
 
-            EditorCommand.DeleteRight -> edit { state.deleteRight() }
+            KeyCommand.DeleteRight -> edit { state.deleteRight() }
 
-            EditorCommand.DeleteWordLeft -> edit { state.deleteLeft(word = true) }
+            KeyCommand.DeleteWordLeft -> edit { state.deleteLeft(word = true) }
 
-            EditorCommand.DeleteWordRight -> edit { state.deleteRight(word = true) }
+            KeyCommand.DeleteWordRight -> edit { state.deleteRight(word = true) }
 
-            EditorCommand.DeleteToLineStart -> edit {
+            KeyCommand.DeleteToLineStart -> edit {
                 state.moveSelections(extend = true) { document.lineStart(document.offsetToLineCol(it.end).first) }
                 state.deleteLeft()
             }
 
-            EditorCommand.Enter -> !readOnly && true.also { type("\n") }
+            KeyCommand.Enter -> !readOnly && true.also { type("\n") }
 
             // In a snippet, Tab and Shift+Tab step through its tab stops instead, as in Monaco.
-            EditorCommand.Indent -> edit { if (!state.moveInSnippet(forward = true)) state.indentSelection() }
+            KeyCommand.Indent -> edit { if (!state.moveInSnippet(forward = true)) state.indentSelection() }
 
-            EditorCommand.Outdent -> edit { if (!state.moveInSnippet(forward = false)) state.outdentSelection() }
+            KeyCommand.Outdent -> edit { if (!state.moveInSnippet(forward = false)) state.outdentSelection() }
 
-            EditorCommand.Undo -> edit { state.undo() }
+            KeyCommand.Undo -> edit { state.undo() }
 
-            EditorCommand.Redo -> edit { state.redo() }
+            KeyCommand.Redo -> edit { state.redo() }
 
-            EditorCommand.SelectAll -> true.also { state.selectAll() }
+            KeyCommand.SelectAll -> true.also { state.selectAll() }
 
-            EditorCommand.Copy -> editorClipboardFromKeys && true.also { copyToClipboard() }
+            KeyCommand.Copy -> editorClipboardFromKeys && true.also { copyToClipboard() }
 
-            EditorCommand.Cut -> editorClipboardFromKeys && true.also { cutToClipboard() }
+            KeyCommand.Cut -> editorClipboardFromKeys && true.also { cutToClipboard() }
 
-            EditorCommand.Paste -> editorClipboardFromKeys && !readOnly && true.also { pasteFromClipboard() }
+            KeyCommand.Paste -> editorClipboardFromKeys && !readOnly && true.also { pasteFromClipboard() }
 
-            EditorCommand.Find -> true.also { actions.onFind() }
+            KeyCommand.Find -> true.also { actions.onFind() }
 
-            EditorCommand.Replace -> true.also { actions.onReplace() }
+            KeyCommand.Replace -> true.also { actions.onReplace() }
 
-            EditorCommand.GoToLine -> true.also { actions.onGoToLine() }
+            KeyCommand.GoToLine -> true.also { actions.onGoToLine() }
 
-            EditorCommand.ToggleComment -> edit { state.toggleComment() }
+            KeyCommand.ToggleComment -> edit { state.toggleComment() }
 
-            EditorCommand.MoveLinesUp -> edit { state.moveLines(up = true) }
+            KeyCommand.MoveLinesUp -> edit { state.moveLines(up = true) }
 
-            EditorCommand.MoveLinesDown -> edit { state.moveLines(up = false) }
+            KeyCommand.MoveLinesDown -> edit { state.moveLines(up = false) }
 
-            EditorCommand.CopyLinesUp -> edit { state.copyLines(down = false) }
+            KeyCommand.CopyLinesUp -> edit { state.copyLines(down = false) }
 
-            EditorCommand.CopyLinesDown -> edit { state.copyLines(down = true) }
+            KeyCommand.CopyLinesDown -> edit { state.copyLines(down = true) }
 
-            EditorCommand.DeleteLines -> edit { state.deleteLines() }
+            KeyCommand.DeleteLines -> edit { state.deleteLines() }
 
-            EditorCommand.AddNextOccurrence -> state.addNextOccurrence().also { revealCaret() }
+            KeyCommand.AddNextOccurrence -> state.addNextOccurrence().also { revealCaret() }
 
-            EditorCommand.SelectAllOccurrences -> state.selectAllOccurrences()
+            KeyCommand.SelectAllOccurrences -> state.selectAllOccurrences()
 
-            EditorCommand.AddCursorAbove -> addCursor(-1)
+            KeyCommand.AddCursorAbove -> addCursor(-1)
 
-            EditorCommand.AddCursorBelow -> addCursor(1)
+            KeyCommand.AddCursorBelow -> addCursor(1)
 
-            EditorCommand.ColumnSelectLeft -> columnSelect(rows = 0, columns = -1)
+            KeyCommand.ColumnSelectLeft -> columnSelect(rows = 0, columns = -1)
 
-            EditorCommand.ColumnSelectRight -> columnSelect(rows = 0, columns = 1)
+            KeyCommand.ColumnSelectRight -> columnSelect(rows = 0, columns = 1)
 
-            EditorCommand.ColumnSelectUp -> columnSelect(rows = -1, columns = 0)
+            KeyCommand.ColumnSelectUp -> columnSelect(rows = -1, columns = 0)
 
-            EditorCommand.ColumnSelectDown -> columnSelect(rows = 1, columns = 0)
+            KeyCommand.ColumnSelectDown -> columnSelect(rows = 1, columns = 0)
 
-            EditorCommand.ColumnSelectPageUp -> columnSelect(rows = -(view.visibleRows - 1).coerceAtLeast(1), columns = 0)
+            KeyCommand.ColumnSelectPageUp -> columnSelect(rows = -(view.visibleRows - 1).coerceAtLeast(1), columns = 0)
 
-            EditorCommand.ColumnSelectPageDown -> columnSelect(rows = (view.visibleRows - 1).coerceAtLeast(1), columns = 0)
+            KeyCommand.ColumnSelectPageDown -> columnSelect(rows = (view.visibleRows - 1).coerceAtLeast(1), columns = 0)
 
-            EditorCommand.Escape -> escape()
+            KeyCommand.Escape -> escape()
 
-            EditorCommand.TriggerSuggest -> !readOnly && true.also { actions.onTriggerSuggest() }
+            KeyCommand.TriggerSuggest -> !readOnly && true.also { actions.onTriggerSuggest() }
 
-            EditorCommand.GoToDefinition -> actions.onGoToDefinition()
+            KeyCommand.GoToDefinition -> actions.onGoToDefinition()
 
-            EditorCommand.FindReferences -> actions.onFindReferences()
+            KeyCommand.FindReferences -> actions.onFindReferences()
 
-            EditorCommand.FormatDocument -> !readOnly && actions.onFormat()
+            KeyCommand.FormatDocument -> !readOnly && actions.onFormat()
+
+            KeyCommand.NextProblem -> actions.onGoToProblem(true)
+
+            KeyCommand.PreviousProblem -> actions.onGoToProblem(false)
+
+            KeyCommand.Rename -> !readOnly && actions.onRename()
+
+            KeyCommand.QuickFix -> !readOnly && actions.onQuickFix()
+
+            KeyCommand.FindNext -> actions.onFindNext(true)
+
+            KeyCommand.FindPrevious -> actions.onFindNext(false)
+
+            KeyCommand.SelectAllMatches -> actions.onSelectAllMatches()
         }
         return handled
     }

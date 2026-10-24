@@ -29,8 +29,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Parses a VS Code theme JSON string into an [EditorTheme].
@@ -55,16 +59,73 @@ object EditorThemeParser {
      * required keys are missing; the caller should fall back to a built-in theme.
      */
     fun fromJson(json: String): EditorTheme? = try {
-        parseTheme(Json.parseToJsonElement(json).jsonObject)
+        parseTheme(Json.parseToJsonElement(json).jsonObject, EditorThemes.VsCodeDark)
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
         null
     }
 
-    private fun parseTheme(root: JsonObject): EditorTheme {
+    /**
+     * Parses [json] as Monaco's `defineTheme` data, `{ base, inherit, rules, colors }`, so one theme
+     * file serves a Monaco-shaped web editor and a Kotlin one alike. `base` picks what the theme
+     * leaves unset: [EditorThemes.VsCodeLight] for `vs` and `hc-light`, [EditorThemes.VsCodeDark]
+     * otherwise. Each rule's `token` names tokens as a grammar or the built-in languages do
+     * (`keyword`, `tag.aardflex`; the longest matching prefix wins), with its `foreground` (with or
+     * without `#`) and `fontStyle`; a rule with the empty token sets the default text colour. A
+     * rule's `background` is not drawn. `colors` takes VS Code's color keys, as [fromJson] does.
+     * With `inherit: false` the base still supplies the UI colours and the default text colour, but
+     * none of its token rules; a missing `inherit` inherits. Returns null if the JSON is malformed.
+     */
+    fun fromMonacoJson(json: String): EditorTheme? = try {
+        val root = Json.parseToJsonElement(json).jsonObject
+        val base = when ((root["base"] as? JsonPrimitive)?.contentOrNull) {
+            "vs", "hc-light" -> EditorThemes.VsCodeLight
+            else -> EditorThemes.VsCodeDark
+        }
+        val inherit = (root["inherit"] as? JsonPrimitive)?.booleanOrNull ?: true
+        val colors = (root["colors"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
+        val tokenColors = buildJsonArray {
+            for (rule in (root["rules"] as? JsonArray).orEmpty()) {
+                val obj = rule as? JsonObject ?: continue
+                val token = (obj["token"] as? JsonPrimitive)?.contentOrNull ?: continue
+                val foreground = (obj["foreground"] as? JsonPrimitive)?.contentOrNull?.let { "#" + it.removePrefix("#") }
+                val fontStyle = (obj["fontStyle"] as? JsonPrimitive)?.contentOrNull
+                if (token.isEmpty()) {
+                    if (foreground != null && "editor.foreground" !in colors) colors["editor.foreground"] = JsonPrimitive(foreground)
+                    continue
+                }
+                if (foreground == null && fontStyle == null) continue
+                add(
+                    buildJsonObject {
+                        put("scope", token)
+                        put(
+                            "settings",
+                            buildJsonObject {
+                                if (foreground != null) put("foreground", foreground)
+                                if (fontStyle != null) put("fontStyle", fontStyle)
+                            },
+                        )
+                    },
+                )
+            }
+        }
+        parseTheme(
+            buildJsonObject {
+                put("colors", JsonObject(colors))
+                put("tokenColors", tokenColors)
+            },
+            base,
+            inheritTokenRules = inherit,
+        )
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+    private fun parseTheme(root: JsonObject, fallback: EditorTheme, inheritTokenRules: Boolean = true): EditorTheme {
         val colors = root["colors"]?.jsonObject ?: JsonObject(emptyMap())
-        val fallback = EditorThemes.VsCodeDark
 
         val background = colors.hexColor("editor.background") ?: fallback.background
         val foreground = colors.hexColor("editor.foreground") ?: fallback.tokenColors[TokenType.Default]!!
@@ -81,7 +142,7 @@ object EditorThemeParser {
             .ifEmpty { if (background.luminance() > 0.5f) LightBracketPairColors else DefaultBracketPairColors }
 
         // ── Token colors ──────────────────────────────────────────────────────
-        val tokenStyles = buildTokenStyles(root, foreground, fallback)
+        val tokenStyles = buildTokenStyles(root, foreground, fallback, inheritTokenRules)
 
         return EditorTheme(
             background = background,
@@ -118,9 +179,9 @@ object EditorThemeParser {
      *
      * What the theme leaves out comes from [fallback], except a fallback sub-name under a type the
      * theme sets itself: a theme with its own keyword colour does not keep the fallback's
-     * `keyword.flow`.
+     * `keyword.flow`. Without [inheritRules], nothing but the default colour comes from [fallback].
      */
-    private fun buildTokenStyles(root: JsonObject, defaultFg: Color, fallback: EditorTheme): TokenStyles {
+    private fun buildTokenStyles(root: JsonObject, defaultFg: Color, fallback: EditorTheme, inheritRules: Boolean): TokenStyles {
         val colorRules = LinkedHashMap<String, Color>()
         val fontRules = LinkedHashMap<String, TokenFontStyle>()
         for (entry in (root["tokenColors"] as? JsonArray).orEmpty()) {
@@ -143,9 +204,9 @@ object EditorThemeParser {
             }
         }
 
-        val colors = fallback.tokenColors.toMutableMap()
+        val colors = if (inheritRules) fallback.tokenColors.toMutableMap() else mutableMapOf()
         colors[TokenType.Default] = defaultFg
-        val fontStyles = fallback.tokenFontStyles.toMutableMap()
+        val fontStyles = if (inheritRules) fallback.tokenFontStyles.toMutableMap() else mutableMapOf()
         val ownColors = HashSet<TokenType>()
         val ownFonts = HashSet<TokenType>()
         for ((type, scopes) in BASE_SCOPES) {

@@ -51,6 +51,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
@@ -436,11 +437,11 @@ class CodeEditorLayoutUiTest {
         override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc =
             HoverDoc(title = "Docs for a word", content = "What it does.")
 
-        override suspend fun format(document: CodeDocument): String = document.text
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
-        override fun smartIndent(document: CodeDocument, lineIndex: Int): Int = 0
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 
     @Test

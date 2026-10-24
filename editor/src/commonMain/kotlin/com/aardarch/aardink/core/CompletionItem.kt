@@ -23,8 +23,12 @@ package com.aardarch.aardink.core
  * @param insertText Text inserted into the document when the item is accepted. May differ from
  *   [label]; with [isSnippet] it is a snippet, such as `<text>$0</text>` for the label `text`.
  * @param documentation Optional secondary text shown below the label in the dropdown.
- * @param filterText String used for fuzzy-filtering as the user continues typing. Defaults to [label].
- * @param sortPriority Lower values sort earlier in the list (0 = highest priority).
+ * @param filterText What the text typed so far is matched against when the editor filters the list
+ *   itself (a service with [LanguageService.completionsAreIncomplete] false): its characters in
+ *   order, ignoring case, the first at the start of [filterText] or of a word in it. Defaults to
+ *   [label].
+ * @param sortPriority Lower values sort earlier in the list (0 = highest priority). The editor
+ *   keeps the service's order among items of the same priority.
  * @param replaceRange Exact document range [insertText] replaces when the item is accepted, for
  *   providers that know it (a language server's `textEdit`). When null the editor falls back to
  *   replacing the token before the cursor.
@@ -40,6 +44,10 @@ package com.aardarch.aardink.core
  *   line it is accepted on, and a tab in their indentation becomes the editor's indent.
  * @param keepWhitespace With [isSnippet], insert the snippet's whitespace as written, without the
  *   indentation adjustment (Monaco's `KeepWhitespace`).
+ * @param detail A short line about the item, such as a type or a signature, shown beside its label.
+ * @param commitCharacters Characters that, typed while this item is selected in the list at the
+ *   caret, accept it first and are then typed after it (LSP's and Monaco's `commitCharacters`).
+ *   Not for snippets.
  */
 data class CompletionItem(
     val label: String,
@@ -52,8 +60,14 @@ data class CompletionItem(
     val additionalEdits: List<TextEdit> = emptyList(),
     val isSnippet: Boolean = false,
     val keepWhitespace: Boolean = false,
+    val detail: String? = null,
+    val commitCharacters: Set<Char> = emptySet(),
 )
 
+/**
+ * What a [CompletionItem] completes, for its icon: the eight kinds the aardflex markup language
+ * needs, then the rest of Monaco's `CompletionItemKind` (and LSP's) for code.
+ */
 enum class CompletionKind {
     /** XML element name (e.g. `text`, `layer`). */
     Element,
@@ -67,10 +81,10 @@ enum class CompletionKind {
     /** A multi-token snippet (e.g. full `<module .../>` boilerplate). */
     Snippet,
 
-    /** A data module type or declared module ID (for expression module context). */
+    /** A data module type or declared module ID, or a code module or package. */
     Module,
 
-    /** A module property name (for expression property context). */
+    /** A module property name, or a property of an object. */
     Property,
 
     /** An expression transform name (e.g. `uppercase`, `round`). */
@@ -78,4 +92,30 @@ enum class CompletionKind {
 
     /** A colour reference name (e.g. `primary` after `@`). */
     ColorRef,
+
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Struct,
+    Interface,
+    Enum,
+    EnumMember,
+    Keyword,
+    Text,
+
+    /** A colour value, such as a hex code. */
+    Color,
+    File,
+    Folder,
+    Reference,
+    Constant,
+    Event,
+    Operator,
+    TypeParameter,
+    Unit,
+    User,
+    Issue,
 }

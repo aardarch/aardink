@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -119,7 +120,6 @@ object KotlinLanguageService : BaseLanguageService() {
                     diags.add(
                         Diagnostic(
                             range = i..n,
-                            lineNumber = line,
                             message = "Unterminated block comment /* ... */",
                             severity = DiagnosticSeverity.Error,
                             source = "kotlin",
@@ -139,7 +139,6 @@ object KotlinLanguageService : BaseLanguageService() {
                     diags.add(
                         Diagnostic(
                             range = i..n,
-                            lineNumber = line,
                             message = "Unterminated raw string \"\"\" ... \"\"\"",
                             severity = DiagnosticSeverity.Error,
                             source = "kotlin",
@@ -173,7 +172,6 @@ object KotlinLanguageService : BaseLanguageService() {
                     diags.add(
                         Diagnostic(
                             range = strStart..i,
-                            lineNumber = line,
                             message = "Unterminated string literal",
                             severity = DiagnosticSeverity.Error,
                             source = "kotlin",
@@ -209,7 +207,6 @@ object KotlinLanguageService : BaseLanguageService() {
                     diags.add(
                         Diagnostic(
                             range = i..(i + 1),
-                            lineNumber = line,
                             message = "Unmatched closing delimiter '$c'",
                             severity = DiagnosticSeverity.Error,
                             source = "kotlin",
@@ -228,7 +225,6 @@ object KotlinLanguageService : BaseLanguageService() {
             diags.add(
                 Diagnostic(
                     range = offset..(offset + 1),
-                    lineNumber = line,
                     message = "Unclosed delimiter '$openChar'",
                     severity = DiagnosticSeverity.Error,
                     source = "kotlin",
@@ -317,26 +313,23 @@ object KotlinLanguageService : BaseLanguageService() {
         else -> null
     }
 
-    override fun smartIndent(document: CodeDocument, lineIndex: Int): Int {
-        if (lineIndex <= 0) return 0
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String {
+        if (lineIndex <= 0) return ""
         val prevLine = document.lineText(lineIndex - 1)
-        val prevIndent = prevLine.takeWhile { it.isWhitespace() }.length
         val trimmedPrev = prevLine.trim()
         val currLine = document.lineText(lineIndex).trim()
 
-        var indent = prevIndent
+        var levels = 0
         if (trimmedPrev.endsWith("{") || trimmedPrev.endsWith("(") || trimmedPrev.endsWith("=") || trimmedPrev.endsWith("->") ||
             trimmedPrev == "when"
         ) {
-            indent += 4
+            levels++
         }
-        if (currLine.startsWith("}") || currLine.startsWith(")")) {
-            indent = (indent - 4).coerceAtLeast(0)
-        }
-        return indent
+        if (currLine.startsWith("}") || currLine.startsWith(")")) levels--
+        return options.indentAfter(prevLine, levels)
     }
 
-    override suspend fun format(document: CodeDocument): String {
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
         val text = document.text
         if (text.isBlank()) return text
 
@@ -371,7 +364,7 @@ object KotlinLanguageService : BaseLanguageService() {
             // blocks, and a line starting `})` closes two.
             val (net, leadingCloses) = delimiterBalance(state.code)
             val lineDepth = (depth - leadingCloses).coerceAtLeast(0)
-            formatted.add(" ".repeat(lineDepth * 4) + trimmed)
+            formatted.add(options.indentOf(lineDepth * options.tabSize) + trimmed)
             depth = (lineDepth + net + leadingCloses).coerceAtLeast(0)
         }
 

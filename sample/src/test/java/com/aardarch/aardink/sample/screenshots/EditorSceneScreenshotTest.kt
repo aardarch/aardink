@@ -208,13 +208,11 @@ class EditorSceneScreenshotTest {
             diagnostics = listOf(
                 Diagnostic(
                     range = names until names + 10,
-                    lineNumber = document.offsetToLineCol(names).first,
                     message = "Unresolved reference",
                     severity = DiagnosticSeverity.Error,
                 ),
                 Diagnostic(
                     range = count until count + 5,
-                    lineNumber = document.offsetToLineCol(count).first,
                     message = "Name shadowed",
                     severity = DiagnosticSeverity.Warning,
                 ),

@@ -12,9 +12,10 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 [![minSdk](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](#requirements)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20JVM%20%7C%20Wasm-blue.svg)](#requirements)
 
-> **Upgrading from 0.5?** 0.6 replaces the text field underneath the editor, and the API changes
-> with it. [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md) has every change with a before and
-> after.
+> **Upgrading?** From 0.6, [`docs/MIGRATION_0.7.md`](docs/MIGRATION_0.7.md); from 0.5, which had
+> a different text field underneath the editor, [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md)
+> first. Each has every change with a before and after. What comes next is in
+> [`docs/AARDINK_ROADMAP.md`](docs/AARDINK_ROADMAP.md).
 
 ## Features
 
@@ -23,11 +24,16 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Syntax highlighting, incremental, for Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown | ✓ | ✓ | ✓ |
 | Your own language: a tokenizer in Kotlin, or a Monarch grammar as data (`DeclarativeGrammar`) | ✓ | ✓ | ✓ |
 | … or registered from JavaScript, with completions, hover and diagnostics in JavaScript | | | ✓ |
+| An XML dialect from a schema: completions by nesting, hover, checks (`XmlSchemaLanguageService`) | ✓ | ✓ | ✓ |
+| A dialect over a built-in language, keeping its checks and formatting (`CompositeLanguageService`) | ✓ | ✓ | ✓ |
 | Folding, find and replace, go to line | ✓ | ✓ | ✓ |
 | Multiple cursors and column selection | ✓ | ✓ | ✓ |
 | Undo grouped as Monaco does, `alternativeVersionId` for dirty tracking | ✓ | ✓ | ✓ |
+| Content and selection events with ranges; commands for a host's buttons (`EditorCommand`) | ✓ | ✓ | ✓ |
 | Completions, hover, signature help and quick fixes at the caret | ✓ | ✓ | ✓ |
-| Diagnostics (squiggles and gutter markers), from the language or the host | ✓ | ✓ | ✓ |
+| Completions filtered and ordered by the editor, quick suggestions, commit characters | ✓ | ✓ | ✓ |
+| Diagnostics (squiggles and gutter markers), from the language or the host, with codes, tags and hints | ✓ | ✓ | ✓ |
+| F8 through the problems; a squiggle's message under the mouse or a tap | ✓ | ✓ | ✓ |
 | Go to definition, find references, format document or selection | ✓ | ✓ | ✓ |
 | Bracket-pair colours and matching, current-line highlight | ✓ | ✓ | ✓ |
 | Minimap and sticky scroll | ✓ | ✓ | ✓ |
@@ -36,10 +42,10 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Input methods: composition, and a phone keyboard's autocorrect and voice input | ✓ | ✓ | ✓ |
 | Touch: selection handles, text menu | ✓ | | ✓ |
 | Magnifier while dragging a handle | ✓ | | |
-| Keyboard toolbar above the soft keyboard: the language's characters, caret arrows, undo, redo | ✓ | | on touch devices |
-| Right-click menu | | ✓ | ✓ |
+| Keyboard toolbar above the soft keyboard: the language's characters, caret arrows, undo, redo, and your own buttons | ✓ | | on touch devices |
+| Touch menu and right-click menu, with your own items | ✓ | ✓ | ✓ |
 | Language servers (`aardink-languages-lsp`) | streams | streams | WebSocket |
-| Themes: `EditorTheme` data classes, six built in, or VS Code theme JSON | ✓ | ✓ | ✓ |
+| Themes: `EditorTheme` data classes, six built in, VS Code theme JSON, or Monaco's `defineTheme` data | ✓ | ✓ | ✓ |
 
 ## Modules
 
@@ -127,8 +133,10 @@ fun MyEditor() {
 
 With a language service and no `diagnostics` argument, the editor collects the service's
 diagnostics itself. Read the text with `state.text`, the selections with `state.selections`, and
-edit with `state.applyTextEdits(...)`; `state.canUndo`, `undo()` and `redo()` drive toolbar
-buttons. See the [`sample/`](sample/) module for a runnable example.
+edit with `state.applyTextEdits(...)`. `state.addContentListener { changes -> … }` reports every
+edit with its range; `state.execute(EditorCommand.Format)` and the other commands drive a
+toolbar, `state.availableCommands` enabling its buttons. See the [`sample/`](sample/) module for
+a runnable example.
 
 ## Using Aardink in a web app
 
@@ -181,6 +189,11 @@ To add a new language, implement these interfaces from the `editor` module:
 
 Bundle them as a `LanguageDefinition` and register with `LanguageRegistry`.
 The [`languages/`](languages/) module is a working reference.
+
+For a dialect of a built-in language, `LanguageDefinition.extending(BuiltInLanguages.Xml, myService)`
+puts your service over the base's, keeping its checks, indentation and formatting. For an XML
+dialect, describe its elements and attributes once as an `XmlSchema` (JSON) and
+`XmlSchemaLanguageService(XmlSchema.parse(json))` gives completions, hover and checks from it.
 
 For highlighting alone, no tokenizer code is needed: `DeclarativeTokenizer(DeclarativeGrammar.parse(json))`
 highlights from a Monarch grammar (Monaco's format) as JSON, a line at a time and incrementally.

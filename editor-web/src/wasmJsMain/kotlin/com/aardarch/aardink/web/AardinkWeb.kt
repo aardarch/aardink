@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,24 +33,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.ComposeViewport
+import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ContentChange
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.EditorTypography
@@ -77,6 +88,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonArray
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -118,9 +130,28 @@ class AardinkEditorHandle internal constructor(
     internal var reportedTextVersion: Int = initialState.textVersion
 
     internal var onChange: ((String) -> Unit)? = null
-    internal var onContentChange: ((String, Int, String) -> Unit)? = null
+    internal var onContentChange: ((String, Int, String, String) -> Unit)? = null
     internal var onCursorChange: ((Int, Int) -> Unit)? = null
     internal var onDiagnosticsChange: ((String) -> Unit)? = null
+    internal var onSelectionChange: ((String) -> Unit)? = null
+    internal var onFocusChange: ((Boolean) -> Unit)? = null
+
+    /** The changes since the last report to [onContentChange], in order. */
+    internal val pendingChanges = ArrayList<ContentChange>()
+
+    /** The focus last reported to [onFocusChange]. */
+    internal var reportedFocus = false
+
+    /** The commands and actions the host added, keys and context-menu entries included. */
+    internal val hostActions = mutableStateListOf<WebAction>()
+    internal var nextCommandId = 1
+
+    init {
+        initialState.addContentListener { pendingChanges += it }
+        initialState.addSelectionListener { _, reason ->
+            onSelectionChange?.invoke(AardinkWeb.selectionEventJson(this, reason))
+        }
+    }
 
     /** What the diff lane compares the text with; "" for no diff lane. */
     internal val baseline: MutableState<String> = mutableStateOf("")
@@ -156,7 +187,10 @@ object AardinkWeb {
         "solarized-dark" to EditorThemes.SolarizedDark,
     )
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
 
     // ── What pages register: every editor mounted with the defaults sees it ─────
 
@@ -172,7 +206,9 @@ object AardinkWeb {
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
      * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
-     * "triggerCharacters"?, "inheritCompletions"? }`: `grammar` is a [DeclarativeGrammar] (a subset
+     * "triggerCharacters"?, "inheritCompletions"?, "schema"? }` (`schema`: an
+     * [com.aardarch.aardink.languages.XmlSchema] as JSON, whose completions, hover and checks come
+     * before the extended language's, or built-in XML's when it extends none): `grammar` is a [DeclarativeGrammar] (a subset
      * of Monaco's Monarch, with `comments` as in Monaco's language configuration), and `extends`
      * names a language whose language service and folding this one takes (`"xml"`), besides what
      * [providers] answer. `inheritCompletions: false` leaves out that language's completions,
@@ -399,12 +435,171 @@ object AardinkWeb {
     /**
      * Registers the single detailed content listener, replacing any previous one; `null` removes it.
      * Called with the full text after every change, as [onChange] is, with the text's version
-     * (Monaco's `versionId`: it goes up with every change) and what the change was: `"edit"`,
-     * `"undo"`, `"redo"` or `"flush"` (the whole text replaced, as by [setValue]).
+     * (Monaco's `versionId`: it goes up with every change), what the change was (`"edit"`,
+     * `"undo"`, `"redo"` or `"flush"`, the whole text replaced, as by [setValue]) and a JSON array
+     * of the changes since the last call, in Monaco's `IModelContentChange` shape:
+     * `{ range, rangeOffset, rangeLength, text }`, `range` 1-based with an exclusive end, in the
+     * text as it was just before that change. Apply them in order to the previous text and you
+     * have this one. Several edits within one frame are reported together.
      */
-    fun onContentChange(handle: AardinkEditorHandle, callback: ((text: String, versionId: Int, kind: String) -> Unit)?) {
+    fun onContentChange(
+        handle: AardinkEditorHandle,
+        callback: ((text: String, versionId: Int, kind: String, changesJson: String) -> Unit)?,
+    ) {
         handle.onContentChange = callback
     }
+
+    /**
+     * Registers the single selection listener, replacing any previous one; `null` removes it.
+     * Called whenever the selections change, with JSON `{ selections, reason, source }`:
+     * `selections` as [getSelections] gives them, the primary first; `reason` one of `"keyboard"`,
+     * `"pointer"`, `"edit"`, `"undo"`, `"redo"`, `"flush"` and `"api"`; `source` Monaco's
+     * `"keyboard"`, `"mouse"`, `"api"` or `"model"` (an edit moved them).
+     */
+    fun onSelectionChange(handle: AardinkEditorHandle, callback: ((eventJson: String) -> Unit)?) {
+        handle.onSelectionChange = callback
+    }
+
+    /** Registers the single focus listener, replacing any previous one: true when the text gains the keyboard focus, false when it loses it. */
+    fun onFocusChange(handle: AardinkEditorHandle, callback: ((focused: Boolean) -> Unit)?) {
+        handle.onFocusChange = callback
+    }
+
+    /** The primary caret, 1-based, as Monaco's `getPosition`. */
+    fun getPosition(handle: AardinkEditorHandle): WebPosition {
+        val document = handle.state.value.document
+        val (line, column) = document.offsetToLineCol(handle.state.value.selection.end)
+        return WebPosition(line + 1, column + 1)
+    }
+
+    /** [getPosition] as JSON. */
+    fun getPositionJson(handle: AardinkEditorHandle): String = json.encodeToString(WebPosition.serializer(), getPosition(handle))
+
+    /**
+     * Places a single caret at a 1-based [line] and [column], clamped to the document, as Monaco's
+     * `setPosition`; it does not scroll (see [navigateTo] for that).
+     */
+    fun setPosition(handle: AardinkEditorHandle, line: Int, column: Int) {
+        val state = handle.state.value
+        state.selection = TextRange(offsetOf(state.document, line, column))
+    }
+
+    // ── Commands and actions, as Monaco's trigger, addCommand, addAction and getAction ─────
+
+    /**
+     * Runs an action by its id, as Monaco's `trigger(source, handlerId, payload)`: one the host
+     * added with [addAction] or [addCommand], or one of the editor's own by Monaco's id
+     * (`editor.action.formatDocument`, `editor.action.marker.next`, `editor.foldLevel2`, ...).
+     * `editor.action.insertSnippet` takes [payloadJson] `{ "snippet": "..." }`. Returns whether it
+     * ran.
+     */
+    fun trigger(handle: AardinkEditorHandle, actionId: String, payloadJson: String? = null): Boolean {
+        handle.hostActions.lastOrNull { it.id == actionId }?.let {
+            it.run()
+            return true
+        }
+        val command = if (actionId == "editor.action.insertSnippet") {
+            val payload = payloadJson?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
+            val snippet = (payload?.get("snippet") as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return false
+            EditorCommand.InsertSnippet(snippet)
+        } else {
+            MonacoActions.command(actionId) ?: return false
+        }
+        return handle.state.value.execute(command)
+    }
+
+    /** Whether [trigger] would run [actionId] now: Monaco's `IEditorAction.isSupported`. */
+    fun canTrigger(handle: AardinkEditorHandle, actionId: String): Boolean = handle.hostActions.any { it.id == actionId } ||
+        (MonacoActions.command(actionId)?.let { handle.state.value.canExecute(it) } ?: false)
+
+    /** The label of an action by its id, the host's or the editor's own; null for an id neither has. */
+    fun actionLabel(handle: AardinkEditorHandle, actionId: String): String? =
+        handle.hostActions.lastOrNull { it.id == actionId }?.label ?: MonacoActions.label(actionId)
+
+    /**
+     * Adds an action, as Monaco's `addAction`: [run] is called by [trigger], by any of
+     * [keybindings] while the editor has the focus (see [addCommand] for their form; ones it
+     * cannot read are skipped), and from the right-click menu when [inContextMenu]. Adding an id
+     * again replaces it.
+     */
+    fun addAction(
+        handle: AardinkEditorHandle,
+        id: String,
+        label: String,
+        keybindings: List<String>,
+        inContextMenu: Boolean,
+        run: () -> Unit,
+    ) {
+        handle.hostActions.removeAll { it.id == id }
+        handle.hostActions += WebAction(id, label, keybindings.mapNotNull(KeyChord::parse), inContextMenu, run)
+    }
+
+    /** Removes an action [addAction] or [addCommand] added. */
+    fun removeAction(handle: AardinkEditorHandle, id: String) {
+        handle.hostActions.removeAll { it.id == id }
+    }
+
+    /**
+     * Binds a key to [run] while the editor has the focus, ahead of the editor's own binding for
+     * it, as Monaco's `addCommand`. [keybinding] is text, `"CtrlCmd+S"`, `"Shift+Alt+F"`, `"F8"`
+     * (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere, `Ctrl` is Ctrl everywhere), or Monaco's
+     * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+     * Returns the command's id, for [trigger] and [removeAction]; null for a key it cannot read.
+     */
+    fun addCommand(handle: AardinkEditorHandle, keybinding: String, run: () -> Unit): String? {
+        val chord = KeyChord.parse(keybinding) ?: return null
+        val id = "aardink.command.${handle.nextCommandId++}"
+        handle.hostActions += WebAction(id, id, listOf(chord), inContextMenu = false, run = run)
+        return id
+    }
+
+    /** Scrolls a 1-based [line] into view, to the middle when [center], without moving the caret: Monaco's `revealLine` and `revealLineInCenter`. */
+    fun revealLine(handle: AardinkEditorHandle, line: Int, center: Boolean = false) {
+        val state = handle.state.value
+        val document = state.document
+        state.execute(EditorCommand.Reveal(document.lineStart((line - 1).coerceIn(0, document.lineCount - 1)), center))
+    }
+
+    /** Scrolls a 1-based position into view, to the middle when [center], without moving the caret: Monaco's `revealRange` by its start. */
+    fun revealPosition(handle: AardinkEditorHandle, line: Int, column: Int, center: Boolean = false) {
+        val state = handle.state.value
+        state.execute(EditorCommand.Reveal(offsetOf(state.document, line, column), center))
+    }
+
+    /** The changes reported to [onContentChange], as JSON in Monaco's shape. */
+    internal fun contentChangesJson(changes: List<ContentChange>): String = buildJsonArray {
+        for (change in changes) {
+            addJsonObject {
+                put(
+                    "range",
+                    buildJsonObject {
+                        put("startLineNumber", change.startLine + 1)
+                        put("startColumn", change.startColumn + 1)
+                        put("endLineNumber", change.oldEndLine + 1)
+                        put("endColumn", change.oldEndColumn + 1)
+                    },
+                )
+                put("rangeOffset", change.offset)
+                put("rangeLength", change.deletedLength)
+                put("text", change.insertedText)
+            }
+        }
+    }.toString()
+
+    /** What [onSelectionChange] is called with. */
+    internal fun selectionEventJson(handle: AardinkEditorHandle, reason: SelectionChangeReason): String = buildJsonObject {
+        put("selections", json.encodeToJsonElement(selectionsJsonSerializer, getSelections(handle)))
+        put("reason", reason.name.lowercase())
+        put(
+            "source",
+            when (reason) {
+                SelectionChangeReason.Keyboard -> "keyboard"
+                SelectionChangeReason.Pointer -> "mouse"
+                SelectionChangeReason.Api -> "api"
+                else -> "model"
+            },
+        )
+    }.toString()
 
     /** Registers the single caret listener (1-based line and column), replacing any previous one. */
     fun onCursorChange(handle: AardinkEditorHandle, callback: ((line: Int, column: Int) -> Unit)?) {
@@ -420,22 +615,36 @@ object AardinkWeb {
         handle.diagnostics.value = diagnostics?.let { toDiagnostics(handle.state.value.document, it) }
     }
 
-    /** [diagnostics] addressed to [document]; ones on lines it does not have are dropped. */
+    /** [diagnostics] addressed to [document]; ones starting on lines it does not have are dropped. */
     internal fun toDiagnostics(document: CodeDocument, diagnostics: List<WebDiagnostic>): List<Diagnostic> = diagnostics.mapNotNull { web ->
         if (web.line < 1 || web.line > document.lineCount) return@mapNotNull null
         val line = web.line - 1
+        val endLine = ((web.endLineNumber ?: web.line) - 1).coerceIn(line, document.lineCount - 1)
         val start = document.lineColToOffset(line, web.startColumn - 1)
-        val endExclusive = document.lineColToOffset(line, web.endColumn - 1)
+        val endExclusive = document.lineColToOffset(endLine, web.endColumn - 1)
         Diagnostic(
             // Diagnostic.range is inclusive of its last character; a zero-width marker still
             // gets one character so it stays visible.
             range = start..maxOf(start, endExclusive - 1),
-            lineNumber = line,
             message = web.message,
             severity = when (web.severity.lowercase()) {
                 "error" -> DiagnosticSeverity.Error
                 "warning" -> DiagnosticSeverity.Warning
+                "hint" -> DiagnosticSeverity.Hint
                 else -> DiagnosticSeverity.Info
+            },
+            source = web.source,
+            code = web.code,
+            codeDescription = web.codeHref?.let { CodeDescription(it) },
+            tags = web.tags.orEmpty().mapNotNullTo(mutableSetOf()) {
+                when (it) {
+                    1 -> DiagnosticTag.Unnecessary
+                    2 -> DiagnosticTag.Deprecated
+                    else -> null
+                }
+            },
+            relatedInformation = web.relatedInformation.orEmpty().map {
+                DiagnosticRelatedInformation(Location(it.resource, IntRange.EMPTY, it.startLineNumber - 1, it.startColumn - 1), it.message)
             },
         )
     }
@@ -469,10 +678,7 @@ object AardinkWeb {
         handle.state.value.revalidate()
     }
 
-    /**
-     * [diagnostics] in the host's shape. A marker covers one line, so a range running on past the
-     * end of its first line ends there.
-     */
+    /** [diagnostics] in the host's shape, over as many lines as they run. */
     internal fun toWebDiagnostics(document: CodeDocument, diagnostics: List<Diagnostic>): List<WebDiagnostic> =
         diagnostics.map { diagnostic ->
             val (line, startColumn) = document.offsetToLineCol(diagnostic.range.first)
@@ -480,9 +686,28 @@ object AardinkWeb {
             WebDiagnostic(
                 line = line + 1,
                 startColumn = startColumn + 1,
-                endColumn = if (endLine == line) endColumn + 1 else document.lineEnd(line) - document.lineStart(line) + 1,
+                endColumn = endColumn + 1,
                 message = diagnostic.message,
                 severity = diagnostic.severity.name.lowercase(),
+                endLineNumber = endLine + 1,
+                source = diagnostic.source,
+                code = diagnostic.code,
+                codeHref = diagnostic.codeDescription?.href,
+                tags = diagnostic.tags.map { if (it == DiagnosticTag.Unnecessary) 1 else 2 }.takeIf { it.isNotEmpty() },
+                relatedInformation = diagnostic.relatedInformation.map { related ->
+                    val location = related.location
+                    val (startLine, startCol) = if (location.range != IntRange.EMPTY) {
+                        document.offsetToLineCol(location.range.first)
+                    } else {
+                        (location.line ?: 0) to (location.column ?: 0)
+                    }
+                    val (endL, endC) = if (location.range != IntRange.EMPTY) {
+                        document.offsetToLineCol(location.range.last + 1)
+                    } else {
+                        startLine to startCol
+                    }
+                    WebRelatedInformation(location.uri, related.message, startLine + 1, startCol + 1, endL + 1, endC + 1)
+                }.takeIf { it.isNotEmpty() },
             )
         }
 
@@ -522,10 +747,12 @@ object AardinkWeb {
         val state = handle.state.value
         val service = handle.language.value.languageService
         if (service == null || handle.options.value.readOnly) return then(false)
+        val options = handle.options.value
+        val formatting = FormattingOptions(options.tabSize, options.insertSpaces)
         handle.scope.launch {
             val version = state.textVersion
             val text = state.document.text
-            val formatted = withContext(state.computeDispatcher) { service.format(CodeDocument(text)) }
+            val formatted = withContext(state.computeDispatcher) { service.format(CodeDocument(text), formatting) }
             val edit = changeBetween(text, formatted)
             if (state.textVersion != version || edit == null) return@launch then(false)
             state.applyTextEdits(listOf(edit))
@@ -645,6 +872,10 @@ object AardinkWeb {
         handle.onContentChange = null
         handle.onCursorChange = null
         handle.onDiagnosticsChange = null
+        handle.onSelectionChange = null
+        handle.onFocusChange = null
+        handle.hostActions.clear()
+        handle.pendingChanges.clear()
         handle.scope.cancel()
     }
 
@@ -708,8 +939,18 @@ private fun EditorContent(handle: AardinkEditorHandle) {
             if (version != handle.reportedTextVersion) {
                 handle.reportedTextVersion = version
                 val text = state.document.text
+                val changes = AardinkWeb.contentChangesJson(handle.pendingChanges)
+                handle.pendingChanges.clear()
                 handle.onChange?.invoke(text)
-                handle.onContentChange?.invoke(text, version, state.lastChangeKind.name.lowercase())
+                handle.onContentChange?.invoke(text, version, state.lastChangeKind.name.lowercase(), changes)
+            }
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.isFocused }.collect { focused ->
+            if (focused != handle.reportedFocus) {
+                handle.reportedFocus = focused
+                handle.onFocusChange?.invoke(focused)
             }
         }
     }
@@ -743,7 +984,15 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         ) {
             CodeEditorLayout(
                 state = state,
-                modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
+                // The host's keys come first, as Monaco's addCommand ones do.
+                modifier = Modifier.fillMaxSize().focusRequester(focusRequester).onPreviewKeyEvent { event ->
+                    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it.matches(event) } }
+                    action?.run?.invoke()
+                    action != null
+                },
+                contextMenuItems = handle.hostActions.filter {
+                    it.inContextMenu
+                }.map { action -> EditorMenuItem(action.label, onClick = action.run) },
                 languageService = language.languageService,
                 findReplaceState = handle.findReplaceState,
                 foldState = handle.foldState,
@@ -766,6 +1015,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     tabSize = options.tabSize.coerceIn(1, 16),
                     insertSpaces = options.insertSpaces,
                     renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
+                    quickSuggestions = options.quickSuggestions,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
             )

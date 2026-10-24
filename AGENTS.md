@@ -126,7 +126,7 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
   and commit the updated dumps under `*/api/`. Every public symbol added, changed or removed
   must be in the current version's API ledger, [docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md)
-  §11 for 0.7 (the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
+  §11 for 0.7 and §14 for 0.8, once approved (the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
   if it breaks consumers, in that version's `docs/MIGRATION_0.x.md`. Nothing public is added
   without that.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
@@ -186,9 +186,13 @@ The `editor` module is intentionally language-agnostic:
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
 | `EditorOptions` | The editor's switches: read-only, soft wrap, gutter, minimap, sticky scroll, brackets, tabs |
 | `CodeEditorState` / `rememberCodeEditorState()` | State holder: text, `selections`, `applyTextEdits()`, undo (`canUndo`, `pushUndoStop`, `alternativeVersionId`) |
+| `ContentChange` / `CodeEditorState.addContentListener` | Edits as they happen, with ranges and inserted text; `addSelectionListener` for selections |
+| `EditorCommand` / `CodeEditorState.execute` | What a key or menu does, for a host's buttons; `availableCommands` to enable them |
 | `DeclarativeGrammar` / `DeclarativeTokenizer` | Highlighting from a Monarch grammar as JSON (`:languages`) |
 | `AardinkWeb` | The browser bridge (`:editor-web`); the npm package wraps it in a Monaco-shaped API |
 | `LanguageService` | Interface — completions, diagnostics, hover, formatting, code actions, definition, signature help, rename |
+| `CompositeLanguageService` | A dialect's service over a base language's (`LanguageDefinition.extending` in `:languages`) |
+| `XmlSchema` / `XmlSchemaLanguageService` | An XML dialect's completions, hover and checks from its vocabulary as JSON (`:languages`) |
 | `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`) |
 | `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
@@ -213,7 +217,7 @@ The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the
 vanniktech Maven Publish plugin, and `:sample-web` stamps it into the npm package — never
 hardcode a version in `build.gradle.kts`. Between releases `VERSION_NAME` is the next version
-with a `-SNAPSHOT` suffix (now `0.6.0-SNAPSHOT`); `create-release.ps1` suggests the version
+with a `-SNAPSHOT` suffix (now `0.7.0-SNAPSHOT`); `create-release.ps1` suggests the version
 without the suffix, and the first commit after a release moves `VERSION_NAME` to the next
 `-SNAPSHOT`.
 

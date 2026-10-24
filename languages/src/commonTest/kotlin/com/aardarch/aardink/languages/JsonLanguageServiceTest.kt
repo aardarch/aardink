@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -104,6 +105,13 @@ class JsonLanguageServiceTest {
         val doc = CodeDocument("{\"a\":1,\"b\":[true]}")
         val formatted = JsonLanguageService.format(doc)
         assertEquals("{\n    \"a\": 1,\n    \"b\": [\n        true\n    ]\n}", formatted)
+    }
+
+    @Test
+    fun `format indents JSON with the editor's tab size`() = runTest {
+        val doc = CodeDocument("{\"a\":[1]}")
+        val formatted = JsonLanguageService.format(doc, FormattingOptions(tabSize = 2))
+        assertEquals("{\n  \"a\": [\n    1\n  ]\n}", formatted)
     }
 
     /**

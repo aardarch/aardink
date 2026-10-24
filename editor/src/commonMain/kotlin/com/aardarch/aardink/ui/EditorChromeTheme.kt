@@ -86,7 +86,7 @@ internal class EditorChromeColors(private val theme: EditorTheme) {
         val color = when (severity) {
             DiagnosticSeverity.Error -> theme.errorColor
             DiagnosticSeverity.Warning -> theme.warningColor
-            DiagnosticSeverity.Info -> theme.infoColor
+            DiagnosticSeverity.Info, DiagnosticSeverity.Hint -> theme.infoColor
         }
         return lerp(surface(1), color.compositeOver(background), SEVERITY_TINT)
     }

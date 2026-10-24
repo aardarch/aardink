@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.runtime.Immutable
+import com.aardarch.aardink.core.LineEnding
 
 /**
  * How [CodeEditorLayout] looks and behaves. One object instead of a parameter per switch, so a new
@@ -43,6 +44,12 @@ import androidx.compose.runtime.Immutable
  * @property insertSpaces Tab and indentation insert spaces ([tabSize] of them) rather than a tab.
  * @property renderWhitespace Which spaces and tabs are drawn, as faint dots and arrows in
  *   `EditorTheme.whitespaceColor`. VS Code's default: those inside a selection.
+ * @property quickSuggestions Typing a letter in code (not in a string or a comment) opens the
+ *   completion list when the language service has items, as Monaco's `quickSuggestions`. Off by
+ *   default, as in 0.6: the list opens on trigger characters and Ctrl+Space, and letters refresh it.
+ * @property eol The line ending Enter, typing and pasting insert. Null, the default, keeps the
+ *   document's own ([com.aardarch.aardink.core.CodeDocument.eol], from its first line break), so a
+ *   CR LF file stays CR LF. The text already in the document is never converted.
  */
 @Immutable
 data class EditorOptions(
@@ -61,6 +68,8 @@ data class EditorOptions(
     val tabSize: Int = 4,
     val insertSpaces: Boolean = true,
     val renderWhitespace: RenderWhitespace = RenderWhitespace.Selection,
+    val eol: LineEnding? = null,
+    val quickSuggestions: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

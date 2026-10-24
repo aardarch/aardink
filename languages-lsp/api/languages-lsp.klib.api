@@ -158,6 +158,32 @@ final class com.aardarch.aardink.languages.lsp/LspCodeActionParams { // com.aard
     }
 }
 
+final class com.aardarch.aardink.languages.lsp/LspCodeDescription { // com.aardarch.aardink.languages.lsp/LspCodeDescription|null[0]
+    constructor <init>(kotlin/String) // com.aardarch.aardink.languages.lsp/LspCodeDescription.<init>|<init>(kotlin.String){}[0]
+
+    final val href // com.aardarch.aardink.languages.lsp/LspCodeDescription.href|{}href[0]
+        final fun <get-href>(): kotlin/String // com.aardarch.aardink.languages.lsp/LspCodeDescription.href.<get-href>|<get-href>(){}[0]
+
+    final fun component1(): kotlin/String // com.aardarch.aardink.languages.lsp/LspCodeDescription.component1|component1(){}[0]
+    final fun copy(kotlin/String = ...): com.aardarch.aardink.languages.lsp/LspCodeDescription // com.aardarch.aardink.languages.lsp/LspCodeDescription.copy|copy(kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspCodeDescription.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages.lsp/LspCodeDescription.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages.lsp/LspCodeDescription.toString|toString(){}[0]
+
+    final object $serializer : kotlinx.serialization.internal/GeneratedSerializer<com.aardarch.aardink.languages.lsp/LspCodeDescription> { // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer|null[0]
+        final val descriptor // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer.descriptor|{}descriptor[0]
+            final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+
+        final fun childSerializers(): kotlin/Array<kotlinx.serialization/KSerializer<*>> // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer.childSerializers|childSerializers(){}[0]
+        final fun deserialize(kotlinx.serialization.encoding/Decoder): com.aardarch.aardink.languages.lsp/LspCodeDescription // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+        final fun serialize(kotlinx.serialization.encoding/Encoder, com.aardarch.aardink.languages.lsp/LspCodeDescription) // com.aardarch.aardink.languages.lsp/LspCodeDescription.$serializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;com.aardarch.aardink.languages.lsp.LspCodeDescription){}[0]
+    }
+
+    final object Companion { // com.aardarch.aardink.languages.lsp/LspCodeDescription.Companion|null[0]
+        final fun serializer(): kotlinx.serialization/KSerializer<com.aardarch.aardink.languages.lsp/LspCodeDescription> // com.aardarch.aardink.languages.lsp/LspCodeDescription.Companion.serializer|serializer(){}[0]
+    }
+}
+
 final class com.aardarch.aardink.languages.lsp/LspCompletionEdit { // com.aardarch.aardink.languages.lsp/LspCompletionEdit|null[0]
     constructor <init>(kotlin/String, com.aardarch.aardink.languages.lsp/LspRange? = ..., com.aardarch.aardink.languages.lsp/LspRange? = ..., com.aardarch.aardink.languages.lsp/LspRange? = ...) // com.aardarch.aardink.languages.lsp/LspCompletionEdit.<init>|<init>(kotlin.String;com.aardarch.aardink.languages.lsp.LspRange?;com.aardarch.aardink.languages.lsp.LspRange?;com.aardarch.aardink.languages.lsp.LspRange?){}[0]
 
@@ -196,10 +222,12 @@ final class com.aardarch.aardink.languages.lsp/LspCompletionEdit { // com.aardar
 }
 
 final class com.aardarch.aardink.languages.lsp/LspCompletionItem { // com.aardarch.aardink.languages.lsp/LspCompletionItem|null[0]
-    constructor <init>(kotlin/String, kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin/Int? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? = ..., kotlin/String? = ..., kotlin/String? = ...) // com.aardarch.aardink.languages.lsp/LspCompletionItem.<init>|<init>(kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.Int?;kotlinx.serialization.json.JsonElement?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspTextEdit>?;kotlin.String?;kotlin.String?){}[0]
+    constructor <init>(kotlin/String, kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin/Int? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/List<kotlin/String>? = ...) // com.aardarch.aardink.languages.lsp/LspCompletionItem.<init>|<init>(kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.Int?;kotlinx.serialization.json.JsonElement?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspTextEdit>?;kotlin.String?;kotlin.String?;kotlin.collections.List<kotlin.String>?){}[0]
 
     final val additionalTextEdits // com.aardarch.aardink.languages.lsp/LspCompletionItem.additionalTextEdits|{}additionalTextEdits[0]
         final fun <get-additionalTextEdits>(): kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? // com.aardarch.aardink.languages.lsp/LspCompletionItem.additionalTextEdits.<get-additionalTextEdits>|<get-additionalTextEdits>(){}[0]
+    final val commitCharacters // com.aardarch.aardink.languages.lsp/LspCompletionItem.commitCharacters|{}commitCharacters[0]
+        final fun <get-commitCharacters>(): kotlin.collections/List<kotlin/String>? // com.aardarch.aardink.languages.lsp/LspCompletionItem.commitCharacters.<get-commitCharacters>|<get-commitCharacters>(){}[0]
     final val detail // com.aardarch.aardink.languages.lsp/LspCompletionItem.detail|{}detail[0]
         final fun <get-detail>(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspCompletionItem.detail.<get-detail>|<get-detail>(){}[0]
     final val documentation // com.aardarch.aardink.languages.lsp/LspCompletionItem.documentation|{}documentation[0]
@@ -221,6 +249,7 @@ final class com.aardarch.aardink.languages.lsp/LspCompletionItem { // com.aardar
 
     final fun component1(): kotlin/String // com.aardarch.aardink.languages.lsp/LspCompletionItem.component1|component1(){}[0]
     final fun component10(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component10|component10(){}[0]
+    final fun component11(): kotlin.collections/List<kotlin/String>? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component11|component11(){}[0]
     final fun component2(): kotlin/Int? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component2|component2(){}[0]
     final fun component3(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component3|component3(){}[0]
     final fun component4(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component4|component4(){}[0]
@@ -229,7 +258,7 @@ final class com.aardarch.aardink.languages.lsp/LspCompletionItem { // com.aardar
     final fun component7(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component7|component7(){}[0]
     final fun component8(): kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component8|component8(){}[0]
     final fun component9(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspCompletionItem.component9|component9(){}[0]
-    final fun copy(kotlin/String = ..., kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin/Int? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? = ..., kotlin/String? = ..., kotlin/String? = ...): com.aardarch.aardink.languages.lsp/LspCompletionItem // com.aardarch.aardink.languages.lsp/LspCompletionItem.copy|copy(kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.Int?;kotlinx.serialization.json.JsonElement?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspTextEdit>?;kotlin.String?;kotlin.String?){}[0]
+    final fun copy(kotlin/String = ..., kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin/Int? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspTextEdit>? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/List<kotlin/String>? = ...): com.aardarch.aardink.languages.lsp/LspCompletionItem // com.aardarch.aardink.languages.lsp/LspCompletionItem.copy|copy(kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.Int?;kotlinx.serialization.json.JsonElement?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspTextEdit>?;kotlin.String?;kotlin.String?;kotlin.collections.List<kotlin.String>?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspCompletionItem.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages.lsp/LspCompletionItem.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.languages.lsp/LspCompletionItem.toString|toString(){}[0]
@@ -282,20 +311,26 @@ final class com.aardarch.aardink.languages.lsp/LspCompletionList { // com.aardar
 }
 
 final class com.aardarch.aardink.languages.lsp/LspDiagnostic { // com.aardarch.aardink.languages.lsp/LspDiagnostic|null[0]
-    constructor <init>(com.aardarch.aardink.languages.lsp/LspRange, kotlin/String, kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlinx.serialization.json/JsonElement? = ...) // com.aardarch.aardink.languages.lsp/LspDiagnostic.<init>|<init>(com.aardarch.aardink.languages.lsp.LspRange;kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlinx.serialization.json.JsonElement?){}[0]
+    constructor <init>(com.aardarch.aardink.languages.lsp/LspRange, kotlin/String, kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlinx.serialization.json/JsonElement? = ..., com.aardarch.aardink.languages.lsp/LspCodeDescription? = ..., kotlin.collections/List<kotlin/Int>? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation>? = ...) // com.aardarch.aardink.languages.lsp/LspDiagnostic.<init>|<init>(com.aardarch.aardink.languages.lsp.LspRange;kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlinx.serialization.json.JsonElement?;com.aardarch.aardink.languages.lsp.LspCodeDescription?;kotlin.collections.List<kotlin.Int>?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspDiagnosticRelatedInformation>?){}[0]
 
     final val code // com.aardarch.aardink.languages.lsp/LspDiagnostic.code|{}code[0]
         final fun <get-code>(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspDiagnostic.code.<get-code>|<get-code>(){}[0]
+    final val codeDescription // com.aardarch.aardink.languages.lsp/LspDiagnostic.codeDescription|{}codeDescription[0]
+        final fun <get-codeDescription>(): com.aardarch.aardink.languages.lsp/LspCodeDescription? // com.aardarch.aardink.languages.lsp/LspDiagnostic.codeDescription.<get-codeDescription>|<get-codeDescription>(){}[0]
     final val data // com.aardarch.aardink.languages.lsp/LspDiagnostic.data|{}data[0]
         final fun <get-data>(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspDiagnostic.data.<get-data>|<get-data>(){}[0]
     final val message // com.aardarch.aardink.languages.lsp/LspDiagnostic.message|{}message[0]
         final fun <get-message>(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnostic.message.<get-message>|<get-message>(){}[0]
     final val range // com.aardarch.aardink.languages.lsp/LspDiagnostic.range|{}range[0]
         final fun <get-range>(): com.aardarch.aardink.languages.lsp/LspRange // com.aardarch.aardink.languages.lsp/LspDiagnostic.range.<get-range>|<get-range>(){}[0]
+    final val relatedInformation // com.aardarch.aardink.languages.lsp/LspDiagnostic.relatedInformation|{}relatedInformation[0]
+        final fun <get-relatedInformation>(): kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation>? // com.aardarch.aardink.languages.lsp/LspDiagnostic.relatedInformation.<get-relatedInformation>|<get-relatedInformation>(){}[0]
     final val severity // com.aardarch.aardink.languages.lsp/LspDiagnostic.severity|{}severity[0]
         final fun <get-severity>(): kotlin/Int? // com.aardarch.aardink.languages.lsp/LspDiagnostic.severity.<get-severity>|<get-severity>(){}[0]
     final val source // com.aardarch.aardink.languages.lsp/LspDiagnostic.source|{}source[0]
         final fun <get-source>(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspDiagnostic.source.<get-source>|<get-source>(){}[0]
+    final val tags // com.aardarch.aardink.languages.lsp/LspDiagnostic.tags|{}tags[0]
+        final fun <get-tags>(): kotlin.collections/List<kotlin/Int>? // com.aardarch.aardink.languages.lsp/LspDiagnostic.tags.<get-tags>|<get-tags>(){}[0]
 
     final fun component1(): com.aardarch.aardink.languages.lsp/LspRange // com.aardarch.aardink.languages.lsp/LspDiagnostic.component1|component1(){}[0]
     final fun component2(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnostic.component2|component2(){}[0]
@@ -303,7 +338,10 @@ final class com.aardarch.aardink.languages.lsp/LspDiagnostic { // com.aardarch.a
     final fun component4(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component4|component4(){}[0]
     final fun component5(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component5|component5(){}[0]
     final fun component6(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component6|component6(){}[0]
-    final fun copy(com.aardarch.aardink.languages.lsp/LspRange = ..., kotlin/String = ..., kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlinx.serialization.json/JsonElement? = ...): com.aardarch.aardink.languages.lsp/LspDiagnostic // com.aardarch.aardink.languages.lsp/LspDiagnostic.copy|copy(com.aardarch.aardink.languages.lsp.LspRange;kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlinx.serialization.json.JsonElement?){}[0]
+    final fun component7(): com.aardarch.aardink.languages.lsp/LspCodeDescription? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component7|component7(){}[0]
+    final fun component8(): kotlin.collections/List<kotlin/Int>? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component8|component8(){}[0]
+    final fun component9(): kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation>? // com.aardarch.aardink.languages.lsp/LspDiagnostic.component9|component9(){}[0]
+    final fun copy(com.aardarch.aardink.languages.lsp/LspRange = ..., kotlin/String = ..., kotlin/Int? = ..., kotlin/String? = ..., kotlinx.serialization.json/JsonElement? = ..., kotlinx.serialization.json/JsonElement? = ..., com.aardarch.aardink.languages.lsp/LspCodeDescription? = ..., kotlin.collections/List<kotlin/Int>? = ..., kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation>? = ...): com.aardarch.aardink.languages.lsp/LspDiagnostic // com.aardarch.aardink.languages.lsp/LspDiagnostic.copy|copy(com.aardarch.aardink.languages.lsp.LspRange;kotlin.String;kotlin.Int?;kotlin.String?;kotlinx.serialization.json.JsonElement?;kotlinx.serialization.json.JsonElement?;com.aardarch.aardink.languages.lsp.LspCodeDescription?;kotlin.collections.List<kotlin.Int>?;kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspDiagnosticRelatedInformation>?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspDiagnostic.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages.lsp/LspDiagnostic.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnostic.toString|toString(){}[0]
@@ -318,7 +356,38 @@ final class com.aardarch.aardink.languages.lsp/LspDiagnostic { // com.aardarch.a
     }
 
     final object Companion { // com.aardarch.aardink.languages.lsp/LspDiagnostic.Companion|null[0]
+        final val $childSerializers // com.aardarch.aardink.languages.lsp/LspDiagnostic.Companion.$childSerializers|{}$childSerializers[0]
+
         final fun serializer(): kotlinx.serialization/KSerializer<com.aardarch.aardink.languages.lsp/LspDiagnostic> // com.aardarch.aardink.languages.lsp/LspDiagnostic.Companion.serializer|serializer(){}[0]
+    }
+}
+
+final class com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation { // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation|null[0]
+    constructor <init>(com.aardarch.aardink.languages.lsp/LspLocation, kotlin/String) // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.<init>|<init>(com.aardarch.aardink.languages.lsp.LspLocation;kotlin.String){}[0]
+
+    final val location // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.location|{}location[0]
+        final fun <get-location>(): com.aardarch.aardink.languages.lsp/LspLocation // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.location.<get-location>|<get-location>(){}[0]
+    final val message // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.message|{}message[0]
+        final fun <get-message>(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.message.<get-message>|<get-message>(){}[0]
+
+    final fun component1(): com.aardarch.aardink.languages.lsp/LspLocation // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.component2|component2(){}[0]
+    final fun copy(com.aardarch.aardink.languages.lsp/LspLocation = ..., kotlin/String = ...): com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.copy|copy(com.aardarch.aardink.languages.lsp.LspLocation;kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.toString|toString(){}[0]
+
+    final object $serializer : kotlinx.serialization.internal/GeneratedSerializer<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation> { // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer|null[0]
+        final val descriptor // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer.descriptor|{}descriptor[0]
+            final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+
+        final fun childSerializers(): kotlin/Array<kotlinx.serialization/KSerializer<*>> // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer.childSerializers|childSerializers(){}[0]
+        final fun deserialize(kotlinx.serialization.encoding/Decoder): com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+        final fun serialize(kotlinx.serialization.encoding/Encoder, com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation) // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.$serializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;com.aardarch.aardink.languages.lsp.LspDiagnosticRelatedInformation){}[0]
+    }
+
+    final object Companion { // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.Companion|null[0]
+        final fun serializer(): kotlinx.serialization/KSerializer<com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation> // com.aardarch.aardink.languages.lsp/LspDiagnosticRelatedInformation.Companion.serializer|serializer(){}[0]
     }
 }
 
@@ -561,6 +630,8 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
 
     final val client // com.aardarch.aardink.languages.lsp/LspLanguageService.client|{}client[0]
         final fun <get-client>(): com.aardarch.aardink.languages.lsp/LspClient // com.aardarch.aardink.languages.lsp/LspLanguageService.client.<get-client>|<get-client>(){}[0]
+    final val completionsAreIncomplete // com.aardarch.aardink.languages.lsp/LspLanguageService.completionsAreIncomplete|{}completionsAreIncomplete[0]
+        final fun <get-completionsAreIncomplete>(): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspLanguageService.completionsAreIncomplete.<get-completionsAreIncomplete>|<get-completionsAreIncomplete>(){}[0]
     final val documentUri // com.aardarch.aardink.languages.lsp/LspLanguageService.documentUri|{}documentUri[0]
         final fun <get-documentUri>(): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.documentUri.<get-documentUri>|<get-documentUri>(){}[0]
     final val languageId // com.aardarch.aardink.languages.lsp/LspLanguageService.languageId|{}languageId[0]
@@ -571,7 +642,7 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
         final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.lsp/LspLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
     final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.lsp/LspLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
-    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin/Int // com.aardarch.aardink.languages.lsp/LspLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun codeActions(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/CodeAction> // com.aardarch.aardink.languages.lsp/LspLanguageService.codeActions|codeActions(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
     final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.lsp/LspLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun definition(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/Location? // com.aardarch.aardink.languages.lsp/LspLanguageService.definition|definition(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
@@ -579,8 +650,8 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
     final suspend fun didChange(com.aardarch.aardink.core/CodeDocument, kotlin/Int) // com.aardarch.aardink.languages.lsp/LspLanguageService.didChange|didChange(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun didClose() // com.aardarch.aardink.languages.lsp/LspLanguageService.didClose|didClose(){}[0]
     final suspend fun didOpen(com.aardarch.aardink.core/CodeDocument) // com.aardarch.aardink.languages.lsp/LspLanguageService.didOpen|didOpen(com.aardarch.aardink.core.CodeDocument){}[0]
-    final suspend fun format(com.aardarch.aardink.core/CodeDocument): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.format|format(com.aardarch.aardink.core.CodeDocument){}[0]
-    final suspend fun formatRange(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.languages.lsp/LspLanguageService.formatRange|formatRange(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
+    final suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
+    final suspend fun formatRange(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange, com.aardarch.aardink.core/FormattingOptions): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.languages.lsp/LspLanguageService.formatRange|formatRange(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun hoverDoc(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/HoverDoc? // com.aardarch.aardink.languages.lsp/LspLanguageService.hoverDoc|hoverDoc(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun prepareRename(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.ranges/IntRange? // com.aardarch.aardink.languages.lsp/LspLanguageService.prepareRename|prepareRename(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun references(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Location> // com.aardarch.aardink.languages.lsp/LspLanguageService.references|references(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
@@ -1321,6 +1392,8 @@ final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop[0]
@@ -1328,6 +1401,8 @@ final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop[0]
+final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop[0]
@@ -1406,6 +1481,8 @@ final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCodeActionParams$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCodeActionParams_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCodeAction_$serializer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCodeDescription$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCodeDescription_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCompletionEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCompletionEdit_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCompletionItem$stableprop_getter(){}[0]
@@ -1413,6 +1490,8 @@ final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCompletionList$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspCompletionList_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDiagnostic$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDiagnosticRelatedInformation_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDiagnostic_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop_getter|com_aardarch_aardink_languages_lsp_LspDidChangeTextDocumentParams_$serializer$stableprop_getter(){}[0]

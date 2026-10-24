@@ -35,6 +35,8 @@ import kotlinx.serialization.Serializable
  * @property insertSpaces Tab indents with [tabSize] spaces rather than a tab character.
  * @property renderWhitespace Which spaces and tabs are drawn, as Monaco's option: `none`,
  *   `boundary`, `selection` (the default), `trailing` or `all`. Anything else counts as `selection`.
+ * @property quickSuggestions Typing a letter in code opens the completion list, as Monaco's
+ *   `quickSuggestions`; off by default, as in 0.6.
  */
 @Serializable
 data class WebEditorOptions(
@@ -53,6 +55,7 @@ data class WebEditorOptions(
     val tabSize: Int = 4,
     val insertSpaces: Boolean = true,
     val renderWhitespace: String = "selection",
+    val quickSuggestions: Boolean = false,
 )
 
 /**
@@ -68,16 +71,50 @@ data class WebSelection(
     val positionColumn: Int,
 )
 
+/** A position as a web host describes it: Monaco's `IPosition`, 1-based. */
+@Serializable
+data class WebPosition(val lineNumber: Int, val column: Int)
+
 /**
  * A diagnostic as a web host describes it — the shape of a Monaco marker, so hosts moving off
  * Monaco can pass theirs through unchanged, and the shape [AardinkWeb.onDiagnosticsChange]
  * reports the language's own in. Lines and columns are **1-based**, and [endColumn] is
- * **exclusive**. A range that runs past the end of its line is clamped to it.
+ * **exclusive**. It runs from [line] to [endLineNumber] ([line] when absent); a position past the
+ * end of its line is the line's end.
  *
- * @property severity `"error"`, `"warning"` or `"info"`; anything else is treated as `"info"`.
+ * @property severity `"error"`, `"warning"`, `"info"` or `"hint"`; anything else is treated as `"info"`.
+ * @property code The producer's identifier for this kind of problem, shown after [source].
+ * @property codeHref Where [code] is explained (Monaco's `code.target`).
+ * @property tags Monaco's `MarkerTag`s: `1` unnecessary (drawn faded), `2` deprecated (struck through).
  */
 @Serializable
-data class WebDiagnostic(val line: Int, val startColumn: Int, val endColumn: Int, val message: String, val severity: String = "error")
+data class WebDiagnostic(
+    val line: Int,
+    val startColumn: Int,
+    val endColumn: Int,
+    val message: String,
+    val severity: String = "error",
+    val endLineNumber: Int? = null,
+    val source: String? = null,
+    val code: String? = null,
+    val codeHref: String? = null,
+    val tags: List<Int>? = null,
+    val relatedInformation: List<WebRelatedInformation>? = null,
+)
+
+/**
+ * Another place that bears on a [WebDiagnostic]: Monaco's `IRelatedInformation`, with its
+ * `resource` as a string.
+ */
+@Serializable
+data class WebRelatedInformation(
+    val resource: String,
+    val message: String,
+    val startLineNumber: Int,
+    val startColumn: Int,
+    val endLineNumber: Int,
+    val endColumn: Int,
+)
 
 /**
  * A range as a web host describes it: Monaco's `IRange`, 1-based, from [startLineNumber] and

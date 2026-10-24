@@ -77,23 +77,27 @@ internal fun HoverDocCard(doc: HoverDoc, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (doc.example != null) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = doc.example,
-                            modifier = Modifier.padding(8.dp),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = LocalEditorTypography.current.fontFamily,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                if (doc.example != null) HoverDocExample(doc.example)
             }
         }
+    }
+}
+
+/** A [HoverDoc.example] as hover cards show it: code-font text on an inset panel. */
+@Composable
+internal fun HoverDocExample(example: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = example,
+            modifier = Modifier.padding(8.dp),
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = LocalEditorTypography.current.fontFamily,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

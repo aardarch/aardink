@@ -29,9 +29,11 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
@@ -85,6 +87,14 @@ class EditorChromeUiTest {
     fun `the hover card follows a dark editor theme under a light host`() = runComposeUiTest {
         show(lightHost = true, EditorThemes.VsCodeDark) { HoverDocCard(doc, Modifier.testTag("hover")) }
         assertDark("hover")
+    }
+
+    @Test
+    fun `the hover card keeps the documentation's example under a diagnostic`() = runComposeUiTest {
+        val warning = Diagnostic(0..0, "a warning", DiagnosticSeverity.Warning)
+        show(lightHost = true, EditorThemes.VsCodeDark) { EditorHoverCard(listOf(warning), doc, onQuickFix = null) }
+        onNodeWithText("a warning").assertExists()
+        onNodeWithText("val x = 1").assertExists()
     }
 
     @Test

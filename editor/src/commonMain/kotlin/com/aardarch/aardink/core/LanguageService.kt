@@ -47,12 +47,14 @@ interface LanguageService {
     suspend fun diagnostics(document: CodeDocument): List<Diagnostic>
 
     /**
-     * Returns the indent level (number of spaces) for a newly inserted line.
+     * Returns the whitespace a newly inserted line starts with, or "" for none.
      *
      * Called after the user presses Enter. [lineIndex] is the 0-based index of the NEW line
-     * (the one just created). The previous line is `lineIndex - 1`.
+     * (the one just created). The previous line is `lineIndex - 1`. Build the result with
+     * [options] (for example `options.indentAfter(previousLine, levels = 1)`), so it is tabs or
+     * spaces as the editor is set up.
      */
-    fun smartIndent(document: CodeDocument, lineIndex: Int): Int
+    fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions = FormattingOptions()): String
 
     /**
      * Returns auto-close text to insert immediately after [charTyped], or null if no auto-close
@@ -71,10 +73,10 @@ interface LanguageService {
     suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc?
 
     /**
-     * Formats the entire document and returns the formatted string.
+     * Formats the entire document, indenting as [options] says, and returns the formatted string.
      * Returns the original text unchanged if formatting fails.
      */
-    suspend fun format(document: CodeDocument): String
+    suspend fun format(document: CodeDocument, options: FormattingOptions = FormattingOptions()): String
 
     /**
      * Returns available code actions / quick fixes for [range] in [document].
@@ -119,9 +121,21 @@ interface LanguageService {
     suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> = emptyList()
 
     /**
-     * Formats only the specified [range] of [document].
+     * Formats only the specified [range] of [document], indenting as [options] says.
      */
-    suspend fun formatRange(document: CodeDocument, range: IntRange): List<TextEdit> = emptyList()
+    suspend fun formatRange(document: CodeDocument, range: IntRange, options: FormattingOptions = FormattingOptions()): List<TextEdit> =
+        emptyList()
+
+    /**
+     * Whether [completions] must be asked again on every letter typed while the list is open, as
+     * LSP's and Monaco's `isIncomplete`. True, the default and 0.6's behaviour: the service is asked
+     * on each keystroke and filters for what was typed itself; the editor only orders the items by
+     * [CompletionItem.sortPriority]. False: the service is asked once per word, and the editor
+     * filters that list by [CompletionItem.filterText] as the word grows. The editor reads this
+     * after each answer, so it may change from one answer to the next.
+     */
+    val completionsAreIncomplete: Boolean
+        get() = true
 
     /**
      * Characters that should trigger a completion request when typed.

@@ -17,6 +17,7 @@ package com.aardarch.aardink.web
 
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DiagnosticTag
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlinx.browser.document
@@ -281,7 +282,7 @@ class AardinkWebTest {
         assertEquals(2, diagnostics.size, "the out-of-range line is dropped")
         // "second" is offsets 6..11 in "first\nsecond line".
         assertEquals(6..11, diagnostics[0].range)
-        assertEquals(1, diagnostics[0].lineNumber)
+        assertEquals(1, diagnostics[0].lineIn(handle.state.value.document))
         assertEquals(DiagnosticSeverity.Warning, diagnostics[0].severity)
         assertEquals(8..8, diagnostics[1].range, "a zero-width marker keeps one character")
         assertEquals(DiagnosticSeverity.Error, diagnostics[1].severity)
@@ -296,7 +297,19 @@ class AardinkWebTest {
         awaitUntil { reported.isNotEmpty() }
 
         val markers = Json.decodeFromString(ListSerializer(WebDiagnostic.serializer()), reported.last())
-        assertEquals(listOf(WebDiagnostic(line = 3, startColumn = 1, endColumn = 2, message = "Trailing comma in object")), markers)
+        assertEquals(
+            listOf(
+                WebDiagnostic(
+                    line = 3,
+                    startColumn = 1,
+                    endColumn = 2,
+                    message = "Trailing comma in object",
+                    endLineNumber = 3,
+                    source = "json",
+                ),
+            ),
+            markers,
+        )
         assertEquals(null, handle.diagnostics.value, "no host list: the language's own are shown")
     }
 
@@ -344,14 +357,34 @@ class AardinkWebTest {
     }
 
     @Test
-    fun `a diagnostic running over several lines is reported up to the end of its first`() {
+    fun `a diagnostic running over several lines is reported over all of them, and comes back the same`() {
         val handle = mount("first\nsecond")
         val document = handle.state.value.document
-        val markers = AardinkWeb.toWebDiagnostics(
-            document,
-            listOf(Diagnostic(range = 2..8, lineNumber = 0, message = "wide", severity = DiagnosticSeverity.Info)),
+        val wide =
+            Diagnostic(
+                range = 2..8,
+                message = "wide",
+                severity = DiagnosticSeverity.Hint,
+                code = "W1",
+                tags = setOf(DiagnosticTag.Deprecated),
+            )
+        val markers = AardinkWeb.toWebDiagnostics(document, listOf(wide))
+        assertEquals(
+            listOf(
+                WebDiagnostic(
+                    line = 1,
+                    startColumn = 3,
+                    endColumn = 4,
+                    message = "wide",
+                    severity = "hint",
+                    endLineNumber = 2,
+                    code = "W1",
+                    tags = listOf(2),
+                ),
+            ),
+            markers,
         )
-        assertEquals(listOf(WebDiagnostic(line = 1, startColumn = 3, endColumn = 6, message = "wide", severity = "info")), markers)
+        assertEquals(listOf(wide), AardinkWeb.toDiagnostics(document, markers))
     }
 
     @Test

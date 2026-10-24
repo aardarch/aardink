@@ -26,7 +26,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 
 /** Everything a key can make the editor do. */
-internal enum class EditorCommand {
+internal enum class KeyCommand {
     CharLeft,
     CharRight,
     WordLeft,
@@ -77,10 +77,17 @@ internal enum class EditorCommand {
     GoToDefinition,
     FindReferences,
     FormatDocument,
+    NextProblem,
+    PreviousProblem,
+    Rename,
+    QuickFix,
+    FindNext,
+    FindPrevious,
+    SelectAllMatches,
 }
 
 /** A [command], and for the movement commands whether Shift extends the selection ([select]). */
-internal data class KeyBinding(val command: EditorCommand, val select: Boolean = false)
+internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false)
 
 /**
  * The editor's keyboard, as a table: VS Code's default bindings, with Cmd for Ctrl on macOS and
@@ -102,33 +109,33 @@ internal object EditorKeyBindings {
         val word = if (isMac) alt && !meta && !ctrl else ctrl && !alt && !meta
         val plain = !alt && !ctrl && !meta
 
-        fun move(command: EditorCommand) = KeyBinding(command, select = shift)
+        fun move(command: KeyCommand) = KeyBinding(command, select = shift)
 
         // Ctrl+Shift+Alt (Cmd+Shift+Option on macOS) with an arrow or page key: a column selection.
         if (primary && shift && alt) {
             return when (event.key) {
-                Key.DirectionLeft -> KeyBinding(EditorCommand.ColumnSelectLeft)
-                Key.DirectionRight -> KeyBinding(EditorCommand.ColumnSelectRight)
-                Key.DirectionUp -> KeyBinding(EditorCommand.ColumnSelectUp)
-                Key.DirectionDown -> KeyBinding(EditorCommand.ColumnSelectDown)
-                Key.PageUp -> KeyBinding(EditorCommand.ColumnSelectPageUp)
-                Key.PageDown -> KeyBinding(EditorCommand.ColumnSelectPageDown)
+                Key.DirectionLeft -> KeyBinding(KeyCommand.ColumnSelectLeft)
+                Key.DirectionRight -> KeyBinding(KeyCommand.ColumnSelectRight)
+                Key.DirectionUp -> KeyBinding(KeyCommand.ColumnSelectUp)
+                Key.DirectionDown -> KeyBinding(KeyCommand.ColumnSelectDown)
+                Key.PageUp -> KeyBinding(KeyCommand.ColumnSelectPageUp)
+                Key.PageDown -> KeyBinding(KeyCommand.ColumnSelectPageDown)
                 else -> null
             }
         }
 
         return when (event.key) {
             Key.DirectionLeft -> when {
-                isMac && meta && !alt -> move(EditorCommand.LineStart)
-                word -> move(EditorCommand.WordLeft)
-                plain -> move(EditorCommand.CharLeft)
+                isMac && meta && !alt -> move(KeyCommand.LineStart)
+                word -> move(KeyCommand.WordLeft)
+                plain -> move(KeyCommand.CharLeft)
                 else -> null
             }
 
             Key.DirectionRight -> when {
-                isMac && meta && !alt -> move(EditorCommand.LineEnd)
-                word -> move(EditorCommand.WordRight)
-                plain -> move(EditorCommand.CharRight)
+                isMac && meta && !alt -> move(KeyCommand.LineEnd)
+                word -> move(KeyCommand.WordRight)
+                plain -> move(KeyCommand.CharRight)
                 else -> null
             }
 
@@ -136,77 +143,95 @@ internal object EditorKeyBindings {
                 val up = event.key == Key.DirectionUp
                 when {
                     // Ctrl+Alt (Cmd+Option on macOS): a caret on the line above or below as well.
-                    primary && alt && !shift -> KeyBinding(if (up) EditorCommand.AddCursorAbove else EditorCommand.AddCursorBelow)
+                    primary && alt && !shift -> KeyBinding(if (up) KeyCommand.AddCursorAbove else KeyCommand.AddCursorBelow)
 
-                    isMac && meta && !alt -> move(if (up) EditorCommand.DocumentStart else EditorCommand.DocumentEnd)
+                    isMac && meta && !alt -> move(if (up) KeyCommand.DocumentStart else KeyCommand.DocumentEnd)
 
-                    alt && !primary && shift -> KeyBinding(if (up) EditorCommand.CopyLinesUp else EditorCommand.CopyLinesDown)
+                    alt && !primary && shift -> KeyBinding(if (up) KeyCommand.CopyLinesUp else KeyCommand.CopyLinesDown)
 
-                    alt && !primary -> KeyBinding(if (up) EditorCommand.MoveLinesUp else EditorCommand.MoveLinesDown)
+                    alt && !primary -> KeyBinding(if (up) KeyCommand.MoveLinesUp else KeyCommand.MoveLinesDown)
 
-                    plain -> move(if (up) EditorCommand.LineUp else EditorCommand.LineDown)
+                    plain -> move(if (up) KeyCommand.LineUp else KeyCommand.LineDown)
 
                     else -> null
                 }
             }
 
             Key.MoveHome -> when {
-                primary && !alt -> move(EditorCommand.DocumentStart)
-                plain -> move(EditorCommand.LineStart)
+                primary && !alt -> move(KeyCommand.DocumentStart)
+                plain -> move(KeyCommand.LineStart)
                 else -> null
             }
 
             Key.MoveEnd -> when {
-                primary && !alt -> move(EditorCommand.DocumentEnd)
-                plain -> move(EditorCommand.LineEnd)
+                primary && !alt -> move(KeyCommand.DocumentEnd)
+                plain -> move(KeyCommand.LineEnd)
                 else -> null
             }
 
-            Key.PageUp -> if (plain) move(EditorCommand.PageUp) else null
+            Key.PageUp -> if (plain) move(KeyCommand.PageUp) else null
 
-            Key.PageDown -> if (plain) move(EditorCommand.PageDown) else null
+            Key.PageDown -> if (plain) move(KeyCommand.PageDown) else null
 
             Key.Backspace -> when {
-                isMac && meta -> KeyBinding(EditorCommand.DeleteToLineStart)
-                word -> KeyBinding(EditorCommand.DeleteWordLeft)
-                !alt && !primary -> KeyBinding(EditorCommand.DeleteLeft)
+                isMac && meta -> KeyBinding(KeyCommand.DeleteToLineStart)
+                word -> KeyBinding(KeyCommand.DeleteWordLeft)
+                !alt && !primary -> KeyBinding(KeyCommand.DeleteLeft)
                 else -> null
             }
 
             Key.Delete -> when {
-                !isMac && shift && plain -> KeyBinding(EditorCommand.Cut)
-                word -> KeyBinding(EditorCommand.DeleteWordRight)
-                !alt && !primary -> KeyBinding(EditorCommand.DeleteRight)
+                !isMac && shift && plain -> KeyBinding(KeyCommand.Cut)
+                word -> KeyBinding(KeyCommand.DeleteWordRight)
+                !alt && !primary -> KeyBinding(KeyCommand.DeleteRight)
                 else -> null
             }
 
             Key.Insert -> when {
-                !isMac && ctrl && !shift && !alt -> KeyBinding(EditorCommand.Copy)
-                !isMac && shift && plain -> KeyBinding(EditorCommand.Paste)
+                !isMac && ctrl && !shift && !alt -> KeyBinding(KeyCommand.Copy)
+                !isMac && shift && plain -> KeyBinding(KeyCommand.Paste)
                 else -> null
             }
 
-            Key.Enter, Key.NumPadEnter -> if (!alt && !primary) KeyBinding(EditorCommand.Enter) else null
+            Key.Enter, Key.NumPadEnter -> when {
+                alt && !primary && !shift -> KeyBinding(KeyCommand.SelectAllMatches)
+                !alt && !primary -> KeyBinding(KeyCommand.Enter)
+                else -> null
+            }
 
             Key.Tab -> when {
                 ctrl || meta || alt -> null
-                shift -> KeyBinding(EditorCommand.Outdent)
-                else -> KeyBinding(EditorCommand.Indent)
+                shift -> KeyBinding(KeyCommand.Outdent)
+                else -> KeyBinding(KeyCommand.Indent)
             }
 
-            Key.Escape -> if (plain && !shift) KeyBinding(EditorCommand.Escape) else null
+            Key.Escape -> if (plain && !shift) KeyBinding(KeyCommand.Escape) else null
 
-            Key.F12 -> when {
-                shift && !alt && !primary -> KeyBinding(EditorCommand.FindReferences)
-                plain && !shift -> KeyBinding(EditorCommand.GoToDefinition)
+            Key.F2 -> if (plain && !shift) KeyBinding(KeyCommand.Rename) else null
+
+            Key.F3 -> when {
+                shift && !alt && !primary -> KeyBinding(KeyCommand.FindPrevious)
+                plain && !shift -> KeyBinding(KeyCommand.FindNext)
                 else -> null
             }
 
-            Key.Spacebar -> if (ctrl && !alt && !meta && !shift) KeyBinding(EditorCommand.TriggerSuggest) else null
+            Key.F8 -> when {
+                shift && !alt && !primary -> KeyBinding(KeyCommand.PreviousProblem)
+                plain && !shift -> KeyBinding(KeyCommand.NextProblem)
+                else -> null
+            }
+
+            Key.F12 -> when {
+                shift && !alt && !primary -> KeyBinding(KeyCommand.FindReferences)
+                plain && !shift -> KeyBinding(KeyCommand.GoToDefinition)
+                else -> null
+            }
+
+            Key.Spacebar -> if (ctrl && !alt && !meta && !shift) KeyBinding(KeyCommand.TriggerSuggest) else null
 
             Key.F -> when {
-                shift && alt && !primary -> KeyBinding(EditorCommand.FormatDocument)
-                primary && !alt && !shift -> KeyBinding(EditorCommand.Find)
+                shift && alt && !primary -> KeyBinding(KeyCommand.FormatDocument)
+                primary && !alt && !shift -> KeyBinding(KeyCommand.Find)
                 else -> null
             }
 
@@ -216,18 +241,19 @@ internal object EditorKeyBindings {
 
     /** Cmd/Ctrl chords on letters and punctuation. */
     private fun chord(key: Key, shift: Boolean): KeyBinding? = when (key) {
-        Key.Z -> KeyBinding(if (shift) EditorCommand.Redo else EditorCommand.Undo)
-        Key.Y -> if (shift) null else KeyBinding(EditorCommand.Redo)
-        Key.A -> if (shift) null else KeyBinding(EditorCommand.SelectAll)
-        Key.C -> if (shift) null else KeyBinding(EditorCommand.Copy)
-        Key.X -> if (shift) null else KeyBinding(EditorCommand.Cut)
-        Key.V -> if (shift) null else KeyBinding(EditorCommand.Paste)
-        Key.H -> if (shift) null else KeyBinding(EditorCommand.Replace)
-        Key.G -> if (shift) null else KeyBinding(EditorCommand.GoToLine)
-        Key.Slash -> if (shift) null else KeyBinding(EditorCommand.ToggleComment)
-        Key.K -> if (shift) KeyBinding(EditorCommand.DeleteLines) else null
-        Key.D -> if (shift) null else KeyBinding(EditorCommand.AddNextOccurrence)
-        Key.L -> if (shift) KeyBinding(EditorCommand.SelectAllOccurrences) else null
+        Key.Z -> KeyBinding(if (shift) KeyCommand.Redo else KeyCommand.Undo)
+        Key.Y -> if (shift) null else KeyBinding(KeyCommand.Redo)
+        Key.A -> if (shift) null else KeyBinding(KeyCommand.SelectAll)
+        Key.C -> if (shift) null else KeyBinding(KeyCommand.Copy)
+        Key.X -> if (shift) null else KeyBinding(KeyCommand.Cut)
+        Key.V -> if (shift) null else KeyBinding(KeyCommand.Paste)
+        Key.H -> if (shift) null else KeyBinding(KeyCommand.Replace)
+        Key.G -> if (shift) null else KeyBinding(KeyCommand.GoToLine)
+        Key.Slash -> if (shift) null else KeyBinding(KeyCommand.ToggleComment)
+        Key.K -> if (shift) KeyBinding(KeyCommand.DeleteLines) else null
+        Key.D -> if (shift) null else KeyBinding(KeyCommand.AddNextOccurrence)
+        Key.L -> if (shift) KeyBinding(KeyCommand.SelectAllOccurrences) else null
+        Key.Period -> if (shift) null else KeyBinding(KeyCommand.QuickFix)
         else -> null
     }
 }
