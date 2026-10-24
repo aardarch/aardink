@@ -16,6 +16,7 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.edit.TextNavigator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
@@ -101,6 +102,30 @@ class EditorInputTest {
         state.type("\n")
         assertEquals("x\r\n    \r\ny", state.text)
         assertEquals(TextRange(7), state.selection)
+    }
+
+    @Test
+    fun `backspace and delete remove a CR LF line break whole`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        state.type("\n")
+        assertEquals("x\r\n    \r\ny", state.text)
+        state.selection = TextRange(3)
+        state.deleteLeft()
+        assertEquals("x    \r\ny", state.text)
+        state.selection = TextRange(5)
+        state.deleteRight()
+        assertEquals("x    y", state.text)
+    }
+
+    @Test
+    fun `caret moves step over a CR LF line break whole`() {
+        val text = "ab\r\ncd"
+        assertEquals(2, TextNavigator.charLeft(text, 4))
+        assertEquals(4, TextNavigator.charRight(text, 2))
+        assertEquals(2, TextNavigator.wordLeft(text, 4))
+        assertEquals(4, TextNavigator.wordRight(text, 2))
+        assertEquals(2, TextNavigator.wordRight(text, 0))
     }
 
     @Test
