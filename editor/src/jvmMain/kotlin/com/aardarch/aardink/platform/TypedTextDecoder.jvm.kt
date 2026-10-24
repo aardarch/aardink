@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.platform
 
+import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.input.key.KeyEvent
 
 internal actual class TypedTextDecoder actual constructor() {
@@ -22,9 +23,12 @@ internal actual class TypedTextDecoder actual constructor() {
      * AWT's `KEY_TYPED`: the character a key (or a dead key and the key after it) produced. Chords
      * with Ctrl or Cmd type control characters or nothing and are shortcuts; Ctrl+Alt is AltGr on
      * Windows, which types characters such as `@` on many layouts, so it counts as typing.
+     *
+     * Compose wraps the AWT event (`nativeKeyEvent` is its own `InternalKeyEvent`), so it is read
+     * through [awtEventOrNull].
      */
     actual fun typedText(event: KeyEvent): String? {
-        val native = event.nativeKeyEvent as? java.awt.event.KeyEvent ?: return null
+        val native = event.awtEventOrNull ?: return null
         if (native.id != java.awt.event.KeyEvent.KEY_TYPED) return null
         val char = native.keyChar
         if (char == java.awt.event.KeyEvent.CHAR_UNDEFINED || Character.isISOControl(char)) return null

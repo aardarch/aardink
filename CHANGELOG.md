@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Desktop:** letters, digits and every other typed character were dropped; only keys with a
+  binding, such as Enter and Backspace, worked. Compose wraps the AWT `KEY_TYPED` event in its own
+  native event, which the editor did not unwrap; it now reads it through `awtEventOrNull` (#37).
+
 ## [0.7.0] - 2026-10-24
 
 0.7 makes the editor controllable and observable by its host, on a phone as well as with a
