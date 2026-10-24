@@ -29,12 +29,31 @@ for (const file of readdirSync('dist/assets').filter((f) => f.endsWith('.wasm'))
   console.log(`${file} sha256 ${createHash('sha256').update(readFileSync(`dist/assets/${file}`)).digest('hex').slice(0, 16)}`);
 }
 
-const harness = await startHarness();
-const { browser, url } = harness;
-const failures = [];
 // The step under way, so a page error says what set it off: an uncaught error reaches the page
 // on its own schedule, and the list of failures is only printed at the end.
-let phase = 'loading';
+let phase;
+let phaseStarted;
+let harness;
+function setPhase(name) {
+  phase = name;
+  phaseStarted = Date.now();
+  console.log(`  .. ${name}`);
+}
+
+// A step that never finishes (a promise in the page that never settles) fails the run and says
+// which step it was, instead of leaving pre-push waiting with nothing on screen.
+const PHASE_LIMIT_MS = 120_000;
+setInterval(() => {
+  if (Date.now() - phaseStarted < PHASE_LIMIT_MS) return;
+  console.error(`  stuck for ${PHASE_LIMIT_MS / 1000}s during ${phase}`);
+  harness?.browser.process()?.kill();
+  process.exit(1);
+}, 1000).unref();
+
+setPhase('starting Chrome');
+harness = await startHarness();
+const { browser, url } = harness;
+const failures = [];
 const notices = [];
 
 // Upstream console output we cannot fix here. Printed, not fatal; revisit on each Compose/Kotlin bump.
@@ -64,7 +83,7 @@ async function interactionChecks(page) {
 
   // Touch first: once a (synthetic) mouse has been over the page, Compose's web input no longer
   // delivers Puppeteer's taps at all, for its own text field as much as for this editor.
-  phase = 'touch tap';
+  setPhase('touch tap');
   await mountEditor('line one\nline two');
   await page.touchscreen.tap(150, 36); // the second line
   await settle();
@@ -75,7 +94,7 @@ async function interactionChecks(page) {
   const [first, second] = (await value()).split('\n');
   checks['touch tap places the caret'] = first.includes('!') && !second.includes('!');
 
-  phase = 'typing';
+  setPhase('typing');
   await mountEditor('');
   await page.mouse.click(300, 20);
   await page.keyboard.type('abc');
@@ -83,14 +102,14 @@ async function interactionChecks(page) {
   checks['typing'] = (await value()) === 'abc';
 
   const cdp = await page.createCDPSession();
-  phase = 'IME composition';
+  setPhase('IME composition');
   await cdp.send('Input.imeSetComposition', { text: 'に', selectionStart: 1, selectionEnd: 1 });
   await settle();
   await cdp.send('Input.insertText', { text: '日' });
   await settle();
   checks['IME composition'] = (await value()) === 'abc日';
 
-  phase = 'paste';
+  setPhase('paste');
   await page.evaluate(() => {
     const data = new DataTransfer();
     data.setData('text/plain', 'X\r\nY');
@@ -99,13 +118,13 @@ async function interactionChecks(page) {
   await settle();
   checks['paste (CRLF to LF)'] = (await value()) === 'abc日X\nY';
 
-  phase = 'backspace';
+  setPhase('backspace');
   await page.keyboard.press('Backspace');
   await settle();
   checks['backspace'] = (await value()) === 'abc日X\n';
 
   // The find panel takes the keys while it is open, and Escape gives them back to the text.
-  phase = 'find panel focus';
+  setPhase('find panel focus');
   await page.keyboard.down('Control');
   await page.keyboard.press('KeyF');
   await page.keyboard.up('Control');
@@ -119,7 +138,7 @@ async function interactionChecks(page) {
   await settle();
   checks['Ctrl+F types into the find field, Escape back into the text'] = untouched && (await value()) === 'abc日X\nq';
 
-  phase = 'showFind focus';
+  setPhase('showFind focus');
   await page.evaluate(() => {
     document.activeElement?.blur();
     window.__smokeEditor.showFind();
@@ -138,7 +157,7 @@ async function interactionChecks(page) {
  * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
  */
 async function triggerCheck(page) {
-  phase = 'trigger characters';
+  setPhase('trigger characters');
   await page.evaluate(async (mount) => {
     window.__smokeEditor?.dispose();
     document.getElementById('check')?.remove();
@@ -169,7 +188,7 @@ async function triggerCheck(page) {
  * keyword `shout` in the theme's magenta, counted by pixel in a screenshot of the editor.
  */
 async function grammarCheck(page) {
-  phase = 'registered grammar';
+  setPhase('registered grammar');
   await page.evaluate(async (mount) => {
     window.__smokeEditor?.dispose();
     document.getElementById('check')?.remove();
@@ -208,13 +227,13 @@ try {
     (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
   });
 
-  phase = 'in-page checks';
+  setPhase('in-page checks');
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
   const report = await page.evaluate(() => window.__aardinkSmoke);
   // A few frames so the light theme and the diagnostic are painted before the screenshot.
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  phase = 'screenshot of the in-page checks';
+  setPhase('screenshot of the in-page checks');
   await page.screenshot({ path: 'dist/smoke.png' });
 
   console.log(`@aardarch/aardink-web ${report.version}`);
@@ -231,6 +250,7 @@ try {
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);
   if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
 } finally {
+  setPhase('closing Chrome');
   await harness.close();
 }
 

@@ -184,6 +184,11 @@ try {
 
             # The npm package in a real Vite app, in headless Chrome. Needs pnpm on PATH.
             Invoke-Check 'Web npm package + Vite smoke test' {
+                # Each sub-step says what it is starting, with the time since the check began: the
+                # package build alone runs for minutes, and a hang should show where it stopped.
+                $Clock = [System.Diagnostics.Stopwatch]::StartNew()
+                function Write-Sub { param([string]$Msg) Write-Host ('    ..    [{0,4}s] {1}' -f [int]$Clock.Elapsed.TotalSeconds, $Msg) -ForegroundColor DarkGray }
+
                 # pnpm 11+ puts its shims in $PNPM_HOME\bin; a shell started before that folder
                 # joined PATH can't see them, so look there before giving up.
                 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue) -and $env:PNPM_HOME) {
@@ -193,18 +198,25 @@ try {
                 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
                     throw 'pnpm not found on PATH or in $PNPM_HOME\bin - install pnpm 12 (https://pnpm.io/installation)'
                 }
-                & $Gradlew ':sample-web:npmPackage' ':sample-web:verifyExportsMatchTemplate' --quiet 2>&1 | Out-Host
+                # Not --quiet: the production wasm build and its binaryen pass take minutes, and the
+                # task lines are the only sign of progress.
+                Write-Sub 'Building the npm package (production wasm + binaryen, minutes when cold)'
+                & $Gradlew ':sample-web:npmPackage' ':sample-web:verifyExportsMatchTemplate' --console=plain 2>&1 | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw 'Building the npm package failed' }
                 Push-Location (Join-Path $ProjectRoot 'tools' 'vite-smoke')
                 try {
                     # --force: the package is a file: dependency, copied at install time, so a
-                    # plain install would keep testing the previous build.
-                    pnpm install --force --frozen-lockfile 2>&1 | Out-Host
+                    # plain install would keep testing the previous build. Out-Host only shows whole
+                    # lines, so a prompt would wait unseen: never ask to purge node_modules.
+                    Write-Sub 'pnpm install'
+                    pnpm install --force --frozen-lockfile --reporter=append-only --config.confirm-modules-purge=false 2>&1 | Out-Host
                     if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed (is pnpm installed?)' }
+                    Write-Sub 'Loader test, vite build and the headless Chrome run'
                     pnpm smoke 2>&1 | Out-Host
                     if ($LASTEXITCODE -ne 0) { throw 'Vite smoke test failed - see tools/vite-smoke/dist/smoke.png' }
                     # The file list npm would publish; CI and the release job also run publint and
                     # arethetypeswrong, which need a network fetch this script avoids.
+                    Write-Sub 'npm pack --dry-run'
                     Push-Location (Join-Path $ProjectRoot 'sample-web' 'build' 'npm')
                     try {
                         npm pack --dry-run 2>&1 | Out-Host

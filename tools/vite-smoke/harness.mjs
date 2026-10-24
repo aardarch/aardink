@@ -43,7 +43,9 @@ export async function startHarness() {
     url,
     browser,
     async close() {
-      await browser.close();
+      // browser.close() waits on Chrome to answer; one that has stopped answering is killed.
+      await Promise.race([browser.close(), new Promise((resolve) => setTimeout(resolve, 10000).unref())]);
+      browser.process()?.kill();
       await new Promise((resolve) => server.httpServer.close(resolve));
     },
   };
