@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-24
+
 0.7 makes the editor controllable and observable by its host, on a phone as well as with a
 keyboard, and turns an XML dialect's vocabulary into a language service. It breaks source in three
 places: `LanguageService.smartIndent`, `format` and `formatRange` take `FormattingOptions`
