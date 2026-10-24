@@ -34,6 +34,7 @@ class CompositeLanguageServiceTest {
         override val triggerCharacters: Set<Char> = emptySet(),
         override val supportsRename: Boolean = false,
         val renameTo: String = "",
+        override val completionsAreIncomplete: Boolean = true,
     ) : LanguageService {
         override suspend fun completions(document: CodeDocument, cursorOffset: Int) = items
 
@@ -62,6 +63,27 @@ class CompositeLanguageServiceTest {
         )
         assertEquals(listOf("page", "text", "text", "div"), composite.completions(doc, 1).map { it.label })
         assertEquals(CompletionKind.Attribute, composite.completions(doc, 1)[2].kind)
+    }
+
+    @Test
+    fun `a complete side's completions are filtered when the other side is incomplete`() = runTest {
+        val typed = CodeDocument("al")
+        val completePrimary = CompositeLanguageService(
+            Fake(items = listOf(item("alpha"), item("beta")), completionsAreIncomplete = false),
+            Fake(items = listOf(item("gamma"))),
+        )
+        assertTrue(completePrimary.completionsAreIncomplete)
+        assertEquals(listOf("alpha", "gamma"), completePrimary.completions(typed, 2).map { it.label })
+        val completeFallback = CompositeLanguageService(
+            Fake(items = listOf(item("gamma"))),
+            Fake(items = listOf(item("alpha"), item("beta")), completionsAreIncomplete = false),
+        )
+        assertEquals(listOf("gamma", "alpha"), completeFallback.completions(typed, 2).map { it.label })
+        val bothComplete = CompositeLanguageService(
+            Fake(items = listOf(item("alpha"), item("beta")), completionsAreIncomplete = false),
+            Fake(items = listOf(item("gamma")), completionsAreIncomplete = false),
+        )
+        assertEquals(listOf("alpha", "beta", "gamma"), bothComplete.completions(typed, 2).map { it.label })
     }
 
     @Test

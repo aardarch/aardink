@@ -75,6 +75,7 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.core.completionReplaceRange
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.platform.PlatformInfo
@@ -664,8 +665,7 @@ fun CodeEditorLayout(
     val arrangeCompletions: (List<CompletionItem>, LanguageService) -> List<CompletionItem> = { all, service ->
         val cursor = state.selection.start
         CompletionFilter.arrange(all, filter = !service.completionsAreIncomplete) { item ->
-            val start = completionReplaceRange(state.document, cursor, item).first
-            if (start < cursor) state.document.subSequence(start, cursor).toString() else ""
+            CompletionFilter.typedFor(state.document, cursor, item)
         }
     }
 
@@ -1327,35 +1327,6 @@ private fun applyCompletion(state: CodeEditorState, item: CompletionItem, cursor
         .sumOf { it.newText.length - (it.range.last - it.range.first + 1) }
     val caret = (target.first + shiftBefore + item.insertText.length).coerceIn(0, state.document.length)
     state.withSelectionReason(SelectionChangeReason.Edit) { state.selection = TextRange(caret) }
-}
-
-/**
- * Characters a completion never reaches back across when guessing what it replaces.
- *
- * `.` is one of them: after `list.`, accepting a member completion must insert after the receiver,
- * not swallow it. A provider that knows better says so with [CompletionItem.replaceRange].
- */
-private val COMPLETION_BOUNDARY_CHARS =
-    setOf('<', '>', '{', '}', '(', ')', '[', ']', '"', '\'', '=', ',', ';', '.', ' ', '\n', '\t', '@', '|', ':')
-
-/**
- * Half-open-as-inclusive range in [text] that accepting [item] at [cursorPos] replaces.
- *
- * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
- * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
- */
-internal fun completionReplaceRange(text: CharSequence, cursorPos: Int, item: CompletionItem): IntRange {
-    val cursor = cursorPos.coerceIn(0, text.length)
-    item.replaceRange?.let { provided ->
-        val start = provided.first.coerceIn(0, text.length)
-        val end = (provided.last + 1).coerceIn(start, text.length)
-        return start until end
-    }
-    var start = cursor
-    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
-        start--
-    }
-    return start until cursor
 }
 
 /**

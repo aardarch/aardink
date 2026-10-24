@@ -42,6 +42,12 @@ internal object CompletionFilter {
             .map { it.first }
     }
 
+    /** What has been typed of [item] at [cursor]: from the start of what it replaces to the caret. */
+    fun typedFor(text: CharSequence, cursor: Int, item: CompletionItem): String {
+        val start = completionReplaceRange(text, cursor, item).first
+        return if (start < cursor) text.subSequence(start, cursor).toString() else ""
+    }
+
     /** Whether [typed] is in [candidate] as VS Code matches a completion: in order, from a word start. */
     fun matches(typed: String, candidate: String): Boolean {
         if (typed.isEmpty()) return true
@@ -63,4 +69,33 @@ internal object CompletionFilter {
         val before = text[index - 1]
         return !before.isLetterOrDigit() || (text[index].isUpperCase() && before.isLowerCase())
     }
+}
+
+/**
+ * Characters a completion never reaches back across when guessing what it replaces.
+ *
+ * `.` is one of them: after `list.`, accepting a member completion must insert after the receiver,
+ * not swallow it. A provider that knows better says so with [CompletionItem.replaceRange].
+ */
+private val COMPLETION_BOUNDARY_CHARS =
+    setOf('<', '>', '{', '}', '(', ')', '[', ']', '"', '\'', '=', ',', ';', '.', ' ', '\n', '\t', '@', '|', ':')
+
+/**
+ * Half-open-as-inclusive range in [text] that accepting [item] at [cursorPos] replaces.
+ *
+ * A provider that knows the exact range it means (a language server's `textEdit`) wins; only when
+ * [CompletionItem.replaceRange] is absent does the editor guess the token before the cursor.
+ */
+internal fun completionReplaceRange(text: CharSequence, cursorPos: Int, item: CompletionItem): IntRange {
+    val cursor = cursorPos.coerceIn(0, text.length)
+    item.replaceRange?.let { provided ->
+        val start = provided.first.coerceIn(0, text.length)
+        val end = (provided.last + 1).coerceIn(start, text.length)
+        return start until end
+    }
+    var start = cursor
+    while (start > 0 && text[start - 1] !in COMPLETION_BOUNDARY_CHARS) {
+        start--
+    }
+    return start until cursor
 }

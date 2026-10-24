@@ -47,7 +47,16 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val own = primary.completions(document, cursorOffset)
         if (!inheritCompletions) return own
-        return merged(own, fallback.completions(document, cursorOffset))
+        val inherited = fallback.completions(document, cursorOffset)
+        val all = merged(own, inherited)
+        if (primary.completionsAreIncomplete == fallback.completionsAreIncomplete) return all
+        // The list as a whole is asked for again per keystroke, so the editor will not filter it:
+        // the complete side's items, which rely on that filtering, are filtered here instead.
+        val complete = (if (primary.completionsAreIncomplete) inherited else own).toHashSet()
+        return all.filter {
+            it !in complete ||
+                CompletionFilter.matches(CompletionFilter.typedFor(document, cursorOffset, it), it.filterText)
+        }
     }
 
     /** [own] then [inherited], less the inherited items [own] already offers by kind and label. */
