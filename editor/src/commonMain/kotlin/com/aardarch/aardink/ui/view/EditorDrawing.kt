@@ -201,8 +201,8 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
                 continue
             }
             if (diagnostic.severity == DiagnosticSeverity.Hint) {
-                // Three dots under the start, as VS Code draws a hint.
-                if (row == firstRow) drawHintDots(left + x0, top + layout.getLineBottom(row), color)
+                // Three dots under the start, as VS Code draws a hint: only on the line it starts on.
+                if (row == firstRow && start >= line.start) drawHintDots(left + x0, top + layout.getLineBottom(row), color)
                 continue
             }
             if (x1 <= x0) x1 = x0 + minWidth
