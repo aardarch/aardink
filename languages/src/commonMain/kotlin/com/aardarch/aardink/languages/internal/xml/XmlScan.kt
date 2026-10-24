@@ -15,9 +15,17 @@
  */
 package com.aardarch.aardink.languages.internal.xml
 
-/** An attribute of an [XmlTag]: its name at [nameStart], and its value from [valueStart] to [valueEnd] when it has one. */
+import com.aardarch.aardink.languages.internal.CooperativePacer
+
+/**
+ * An attribute of an [XmlTag]: its name at [nameStart], and its value from [valueStart] to [valueEnd]
+ * when it has one. [value] is the source text; [decodedValue] is what it means, with its entity and
+ * character references replaced.
+ */
 internal class XmlAttr(val name: String, val nameStart: Int, val valueStart: Int, val valueEnd: Int, val value: String?) {
     val nameEnd: Int get() = nameStart + name.length
+
+    val decodedValue: String? by lazy { value?.let(XmlScan::decodeReferences) }
 }
 
 /**
@@ -48,14 +56,19 @@ internal class XmlTag(
  */
 internal object XmlScan {
 
-    fun tags(text: CharSequence): List<XmlTag> {
+    /**
+     * The tags of [text] that start before [until]; a request about one offset needs no more than
+     * the tags up to it. A whole-document pass gives a [pacer] to pause for the browser.
+     */
+    suspend fun tags(text: CharSequence, until: Int = text.length, pacer: CooperativePacer? = null): List<XmlTag> {
         val tags = ArrayList<XmlTag>()
         val open = ArrayList<String>()
         val n = text.length
         var i = 0
         while (i < n) {
+            pacer?.onProgress(i)
             val lt = indexOf(text, '<', i)
-            if (lt < 0) break
+            if (lt < 0 || lt >= until) break
             when {
                 startsWith(text, "<!--", lt) -> {
                     i = endOf(text, "-->", lt + 4)
@@ -67,8 +80,13 @@ internal object XmlScan {
                     continue
                 }
 
-                lt + 1 < n && (text[lt + 1] == '?' || text[lt + 1] == '!') -> {
-                    i = endOf(text, ">", lt + 2)
+                lt + 1 < n && text[lt + 1] == '?' -> {
+                    i = endOf(text, "?>", lt + 2)
+                    continue
+                }
+
+                lt + 1 < n && text[lt + 1] == '!' -> {
+                    i = endOfDeclaration(text, lt + 2)
                     continue
                 }
             }
@@ -178,6 +196,87 @@ internal object XmlScan {
 
     private fun startsWith(text: CharSequence, prefix: String, at: Int): Boolean =
         at + prefix.length <= text.length && (prefix.indices).all { text[at + it] == prefix[it] }
+
+    /**
+     * Just after the `>` ending a `<!…` declaration whose body starts at [from], or the end of
+     * [text]: not one inside quotes or inside a DOCTYPE's `[…]` internal subset, whose comments and
+     * processing instructions are skipped whole.
+     */
+    private fun endOfDeclaration(text: CharSequence, from: Int): Int {
+        var quote: Char? = null
+        var depth = 0
+        var i = from
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                quote != null -> if (c == quote) quote = null
+
+                c == '"' || c == '\'' -> quote = c
+
+                depth > 0 && startsWith(text, "<!--", i) -> {
+                    i = endOf(text, "-->", i + 4)
+                    continue
+                }
+
+                depth > 0 && startsWith(text, "<?", i) -> {
+                    i = endOf(text, "?>", i + 2)
+                    continue
+                }
+
+                c == '[' -> depth++
+
+                c == ']' -> if (depth > 0) depth--
+
+                c == '>' && depth == 0 -> return i + 1
+            }
+            i++
+        }
+        return text.length
+    }
+
+    /**
+     * [value] with its references replaced: the five predefined entities and decimal and
+     * hexadecimal character references. One it cannot resolve stays as written.
+     */
+    fun decodeReferences(value: String): String {
+        if ('&' !in value) return value
+        val out = StringBuilder(value.length)
+        var i = 0
+        while (i < value.length) {
+            val semi = if (value[i] == '&') value.indexOf(';', i + 1) else -1
+            val decoded = if (semi > i + 1) referenceText(value.substring(i + 1, semi)) else null
+            if (decoded != null) {
+                out.append(decoded)
+                i = semi + 1
+            } else {
+                out.append(value[i])
+                i++
+            }
+        }
+        return out.toString()
+    }
+
+    private fun referenceText(name: String): String? = when {
+        name == "lt" -> "<"
+        name == "gt" -> ">"
+        name == "amp" -> "&"
+        name == "quot" -> "\""
+        name == "apos" -> "'"
+        name.startsWith("#x") -> codePointText(name.substring(2).toIntOrNull(16))
+        name.startsWith("#") -> codePointText(name.substring(1).toIntOrNull())
+        else -> null
+    }
+
+    private fun codePointText(codePoint: Int?): String? = when {
+        codePoint == null || codePoint <= 0 || codePoint > 0x10FFFF || codePoint in 0xD800..0xDFFF -> null
+
+        codePoint < 0x10000 -> codePoint.toChar().toString()
+
+        else -> {
+            val v = codePoint - 0x10000
+            charArrayOf((0xD800 + (v shr 10)).toChar(), (0xDC00 + (v and 0x3FF)).toChar()).concatToString()
+        }
+    }
 
     /** Just after the first [marker] at or after [from], or the end of [text]. */
     private fun endOf(text: CharSequence, marker: String, from: Int): Int {

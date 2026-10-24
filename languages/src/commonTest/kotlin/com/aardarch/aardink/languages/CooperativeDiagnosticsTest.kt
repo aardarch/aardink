@@ -77,4 +77,30 @@ class CooperativeDiagnosticsTest {
             assertTrue(ticks >= 2, "$id: other work ran only $ticks times during the pass")
         }
     }
+
+    @Test
+    fun `schema diagnostics pause for the browser and find the same problems`() = runTest {
+        val schema = XmlSchema.parse("""{ "elements": { "list": { "children": ["item"] }, "item": { "children": [] } } }""")
+        // Without a base, so only the schema's own pass runs.
+        val service = XmlSchemaLanguageService(schema, base = null)
+        val document = CodeDocument("<list>\n" + "<item/>\n".repeat(5_000) + "<bogus/>\n</list>")
+        cooperativeDiagnostics = false
+        val plain = service.diagnostics(document)
+        assertTrue(plain.isNotEmpty(), "the sample has a problem to find")
+
+        cooperativeDiagnostics = true
+        cooperativeSlice = Duration.ZERO
+        var ticks = 0
+        val ticker = launch {
+            while (true) {
+                delay(1)
+                ticks++
+            }
+        }
+        val paced = service.diagnostics(document)
+        ticker.cancel()
+
+        assertEquals(plain, paced, "pausing changed what was found")
+        assertTrue(ticks >= 2, "other work ran only $ticks times during the pass")
+    }
 }

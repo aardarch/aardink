@@ -99,6 +99,29 @@ class XmlSchemaLanguageServiceTest {
     }
 
     @Test
+    fun `markup inside a processing instruction or a declaration is not read as elements`() = runTest {
+        val documents = listOf(
+            "<?test > <bogus/> ?><wallpaper/>",
+            "<!DOCTYPE wallpaper [<!ENTITY e \"x > <bogus/>\"><!-- it's > <bogus/> -->]><wallpaper/>",
+        )
+        for (text in documents) {
+            val messages = service.diagnostics(CodeDocument(text)).filter { it.source == "schema" }.map { it.message }
+            assertEquals(emptyList(), messages, text)
+        }
+    }
+
+    @Test
+    fun `attribute values are compared by what their references mean`() = runTest {
+        val document = CodeDocument(
+            "<wallpaper><page><text value=\"x\" align=\"st&#97;rt\"/><text value=\"x\" align=\"mid&amp;dle\"/></page></wallpaper>",
+        )
+        val messages = service.diagnostics(document).filter { it.source == "schema" }.map { it.message }
+        assertEquals(listOf("'mid&amp;dle' is not a value of align; expected start, center, end"), messages)
+        val hovered = CodeDocument("<text value=\"x\" align=\"&#x65;nd\"/>")
+        assertEquals("The far side.", service.hoverDoc(hovered, 25)?.content)
+    }
+
+    @Test
     fun `diagnostics report what the schema does not allow`() = runTest {
         val document = CodeDocument(
             """<wallpaper>

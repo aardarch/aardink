@@ -24,6 +24,7 @@ import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 import com.aardarch.aardink.languages.internal.xml.XmlAttr
 import com.aardarch.aardink.languages.internal.xml.XmlScan
 import com.aardarch.aardink.languages.internal.xml.XmlTag
@@ -77,8 +78,7 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val text = document.text
         val offset = cursorOffset.coerceIn(0, text.length)
-        val tags = XmlScan.tags(text)
-        val tag = XmlScan.tagAt(tags, offset) ?: return emptyList()
+        val tag = XmlScan.tagAt(XmlScan.tags(text, until = offset), offset) ?: return emptyList()
         if (tag.closing) return emptyList()
         if (offset in tag.nameStart..tag.nameEnd) return elementCompletions(text, tag, offset)
         val element = schema.elements[tag.name] ?: return emptyList()
@@ -179,7 +179,7 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
     // ── Hover ───────────────────────────────────────────────────────────────
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
-        val tag = XmlScan.tagAt(XmlScan.tags(document.text), offset) ?: return null
+        val tag = XmlScan.tagAt(XmlScan.tags(document.text, until = offset), offset) ?: return null
         val element = schema.elements[tag.name] ?: return null
         if (offset in tag.nameStart..tag.nameEnd) {
             val doc = element.documentation ?: return null
@@ -192,7 +192,7 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
                 ?: return null
         val info = element.attributes[attr.name] ?: return null
         if (attr.valueStart >= 0 && offset >= attr.valueStart) {
-            val value = info.values.firstOrNull { it.value == attr.value }
+            val value = info.values.firstOrNull { it.value == attr.decodedValue }
             val doc = value?.documentation ?: return null
             return HoverDoc(title = "${attr.name}=\"${value.value}\"", content = doc, range = attr.valueStart until attr.valueEnd)
         }
@@ -206,7 +206,7 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val problems = ArrayList<Diagnostic>()
-        for (tag in XmlScan.tags(document.text)) {
+        for (tag in XmlScan.tags(document.text, pacer = diagnosticsPacer())) {
             if (tag.closing || tag.name.isEmpty()) continue
             val nameRange = tag.nameStart until tag.nameEnd
             val element = schema.elements[tag.name]
@@ -236,8 +236,9 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
                     continue
                 }
                 val value = attr.value ?: continue
-                if (info.values.isEmpty() || info.values.any { it.value == value }) continue
-                if (schema.dynamicValue?.containsMatchIn(value) == true) continue
+                val meaning = attr.decodedValue ?: continue
+                if (info.values.isEmpty() || info.values.any { it.value == meaning }) continue
+                if (schema.dynamicValue?.containsMatchIn(meaning) == true) continue
                 val range = if (value.isEmpty()) (attr.valueStart - 1)..attr.valueStart else attr.valueStart until attr.valueEnd
                 problems +=
                     problem(range, "'$value' is not a value of ${attr.name}; expected ${info.values.joinToString(", ") { it.value }}")
