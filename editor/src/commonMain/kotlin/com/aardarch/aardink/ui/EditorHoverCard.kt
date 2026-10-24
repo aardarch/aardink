@@ -101,6 +101,7 @@ internal fun EditorHoverCard(diagnostics: List<Diagnostic>, doc: HoverDoc?, onQu
                     HorizontalDivider(thickness = 0.5.dp)
                     Text(text = doc.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
                     Text(text = doc.content, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (doc.example != null) HoverDocExample(doc.example)
                 }
             }
         }
