@@ -28,8 +28,8 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
  *
  * Built on [XmlScan]'s forgiving scan, so a document being typed still has a structure: an element
  * never closed ends where its parent does, or at the end of the text; a closing tag with no open
- * element of its name is ignored. In [htmlMode] names match without case and the [voidElements]
- * (`br`, `img`, …) have no content.
+ * element of its name is ignored. In [htmlMode] names match without case, the [voidElements]
+ * (`br`, `img`, …) have no content, and the [TEXT_ONLY_ELEMENTS] no elements inside.
  */
 internal object XmlSymbols {
 
@@ -44,7 +44,7 @@ internal object XmlSymbols {
         pacer: CooperativePacer? = null,
     ): List<DocumentSymbol> {
         if (text.isEmpty()) return emptyList()
-        val tags = XmlScan.tags(text, pacer = pacer)
+        val tags = XmlScan.tags(text, pacer = pacer, textOnly = textOnly(htmlMode))
         val top = ArrayList<DocumentSymbol>()
         val open = ArrayList<Open>()
 
@@ -94,6 +94,11 @@ internal object XmlSymbols {
 
     /** Attributes whose value names an element, shown beside its tag. */
     private val NAMING_ATTRIBUTES = setOf("id", "name", "android:id", "key")
+
+    /** HTML elements whose content is text, never elements: raw text (`script`, `style`) and RCDATA. */
+    private val TEXT_ONLY_ELEMENTS = setOf("script", "style", "textarea", "title")
+
+    private fun textOnly(htmlMode: Boolean): Set<String> = if (htmlMode) TEXT_ONLY_ELEMENTS else emptySet()
 
     /**
      * Which tag closes which in [tags], as indices both ways: an opening tag and the closing tag
@@ -148,7 +153,7 @@ internal object XmlSymbols {
     suspend fun linkedNames(text: CharSequence, offset: Int, htmlMode: Boolean, voidElements: Set<String>): List<IntRange>? {
         if (!mayBeInTagName(text, offset)) return null
         val parsed = lastParsed?.takeIf { it.text === text && it.htmlMode == htmlMode && it.voidElements === voidElements }
-            ?: XmlScan.tags(text, pacer = diagnosticsPacer()).let { tags ->
+            ?: XmlScan.tags(text, pacer = diagnosticsPacer(), textOnly = textOnly(htmlMode)).let { tags ->
                 Parsed(text, htmlMode, voidElements, tags, partners(tags, htmlMode, voidElements, diagnosticsPacer()))
             }.also { lastParsed = it }
         val tags = parsed.tags

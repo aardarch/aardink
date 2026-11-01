@@ -226,4 +226,19 @@ class DocumentSymbolsTest {
         assertEquals("\"k=v\"", symbols[0].children[0].nameIn(text))
         assertEquals("\"x]]y\"", symbols[1].nameIn(text))
     }
+
+    @Test
+    fun `a toml table runs on through its trailing comments and blank lines`() = runTest {
+        val text = "[a]\nx = 1\n# comment\n\n[b]\ny = 2\n# end"
+        val symbols = symbolsOf(BuiltInLanguages.Toml.languageService, text)
+        assertEquals("[a]\nx = 1\n# comment\n", symbols[0].textIn(text))
+        assertTrue(symbols[1].textIn(text).endsWith("# end"))
+    }
+
+    @Test
+    fun `html raw text and rcdata hold no elements`() = runTest {
+        val text = "<body><script>const t = \"<b>x</b>\";</script><title>a <i>b</i></title><p>hi</p></body>"
+        assertEquals(listOf("body(script, title, p)"), outline(symbolsOf(BuiltInLanguages.Html.languageService, text)))
+        assertEquals(listOf("r(script(b))"), outline(symbolsOf(BuiltInLanguages.Xml.languageService, "<r><script><b/></script></r>")))
+    }
 }

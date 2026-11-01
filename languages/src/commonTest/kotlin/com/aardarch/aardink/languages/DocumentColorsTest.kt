@@ -86,6 +86,22 @@ class DocumentColorsTest {
     }
 
     @Test
+    fun `a json key whose colon is on another line is not a colour`() = runTest {
+        assertEquals(
+            listOf("#0f0" to Color(0xFF00FF00)),
+            colorsIn(BuiltInLanguages.Json.languageService, "{\"#fff\"\n: \"#0f0\", \"#000\" /* c */\n// c\n: 1}"),
+        )
+    }
+
+    @Test
+    fun `toml table names are not colours, array values starting a line are`() = runTest {
+        assertEquals(
+            listOf("#fff" to Color(0xFFFFFFFF)),
+            colorsIn(BuiltInLanguages.Toml.languageService, "[\"#abc\"]\nvalue = 1\n  [[\"#def\"]]\ncolors = [\n[\"#fff\"],\n]"),
+        )
+    }
+
+    @Test
     fun `css hashes in nested selectors, strings and urls are not colours`() = runTest {
         assertEquals(
             listOf("#fff" to Color(0xFFFFFFFF), "#000" to Color(0xFF000000)),

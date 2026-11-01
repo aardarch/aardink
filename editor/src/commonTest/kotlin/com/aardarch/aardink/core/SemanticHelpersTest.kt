@@ -52,6 +52,12 @@ class SemanticHelpersTest {
     }
 
     @Test
+    fun `a bracket in a string is not one the selection grows to`() {
+        val text = "f(\"(\", arg)"
+        assertEquals(listOf("arg", "\"(\", arg", "(\"(\", arg)", text), grown(text, text.indexOf("arg") + 1))
+    }
+
+    @Test
     fun `expand then shrink walks back the same way`() {
         val state = state("call(arg)")
         state.selection = TextRange(6)

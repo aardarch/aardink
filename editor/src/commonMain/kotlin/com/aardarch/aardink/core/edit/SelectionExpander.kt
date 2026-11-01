@@ -93,41 +93,81 @@ internal object SelectionExpander {
         return null
     }
 
-    /** The innermost pair of brackets around `[a, b)`, as the offsets of the two brackets, or null. */
+    /**
+     * The innermost pair of brackets around `[a, b)`, as the offsets of the two brackets, or null.
+     * A bracket in a string literal is text, not structure: in `f("(", arg)` the call's are found.
+     */
     private fun bracketsAround(text: CharSequence, a: Int, b: Int): Pair<Int, Int>? {
         var depth = 0
         var open = -1
-        var i = a - 1
         val stop = (a - MAX_SCAN).coerceAtLeast(0)
-        while (i >= stop) {
-            val c = text[i]
-            if (c in CLOSERS) {
-                depth++
-            } else if (c in OPENERS) {
-                if (depth == 0) {
+        // Back a line at a time: which brackets are in strings is read from a line's start.
+        var end = a
+        while (open < 0 && end > stop) {
+            val start = lineStart(text, end - 1).coerceAtLeast(stop)
+            val brackets = codeBrackets(text, start, start, end)
+            for (k in brackets.indices.reversed()) {
+                val i = brackets[k]
+                if (text[i] in CLOSERS) {
+                    depth++
+                } else if (depth == 0) {
                     open = i
                     break
+                } else {
+                    depth--
                 }
-                depth--
             }
-            i--
+            end = start
         }
         if (open < 0) return null
         val wanted = CLOSERS[OPENERS.indexOf(text[open])]
         depth = 0
-        var j = b
         val limit = (b + MAX_SCAN).coerceAtMost(text.length)
-        while (j < limit) {
-            val c = text[j]
-            if (c in OPENERS) {
+        for (j in codeBrackets(text, lineStart(text, b).coerceAtLeast(b - MAX_SCAN), b, limit)) {
+            if (text[j] in OPENERS) {
                 depth++
-            } else if (c in CLOSERS) {
-                if (depth == 0) return if (c == wanted) open to j else null
+            } else {
+                if (depth == 0) return if (text[j] == wanted) open to j else null
                 depth--
             }
-            j++
         }
         return null
+    }
+
+    /**
+     * The offsets of the brackets in `[from, to)` outside string literals, the strings read from
+     * [scanFrom] on, so one already open at [from] is known. A string is read as [stringAround]
+     * reads one: closed by its own quote on its line, past backslash escapes; a quote with no
+     * partner on its line opens none.
+     */
+    private fun codeBrackets(text: CharSequence, scanFrom: Int, from: Int, to: Int): List<Int> {
+        val brackets = ArrayList<Int>()
+        var i = scanFrom
+        while (i < to) {
+            val c = text[i]
+            if (c == '"' || c == '\'' || c == '`') {
+                val close = closingQuote(text, i)
+                if (close >= 0) {
+                    i = close + 1
+                    continue
+                }
+            } else if (i >= from && (c in OPENERS || c in CLOSERS)) {
+                brackets += i
+            }
+            i++
+        }
+        return brackets
+    }
+
+    /** The offset of the quote that closes the one at [open] on its line, or -1. */
+    private fun closingQuote(text: CharSequence, open: Int): Int {
+        val quote = text[open]
+        var j = open + 1
+        while (j < text.length && text[j] != '\n') {
+            if (text[j] == quote) return j
+            j += if (text[j] == '\\') 2 else 1
+        }
+        return -1
     }
 
     private fun lineStart(text: CharSequence, offset: Int): Int {

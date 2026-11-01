@@ -84,15 +84,29 @@ internal object HexColors {
     /**
      * The string values in [text] that hold nothing but a hex colour, as JSON's ([json]) and TOML's
      * values do. Comments are skipped, and so are keys (a string followed by `:` in JSON, by `=` or
-     * a dotted key's `.` in TOML) and TOML's multi-line strings.
+     * a dotted key's `.` in TOML), TOML's table headers and its multi-line strings.
      */
     fun quoted(text: CharSequence, json: Boolean): List<ColorInfo> {
         val colors = ArrayList<ColorInfo>()
         val n = text.length
+        // TOML's open arrays and inline tables: a `[` starting a line inside one is not a header.
+        var depth = 0
         var i = 0
         while (i < n) {
             val c = text[i]
             when {
+                !json && c == '[' && depth == 0 && onlyBlankBefore(text, i) -> i = lineEnd(text, i)
+
+                !json && (c == '[' || c == '{') -> {
+                    depth++
+                    i++
+                }
+
+                !json && (c == ']' || c == '}') -> {
+                    depth = (depth - 1).coerceAtLeast(0)
+                    i++
+                }
+
                 json && c == '/' && i + 1 < n && text[i + 1] == '/' -> i = lineEnd(text, i)
 
                 json && c == '/' && i + 1 < n && text[i + 1] == '*' -> {
@@ -115,7 +129,7 @@ internal object HexColors {
                         i = j
                         continue
                     }
-                    val isKey = when (nextNonBlank(text, j + 1)) {
+                    val isKey = when (if (json) nextJsonToken(text, j + 1) else nextNonBlank(text, j + 1)) {
                         ':' -> json
                         '=', '.' -> !json
                         else -> false
@@ -216,6 +230,33 @@ internal object HexColors {
         var i = from
         while (i < text.length && (text[i] == ' ' || text[i] == '\t')) i++
         return if (i < text.length) text[i] else null
+    }
+
+    /** The first character from [from] on past JSON's whitespace and comments, or null at the end of [text]. */
+    private fun nextJsonToken(text: CharSequence, from: Int): Char? {
+        var i = from
+        while (i < text.length) {
+            when {
+                text[i].isWhitespace() -> i++
+
+                startsWith(text, i, "//") -> i = lineEnd(text, i)
+
+                startsWith(text, i, "/*") -> {
+                    val end = indexOf(text, "*/", i + 2)
+                    i = if (end < 0) text.length else end + 2
+                }
+
+                else -> return text[i]
+            }
+        }
+        return null
+    }
+
+    /** Whether only spaces and tabs come between the start of [at]'s line and [at]. */
+    private fun onlyBlankBefore(text: CharSequence, at: Int): Boolean {
+        var i = at - 1
+        while (i >= 0 && (text[i] == ' ' || text[i] == '\t')) i--
+        return i < 0 || text[i] == '\n'
     }
 
     private fun startsWith(text: CharSequence, at: Int, prefix: String, ignoreCase: Boolean = false): Boolean =

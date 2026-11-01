@@ -27,6 +27,7 @@ import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.CooperativePacer
 import com.aardarch.aardink.languages.internal.HexColors
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -69,7 +70,8 @@ object TomlLanguageService : BaseLanguageService() {
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> {
         val lineCount = document.lineCount
         if (lineCount == 0 || document.length == 0) return emptyList()
-        val states = lineStates(document)
+        val states = lineStates(document, diagnosticsPacer())
+        val pacer = diagnosticsPacer()
         val top = ArrayList<DocumentSymbol>()
         var table: DocumentSymbol? = null
         var tableKeys = ArrayList<DocumentSymbol>()
@@ -84,16 +86,22 @@ object TomlLanguageService : BaseLanguageService() {
 
         var i = 0
         while (i < lineCount) {
+            pacer?.onProgress(i)
             val line = document.lineText(i)
             val trimmed = line.trimStart()
             val start = document.lineStart(i) + (line.length - trimmed.length)
             if (states[i].isContinuation || trimmed.isEmpty() || trimmed.startsWith("#")) {
+                // A table runs on through the comments and blank lines after its last key.
+                lastLine = i
                 i++
                 continue
             }
             // The declaration runs on through the lines that continue its value.
             var end = i
-            while (end + 1 < lineCount && states[end + 1].isContinuation) end++
+            while (end + 1 < lineCount && states[end + 1].isContinuation) {
+                end++
+                pacer?.onProgress(end)
+            }
             val last = document.lineEnd(end) - 1
             if (trimmed.startsWith("[")) {
                 endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
@@ -145,7 +153,7 @@ object TomlLanguageService : BaseLanguageService() {
         val keysByTable = mutableMapOf<Pair<List<String>, Int>, MutableSet<List<String>>>()
         val arrayInstances = mutableMapOf<List<String>, Int>()
         var sectionKeys = keysByTable.getOrPut(emptyList<String>() to 0) { mutableSetOf() }
-        val lineStates = lineStates(document)
+        val lineStates = lineStates(document, diagnosticsPacer())
         val pacer = diagnosticsPacer()
 
         for (i in 0 until lineCount) {
@@ -336,7 +344,7 @@ object TomlLanguageService : BaseLanguageService() {
         if (lineCount == 0) return ""
 
         val formattedLines = mutableListOf<String>()
-        val lineStates = lineStates(document)
+        val lineStates = lineStates(document, diagnosticsPacer())
         for (i in 0 until lineCount) {
             val line = document.lineText(i)
             // Whitespace inside a multiline string is data — reformatting it changes the document.
@@ -382,14 +390,16 @@ object TomlLanguageService : BaseLanguageService() {
     /**
      * Classifies every line of [document]. TOML values span lines — `"""` / `'''` strings and
      * bracketed arrays or inline tables — so a line is only its own declaration once the lines
-     * above it have closed everything they opened.
+     * above it have closed everything they opened. A whole-document pass gives a [pacer] to pause
+     * for the browser.
      */
-    private fun lineStates(document: CodeDocument): List<TomlLineState> {
+    private suspend fun lineStates(document: CodeDocument, pacer: CooperativePacer?): List<TomlLineState> {
         val states = ArrayList<TomlLineState>(document.lineCount)
         var openDelimiter: String? = null
         var depth = 0
 
         for (i in 0 until document.lineCount) {
+            pacer?.onProgress(i)
             val line = document.lineText(i)
             val startedInsideString = openDelimiter != null
             val startedInsideValue = startedInsideString || depth > 0
