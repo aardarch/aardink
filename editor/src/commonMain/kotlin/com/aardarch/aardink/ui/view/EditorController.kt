@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.EditingCommands
@@ -44,9 +45,14 @@ import com.aardarch.aardink.platform.editorClipboardFromKeys
 import com.aardarch.aardink.platform.editorImeWindowed
 import com.aardarch.aardink.platform.readPlainText
 import com.aardarch.aardink.platform.writePlainText
+import com.aardarch.aardink.ui.EditorKeyBinding
+import com.aardarch.aardink.ui.EditorKeyBindings
 import com.aardarch.aardink.ui.EditorMenuItem
+import com.aardarch.aardink.ui.KeyBindingMatch
+import com.aardarch.aardink.ui.KeyChord
 import com.aardarch.aardink.ui.input.EditorImeAdapter
 import com.aardarch.aardink.ui.input.EditorImeGeometry
+import com.aardarch.aardink.ui.resolveKeyBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -204,37 +210,70 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     fun onKeyEvent(event: KeyEvent): Boolean = state.withSelectionReason(SelectionChangeReason.Keyboard) { handleKey(event) }
 
-    /** Ctrl+K (Cmd+K) was pressed: the next key completes a chord. */
-    internal var chordPending = false
+    /** The first key of a chord (Ctrl+K), while the editor waits for its second. */
+    internal var chordPending: KeyChord? = null
         private set
 
+    /** The host's bindings ([com.aardarch.aardink.ui.EditorOptions.keyBindings]), before the editor's own. */
+    var keyBindings: List<EditorKeyBinding> = emptyList()
+
     private fun handleKey(event: KeyEvent): Boolean {
-        linkModifier = if (PlatformInfo.isMacOs) event.isMetaPressed else event.isCtrlPressed
+        val isMac = PlatformInfo.isMacOs
+        linkModifier = if (isMac) event.isMetaPressed else event.isCtrlPressed
         showToolbarAtCaret = false
-        if (chordPending) {
+        val pending = chordPending
+        if (pending != null) {
             // Modifier keys on their own neither complete nor cancel the chord.
             if (event.key in MODIFIER_KEYS) return false
             if (event.type != KeyEventType.KeyDown) return true
-            chordPending = false
+            chordPending = null
             // A pair that means nothing is swallowed, as VS Code does, and so is Escape.
-            val second = EditorKeyBindings.resolveChord(event, PlatformInfo.isMacOs) ?: return true
-            execute(second)
+            val match = resolveKeyBinding(keyBindings + EditorKeyBindings.defaults(isMac), event, isMac, pending)
+            if (match is KeyBindingMatch.Run) run(match.command)
             return true
         }
         if (actions.onPopupKey(event)) return true
-        if (EditorKeyBindings.startsChord(event, PlatformInfo.isMacOs)) {
-            chordPending = true
-            return true
+        when (val match = resolveKeyBinding(keyBindings + EditorKeyBindings.defaults(isMac), event, isMac, pending = null)) {
+            is KeyBindingMatch.Run -> {
+                run(match.command)
+                touchMode = false
+                return true
+            }
+
+            is KeyBindingMatch.ChordStarted -> {
+                chordPending = match.first
+                return true
+            }
+
+            // Unbound by the host: no binding of the editor's own, so the key types if it types.
+            KeyBindingMatch.Unbound -> return typeKey(event)
+
+            null -> {}
         }
-        val binding = EditorKeyBindings.resolve(event, PlatformInfo.isMacOs)
+        val binding = KeyTable.resolve(event, isMac)
         if (binding != null && execute(binding)) {
             touchMode = false
             return true
         }
+        return typeKey(event)
+    }
+
+    /** The text [event] types, typed; false when it types nothing. */
+    private fun typeKey(event: KeyEvent): Boolean {
         if (readOnly) return false
         val typed = decoder.typedText(event) ?: return false
         if (typed.isNotEmpty()) type(typed)
         return true
+    }
+
+    /**
+     * Runs a bound [command] as its key: through the state, then shows the caret when it moved or
+     * the text changed, except for commands that scroll the view themselves.
+     */
+    private fun run(command: EditorCommand) {
+        val ran = state.execute(command)
+        val scrolls = command is EditorCommand.ScrollLines || command is EditorCommand.Reveal
+        if (ran && !scrolls) revealCaret()
     }
 
     /** Types [text] at every selection, as a keyboard does. */
@@ -299,10 +338,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
             KeyCommand.Outdent -> edit { if (!state.moveInSnippet(forward = false)) state.outdentSelection() }
 
-            KeyCommand.Undo -> edit { state.undo() }
-
-            KeyCommand.Redo -> edit { state.redo() }
-
             KeyCommand.SelectAll -> true.also { state.selectAll() }
 
             KeyCommand.Copy -> editorClipboardFromKeys && true.also { copyToClipboard() }
@@ -310,14 +345,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             KeyCommand.Cut -> editorClipboardFromKeys && true.also { cutToClipboard() }
 
             KeyCommand.Paste -> editorClipboardFromKeys && !readOnly && true.also { pasteFromClipboard() }
-
-            KeyCommand.Find -> true.also { actions.onFind() }
-
-            KeyCommand.Replace -> true.also { actions.onReplace() }
-
-            KeyCommand.GoToLine -> true.also { actions.onGoToLine() }
-
-            KeyCommand.ToggleComment -> edit { state.toggleComment() }
 
             KeyCommand.MoveLinesUp -> edit { state.moveLines(up = true) }
 
@@ -330,8 +357,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             KeyCommand.DeleteLines -> edit { state.deleteLines() }
 
             KeyCommand.AddNextOccurrence -> state.addNextOccurrence().also { revealCaret() }
-
-            KeyCommand.SelectAllOccurrences -> state.selectAllOccurrences()
 
             KeyCommand.AddCursorAbove -> addCursor(-1)
 
@@ -351,29 +376,13 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
             KeyCommand.Escape -> escape()
 
-            KeyCommand.TriggerSuggest -> !readOnly && true.also { actions.onTriggerSuggest() }
-
-            KeyCommand.GoToDefinition -> actions.onGoToDefinition()
-
-            KeyCommand.FindReferences -> actions.onFindReferences()
-
             KeyCommand.FormatDocument -> !readOnly && actions.onFormat()
-
-            KeyCommand.NextProblem -> actions.onGoToProblem(true)
-
-            KeyCommand.PreviousProblem -> actions.onGoToProblem(false)
-
-            KeyCommand.Rename -> !readOnly && actions.onRename()
-
-            KeyCommand.QuickFix -> !readOnly && actions.onQuickFix()
 
             KeyCommand.FindNext -> actions.onFindNext(true)
 
             KeyCommand.FindPrevious -> actions.onFindNext(false)
 
             KeyCommand.SelectAllMatches -> actions.onSelectAllMatches()
-
-            KeyCommand.Command -> binding.run?.let(state::execute) ?: false
         }
         return handled
     }

@@ -525,6 +525,46 @@ public abstract class com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$AddLineComment : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$AddLineComment;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$BlockComment : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$BlockComment;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$ChangeAllOccurrences : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$ChangeAllOccurrences;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$CursorUndo : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$CursorUndo;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$CursorsAtLineEnds : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$CursorsAtLineEnds;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$ExpandSelection : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$ExpandSelection;
@@ -609,6 +649,22 @@ public final class com/aardarch/aardink/core/EditorCommand$GoToSymbol : com/aard
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$InsertLineAbove : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$InsertLineAbove;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$InsertLineBelow : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$InsertLineBelow;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$InsertSnippet : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public fun <init> (Ljava/lang/String;)V
@@ -617,6 +673,30 @@ public final class com/aardarch/aardink/core/EditorCommand$InsertSnippet : com/a
 	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorCommand$InsertSnippet;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorCommand$InsertSnippet;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getSnippet ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$JoinLines : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$JoinLines;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$JumpToBracket : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$JumpToBracket;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$LowerCase : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$LowerCase;
+	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -645,6 +725,14 @@ public final class com/aardarch/aardink/core/EditorCommand$Redo : com/aardarch/a
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$RemoveLineComment : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$RemoveLineComment;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$Rename : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$Rename;
@@ -668,9 +756,29 @@ public final class com/aardarch/aardink/core/EditorCommand$Reveal : com/aardarch
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$ScrollLines : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Lcom/aardarch/aardink/core/EditorCommand$ScrollLines;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorCommand$ScrollLines;IILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorCommand$ScrollLines;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDelta ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$SelectAllOccurrences : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$SelectAllOccurrences;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$SelectLine : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$SelectLine;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -724,6 +832,28 @@ public final class com/aardarch/aardink/core/EditorCommand$ShrinkSelection : com
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$SkipOccurrence : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$SkipOccurrence;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$SortLines : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Z)V
+	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lcom/aardarch/aardink/core/EditorCommand$SortLines;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/EditorCommand$SortLines;ZILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorCommand$SortLines;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDescending ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$ToggleComment : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$ToggleComment;
@@ -735,6 +865,14 @@ public final class com/aardarch/aardink/core/EditorCommand$ToggleComment : com/a
 public final class com/aardarch/aardink/core/EditorCommand$TriggerSuggest : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$TriggerSuggest;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$TrimTrailingWhitespace : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$TrimTrailingWhitespace;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -759,6 +897,14 @@ public final class com/aardarch/aardink/core/EditorCommand$Unfold : com/aardarch
 public final class com/aardarch/aardink/core/EditorCommand$UnfoldAll : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$UnfoldAll;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/EditorCommand$UpperCase : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$UpperCase;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -1531,6 +1677,27 @@ public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
 	public static final fun EditorAttributionBadge (Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
 
+public final class com/aardarch/aardink/ui/EditorKeyBinding {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/ui/KeyChord;Lcom/aardarch/aardink/core/EditorCommand;)V
+	public fun <init> (Ljava/util/List;Lcom/aardarch/aardink/core/EditorCommand;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Lcom/aardarch/aardink/core/EditorCommand;
+	public final fun copy (Ljava/util/List;Lcom/aardarch/aardink/core/EditorCommand;)Lcom/aardarch/aardink/ui/EditorKeyBinding;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/ui/EditorKeyBinding;Ljava/util/List;Lcom/aardarch/aardink/core/EditorCommand;ILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorKeyBinding;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChord ()Ljava/util/List;
+	public final fun getCommand ()Lcom/aardarch/aardink/core/EditorCommand;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/EditorKeyBindings {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorKeyBindings;
+	public final fun getDefault ()Ljava/util/List;
+}
+
 public final class com/aardarch/aardink/ui/EditorMenuItem {
 	public static final field $stable I
 	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/EditorCommand;ZLkotlin/jvm/functions/Function0;)V
@@ -1544,8 +1711,8 @@ public final class com/aardarch/aardink/ui/EditorMenuItem {
 public final class com/aardarch/aardink/ui/EditorOptions {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZ)V
-	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Z
 	public final fun component10 ()Z
 	public final fun component11 ()Z
@@ -1561,6 +1728,7 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun component20 ()Z
 	public final fun component21 ()Z
 	public final fun component22 ()Z
+	public final fun component23 ()Ljava/util/List;
 	public final fun component3 ()Z
 	public final fun component4 ()Z
 	public final fun component5 ()Z
@@ -1568,8 +1736,8 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun component7 ()Z
 	public final fun component8 ()Z
 	public final fun component9 ()Z
-	public final fun copy (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZ)Lcom/aardarch/aardink/ui/EditorOptions;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public final fun copy (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBracketPairColorization ()Z
 	public final fun getBreadcrumbs ()Z
@@ -1577,6 +1745,7 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun getEol ()Lcom/aardarch/aardink/core/LineEnding;
 	public final fun getHighlightCurrentLine ()Z
 	public final fun getInsertSpaces ()Z
+	public final fun getKeyBindings ()Ljava/util/List;
 	public final fun getLinkedEditing ()Z
 	public final fun getMatchBrackets ()Z
 	public final fun getOccurrencesHighlight ()Z
@@ -1657,6 +1826,33 @@ public final class com/aardarch/aardink/ui/GutterAnnotationKind : java/lang/Enum
 
 public final class com/aardarch/aardink/ui/HoverDocPopupKt {
 	public static final fun HoverDocPopup (Lcom/aardarch/aardink/core/HoverDoc;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class com/aardarch/aardink/ui/KeyChord {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/ui/KeyChord$Companion;
+	public synthetic fun <init> (JZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JZZZZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-EK5gGoQ ()J
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun copy-yzqMiHI (JZZZZ)Lcom/aardarch/aardink/ui/KeyChord;
+	public static synthetic fun copy-yzqMiHI$default (Lcom/aardarch/aardink/ui/KeyChord;JZZZZILjava/lang/Object;)Lcom/aardarch/aardink/ui/KeyChord;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAlt ()Z
+	public final fun getCtrlCmd ()Z
+	public final fun getKey-EK5gGoQ ()J
+	public final fun getShift ()Z
+	public final fun getWinCtrl ()Z
+	public fun hashCode ()I
+	public final fun matches-ZmokQxo (Ljava/lang/Object;)Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/KeyChord$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/aardarch/aardink/ui/KeyChord;
 }
 
 public final class com/aardarch/aardink/ui/KeyboardToolbarDefaults {

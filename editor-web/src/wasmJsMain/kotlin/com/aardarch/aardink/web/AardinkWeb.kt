@@ -35,7 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Font
@@ -72,6 +77,7 @@ import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.EditorTypography
 import com.aardarch.aardink.ui.GoToLineDialog
+import com.aardarch.aardink.ui.KeyChord
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
@@ -153,6 +159,9 @@ class AardinkEditorHandle internal constructor(
 
     /** The focus last reported to [onFocusChange]. */
     internal var reportedFocus = false
+
+    /** The first key of one of the host's chords, while the second is awaited. */
+    internal var pendingHostChord: KeyChord? = null
 
     /** The commands and actions the host added, keys and context-menu entries included. */
     internal val hostActions = mutableStateListOf<WebAction>()
@@ -543,7 +552,7 @@ object AardinkWeb {
         run: () -> Unit,
     ) {
         handle.hostActions.removeAll { it.id == id }
-        handle.hostActions += WebAction(id, label, keybindings.mapNotNull(KeyChord::parse), inContextMenu, run)
+        handle.hostActions += WebAction(id, label, keybindings.mapNotNull(::parseKeybinding), inContextMenu, run)
     }
 
     /** Removes an action [addAction] or [addCommand] added. */
@@ -555,11 +564,13 @@ object AardinkWeb {
      * Binds a key to [run] while the editor has the focus, ahead of the editor's own binding for
      * it, as Monaco's `addCommand`. [keybinding] is text, `"CtrlCmd+S"`, `"Shift+Alt+F"`, `"F8"`
      * (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere, `Ctrl` is Ctrl everywhere), or Monaco's
-     * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+     * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key. A
+     * chord of two keys is `"CtrlCmd+K CtrlCmd+S"`, or Monaco's `KeyMod.chord(...)`; its first key
+     * then starts the host's chords only, not the editor's own with the same first key.
      * Returns the command's id, for [trigger] and [removeAction]; null for a key it cannot read.
      */
     fun addCommand(handle: AardinkEditorHandle, keybinding: String, run: () -> Unit): String? {
-        val chord = KeyChord.parse(keybinding) ?: return null
+        val chord = parseKeybinding(keybinding) ?: return null
         val id = "aardink.command.${handle.nextCommandId++}"
         handle.hostActions += WebAction(id, id, listOf(chord), inContextMenu = false, run = run)
         return id
@@ -1158,9 +1169,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 state = state,
                 // The host's keys come first, as Monaco's addCommand ones do.
                 modifier = Modifier.fillMaxSize().focusRequester(focusRequester).onPreviewKeyEvent { event ->
-                    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it.matches(event) } }
-                    action?.run?.invoke()
-                    action != null
+                    hostKey(handle, event)
                 },
                 contextMenuItems = handle.hostActions.filter {
                     it.inContextMenu
@@ -1338,6 +1347,54 @@ internal fun renderWhitespaceOf(value: String): RenderWhitespace = when (value) 
     "all" -> RenderWhitespace.All
     else -> RenderWhitespace.Selection
 }
+
+/**
+ * Runs the host's action bound to [event], as Monaco's `addCommand` keys come first: a key of its
+ * own, or the second of a chord whose first the host's bindings started. Returns whether the key
+ * was the host's.
+ */
+private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
+    val pending = handle.pendingHostChord
+    if (pending != null) {
+        if (event.key in CHORD_MODIFIER_KEYS) return false
+        if (event.type != KeyEventType.KeyDown) return true
+        handle.pendingHostChord = null
+        val action = handle.hostActions.lastOrNull { action ->
+            action.keybindings.any { binding ->
+                binding.size == 2 && binding[0] == pending &&
+                    (binding[1].matches(event) || binding[1].copy(ctrlCmd = !binding[1].ctrlCmd).matches(event))
+            }
+        }
+        action?.run?.invoke()
+        // A pair that means nothing is swallowed, as Monaco does.
+        return true
+    }
+    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it.size == 1 && it[0].matches(event) } }
+    if (action != null) {
+        action.run()
+        return true
+    }
+    val chord = handle.hostActions.asReversed().firstNotNullOfOrNull { action ->
+        action.keybindings.firstOrNull { it.size == 2 && it[0].matches(event) }
+    }
+    if (chord != null) {
+        handle.pendingHostChord = chord[0]
+        return true
+    }
+    return false
+}
+
+/** Keys that are only modifiers, which do not complete a chord. */
+private val CHORD_MODIFIER_KEYS = setOf(
+    Key.CtrlLeft,
+    Key.CtrlRight,
+    Key.ShiftLeft,
+    Key.ShiftRight,
+    Key.AltLeft,
+    Key.AltRight,
+    Key.MetaLeft,
+    Key.MetaRight,
+)
 
 /** A CSS hex colour (`#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`); null for anything else. */
 internal fun cssHexColor(text: String): Color? {

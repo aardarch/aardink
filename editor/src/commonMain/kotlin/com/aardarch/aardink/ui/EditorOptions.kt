@@ -68,6 +68,13 @@ import com.aardarch.aardink.core.LineEnding
  *   their text. Its picker opens from the hover, the touch menu, or
  *   [EditorCommand.ShowColorPicker][com.aardarch.aardink.core.EditorCommand.ShowColorPicker] with
  *   the caret in the colour, and writes the new colour back. Off by default.
+ * @property keyBindings The host's keys for commands, before the editor's own
+ *   ([EditorKeyBindings.Default]): a binding here wins over one of the editor's for the same keys,
+ *   and one with a null command removes the editor's. Moving Select All Occurrences to
+ *   Ctrl+Shift+D and freeing Ctrl+L, say:
+ *   `listOf(EditorKeyBinding(KeyChord(Key.D, ctrlCmd = true, shift = true), EditorCommand.SelectAllOccurrences),
+ *   EditorKeyBinding(KeyChord(Key.L, ctrlCmd = true), null))`. These bind the editor's commands;
+ *   a host's own actions (Ctrl+S to save) belong in its own key handling.
  */
 @Immutable
 data class EditorOptions(
@@ -93,6 +100,7 @@ data class EditorOptions(
     val occurrencesHighlight: Boolean = false,
     val linkedEditing: Boolean = false,
     val colorDecorators: Boolean = false,
+    val keyBindings: List<EditorKeyBinding> = emptyList(),
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

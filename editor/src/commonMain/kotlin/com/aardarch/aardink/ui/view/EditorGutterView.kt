@@ -74,6 +74,8 @@ internal class GutterContent(
     val onAnnotationTap: (Int) -> Unit,
     /** The host's decorations with a gutter colour: a bar at the text edge on each line they mark. */
     val decorationMarks: List<LineMark> = emptyList(),
+    /** A tap on a line's number: selects the line, as in VS Code. */
+    val onLineNumberTap: (Int) -> Unit = {},
 )
 
 /**
@@ -136,6 +138,8 @@ internal fun EditorGutterView(
 
                         position.x in diffLane + foldLane..diffLane + foldLane + annotationLane && hit.line in tapped.annotations ->
                             tapped.onAnnotationTap(hit.line)
+
+                        position.x > diffLane + foldLane + annotationLane && tapped.showLineNumbers -> tapped.onLineNumberTap(hit.line)
                     }
                 }
             }

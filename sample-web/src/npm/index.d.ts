@@ -213,7 +213,15 @@ export interface AardinkEditor {
    * `editor.action.goToReferences`, `editor.action.marker.next`, `editor.action.marker.prev`,
    * `actions.find`, `editor.action.startFindReplaceAction`, `editor.action.gotoLine`,
    * `editor.foldAll`, `editor.unfoldAll`, `editor.foldLevel1` to `7`, `undo`, `redo`,
-   * `editor.action.commentLine`, `editor.action.selectHighlights`, and
+   * `editor.action.commentLine`, `editor.action.selectHighlights`, `editor.action.quickOutline`,
+   * `editor.action.smartSelect.expand` and `.shrink`, `editor.fold`, `editor.unfold`,
+   * `editor.action.joinLines`, `editor.action.sortLinesAscending` and `Descending`,
+   * `editor.action.transformToUppercase` and `Lowercase`, `editor.action.trimTrailingWhitespace`,
+   * `editor.action.jumpToBracket`, `cursorUndo`, `editor.action.moveSelectionToNextFindMatch`,
+   * `editor.action.changeAll`, `editor.action.insertCursorAtEndOfEachLineSelected`,
+   * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
+   * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
+   * `editor.action.showColorPicker`, and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -222,7 +230,9 @@ export interface AardinkEditor {
    * Monaco's `addCommand`: `handler` runs when `keybinding` is pressed in the editor, ahead of the
    * editor's own binding for it. A keybinding is text such as `'CtrlCmd+S'`, `'Shift+Alt+F'` or
    * `'F8'` (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere; `Ctrl` is Ctrl everywhere), or Monaco's
-   * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+   * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key. A
+   * chord of two keys is `'CtrlCmd+K CtrlCmd+S'` or `KeyMod.chord(...)`; its first key then starts
+   * your chords only, not the editor's own with the same first key.
    * Returns the command's id, for `trigger`; null for a keybinding it cannot read.
    */
   addCommand(keybinding: string | number, handler: () => void): string | null;

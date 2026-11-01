@@ -187,6 +187,7 @@ class CodeEditorState(
 
     private fun applySelections(set: SelectionSet) {
         val changed = set != selectionSet
+        if (changed) rememberSelections(selectionSet)
         selectionSet = set
         leaveSnippetIfOutside()
         if (changed) emitSelectionChange(selectionReasonContext ?: SelectionChangeReason.Api)
@@ -509,9 +510,16 @@ class CodeEditorState(
                 if (canUndo) add(EditorCommand.Undo)
                 if (canRedo) add(EditorCommand.Redo)
                 if (tokenizer.commentSyntax != null) add(EditorCommand.ToggleComment)
+                if (tokenizer.commentSyntax?.line != null) addAll(listOf(EditorCommand.AddLineComment, EditorCommand.RemoveLineComment))
+                if (tokenizer.commentSyntax?.blockStart != null) add(EditorCommand.BlockComment)
+                addAll(listOf(EditorCommand.JoinLines, EditorCommand.UpperCase, EditorCommand.LowerCase))
+                addAll(listOf(EditorCommand.TrimTrailingWhitespace, EditorCommand.InsertLineBelow, EditorCommand.InsertLineAbove))
             }
             add(EditorCommand.SelectAllOccurrences)
             add(EditorCommand.ExpandSelection)
+            addAll(listOf(EditorCommand.SelectLine, EditorCommand.CursorsAtLineEnds, EditorCommand.SkipOccurrence))
+            addAll(listOf(EditorCommand.ChangeAllOccurrences, EditorCommand.JumpToBracket))
+            if (cursorHistory.isNotEmpty()) add(EditorCommand.CursorUndo)
             if (canShrinkSelection) add(EditorCommand.ShrinkSelection)
             addAll(uiCommandsAvailable)
         }
@@ -520,6 +528,8 @@ class CodeEditorState(
     fun canExecute(command: EditorCommand): Boolean = when (command) {
         is EditorCommand.InsertSnippet -> !readOnly
         is EditorCommand.FoldLevel -> command.level >= 1 && EditorCommand.FoldAll in uiCommandsAvailable
+        is EditorCommand.SortLines -> !readOnly
+        is EditorCommand.ScrollLines -> uiCommandHandler != null
         is EditorCommand.Reveal -> uiCommandHandler != null
         else -> command in availableCommands
     }
@@ -546,6 +556,38 @@ class CodeEditorState(
             EditorCommand.ExpandSelection -> uiCommandHandler?.invoke(command) ?: expandSelectionByText()
 
             EditorCommand.ShrinkSelection -> shrinkSelection()
+
+            EditorCommand.JoinLines -> joinLines()
+
+            is EditorCommand.SortLines -> sortLines(command.descending)
+
+            EditorCommand.UpperCase -> transformCase(upper = true)
+
+            EditorCommand.LowerCase -> transformCase(upper = false)
+
+            EditorCommand.TrimTrailingWhitespace -> trimTrailingWhitespace()
+
+            EditorCommand.JumpToBracket -> jumpToBracket()
+
+            EditorCommand.CursorUndo -> cursorUndo()
+
+            EditorCommand.SkipOccurrence -> skipOccurrence()
+
+            EditorCommand.ChangeAllOccurrences -> changeAllOccurrences()
+
+            EditorCommand.CursorsAtLineEnds -> cursorsAtLineEnds()
+
+            EditorCommand.AddLineComment -> setLineComments(add = true)
+
+            EditorCommand.RemoveLineComment -> setLineComments(add = false)
+
+            EditorCommand.BlockComment -> blockComment()
+
+            EditorCommand.InsertLineBelow -> insertLine(above = false)
+
+            EditorCommand.InsertLineAbove -> insertLine(above = true)
+
+            EditorCommand.SelectLine -> selectLine()
 
             is EditorCommand.InsertSnippet -> {
                 val primary = selection
@@ -752,6 +794,94 @@ class CodeEditorState(
 
     /** Shift+Alt+Down / Up: copies the selected lines below themselves. */
     internal fun copyLines(down: Boolean): Boolean = applyCommand(LineCommands.copyLines(document, currentSelections(), down))
+
+    // ── The editing commands of 0.8 ──────────────────────────────────────────
+
+    internal fun joinLines(): Boolean = applyCommand(LineCommands.joinLines(document, currentSelections()))
+
+    internal fun sortLines(descending: Boolean): Boolean = applyCommand(LineCommands.sortLines(document, currentSelections(), descending))
+
+    internal fun transformCase(upper: Boolean): Boolean = applyCommand(LineCommands.transformCase(document, currentSelections(), upper))
+
+    internal fun trimTrailingWhitespace(): Boolean = applyCommand(LineCommands.trimTrailingWhitespace(document, currentSelections()))
+
+    internal fun insertLine(above: Boolean): Boolean =
+        applyCommand(LineCommands.insertLine(document, currentSelections(), above, lineEnding.text))
+
+    internal fun setLineComments(add: Boolean): Boolean =
+        applyCommand(LineCommands.setLineComments(document, currentSelections(), tokenizer.commentSyntax, add))
+
+    internal fun blockComment(): Boolean =
+        applyCommand(LineCommands.toggleBlockComment(document, currentSelections(), tokenizer.commentSyntax))
+
+    internal fun selectLine(): Boolean {
+        applySelections(LineCommands.selectLines(document, currentSelections()).clampedTo(document.length))
+        return true
+    }
+
+    internal fun cursorsAtLineEnds(): Boolean {
+        val carets = LineCommands.cursorsAtLineEnds(document, currentSelections()) ?: return false
+        applySelections(carets.clampedTo(document.length))
+        return true
+    }
+
+    /** To the bracket matching the one the caret touches. */
+    internal fun jumpToBracket(): Boolean {
+        val match = matchingBracket() ?: return false
+        val caret = selection.end
+        // From the opening bracket (on either side of it) to just before the closing one, and back.
+        val target = if (caret == match.open || caret == match.open + 1) match.close else match.open
+        applySelections(SelectionSet.caret(target))
+        return true
+    }
+
+    /** Moves the last added selection (the primary) to the next occurrence of the selection. */
+    internal fun skipOccurrence(): Boolean {
+        val current = currentSelections()
+        val primary = current.primary
+        if (primary.collapsed) return addNextOccurrence()
+        val word = TextNavigator.wordAt(document, primary.min)
+        val wholeWord = word.first == primary.min && word.last + 1 == primary.max
+        val next = OccurrenceFinder.addNext(document, current, wholeWord) ?: return false
+        // The new one is first; the one it replaces, the old primary, second.
+        applySelections(SelectionSet.of(listOf(next.ranges.first()) + next.ranges.drop(2)))
+        return true
+    }
+
+    /** A selection at every occurrence of the word at the caret, as a whole word. */
+    internal fun changeAllOccurrences(): Boolean {
+        val primary = selection
+        if (primary.collapsed) {
+            val word = TextNavigator.wordAt(document, primary.start)
+            if (word.isEmpty()) return false
+            applySelections(SelectionSet.single(TextRange(word.first, word.last + 1)))
+        }
+        return selectAllOccurrences()
+    }
+
+    // ── Cursor undo (Ctrl+U) ──────────────────────────────────────────────────
+
+    /** The selections before each change of them, the latest last, up to [CURSOR_HISTORY]. */
+    private var cursorHistory: List<SelectionSet> = emptyList()
+    private var undoingCursor = false
+
+    private fun rememberSelections(previous: SelectionSet) {
+        if (undoingCursor) return
+        cursorHistory = (cursorHistory + previous).takeLast(CURSOR_HISTORY)
+    }
+
+    /** Back to the selections before the last change of them. */
+    internal fun cursorUndo(): Boolean {
+        val previous = cursorHistory.lastOrNull() ?: return false
+        cursorHistory = cursorHistory.dropLast(1)
+        undoingCursor = true
+        try {
+            applySelections(previous.clampedTo(document.length))
+        } finally {
+            undoingCursor = false
+        }
+        return true
+    }
 
     /** Ctrl+Shift+K: deletes the selected lines. */
     internal fun deleteLines(): Boolean = applyCommand(LineCommands.deleteLines(document, currentSelections()))
@@ -1417,6 +1547,7 @@ class CodeEditorState(
      */
     private fun placeSelections(selections: SelectionSet, external: Boolean = true): Boolean {
         val changed = selections != selectionSet
+        if (changed) rememberSelections(selectionSet)
         selectionSet = selections
         leaveSnippetIfOutside()
         if (external) externalEditVersion++
@@ -1443,3 +1574,6 @@ private const val INITIAL_VISIBLE_LINES = 100
 
 /** A partial tokenization pass slower than this is treated as a full scan on single-threaded hosts. */
 private const val SLOW_PARTIAL_PASS_MS = 50L
+
+/** How many earlier selections cursor undo (Ctrl+U) can go back through. */
+private const val CURSOR_HISTORY = 64

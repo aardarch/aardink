@@ -24,7 +24,6 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import com.aardarch.aardink.core.EditorCommand
 
 /** Everything a key can make the editor do. */
 internal enum class KeyCommand {
@@ -48,23 +47,16 @@ internal enum class KeyCommand {
     Enter,
     Indent,
     Outdent,
-    Undo,
-    Redo,
     SelectAll,
     Copy,
     Cut,
     Paste,
-    Find,
-    Replace,
-    GoToLine,
-    ToggleComment,
     MoveLinesUp,
     MoveLinesDown,
     CopyLinesUp,
     CopyLinesDown,
     DeleteLines,
     AddNextOccurrence,
-    SelectAllOccurrences,
     AddCursorAbove,
     AddCursorBelow,
     ColumnSelectLeft,
@@ -74,38 +66,26 @@ internal enum class KeyCommand {
     ColumnSelectPageUp,
     ColumnSelectPageDown,
     Escape,
-    TriggerSuggest,
-    GoToDefinition,
-    FindReferences,
     FormatDocument,
-    NextProblem,
-    PreviousProblem,
-    Rename,
-    QuickFix,
     FindNext,
     FindPrevious,
     SelectAllMatches,
-
-    /** Runs [KeyBinding.run], a public command, through [com.aardarch.aardink.core.CodeEditorState.execute]. */
-    Command,
 }
 
-/**
- * A [command], and for the movement commands whether Shift extends the selection ([select]). For
- * [KeyCommand.Command], [run] is the public command the key runs.
- */
-internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false, val run: EditorCommand? = null) {
-    constructor(run: EditorCommand) : this(KeyCommand.Command, run = run)
-}
+/** A [command], and for the movement commands whether Shift extends the selection ([select]). */
+internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false)
 
 /**
- * The editor's keyboard, as a table: VS Code's default bindings, with Cmd for Ctrl on macOS and
- * macOS's own movement keys (Option+arrows by word, Cmd+arrows to line and document ends).
+ * The editor's fixed keys, as a table: moving the caret and selecting, deleting, typing's own keys
+ * (Enter, Tab, Escape), the clipboard, line moves and copies, and the find panel's keys, as VS
+ * Code binds them, with Cmd for Ctrl on macOS and macOS's own movement keys (Option+arrows by word,
+ * Cmd+arrows to line and document ends). The keys that run public commands are data instead:
+ * [com.aardarch.aardink.ui.EditorKeyBindings], which a host overrides.
  *
  * Keys the browser keeps for itself (Ctrl+W, Ctrl+T, Ctrl+N) never reach a web page, so they are
  * not bound.
  */
-internal object EditorKeyBindings {
+internal object KeyTable {
 
     fun resolve(event: KeyEvent, isMac: Boolean): KeyBinding? {
         if (event.type != KeyEventType.KeyDown) return null
@@ -135,7 +115,6 @@ internal object EditorKeyBindings {
 
         return when (event.key) {
             Key.DirectionLeft -> when {
-                growsSelection(isMac, shift, alt, ctrl, meta) -> KeyBinding(EditorCommand.ShrinkSelection)
                 isMac && meta && !alt -> move(KeyCommand.LineStart)
                 word -> move(KeyCommand.WordLeft)
                 plain -> move(KeyCommand.CharLeft)
@@ -143,7 +122,6 @@ internal object EditorKeyBindings {
             }
 
             Key.DirectionRight -> when {
-                growsSelection(isMac, shift, alt, ctrl, meta) -> KeyBinding(EditorCommand.ExpandSelection)
                 isMac && meta && !alt -> move(KeyCommand.LineEnd)
                 word -> move(KeyCommand.WordRight)
                 plain -> move(KeyCommand.CharRight)
@@ -218,47 +196,14 @@ internal object EditorKeyBindings {
 
             Key.Escape -> if (plain && !shift) KeyBinding(KeyCommand.Escape) else null
 
-            Key.F2 -> if (plain && !shift) KeyBinding(KeyCommand.Rename) else null
-
             Key.F3 -> when {
                 shift && !alt && !primary -> KeyBinding(KeyCommand.FindPrevious)
                 plain && !shift -> KeyBinding(KeyCommand.FindNext)
                 else -> null
             }
 
-            Key.F8 -> when {
-                shift && !alt && !primary -> KeyBinding(KeyCommand.PreviousProblem)
-                plain && !shift -> KeyBinding(KeyCommand.NextProblem)
-                else -> null
-            }
-
-            Key.F12 -> when {
-                shift && !alt && !primary -> KeyBinding(KeyCommand.FindReferences)
-                plain && !shift -> KeyBinding(KeyCommand.GoToDefinition)
-                else -> null
-            }
-
-            Key.Spacebar -> if (ctrl && !alt && !meta && !shift) KeyBinding(KeyCommand.TriggerSuggest) else null
-
             Key.F -> when {
                 shift && alt && !primary -> KeyBinding(KeyCommand.FormatDocument)
-                primary && !alt && !shift -> KeyBinding(KeyCommand.Find)
-                else -> null
-            }
-
-            Key.LeftBracket, Key.RightBracket -> when {
-                isMac && meta && alt && !shift && !ctrl -> KeyBinding(
-                    if (event.key ==
-                        Key.LeftBracket
-                    ) {
-                        EditorCommand.Fold
-                    } else {
-                        EditorCommand.Unfold
-                    },
-                )
-
-                primary && !alt -> chord(event.key, shift)
-
                 else -> null
             }
 
@@ -266,57 +211,14 @@ internal object EditorKeyBindings {
         }
     }
 
-    /** The modifiers of Expand and Shrink Selection: Shift+Alt, and Ctrl+Shift+Cmd on macOS. */
-    private fun growsSelection(isMac: Boolean, shift: Boolean, alt: Boolean, ctrl: Boolean, meta: Boolean): Boolean =
-        if (isMac) shift && ctrl && meta && !alt else shift && alt && !ctrl && !meta
-
-    /**
-     * Whether [event] starts a two-key chord (Ctrl+K, Cmd+K on macOS): the editor then waits for the
-     * second key and resolves the pair with [resolveChord].
-     */
-    fun startsChord(event: KeyEvent, isMac: Boolean): Boolean {
-        if (event.type != KeyEventType.KeyDown || event.key != Key.K) return false
-        val primary = if (isMac) event.isMetaPressed else event.isCtrlPressed
-        return primary && !event.isShiftPressed && !event.isAltPressed && (isMac || !event.isMetaPressed)
-    }
-
-    /**
-     * The second key of a chord begun with Ctrl+K (Cmd+K), as VS Code binds them; the primary
-     * modifier may be held or not. Null for a pair that means nothing.
-     */
-    fun resolveChord(event: KeyEvent, isMac: Boolean): KeyBinding? {
-        if (event.type != KeyEventType.KeyDown) return null
-        if (event.isShiftPressed || event.isAltPressed) return null
-        return when (event.key) {
-            Key.Zero, Key.NumPad0 -> KeyBinding(EditorCommand.FoldAll)
-            Key.J -> KeyBinding(EditorCommand.UnfoldAll)
-            Key.One, Key.NumPad1 -> KeyBinding(EditorCommand.FoldLevel(1))
-            Key.Two, Key.NumPad2 -> KeyBinding(EditorCommand.FoldLevel(2))
-            Key.Three, Key.NumPad3 -> KeyBinding(EditorCommand.FoldLevel(3))
-            Key.Four, Key.NumPad4 -> KeyBinding(EditorCommand.FoldLevel(4))
-            Key.Five, Key.NumPad5 -> KeyBinding(EditorCommand.FoldLevel(5))
-            else -> null
-        }
-    }
-
     /** Cmd/Ctrl chords on letters and punctuation. */
     private fun chord(key: Key, shift: Boolean): KeyBinding? = when (key) {
-        Key.Z -> KeyBinding(if (shift) KeyCommand.Redo else KeyCommand.Undo)
-        Key.Y -> if (shift) null else KeyBinding(KeyCommand.Redo)
         Key.A -> if (shift) null else KeyBinding(KeyCommand.SelectAll)
         Key.C -> if (shift) null else KeyBinding(KeyCommand.Copy)
         Key.X -> if (shift) null else KeyBinding(KeyCommand.Cut)
         Key.V -> if (shift) null else KeyBinding(KeyCommand.Paste)
-        Key.H -> if (shift) null else KeyBinding(KeyCommand.Replace)
-        Key.G -> if (shift) null else KeyBinding(KeyCommand.GoToLine)
-        Key.Slash -> if (shift) null else KeyBinding(KeyCommand.ToggleComment)
         Key.K -> if (shift) KeyBinding(KeyCommand.DeleteLines) else null
         Key.D -> if (shift) null else KeyBinding(KeyCommand.AddNextOccurrence)
-        Key.L -> if (shift) KeyBinding(KeyCommand.SelectAllOccurrences) else null
-        Key.Period -> if (shift) null else KeyBinding(KeyCommand.QuickFix)
-        Key.O -> if (shift) KeyBinding(EditorCommand.GoToSymbol) else null
-        Key.LeftBracket -> if (shift) KeyBinding(EditorCommand.Fold) else null
-        Key.RightBracket -> if (shift) KeyBinding(EditorCommand.Unfold) else null
         else -> null
     }
 }

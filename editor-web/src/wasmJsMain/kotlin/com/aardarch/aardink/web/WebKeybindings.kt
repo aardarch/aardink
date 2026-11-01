@@ -25,139 +25,84 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.aardarch.aardink.core.EditorCommand
+import com.aardarch.aardink.ui.KeyChord
 import kotlinx.browser.window
 
 /**
- * A key with modifiers, as a host binds a command to it: `"CtrlCmd+S"`, `"Shift+F8"`,
- * `"Ctrl+Alt+Enter"`, or Monaco's number `KeyMod.CtrlCmd | KeyCode.KeyS`. `CtrlCmd` is Cmd on
- * macOS and Ctrl elsewhere, as in Monaco; `WinCtrl` is Ctrl on every platform; `Meta` is Cmd or
- * the Windows key.
+ * A host's keybinding: text, `"CtrlCmd+S"`, `"Shift+F8"`, or a chord of two keys separated by a
+ * space, `"CtrlCmd+K CtrlCmd+S"` (see [KeyChord.parse]); or Monaco's number, `KeyMod.CtrlCmd |
+ * KeyCode.KeyS`, a chord being `KeyMod.chord(first, second)`. Null for one it cannot read.
  */
-internal data class KeyChord(
-    val key: Key,
-    val ctrlCmd: Boolean = false,
-    val shift: Boolean = false,
-    val alt: Boolean = false,
-    val winCtrl: Boolean = false,
-) {
-
-    /** Whether [event], a key going down, is this chord, with no other modifier held. */
-    fun matches(event: KeyEvent, isMac: Boolean = IS_MAC): Boolean {
-        if (event.type != KeyEventType.KeyDown || event.key != key) return false
-        val wantCtrl = if (isMac) winCtrl else ctrlCmd || winCtrl
-        val wantMeta = isMac && ctrlCmd
-        return event.isCtrlPressed == wantCtrl && event.isMetaPressed == wantMeta &&
-            event.isShiftPressed == shift && event.isAltPressed == alt
+internal fun parseKeybinding(text: String): List<KeyChord>? {
+    text.trim().toIntOrNull()?.let { value ->
+        val first = monacoChord(value and 0xFFFF) ?: return null
+        val second = (value ushr 16) and 0xFFFF
+        if (second == 0) return listOf(first)
+        return listOf(first, monacoChord(second) ?: return null)
     }
+    val strokes = text.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }
+    if (strokes.size !in 1..2) return null
+    return strokes.map { KeyChord.parse(it) ?: return null }
+}
 
-    companion object {
-        /** A chord from its text or Monaco number; null for one it cannot read. */
-        fun parse(text: String): KeyChord? {
-            text.trim().toIntOrNull()?.let { return fromMonaco(it) }
-            var ctrlCmd = false
-            var shift = false
-            var alt = false
-            var winCtrl = false
-            var key: Key? = null
-            for (part in text.split('+').map { it.trim() }.filter { it.isNotEmpty() }) {
-                when (part.lowercase()) {
-                    "ctrlcmd", "cmdorctrl", "mod", "cmd", "command" -> ctrlCmd = true
-                    "ctrl", "control", "winctrl" -> winCtrl = true
-                    "shift" -> shift = true
-                    "alt", "option", "opt" -> alt = true
-                    else -> key = keyNamed(part) ?: return null
-                }
-            }
-            return KeyChord(key ?: return null, ctrlCmd, shift, alt, winCtrl)
-        }
+/** Monaco's `KeyMod | KeyCode` number for one key. */
+private fun monacoChord(value: Int): KeyChord? {
+    val key = MONACO_KEY_CODES[value and 0xFF] ?: return null
+    return KeyChord(
+        key,
+        ctrlCmd = value and 2048 != 0,
+        shift = value and 1024 != 0,
+        alt = value and 512 != 0,
+        winCtrl = value and 256 != 0,
+    )
+}
 
-        /** Monaco's `KeyMod | KeyCode` number. */
-        private fun fromMonaco(value: Int): KeyChord? {
-            val key = MONACO_KEY_CODES[value and 0xFF] ?: return null
-            return KeyChord(
-                key,
-                ctrlCmd = value and 2048 != 0,
-                shift = value and 1024 != 0,
-                alt = value and 512 != 0,
-                winCtrl = value and 256 != 0,
-            )
-        }
+private val LETTERS = listOf(
+    Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G, Key.H, Key.I, Key.J, Key.K, Key.L, Key.M,
+    Key.N, Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U, Key.V, Key.W, Key.X, Key.Y, Key.Z,
+)
+private val DIGITS = listOf(Key.Zero, Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+private val FUNCTION_KEYS = listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12)
 
-        private fun keyNamed(name: String): Key? {
-            if (name.length == 1) {
-                val c = name[0].uppercaseChar()
-                if (c in 'A'..'Z') return LETTERS[c - 'A']
-                if (c in '0'..'9') return DIGITS[c - '0']
-                PUNCTUATION[c]?.let { return it }
-            }
-            val lower = name.lowercase()
-            if (lower.startsWith("f")) lower.drop(1).toIntOrNull()?.let { n -> if (n in 1..12) return FUNCTION_KEYS[n - 1] }
-            return NAMED_KEYS[lower]
-        }
-
-        private val IS_MAC: Boolean by lazy { "Mac" in window.navigator.platform }
-
-        private val LETTERS = listOf(
-            Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G, Key.H, Key.I, Key.J, Key.K, Key.L, Key.M,
-            Key.N, Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U, Key.V, Key.W, Key.X, Key.Y, Key.Z,
-        )
-        private val DIGITS = listOf(Key.Zero, Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
-        private val FUNCTION_KEYS = listOf(
-            Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12,
-        )
-        private val PUNCTUATION = mapOf(
-            ';' to Key.Semicolon, '=' to Key.Equals, ',' to Key.Comma, '-' to Key.Minus, '.' to Key.Period, '/' to Key.Slash,
-            '`' to Key.Grave, '[' to Key.LeftBracket, '\\' to Key.Backslash, ']' to Key.RightBracket, '\'' to Key.Apostrophe,
-        )
-        private val NAMED_KEYS = mapOf(
-            "enter" to Key.Enter, "return" to Key.Enter, "escape" to Key.Escape, "esc" to Key.Escape, "tab" to Key.Tab,
-            "space" to Key.Spacebar, "backspace" to Key.Backspace, "delete" to Key.Delete, "insert" to Key.Insert,
-            "home" to Key.MoveHome, "end" to Key.MoveEnd, "pageup" to Key.PageUp, "pagedown" to Key.PageDown,
-            "left" to Key.DirectionLeft, "leftarrow" to Key.DirectionLeft,
-            "right" to Key.DirectionRight, "rightarrow" to Key.DirectionRight,
-            "up" to Key.DirectionUp, "uparrow" to Key.DirectionUp, "down" to Key.DirectionDown, "downarrow" to Key.DirectionDown,
-        )
-
-        /** Monaco's `KeyCode` numbers, for the keys a command is bound to. */
-        private val MONACO_KEY_CODES: Map<Int, Key> = buildMap {
-            put(1, Key.Backspace)
-            put(2, Key.Tab)
-            put(3, Key.Enter)
-            put(9, Key.Escape)
-            put(10, Key.Spacebar)
-            put(11, Key.PageUp)
-            put(12, Key.PageDown)
-            put(13, Key.MoveEnd)
-            put(14, Key.MoveHome)
-            put(15, Key.DirectionLeft)
-            put(16, Key.DirectionUp)
-            put(17, Key.DirectionRight)
-            put(18, Key.DirectionDown)
-            put(19, Key.Insert)
-            put(20, Key.Delete)
-            DIGITS.forEachIndexed { i, key -> put(21 + i, key) }
-            LETTERS.forEachIndexed { i, key -> put(31 + i, key) }
-            FUNCTION_KEYS.forEachIndexed { i, key -> put(59 + i, key) }
-            put(85, Key.Semicolon)
-            put(86, Key.Equals)
-            put(87, Key.Comma)
-            put(88, Key.Minus)
-            put(89, Key.Period)
-            put(90, Key.Slash)
-            put(91, Key.Grave)
-            put(92, Key.LeftBracket)
-            put(93, Key.Backslash)
-            put(94, Key.RightBracket)
-            put(95, Key.Apostrophe)
-        }
-    }
+/** Monaco's `KeyCode` numbers, for the keys a command is bound to. */
+private val MONACO_KEY_CODES: Map<Int, Key> = buildMap {
+    put(1, Key.Backspace)
+    put(2, Key.Tab)
+    put(3, Key.Enter)
+    put(9, Key.Escape)
+    put(10, Key.Spacebar)
+    put(11, Key.PageUp)
+    put(12, Key.PageDown)
+    put(13, Key.MoveEnd)
+    put(14, Key.MoveHome)
+    put(15, Key.DirectionLeft)
+    put(16, Key.DirectionUp)
+    put(17, Key.DirectionRight)
+    put(18, Key.DirectionDown)
+    put(19, Key.Insert)
+    put(20, Key.Delete)
+    DIGITS.forEachIndexed { i, key -> put(21 + i, key) }
+    LETTERS.forEachIndexed { i, key -> put(31 + i, key) }
+    FUNCTION_KEYS.forEachIndexed { i, key -> put(59 + i, key) }
+    put(85, Key.Semicolon)
+    put(86, Key.Equals)
+    put(87, Key.Comma)
+    put(88, Key.Minus)
+    put(89, Key.Period)
+    put(90, Key.Slash)
+    put(91, Key.Grave)
+    put(92, Key.LeftBracket)
+    put(93, Key.Backslash)
+    put(94, Key.RightBracket)
+    put(95, Key.Apostrophe)
 }
 
 /** A command or action a host added, with the keys that run it. */
 internal class WebAction(
     val id: String,
     val label: String,
-    val keybindings: List<KeyChord>,
+    /** Each binding one key, or a chord of two. */
+    val keybindings: List<List<KeyChord>>,
     val inContextMenu: Boolean,
     val run: () -> Unit,
 )
@@ -186,6 +131,29 @@ internal object MonacoActions {
         put("redo", "Redo" to EditorCommand.Redo)
         put("editor.action.commentLine", "Toggle Line Comment" to EditorCommand.ToggleComment)
         put("editor.action.selectHighlights", "Select All Occurrences of Find Match" to EditorCommand.SelectAllOccurrences)
+        put("editor.action.quickOutline", "Go to Symbol..." to EditorCommand.GoToSymbol)
+        put("editor.action.smartSelect.expand", "Expand Selection" to EditorCommand.ExpandSelection)
+        put("editor.action.smartSelect.shrink", "Shrink Selection" to EditorCommand.ShrinkSelection)
+        put("editor.fold", "Fold" to EditorCommand.Fold)
+        put("editor.unfold", "Unfold" to EditorCommand.Unfold)
+        put("editor.action.joinLines", "Join Lines" to EditorCommand.JoinLines)
+        put("editor.action.sortLinesAscending", "Sort Lines Ascending" to EditorCommand.SortLines())
+        put("editor.action.sortLinesDescending", "Sort Lines Descending" to EditorCommand.SortLines(descending = true))
+        put("editor.action.transformToUppercase", "Transform to Uppercase" to EditorCommand.UpperCase)
+        put("editor.action.transformToLowercase", "Transform to Lowercase" to EditorCommand.LowerCase)
+        put("editor.action.trimTrailingWhitespace", "Trim Trailing Whitespace" to EditorCommand.TrimTrailingWhitespace)
+        put("editor.action.jumpToBracket", "Go to Bracket" to EditorCommand.JumpToBracket)
+        put("cursorUndo", "Cursor Undo" to EditorCommand.CursorUndo)
+        put("editor.action.moveSelectionToNextFindMatch", "Move Last Selection to Next Find Match" to EditorCommand.SkipOccurrence)
+        put("editor.action.changeAll", "Change All Occurrences" to EditorCommand.ChangeAllOccurrences)
+        put("editor.action.insertCursorAtEndOfEachLineSelected", "Add Cursors to Line Ends" to EditorCommand.CursorsAtLineEnds)
+        put("editor.action.addCommentLine", "Add Line Comment" to EditorCommand.AddLineComment)
+        put("editor.action.removeCommentLine", "Remove Line Comment" to EditorCommand.RemoveLineComment)
+        put("editor.action.blockComment", "Toggle Block Comment" to EditorCommand.BlockComment)
+        put("editor.action.insertLineAfter", "Insert Line Below" to EditorCommand.InsertLineBelow)
+        put("editor.action.insertLineBefore", "Insert Line Above" to EditorCommand.InsertLineAbove)
+        put("expandLineSelection", "Expand Line Selection" to EditorCommand.SelectLine)
+        put("editor.action.showColorPicker", "Show Color Picker" to EditorCommand.ShowColorPicker)
     }
 
     fun command(id: String): EditorCommand? = byId[id]?.second

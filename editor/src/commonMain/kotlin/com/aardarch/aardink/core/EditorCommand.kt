@@ -117,6 +117,57 @@ sealed class EditorCommand {
     /** Ctrl/Cmd+Shift+O: a list of the document's symbols to filter and jump to, as VS Code's "Go to Symbol". */
     data object GoToSymbol : EditorCommand()
 
+    /** Ctrl+J: joins the selected lines, or the caret's line with the next. */
+    data object JoinLines : EditorCommand()
+
+    /** Sorts the selected lines, ascending, or [descending]. */
+    data class SortLines(val descending: Boolean = false) : EditorCommand()
+
+    /** Upper-cases each selection, or the word at each caret. */
+    data object UpperCase : EditorCommand()
+
+    /** Lower-cases each selection, or the word at each caret. */
+    data object LowerCase : EditorCommand()
+
+    /** Ctrl+K Ctrl+X: removes trailing spaces and tabs from every line. */
+    data object TrimTrailingWhitespace : EditorCommand()
+
+    /** Ctrl+Shift+Backslash: to the bracket matching the one at the caret. */
+    data object JumpToBracket : EditorCommand()
+
+    /** Ctrl/Cmd+U: back to the carets and selections before the last change of them. */
+    data object CursorUndo : EditorCommand()
+
+    /** Ctrl+K Ctrl+D: moves the last added selection to the next occurrence, as VS Code's. */
+    data object SkipOccurrence : EditorCommand()
+
+    /** Ctrl/Cmd+F2: a selection at every occurrence of the word at the caret. */
+    data object ChangeAllOccurrences : EditorCommand()
+
+    /** Shift+Alt+I: a caret at the end of every selected line. */
+    data object CursorsAtLineEnds : EditorCommand()
+
+    /** Ctrl+Up / Ctrl+Down: scrolls [delta] lines, down when positive, without moving the caret. */
+    data class ScrollLines(val delta: Int) : EditorCommand()
+
+    /** Ctrl+K Ctrl+C: comments the selected lines with the line comment. */
+    data object AddLineComment : EditorCommand()
+
+    /** Ctrl+K Ctrl+U: uncomments the selected lines. */
+    data object RemoveLineComment : EditorCommand()
+
+    /** Shift+Alt+A: wraps the selection in a block comment, or unwraps it. */
+    data object BlockComment : EditorCommand()
+
+    /** Ctrl/Cmd+Enter: a new line below the caret's, the caret on it. */
+    data object InsertLineBelow : EditorCommand()
+
+    /** Ctrl/Cmd+Shift+Enter: a new line above the caret's, the caret on it. */
+    data object InsertLineAbove : EditorCommand()
+
+    /** Ctrl/Cmd+L: selects the caret's line, then the next with each repeat. */
+    data object SelectLine : EditorCommand()
+
     /** Scrolls [offset] into view, to the middle when [center], without moving the caret. */
     data class Reveal(val offset: Int, val center: Boolean = false) : EditorCommand()
 }

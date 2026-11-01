@@ -1142,6 +1142,11 @@ fun CodeEditorLayout(
 
             EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
 
+            is EditorCommand.ScrollLines -> true.also {
+                val lineHeight = view.style?.metrics?.lineHeight ?: 0f
+                view.scroll.scrollToY(view.scroll.scrollY + command.delta * lineHeight)
+            }
+
             EditorCommand.ShowColorPicker -> colorAt(state.selection.end)?.let { pickingColor = it } != null
 
             EditorCommand.ExpandSelection -> true.also { coroutineScope.launch { expandSelection() } }
@@ -1183,6 +1188,7 @@ fun CodeEditorLayout(
         controller.scope = coroutineScope
         controller.languageService = { currentLanguageService.value }
         controller.touchMenuItems = touchMenuItems
+        controller.keyBindings = options.keyBindings
         controller.contextMenuItems = contextMenuItems
         controller.actions = EditorHostActions(
             onFind = {
@@ -1428,6 +1434,15 @@ fun CodeEditorLayout(
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
+                    onLineNumberTap = { line ->
+                        val document = state.document
+                        val end = if (line + 1 < document.lineCount) document.lineStart(line + 1) else document.length
+                        state.withSelectionReason(SelectionChangeReason.Pointer) {
+                            state.selection =
+                                TextRange(document.lineStart(line), end)
+                        }
+                        controller.requestFocus()
+                    },
                     decorationMarks = gutterDecorationMarks,
                     onAnnotationTap = { lineIndex ->
                         problemCounter = null
