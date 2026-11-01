@@ -144,4 +144,5 @@ private fun usedHeapMb(): String {
 }
 
 // performance.memory is a non-standard Chrome extension, so it is not in the DOM bindings.
+@OptIn(ExperimentalWasmJsInterop::class)
 private fun usedJsHeapBytes(): Double = js("(performance.memory ? performance.memory.usedJSHeapSize : -1)")
