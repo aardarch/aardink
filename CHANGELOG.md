@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desktop:** letters, digits and every other typed character were dropped; only keys with a
   binding, such as Enter and Backspace, worked. Compose wraps the AWT `KEY_TYPED` event in its own
   native event, which the editor did not unwrap; it now reads it through `awtEventOrNull` (#37).
+- **Android, soft wrap:** a line wrapped onto several rows drew those rows further apart than
+  the editor's row height on some phones, so its last row overlapped the next line. The gutter,
+  scrolling and hit-testing step rows by the editor's line height, but the text was drawn as one
+  paragraph at whatever pitch Android's text engine chose. Every row of a wrapped line, with its
+  selection, caret, squiggles and whitespace marks, now sits at the editor's pitch.
 
 ## [0.7.0] - 2026-10-24
 
