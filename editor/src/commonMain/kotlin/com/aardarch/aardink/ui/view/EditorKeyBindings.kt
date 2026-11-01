@@ -135,6 +135,7 @@ internal object EditorKeyBindings {
 
         return when (event.key) {
             Key.DirectionLeft -> when {
+                growsSelection(isMac, shift, alt, ctrl, meta) -> KeyBinding(EditorCommand.ShrinkSelection)
                 isMac && meta && !alt -> move(KeyCommand.LineStart)
                 word -> move(KeyCommand.WordLeft)
                 plain -> move(KeyCommand.CharLeft)
@@ -142,6 +143,7 @@ internal object EditorKeyBindings {
             }
 
             Key.DirectionRight -> when {
+                growsSelection(isMac, shift, alt, ctrl, meta) -> KeyBinding(EditorCommand.ExpandSelection)
                 isMac && meta && !alt -> move(KeyCommand.LineEnd)
                 word -> move(KeyCommand.WordRight)
                 plain -> move(KeyCommand.CharRight)
@@ -247,6 +249,10 @@ internal object EditorKeyBindings {
             else -> if (primary && !alt) chord(event.key, shift) else null
         }
     }
+
+    /** The modifiers of Expand and Shrink Selection: Shift+Alt, and Ctrl+Shift+Cmd on macOS. */
+    private fun growsSelection(isMac: Boolean, shift: Boolean, alt: Boolean, ctrl: Boolean, meta: Boolean): Boolean =
+        if (isMac) shift && ctrl && meta && !alt else shift && alt && !ctrl && !meta
 
     /** Cmd/Ctrl chords on letters and punctuation. */
     private fun chord(key: Key, shift: Boolean): KeyBinding? = when (key) {

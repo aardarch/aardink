@@ -147,6 +147,35 @@ interface LanguageService {
     suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = emptyList()
 
     /**
+     * The occurrences of the symbol at [offset], for the editor to highlight while the caret rests
+     * there ([com.aardarch.aardink.ui.EditorOptions.occurrencesHighlight]). The default is none:
+     * the editor then highlights the other occurrences of the word at the caret itself.
+     */
+    suspend fun documentHighlights(document: CodeDocument, offset: Int): List<DocumentHighlight> = emptyList()
+
+    /**
+     * For each of [offsets], the ranges the selection grows through from there (Shift+Alt+Right),
+     * innermost first through [SelectionRange.parent]: the same number as [offsets], in order. The
+     * default is none: the editor grows the selection by word, string, brackets and line itself.
+     */
+    suspend fun selectionRanges(document: CodeDocument, offsets: List<Int>): List<SelectionRange> = emptyList()
+
+    /**
+     * The ranges linked to the one at [offset], which always hold the same text (an element's name
+     * in its opening and closing tags), or null for none. With
+     * [com.aardarch.aardink.ui.EditorOptions.linkedEditing] the editor makes an edit inside one in
+     * all of them. The built-in XML and HTML services have them.
+     */
+    suspend fun linkedEditingRanges(document: CodeDocument, offset: Int): LinkedEditingRanges? = null
+
+    /**
+     * The links in [document] besides plain URLs, which the editor finds itself: references the
+     * service can resolve, an `<include component="…">` say. Ctrl+click (Cmd+click) opens one
+     * through [com.aardarch.aardink.ui.CodeEditorLayout]'s `onOpenLink`. The default is none.
+     */
+    suspend fun documentLinks(document: CodeDocument): List<DocumentLink> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */

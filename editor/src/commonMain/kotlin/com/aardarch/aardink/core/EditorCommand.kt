@@ -92,6 +92,16 @@ sealed class EditorCommand {
     /** Folds the ranges nested [level] deep, 1 being the outermost, as VS Code's "Fold Level". */
     data class FoldLevel(val level: Int) : EditorCommand()
 
+    /**
+     * Shift+Alt+Right (Ctrl+Shift+Cmd+Right on macOS): grows the selection to the next larger
+     * syntactic range, from the language service's selection ranges, else by word, string,
+     * brackets and line.
+     */
+    data object ExpandSelection : EditorCommand()
+
+    /** Shift+Alt+Left (Ctrl+Shift+Cmd+Left on macOS): back to the selection before the last growth. */
+    data object ShrinkSelection : EditorCommand()
+
     /** Ctrl/Cmd+Shift+O: a list of the document's symbols to filter and jump to, as VS Code's "Go to Symbol". */
     data object GoToSymbol : EditorCommand()
 

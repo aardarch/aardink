@@ -57,6 +57,12 @@ import com.aardarch.aardink.core.LineEnding
  *   where its diagnostics, find matches, selections, changed lines and the host's decorations
  *   (their `overviewRulerColor`) are; a click scrolls there. The scrollbar is drawn over it, as in
  *   VS Code. Off by default.
+ * @property occurrencesHighlight While the caret rests on a symbol, its other occurrences are
+ *   highlighted: those the language service's `documentHighlights` gives, or else the other
+ *   occurrences of the word as a whole word. Off by default.
+ * @property linkedEditing Typing in a range the language service links to others (an XML or HTML
+ *   element's name, in its opening and closing tags) changes them all, as VS Code's
+ *   `editor.linkedEditing`. Off by default.
  */
 @Immutable
 data class EditorOptions(
@@ -79,6 +85,8 @@ data class EditorOptions(
     val quickSuggestions: Boolean = false,
     val breadcrumbs: Boolean = false,
     val overviewRuler: Boolean = false,
+    val occurrencesHighlight: Boolean = false,
+    val linkedEditing: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

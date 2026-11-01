@@ -28,7 +28,9 @@ package com.aardarch.aardink.core
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
  * - **Formatting:** the primary's when it changes anything, else the fallback's.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
- * - **Document symbols:** the primary's, or the fallback's when the primary has none.
+ * - **Document symbols, highlights and selection ranges:** the primary's, or the fallback's when
+ *   the primary has none. **Linked editing ranges:** likewise.
+ * - **Document links:** both, without two for the same range.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -101,6 +103,18 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> =
         primary.documentSymbols(document).ifEmpty { fallback.documentSymbols(document) }
+
+    override suspend fun documentHighlights(document: CodeDocument, offset: Int): List<DocumentHighlight> =
+        primary.documentHighlights(document, offset).ifEmpty { fallback.documentHighlights(document, offset) }
+
+    override suspend fun selectionRanges(document: CodeDocument, offsets: List<Int>): List<SelectionRange> =
+        primary.selectionRanges(document, offsets).ifEmpty { fallback.selectionRanges(document, offsets) }
+
+    override suspend fun linkedEditingRanges(document: CodeDocument, offset: Int): LinkedEditingRanges? =
+        primary.linkedEditingRanges(document, offset) ?: fallback.linkedEditingRanges(document, offset)
+
+    override suspend fun documentLinks(document: CodeDocument): List<DocumentLink> =
+        (primary.documentLinks(document) + fallback.documentLinks(document)).distinctBy { it.range }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)
 

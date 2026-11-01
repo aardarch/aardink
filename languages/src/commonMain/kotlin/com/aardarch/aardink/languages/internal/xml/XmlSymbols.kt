@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.languages.internal.xml
 
+import com.aardarch.aardink.core.DocumentLink
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.CooperativePacer
@@ -92,4 +93,61 @@ internal object XmlSymbols {
 
     /** Attributes whose value names an element, shown beside its tag. */
     private val NAMING_ATTRIBUTES = setOf("id", "name", "android:id", "key")
+
+    /**
+     * Which tag closes which in [tags], as indices both ways: an opening tag and the closing tag
+     * that closes it. A closing tag closes the innermost open element of its name (without case in
+     * [htmlMode]); self-closing tags, the [voidElements] and unfinished tags have no partner.
+     */
+    fun partners(tags: List<XmlTag>, htmlMode: Boolean, voidElements: Set<String> = emptySet()): Map<Int, Int> {
+        val pairs = HashMap<Int, Int>()
+        val open = ArrayList<Int>()
+        for ((index, tag) in tags.withIndex()) {
+            if (tag.name.isEmpty()) continue
+            if (tag.closing) {
+                val at = open.indexOfLast { tags[it].name.equals(tag.name, ignoreCase = htmlMode) }
+                if (at < 0) continue
+                val opener = open[at]
+                while (open.size > at) open.removeAt(open.size - 1)
+                pairs[opener] = index
+                pairs[index] = opener
+            } else if (tag.terminated && !tag.selfClosing && !(htmlMode && tag.name.lowercase() in voidElements)) {
+                open += index
+            }
+        }
+        return pairs
+    }
+
+    /**
+     * The tag names linked to the one at [offset]: the name in an element's opening tag and in its
+     * closing tag, each `start until end`, when [offset] is in or just after one of them.
+     */
+    suspend fun linkedNames(text: CharSequence, offset: Int, htmlMode: Boolean, voidElements: Set<String>): List<IntRange>? {
+        val tags = XmlScan.tags(text)
+        val index = tags.indexOfFirst { it.name.isNotEmpty() && offset >= it.nameStart && offset <= it.nameEnd }
+        if (index < 0) return null
+        val partner = partners(tags, htmlMode, voidElements)[index] ?: return null
+        val a = tags[index]
+        val b = tags[partner]
+        return listOf(a.nameStart until a.nameEnd, b.nameStart until b.nameEnd).sortedBy { it.first }
+    }
+
+    /**
+     * The links in the attributes of [text]: `href` and `src` values, and the `component` of an
+     * `include`, each as its value's range and the value as the target.
+     */
+    suspend fun links(text: CharSequence, pacer: CooperativePacer? = null): List<DocumentLink> {
+        val links = ArrayList<DocumentLink>()
+        for (tag in XmlScan.tags(text, pacer = pacer)) {
+            if (tag.closing) continue
+            for (attribute in tag.attributes) {
+                val value = attribute.decodedValue ?: continue
+                if (value.isBlank() || attribute.valueEnd <= attribute.valueStart) continue
+                val local = attribute.name.substringAfterLast(':')
+                val isLink = local == "href" || local == "src" || (local == "component" && tag.name.substringAfterLast(':') == "include")
+                if (isLink) links += DocumentLink(attribute.valueStart until attribute.valueEnd, value)
+            }
+        }
+        return links
+    }
 }

@@ -34,6 +34,7 @@ import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.OccurrenceFinder
+import com.aardarch.aardink.core.edit.SelectionExpander
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.SnippetParser
 import com.aardarch.aardink.core.edit.SnippetSession
@@ -510,6 +511,8 @@ class CodeEditorState(
                 if (tokenizer.commentSyntax != null) add(EditorCommand.ToggleComment)
             }
             add(EditorCommand.SelectAllOccurrences)
+            add(EditorCommand.ExpandSelection)
+            if (canShrinkSelection) add(EditorCommand.ShrinkSelection)
             addAll(uiCommandsAvailable)
         }
 
@@ -538,6 +541,11 @@ class CodeEditorState(
             EditorCommand.ToggleComment -> toggleComment()
 
             EditorCommand.SelectAllOccurrences -> selectAllOccurrences()
+
+            // A layout asks its language service; without one, the editor's own ranges.
+            EditorCommand.ExpandSelection -> uiCommandHandler?.invoke(command) ?: expandSelectionByText()
+
+            EditorCommand.ShrinkSelection -> shrinkSelection()
 
             is EditorCommand.InsertSnippet -> {
                 val primary = selection
@@ -794,16 +802,124 @@ class CodeEditorState(
         selectionsAfter: () -> SelectionSet,
     ): Boolean {
         val before = currentSelections()
-        val applied = document.applyChanges(changes)
-        val after = selectionsAfter().clampedTo(document.length)
+        val versionBefore = document.version
+        val applied = document.applyChanges(changes).toMutableList()
+        var after = selectionsAfter().clampedTo(document.length)
         if (applied.isEmpty()) {
             applySelections(after)
             return false
+        }
+        val linkable = before.isSingle && (kind == EditKind.DeletingLeft || kind == EditKind.DeletingRight)
+        if (linkable) {
+            mirrorLinked(changes, after, versionBefore)?.let { (mirrored, moved) ->
+                applied += mirrored
+                after = moved
+            }
         }
         history.record(kind, applied, before, after)
         afterEdit(after, external)
         return true
     }
+
+    // ── Linked editing ────────────────────────────────────────────────────────
+
+    /**
+     * The ranges linked editing keeps equal ([com.aardarch.aardink.ui.EditorOptions.linkedEditing]),
+     * each `start until end`, for the document at [linkedVersion]; set by the layout from the
+     * language service, kept up by the edits mirrored here, and stale after any other edit.
+     */
+    private var linkedRanges: List<IntRange> = emptyList()
+    private var linkedVersion = -1L
+
+    /** The linked ranges the language service gave for the document at [version] (`start until end` each). */
+    internal fun setLinkedRanges(ranges: List<IntRange>, version: Long) {
+        if (version != document.version) return
+        linkedRanges = ranges.sortedBy { it.first }
+        linkedVersion = version
+    }
+
+    /** The linked ranges, while they still describe the document. */
+    internal val currentLinkedRanges: List<IntRange>
+        get() = if (linkedVersion == document.version) linkedRanges else emptyList()
+
+    /**
+     * When [changes] (just applied to the document at [versionBefore]) are one edit inside one of
+     * the linked ranges that leaves a name there, the same name written into the others: returns
+     * those changes as applied and [after] moved by them, or null when there is nothing to mirror.
+     */
+    private fun mirrorLinked(
+        changes: List<TextChange>,
+        after: SelectionSet,
+        versionBefore: Long,
+    ): Pair<List<AppliedChange>, SelectionSet>? {
+        val ranges = linkedRanges
+        if (ranges.size < 2 || linkedVersion != versionBefore) return null
+        val change = changes.singleOrNull() ?: return null
+        val own = ranges.indexOfFirst { change.start >= it.first && change.end <= it.last + 1 }
+        if (own < 0 || change.text.any { !it.isLinkedNameChar() }) return null
+        val delta = change.text.length - (change.end - change.start)
+        // The ranges after the edit: its own grows or shrinks, those after it move.
+        val moved = ranges.mapIndexed { index, range ->
+            when {
+                index == own -> range.first until range.last + 1 + delta
+                range.first >= change.end -> (range.first + delta) until (range.last + 1 + delta)
+                else -> range
+            }
+        }
+        val name = document.subSequence(moved[own].first, moved[own].last + 1).toString()
+        if (name.any { !it.isLinkedNameChar() }) return null
+        val mirrors = moved.withIndex().filter { it.index != own }.map { TextChange(it.value.first, it.value.last + 1, name) }
+        val applied = document.applyChanges(mirrors)
+        val selections = SelectionSet.of(after.ranges.map { TextRange(mapOffset(it.start, mirrors), mapOffset(it.end, mirrors)) })
+            .clampedTo(document.length)
+        var shift = 0
+        linkedRanges = moved.map { range ->
+            val start = range.first + shift
+            shift += name.length - (range.last + 1 - range.first)
+            start until start + name.length
+        }
+        linkedVersion = document.version
+        return applied to selections
+    }
+
+    private fun Char.isLinkedNameChar(): Boolean = isLetterOrDigit() || this == '_' || this == '-' || this == '.' || this == ':'
+
+    // ── Selection growth (Shift+Alt+Right and Left) ──────────────────────────
+
+    /** Grows the primary selection by the editor's own ranges ([SelectionExpander]); false at the whole document. */
+    internal fun expandSelectionByText(): Boolean {
+        val primary = selection
+        val next = SelectionExpander.ranges(document, primary.min, primary.max).firstOrNull() ?: return false
+        growSelection(next.first until next.last + 1)
+        return true
+    }
+
+    /** The selections before each growth, innermost last, while the selection is still the grown one. */
+    private var shrinkStack: List<SelectionSet> = emptyList()
+    private var grown: SelectionSet? = null
+
+    /** Grows the primary selection to [range] (`start until end`), remembering the one before for [shrinkSelection]. */
+    internal fun growSelection(range: IntRange) {
+        val current = currentSelections()
+        if (grown != current) shrinkStack = emptyList()
+        shrinkStack = shrinkStack + current
+        applySelections(SelectionSet.single(TextRange(range.first, range.last + 1)).clampedTo(document.length))
+        grown = currentSelections()
+    }
+
+    /** Back to the selection before the last growth; false when the selection is not a grown one. */
+    internal fun shrinkSelection(): Boolean {
+        if (!canShrinkSelection) return false
+        val previous = shrinkStack.last()
+        shrinkStack = shrinkStack.dropLast(1)
+        applySelections(previous)
+        grown = if (shrinkStack.isEmpty()) null else currentSelections()
+        return true
+    }
+
+    /** Whether [shrinkSelection] would do anything. */
+    internal val canShrinkSelection: Boolean
+        get() = grown == currentSelections() && shrinkStack.isNotEmpty()
 
     /** What every edit ends with: the selections placed, history state and versions updated, tokenization scheduled. */
     private fun afterEdit(selections: SelectionSet, external: Boolean) {
@@ -962,6 +1078,7 @@ class CodeEditorState(
             listOf(TextChange(from, to, normalized))
         }
         if (composing) trackComposition(from, to, normalized.length, before, aroundPrimary)
+        val versionBefore = document.version
         val applied = document.applyChanges(changes).toMutableList()
         // A caret the input method placed means nothing once normalisation changed the text's length.
         val primaryAfter = selectionAfter?.takeIf { normalized.length == text.length } ?: TextRange(from + normalized.length)
@@ -977,6 +1094,14 @@ class CodeEditorState(
         if (applied.isEmpty()) {
             applySelections(after)
             return null
+        }
+        // Linked editing: typing a name inside a linked range (an element's tag name) writes it in
+        // the others too, in the same undo step.
+        if (!mirrored && !composing && before.isSingle) {
+            mirrorLinked(changes, after, versionBefore)?.let { (mirroredChanges, moved) ->
+                applied += mirroredChanges
+                after = moved
+            }
         }
         // Enter in a CR LF document inserts two characters, and is still a typed line break.
         val typedChar = if (normalized == eol.text) '\n' else normalized.singleOrNull()

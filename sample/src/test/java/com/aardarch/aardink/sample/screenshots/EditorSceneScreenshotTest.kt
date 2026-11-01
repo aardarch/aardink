@@ -364,4 +364,12 @@ class EditorSceneScreenshotTest {
             editorOptions = EditorOptions(overviewRuler = true),
         )
     }
+
+    @Test
+    fun occurrences() {
+        // The caret resting on names: its other occurrences are highlighted.
+        val state = stateOf(code)
+        state.selection = TextRange(state.document.text.indexOf("names") + 2)
+        capture("occurrences", state, editorOptions = EditorOptions(occurrencesHighlight = true))
+    }
 }

@@ -77,6 +77,8 @@ internal class EditorHostActions(
     val onSelectAllMatches: () -> Boolean = { false },
     /** A single tap (touch) placed the caret at an offset in the text. */
     val onTapText: (Int) -> Unit = {},
+    /** Ctrl/Cmd+click at an offset: opens the link there; returns whether there was one. */
+    val onOpenLink: (Int) -> Boolean = { false },
 )
 
 /**
@@ -176,7 +178,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             if (touch && !readOnly) ime.keyboardRequests++
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
-        pointer.onLinkClick = { actions.onGoToDefinition() }
+        pointer.onLinkClick = { actions.onOpenLink(state.selection.end) || actions.onGoToDefinition() }
         pointer.onTap = { offset -> actions.onTapText(offset) }
     }
 

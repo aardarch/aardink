@@ -20,8 +20,10 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentLink
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.LinkedEditingRanges
 import com.aardarch.aardink.languages.XmlSchema
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
@@ -44,6 +46,15 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
 
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> =
         XmlSymbols.of(document.text, htmlMode, HTML_VOID_ELEMENTS, diagnosticsPacer())
+
+    /** An element's name in its opening and its closing tag. */
+    override suspend fun linkedEditingRanges(document: CodeDocument, offset: Int): LinkedEditingRanges? =
+        XmlSymbols.linkedNames(document.text, offset, htmlMode, HTML_VOID_ELEMENTS)
+            ?.map { it.first..it.last }
+            ?.let(::LinkedEditingRanges)
+
+    /** `href` and `src` values, and an `include`'s `component`. */
+    override suspend fun documentLinks(document: CodeDocument): List<DocumentLink> = XmlSymbols.links(document.text, diagnosticsPacer())
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val text = document.text

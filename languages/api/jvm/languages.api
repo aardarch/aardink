@@ -179,6 +179,8 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentHighlights (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -186,9 +188,11 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun linkedEditingRanges (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
@@ -336,9 +340,11 @@ public abstract class com/aardarch/aardink/languages/internal/xml/TagValidator :
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun linkedEditingRanges (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 
