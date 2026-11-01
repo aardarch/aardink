@@ -74,6 +74,7 @@ import com.aardarch.aardink.ui.view.EditorSelectionHandles
 import com.aardarch.aardink.ui.view.EditorTouchMenu
 import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
+import com.aardarch.aardink.ui.view.INDENT_GLYPH
 import com.aardarch.aardink.ui.view.MinimapView
 import com.aardarch.aardink.ui.view.StickyLine
 import com.aardarch.aardink.ui.view.ViewStyle
@@ -82,6 +83,7 @@ import com.aardarch.aardink.ui.view.stickyLineAt
 import com.aardarch.aardink.ui.view.stickyLines
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 
 /**
  * The gutter, text area and scrollbars of the editor's own renderer: what the `BasicTextField`
@@ -146,10 +148,18 @@ internal fun VirtualizedEditorBody(
     val columnWidthEm = remember(density, metrics, typography) {
         with(density) { metrics.charWidth / typography.fontSize.toPx() }
     }
+    // A monospace font draws the indentation's stand-in glyph as wide as a space; any other
+    // font keeps its spaces, so its indentation does not change width.
+    val joinIndentation = remember(textStyle, measurer) {
+        val glyph = measurer.measure(INDENT_GLYPH.toString(), textStyle).getLineRight(0)
+        val space = measurer.measure(" ", textStyle).getLineRight(0)
+        abs(glyph - space) < 0.5f
+    }
     val style = ViewStyle(
         measurer, textStyle, tokenStyles::spanStyle, placeholderStyle, metrics, softWrap, bracketStyles,
         tabSize = options.tabSize,
         columnWidthEm = columnWidthEm,
+        joinIndentation = joinIndentation,
     )
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current

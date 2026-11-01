@@ -95,7 +95,8 @@ internal fun DrawScope.drawWhitespace(
     if (mode == RenderWhitespace.None || color.alpha == 0f) return
     val selected = if (mode == RenderWhitespace.Selection) selectedColumns(line, selections) else emptyList()
     if (mode == RenderWhitespace.Selection && selected.isEmpty()) return
-    val text = line.layout.layoutInput.text
+    // The document's characters: the layout stands invisible glyphs in for the indentation.
+    val text = line.text
     val columns = whitespaceColumns(text, line.shownLength, mode, selected)
     if (columns.isEmpty()) return
     val radius = max(1f, lineHeight * 0.06f)

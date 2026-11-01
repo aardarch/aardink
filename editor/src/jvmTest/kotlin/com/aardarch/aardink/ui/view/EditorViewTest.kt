@@ -79,6 +79,7 @@ class EditorViewTest {
                 softWrap = softWrap,
                 tabSize = 4,
                 columnWidthEm = charWidth / 14f,
+                joinIndentation = true,
             )
             this.foldState = foldState
             attach()
@@ -157,6 +158,33 @@ class EditorViewTest {
         val next = view.verticalMove(0, rows = 1)
         assertEquals(0, view.state.document.offsetToLineCol(next).first, "still on the long line, one row down")
         assertTrue(next > 0)
+    }
+
+    @Test
+    fun `an indentation is laid out as wide as it is`() {
+        // Under soft wrap the indentation is measured as invisible glyphs, so the first word
+        // cannot be parted from it; they must still be the width of the spaces and tabs they
+        // stand for, and the document's text must still be what is drawn as whitespace.
+        val palette = "       palette=\"#3A1C71,#D76D77,#FFAF7B,#FF6E40\""
+        val view = viewOf("$palette\n\t\tx\ty\n        ", softWrap = true)
+        view.prepare((32 * charWidth).toInt() + 16, 400)
+        val layout = view.layoutFor(0)
+        assertEquals(palette.length, layout.layoutInput.text.length)
+        assertTrue(layout.lineCount > 1, "the palette line wraps")
+        assertTrue(layout.getLineStart(1) > 7, "the first row holds more than the indentation: ${layout.getLineStart(1)}")
+        assertEquals(1, view.layoutFor(2).lineCount, "a line of only spaces is one row")
+        assertEquals(palette, view.frame.lines[0].text)
+        for (column in listOf(3, 7)) {
+            assertTrue(abs(view.caretRect(column).left - (8f + column * charWidth)) < 1f, "caret at column $column")
+        }
+        assertEquals(3, view.offsetAt(Offset(8f + 3.4f * charWidth, 8f + 10f)).offset)
+        // Two leading tabs reach columns 4 and 8; the inner tab, still a placeholder, column 12.
+        val second = view.state.document.lineStart(1)
+        assertTrue(abs(view.caretRect(second + 1).left - (8f + 4 * charWidth)) < 1f, "after the first tab")
+        assertTrue(abs(view.caretRect(second + 2).left - (8f + 8 * charWidth)) < 1f, "after the second tab")
+        assertTrue(abs(view.caretRect(second + 4).left - (8f + 12 * charWidth)) < 1f, "after the inner tab")
+        val secondRowY = view.caretRect(second).top + 10f
+        assertEquals(second + 1, view.offsetAt(Offset(8f + 6f * charWidth, secondRowY)).offset)
     }
 
     @Test

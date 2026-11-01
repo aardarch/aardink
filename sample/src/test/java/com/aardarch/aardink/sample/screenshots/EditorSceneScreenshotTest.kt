@@ -187,6 +187,21 @@ class EditorSceneScreenshotTest {
     fun wrap() = capture("wrap", stateOf(code), softWrap = true)
 
     @Test
+    fun wrapIndent() {
+        // Indented lines whose first word does not fit after the indentation: Android's line
+        // breaker would put the indentation on a row of its own. The word stays with it, the
+        // value breaks inside, the indentation keeps its dots and the tab its arrow.
+        val text = """
+            |<effect
+            |      palette="#3A1C71,#D76D77,#FFAF7B,#FF6E40,#3A1C71,#D76D77"
+            |      speed="0.04" />
+            |	url="https://example.invalid/a/very/long/path/that/wraps/around"
+            |
+        """.trimMargin()
+        capture("wrap-indent", stateOf(text), editorOptions = EditorOptions(softWrap = true, renderWhitespace = RenderWhitespace.All))
+    }
+
+    @Test
     fun fold() {
         val state = stateOf(code)
         val foldState = FoldState().apply {

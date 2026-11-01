@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scrolling and hit-testing step rows by the editor's line height, but the text was drawn as one
   paragraph at whatever pitch Android's text engine chose. Every row of a wrapped line, with its
   selection, caret, squiggles and whitespace marks, now sits at the editor's pitch.
+- **Android, soft wrap:** an indented line whose first word did not fit after its indentation
+  was broken before that word, leaving a first row of nothing but indentation. Android's line
+  breaker starts a word after any white space, so under soft wrap the indentation is now laid
+  out as invisible glyphs of the same width (a tab as one with letter spacing to its stop); the
+  first word stays on the first row and the break falls inside what follows. Only for a
+  monospace font, where the glyph is as wide as a space; carets, taps, selections and whitespace
+  marks are unchanged.
 
 ## [0.7.0] - 2026-10-24
 

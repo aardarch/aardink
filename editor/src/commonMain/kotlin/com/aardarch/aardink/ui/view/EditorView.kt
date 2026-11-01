@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -80,7 +81,22 @@ internal data class ViewStyle(
     val tabSize: Int = 4,
     /** A column's width in em of the text's font size, for a tab's width; 0 leaves tabs as the font draws them. */
     val columnWidthEm: Float = 0f,
+    /**
+     * Whether a wrapped line's indentation is laid out as invisible glyphs ([INDENT_GLYPH]) rather
+     * than spaces, so the first word stays on the first row. Only for a font that draws the
+     * glyph as wide as a space: a monospace one.
+     */
+    val joinIndentation: Boolean = false,
 )
+
+/**
+ * What a wrapped line's leading spaces and tabs are measured as. Android's line breaker starts
+ * a word after any white space, and a placeholder is a break opportunity, so a first word that
+ * does not fit after the indentation would be moved to the next row, leaving a row of nothing
+ * but indentation. A tilde is a letter to the breaker, neutral to bidi as a space is, in every
+ * font, and drawn transparent; a tab is one of them with letter spacing for its other columns.
+ */
+internal const val INDENT_GLYPH = '~'
 
 /** One line on screen: its layout, and where it starts in the document and in the content. */
 @Immutable
@@ -97,6 +113,8 @@ internal class VisibleLine(
     val layout: TextLayoutResult,
     /** The fold that starts on this line and is closed, drawn as a placeholder after the text. */
     val fold: FoldRange?,
+    /** The [shownLength] characters as the document has them; the layout's text may stand in for some. */
+    val text: String,
 ) {
     val end: Int get() = start + length
 }
@@ -411,7 +429,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 }
                 val top = contentTop(line, metrics)
                 if (top > scrollY + height) break
-                val layout = layoutFor(line)
+                val text = lineText(line)
+                val layout = layoutFor(line, text)
                 if (style.softWrap) {
                     val delta = lineMap.setRows(line, layout.lineCount)
                     // A line starting above the view that turned out taller or shorter: keep the
@@ -422,7 +441,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 }
                 val start = document.lineStart(line)
                 val length = lineLength(line)
-                visible.add(VisibleLine(line, start, length, min(length, MAX_RENDERED_LINE_CHARS), top, layout, folds.startingAt(line)))
+                visible.add(
+                    VisibleLine(line, start, length, min(length, MAX_RENDERED_LINE_CHARS), top, layout, folds.startingAt(line), text),
+                )
                 line++
             }
             contentHeight = metrics.paddingTop + lineMap.totalRows * lineHeight + metrics.paddingBottom
@@ -483,12 +504,18 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt())
     }
 
-    /** [line] laid out, from the cache when nothing it shows has changed. */
-    fun layoutFor(line: Int): TextLayoutResult {
-        val style = checkNotNull(style) { "layoutFor before the view has a style" }
+    /** The characters of [line] that are laid out: its text, cut at [MAX_RENDERED_LINE_CHARS]. */
+    private fun lineText(line: Int): String {
         val start = document.lineStart(line)
         val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
-        val text = document.subSequence(start, start + shown).toString()
+        return document.subSequence(start, start + shown).toString()
+    }
+
+    /** [line] laid out, from the cache when nothing it shows has changed. */
+    fun layoutFor(line: Int): TextLayoutResult = layoutFor(line, lineText(line))
+
+    private fun layoutFor(line: Int, text: String): TextLayoutResult {
+        val style = checkNotNull(style) { "layoutFor before the view has a style" }
         val tokens = if (state.exceedsAnalysisLimit) null else state.tokenStore.lineTokens(line)
         val fold = folds.startingAt(line)
         // Bracket colours depend on the depth the line starts at: part of what the layout shows.
@@ -512,7 +539,13 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         startDepth: Int,
     ): TextLayoutResult {
         val builder = AnnotatedString.Builder(text.length + 4)
-        builder.append(text)
+        val indent = if (style.softWrap && style.joinIndentation) indentationLength(text) else 0
+        if (indent > 0) {
+            for (i in 0 until indent) builder.append(INDENT_GLYPH)
+            builder.append(text, indent, text.length)
+        } else {
+            builder.append(text)
+        }
         if (tokens != null) {
             for (i in 0 until tokens.size) {
                 val spanStyle = style.tokenStyle(tokens.types[i]) ?: continue
@@ -544,26 +577,62 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             builder.append(fold.placeholder)
             builder.pop()
         }
+        // Last, over any token that covers the indentation: the glyphs must not be seen.
+        val column = if (indent > 0) hideIndentation(builder, text, indent, style) else 0
         return style.measurer.measure(
             text = builder.toAnnotatedString(),
             style = style.textStyle,
             softWrap = style.softWrap,
             constraints = if (style.softWrap) Constraints(maxWidth = wrapWidth) else Constraints(),
-            placeholders = tabStops(text, style),
+            placeholders = tabStops(text, style, indent, column),
             skipCache = true,
         )
     }
 
+    /** How many spaces and tabs [text] starts with. */
+    private fun indentationLength(text: String): Int {
+        var n = 0
+        while (n < text.length && (text[n] == ' ' || text[n] == '\t')) n++
+        return n
+    }
+
     /**
-     * Every tab of [text] as a blank as wide as the columns to the next tab stop, as code editors
-     * draw tabs; the font alone would draw one about a character wide. A placeholder covers its
-     * own character, so offsets, carets and hit-testing stay as they are.
+     * Makes the first [indent] glyphs of [builder] invisible and as wide as the spaces and tabs
+     * of [text] they stand for: a run of spaces is one transparent span, a tab one with letter
+     * spacing for the columns to its stop. Returns the column after the indentation.
      */
-    private fun tabStops(text: String, style: ViewStyle): List<AnnotatedString.Range<Placeholder>> {
-        if (style.columnWidthEm <= 0f || text.indexOf('\t') < 0) return emptyList()
-        val stops = ArrayList<AnnotatedString.Range<Placeholder>>()
+    private fun hideIndentation(builder: AnnotatedString.Builder, text: String, indent: Int, style: ViewStyle): Int {
         var column = 0
-        for (i in text.indices) {
+        var i = 0
+        while (i < indent) {
+            if (text[i] == '\t') {
+                val columns = style.tabSize - column % style.tabSize
+                val spacing = ((columns - 1) * style.columnWidthEm).em
+                builder.addStyle(SpanStyle(color = Color.Transparent, letterSpacing = spacing), i, i + 1)
+                column += columns
+                i++
+            } else {
+                var end = i + 1
+                while (end < indent && text[end] == ' ') end++
+                builder.addStyle(HIDDEN, i, end)
+                column += end - i
+                i = end
+            }
+        }
+        return column
+    }
+
+    /**
+     * Every tab of [text] after its first [from] characters as a blank as wide as the columns to
+     * the next tab stop, as code editors draw tabs; the font alone would draw one about a
+     * character wide. A placeholder covers its own character, so offsets, carets and hit-testing
+     * stay as they are. [startColumn] is the column the character at [from] is in.
+     */
+    private fun tabStops(text: String, style: ViewStyle, from: Int = 0, startColumn: Int = 0): List<AnnotatedString.Range<Placeholder>> {
+        if (style.columnWidthEm <= 0f || text.indexOf('\t', from) < 0) return emptyList()
+        val stops = ArrayList<AnnotatedString.Range<Placeholder>>()
+        var column = startColumn
+        for (i in from until text.length) {
             if (text[i] == '\t') {
                 val columns = style.tabSize - column % style.tabSize
                 val placeholder = Placeholder((columns * style.columnWidthEm).em, 1.em, PlaceholderVerticalAlign.TextCenter)
@@ -706,6 +775,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
          * blob) is cut there, as VS Code does, rather than laid out whole on every change.
          */
         const val MAX_RENDERED_LINE_CHARS = 10_000
+
+        /** The style of an indentation's glyphs: there, but not drawn. */
+        private val HIDDEN = SpanStyle(color = Color.Transparent)
     }
 }
 
