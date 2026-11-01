@@ -315,4 +315,33 @@ class WebEditorApiTest {
         assertEquals(Color(0x7F123456), cssHexColor("#1234567f"))
         assertEquals(null, cssHexColor("red"))
     }
+
+    @Test
+    fun `owners keep their own diagnostics, an empty list removing one`() = runTest {
+        val handle = mount("one\ntwo")
+        val marker = WebDiagnostic(line = 1, startColumn = 1, endColumn = 4, message = "from the linter")
+        AardinkWeb.setDiagnosticsForOwner(handle, "linter", listOf(marker))
+        AardinkWeb.setDiagnosticsForOwner(handle, "spell", listOf(marker.copy(line = 2, message = "spelling")))
+        assertEquals(setOf("linter", "spell"), handle.ownerDiagnostics.keys.toSet())
+        AardinkWeb.setDiagnosticsForOwner(handle, "spell", emptyList())
+        assertEquals(setOf("linter"), handle.ownerDiagnostics.keys.toSet())
+        assertEquals("from the linter", handle.ownerDiagnostics.getValue("linter").single().message)
+    }
+
+    @Test
+    fun `the view reports where it is and scrolls when told`() = runTest {
+        val handle = mount((1..200).joinToString("\n") { "line $it" })
+        awaitUntil { handle.state.value.viewport.lastVisibleLine > 0 }
+        assertEquals(0.0, AardinkWeb.getScrollTop(handle))
+        val ranges = Json.parseToJsonElement(AardinkWeb.getVisibleRangesJson(handle)).jsonArray
+        assertEquals(1, ranges.single().jsonObject["startLineNumber"]!!.jsonPrimitive.int)
+        var scrolled: String? = null
+        AardinkWeb.onScrollChange(handle) { scrolled = it }
+        AardinkWeb.setScrollTop(handle, 300.0)
+        awaitUntil { AardinkWeb.getScrollTop(handle) > 0.0 }
+        awaitUntil { scrolled != null }
+        assertTrue(handle.state.value.viewport.firstVisibleLine > 0)
+        assertTrue(AardinkWeb.getScrollHeight(handle) > 300.0)
+        AardinkWeb.layout(handle)
+    }
 }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,6 +93,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -138,6 +141,14 @@ class AardinkEditorHandle internal constructor(
 
     /** The host's diagnostics, or null while the language's own are shown. */
     internal val diagnostics: MutableState<List<Diagnostic>?> = mutableStateOf(null)
+
+    /** The host's diagnostics by owner, as Monaco's `setModelMarkers` keeps them; shown with the language's own. */
+    internal val ownerDiagnostics = mutableStateMapOf<String, List<Diagnostic>>()
+
+    /** The language's own diagnostics, collected here while owners' are shown (the layout then shows a list it is given). */
+    internal val languageDiagnostics: MutableState<List<Diagnostic>> = mutableStateOf(emptyList())
+
+    internal var onScrollChange: ((String) -> Unit)? = null
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -682,6 +693,62 @@ object AardinkWeb {
     }
 
     /**
+     * Monaco's `setModelMarkers(model, owner, markers)`: [diagnostics] as [owner]'s, in place of what
+     * that owner had, shown together with every other owner's and the language's own. An empty list
+     * removes the owner. The owner `"language"` stands for the language's own: setting it replaces
+     * them. Separate from [setDiagnostics], which replaces everything.
+     */
+    fun setDiagnosticsForOwner(handle: AardinkEditorHandle, owner: String, diagnostics: List<WebDiagnostic>) {
+        val list = toDiagnostics(handle.state.value.document, diagnostics)
+        if (list.isEmpty()) handle.ownerDiagnostics.remove(owner) else handle.ownerDiagnostics[owner] = list
+    }
+
+    /** [setDiagnosticsForOwner] from a JSON array of [WebDiagnostic]. */
+    fun setDiagnosticsForOwnerJson(handle: AardinkEditorHandle, owner: String, diagnosticsJson: String) {
+        setDiagnosticsForOwner(handle, owner, parseDiagnostics(diagnosticsJson))
+    }
+
+    // ── The view ─────────────────────────────────────────────────────────────
+
+    /** The lines on screen, Monaco's `getVisibleRanges`: a JSON array of one [WebRange], 1-based. */
+    fun getVisibleRangesJson(handle: AardinkEditorHandle): String {
+        val state = handle.state.value
+        val viewport = state.viewport
+        val document = state.document
+        val last = viewport.lastVisibleLine.coerceIn(0, document.lineCount - 1)
+        val range = WebRange(viewport.firstVisibleLine + 1, 1, last + 1, document.lineEnd(last) - document.lineStart(last) + 1)
+        return json.encodeToString(rangesJsonSerializer, listOf(range))
+    }
+
+    /** How far the text is scrolled down, in CSS pixels: Monaco's `getScrollTop`. */
+    fun getScrollTop(handle: AardinkEditorHandle): Double = handle.state.value.viewport.scrollTop.toDouble()
+
+    /** Scrolls the text so [top] (CSS pixels) is at the top of the view: Monaco's `setScrollTop`. */
+    fun setScrollTop(handle: AardinkEditorHandle, top: Double) {
+        handle.state.value.execute(EditorCommand.ScrollTo(top.toFloat()))
+    }
+
+    /** The height of all the text, in CSS pixels: Monaco's `getScrollHeight`. */
+    fun getScrollHeight(handle: AardinkEditorHandle): Double = handle.state.value.viewport.contentHeight.toDouble()
+
+    /**
+     * Registers the single scroll listener, replacing any previous one: called with JSON
+     * `{ scrollTop, scrollLeft, scrollHeight }` (CSS pixels) as the text scrolls, as Monaco's
+     * `onDidScrollChange`.
+     */
+    fun onScrollChange(handle: AardinkEditorHandle, callback: ((String) -> Unit)?) {
+        handle.onScrollChange = callback
+    }
+
+    /**
+     * Monaco's `layout()`: the editor measures its container again now. It follows the container's
+     * size by itself, so this is only needed when something it cannot see moved it.
+     */
+    fun layout(handle: AardinkEditorHandle) {
+        if (!handle.disposed.value) dispatchResize()
+    }
+
+    /**
      * Registers the single diagnostics listener, replacing any previous one; `null` removes it.
      * Called with a JSON array of [WebDiagnostic] each time the language's own diagnostics are
      * collected: 500 ms after the editor appears, and after each pause in typing. Not called while
@@ -1130,6 +1197,30 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         }
     }
     LaunchedEffect(state) {
+        snapshotFlow { state.viewport }.collect { viewport ->
+            handle.onScrollChange?.invoke(
+                """{"scrollTop":${viewport.scrollTop},"scrollLeft":${viewport.scrollLeft},"scrollHeight":${viewport.contentHeight}}""",
+            )
+        }
+    }
+    // While owners' diagnostics are shown, the layout shows the list it is given; the language's
+    // own are collected here, on the layout's schedule, to go with them.
+    val owners = handle.ownerDiagnostics.toMap()
+    val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
+    LaunchedEffect(state, language, collectLanguage) {
+        val service = language.languageService
+        if (!collectLanguage || service == null) return@LaunchedEffect
+        snapshotFlow { state.textVersion }.collectLatest { asked ->
+            delay(500)
+            val document = state.document.snapshot()
+            val list = service.diagnostics(document)
+            if (state.textVersion == asked) {
+                handle.languageDiagnostics.value = list
+                AardinkWeb.reportDiagnostics(handle, list)
+            }
+        }
+    }
+    LaunchedEffect(state) {
         snapshotFlow { state.isFocused }.collect { focused ->
             if (focused != handle.reportedFocus) {
                 handle.reportedFocus = focused
@@ -1178,7 +1269,11 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 findReplaceState = handle.findReplaceState,
                 foldState = handle.foldState,
                 foldingProvider = language.foldingProvider,
-                diagnostics = handle.diagnostics.value,
+                diagnostics = handle.diagnostics.value ?: if (owners.isEmpty()) {
+                    null
+                } else {
+                    owners.values.flatten() + if ("language" in owners) emptyList() else handle.languageDiagnostics.value
+                },
                 savedText = handle.baseline.value,
                 onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
                 onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
@@ -1197,6 +1292,12 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     insertSpaces = options.insertSpaces,
                     renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
                     quickSuggestions = options.quickSuggestions,
+                    overviewRuler = options.overviewRuler,
+                    occurrencesHighlight = options.occurrencesHighlight,
+                    linkedEditing = options.linkedEditing,
+                    colorDecorators = options.colorDecorators,
+                    breadcrumbs = options.breadcrumbs,
+                    fontLigatures = options.fontLigatures,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
             )
@@ -1243,6 +1344,9 @@ private fun followSize(element: Element): JsAny = js(
     };
 }""",
 )
+
+/** Sends the window a `resize`, which makes Compose measure the editor again. */
+private fun dispatchResize(): Unit = js("window.dispatchEvent(new Event('resize'))")
 
 /** Calls the function [followSize] returned. */
 private fun callStop(stop: JsAny): Unit = js("stop()")

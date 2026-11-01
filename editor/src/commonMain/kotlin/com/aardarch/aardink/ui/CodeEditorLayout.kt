@@ -53,6 +53,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.takeOrElse
@@ -90,6 +91,7 @@ import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.core.TrackedRanges
 import com.aardarch.aardink.core.UrlDetector
+import com.aardarch.aardink.core.ViewportInfo
 import com.aardarch.aardink.core.completionReplaceRange
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
@@ -251,6 +253,7 @@ private fun CodeEditorLayoutContent(
     onOpenLink: (target: String) -> Unit,
     zoom: ZoomControl?,
 ) {
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
     // A theme without a default token colour falls back to the chrome's text colour, not the host's.
@@ -642,6 +645,24 @@ private fun CodeEditorLayoutContent(
         else -> foldState?.foldableRanges ?: ownStickyRanges
     }
     val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
+
+    // ── The view's place, for the host ───────────────────────────────────────
+    LaunchedEffect(state, view, density) {
+        snapshotFlow {
+            val frame = view.frame
+            val scroll = view.scroll
+            with(density) {
+                ViewportInfo(
+                    scrollTop = scroll.scrollY.toDp().value,
+                    scrollLeft = scroll.scrollX.toDp().value,
+                    firstVisibleLine = frame.lines.firstOrNull()?.line ?: 0,
+                    lastVisibleLine = frame.lines.lastOrNull()?.line ?: 0,
+                    height = scroll.viewportHeight.toFloat().toDp().value,
+                    contentHeight = scroll.contentHeight.toDp().value,
+                )
+            }
+        }.collect { state.viewport = it }
+    }
 
     // ── Occurrences of the symbol at a resting caret ─────────────────────────
     val occurrenceStyle =
@@ -1243,6 +1264,8 @@ private fun CodeEditorLayoutContent(
 
             EditorCommand.ZoomReset -> zoom?.reset?.invoke() != null
 
+            is EditorCommand.ScrollTo -> true.also { view.scroll.scrollToY(with(density) { command.top.dp.toPx() }) }
+
             is EditorCommand.ScrollLines -> true.also {
                 val lineHeight = view.style?.metrics?.lineHeight ?: 0f
                 view.scroll.scrollToY(view.scroll.scrollY + command.delta * lineHeight)
@@ -1409,7 +1432,6 @@ private fun CodeEditorLayoutContent(
     // the rest of the IME inset may push the content up: plain imePadding() would lift the
     // keyboard toolbar by the whole keyboard height and leave a gap the size of the host's bars.
     var bottomGapPx by remember { mutableIntStateOf(0) }
-    val density = LocalDensity.current
 
     Column(
         modifier = modifier

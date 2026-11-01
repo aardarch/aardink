@@ -232,6 +232,13 @@ function toKotlinOptions(options) {
     const other = typeof value === 'object' && value !== null ? value.other : value;
     out.quickSuggestions = other !== false && other !== 'off' && other !== undefined;
   }
+  if (options.overviewRulerLanes !== undefined) out.overviewRuler = options.overviewRulerLanes > 0;
+  if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
+  if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
+  if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs']) {
+    if (options[key] !== undefined) out[key] = !!options[key];
+  }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];
     if (value !== undefined) out[key] = typeof value === 'object' && value !== null ? value.enabled !== false : !!value;
@@ -282,6 +289,13 @@ export async function createEditor(container, onChange, options = {}) {
   // What the last host action run returned, so getAction().run() can wait for it: the Kotlin
   // side calls `run` as a () -> Unit and drops the value.
   let actionResult;
+
+  const scrollListeners = new Set();
+  k.aardinkOnScrollChange(id, (json) => {
+    if (!scrollListeners.size) return;
+    const event = JSON.parse(json);
+    for (const listener of scrollListeners) listener(event);
+  });
 
   // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
   let deltaDecorations = [];
@@ -360,7 +374,23 @@ export async function createEditor(container, onChange, options = {}) {
         },
       };
     },
-    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic))),
+    setDiagnostics(diagnostics, owner) {
+      if (owner !== undefined && owner !== null) {
+        k.aardinkSetModelMarkers(id, String(owner), JSON.stringify((diagnostics ?? []).map(toKotlinDiagnostic)));
+      } else {
+        k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic)));
+      }
+    },
+    setModelMarkers: (owner, markers) => k.aardinkSetModelMarkers(id, String(owner), JSON.stringify((markers ?? []).map(toKotlinDiagnostic))),
+    getVisibleRanges: () => JSON.parse(k.aardinkGetVisibleRanges(id)),
+    getScrollTop: () => k.aardinkGetScrollTop(id),
+    setScrollTop: (top) => k.aardinkSetScrollTop(id, Number(top)),
+    getScrollHeight: () => k.aardinkGetScrollHeight(id),
+    onDidScrollChange(listener) {
+      scrollListeners.add(listener);
+      return () => scrollListeners.delete(listener);
+    },
+    layout: () => k.aardinkLayout(id),
     onDidChangeDiagnostics(listener) {
       diagnosticsListeners.add(listener);
       return () => diagnosticsListeners.delete(listener);
@@ -434,6 +464,7 @@ export async function createEditor(container, onChange, options = {}) {
       selectionListeners.clear();
       focusListeners.clear();
       blurListeners.clear();
+      scrollListeners.clear();
       k.aardinkDispose(id);
     },
   };

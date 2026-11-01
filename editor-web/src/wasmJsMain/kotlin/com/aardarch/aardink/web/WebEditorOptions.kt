@@ -37,6 +37,13 @@ import kotlinx.serialization.Serializable
  *   `boundary`, `selection` (the default), `trailing` or `all`. Anything else counts as `selection`.
  * @property quickSuggestions Typing a letter in code opens the completion list, as Monaco's
  *   `quickSuggestions`; off by default, as in 0.6.
+ * @property overviewRuler The overview ruler at the right edge; Monaco's `overviewRulerLanes`
+ *   above 0. Off by default.
+ * @property occurrencesHighlight The other occurrences of the symbol at the caret, highlighted.
+ * @property linkedEditing Typing a tag name changes its partner, as Monaco's `linkedEditing`.
+ * @property colorDecorators Colour swatches under the colours in the text, with a picker.
+ * @property breadcrumbs The path of symbols at the caret, in a row above the text.
+ * @property fontLigatures The font's ligatures; on by default.
  */
 @Serializable
 data class WebEditorOptions(
@@ -56,6 +63,12 @@ data class WebEditorOptions(
     val insertSpaces: Boolean = true,
     val renderWhitespace: String = "selection",
     val quickSuggestions: Boolean = false,
+    val overviewRuler: Boolean = false,
+    val occurrencesHighlight: Boolean = false,
+    val linkedEditing: Boolean = false,
+    val colorDecorators: Boolean = false,
+    val breadcrumbs: Boolean = false,
+    val fontLigatures: Boolean = true,
 )
 
 /**

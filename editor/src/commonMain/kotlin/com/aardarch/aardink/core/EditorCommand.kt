@@ -177,6 +177,9 @@ sealed class EditorCommand {
     /** Ctrl/Cmd+0: the font size the editor started with. */
     data object ZoomReset : EditorCommand()
 
+    /** Scrolls the text so [top] (in dp) is at the top of the view, without moving the caret. */
+    data class ScrollTo(val top: Float) : EditorCommand()
+
     /** Scrolls [offset] into view, to the middle when [center], without moving the caret. */
     data class Reveal(val offset: Int, val center: Boolean = false) : EditorCommand()
 }

@@ -48,6 +48,18 @@ export interface AardinkOptions {
    * option; Monaco's `{ other, comments, strings }` works too, `other` deciding. Off by default.
    */
   quickSuggestions?: boolean | { other?: boolean | 'on' | 'off' | 'inline'; comments?: unknown; strings?: unknown };
+  /** The overview ruler at the right edge, as Monaco's `overviewRulerLanes` above 0. Off by default. */
+  overviewRulerLanes?: number;
+  /** Highlights the other occurrences of the symbol at the caret. Off by default. */
+  occurrencesHighlight?: boolean | 'off' | 'singleFile';
+  /** Typing a tag name changes its partner. Off by default. */
+  linkedEditing?: boolean;
+  /** Swatches under the colours in the text, with a picker. Off by default. */
+  colorDecorators?: boolean;
+  /** The path of symbols at the caret, in a row above the text. Off by default. */
+  breadcrumbs?: boolean;
+  /** The font's ligatures; on by default. */
+  fontLigatures?: boolean;
 }
 
 /**
@@ -247,7 +259,27 @@ export interface AardinkEditor {
    * Shows these diagnostics in place of the language's own; `null` goes back to the language's
    * own. Either way they move along with the text as it is edited, until the next list.
    */
-  setDiagnostics(diagnostics: AardinkDiagnostic[] | null): void;
+  /**
+   * Without `owner`: shows `diagnostics` in place of the language's own, or the language's own
+   * again for `null`. With `owner`: as Monaco's `setModelMarkers`, `diagnostics` become that
+   * owner's, shown with every other owner's and the language's own; an empty list removes the
+   * owner, and the owner `'language'` replaces the language's own.
+   */
+  setDiagnostics(diagnostics: AardinkDiagnostic[] | null, owner?: string): void;
+  /** Monaco's `setModelMarkers(model, owner, markers)`, for this editor's model. */
+  setModelMarkers(owner: string, markers: AardinkDiagnostic[]): void;
+  /** The lines on screen: one range, 1-based. */
+  getVisibleRanges(): AardinkRange[];
+  /** How far the text is scrolled down, in CSS pixels. */
+  getScrollTop(): number;
+  /** Scrolls the text so `top` (CSS pixels) is at the top of the view, without moving the caret. */
+  setScrollTop(top: number): void;
+  /** The height of all the text, in CSS pixels (wrapped lines not laid out yet are estimated). */
+  getScrollHeight(): number;
+  /** Called as the text scrolls. Returns an unsubscribe function. */
+  onDidScrollChange(listener: (event: { scrollTop: number; scrollLeft: number; scrollHeight: number }) => void): () => void;
+  /** Measures the container again now; the editor follows its container's size by itself. */
+  layout(): void;
   /**
    * The language's own diagnostics each time they are collected: 500 ms after the editor appears,
    * after each pause in typing, and on `revalidate()`. Not called while a list from

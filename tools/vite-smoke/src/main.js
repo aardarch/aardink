@@ -111,6 +111,49 @@ try {
   report.checks.revalidate = messages.at(-1) === 'unknown b';
   validated.dispose();
   third.remove();
+
+  // 0.8: symbols, colours, decorations, the view and owned markers, through a registered language.
+  await registerLanguage(
+    { id: 'smoke-08', grammar: { tokenizer: { root: [] } } },
+    {
+      provideDocumentSymbols: () => [
+        { name: 'outer', kind: 18, range: { startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 2 } },
+      ],
+      provideDocumentColors: () => [
+        { range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 8 }, color: { red: 1, green: 0, blue: 0, alpha: 1 } },
+      ],
+    },
+  );
+  const fourth = document.createElement('div');
+  fourth.style.cssText = 'width:300px;height:80px';
+  document.body.append(fourth);
+  const structured = await createEditor(fourth, undefined, {
+    value: '{\n#ff0000\n}\n' + 'x\n'.repeat(40),
+    language: 'smoke-08',
+    colorDecorators: true,
+    overviewRulerLanes: 3,
+  });
+  await waitFor(() => structured.getDocumentSymbols().length > 0, 5000).catch(() => {});
+  report.checks.documentSymbols = structured.getDocumentSymbols()[0]?.name === 'outer' &&
+    structured.getSymbolPathAt({ lineNumber: 2, column: 2 }).length === 1;
+  const ids = structured.deltaDecorations([], [
+    { range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 }, options: { backgroundColor: '#00ff0040', isWholeLine: true } },
+  ]);
+  const collection = structured.createDecorationsCollection([
+    { range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 4 }, options: { underlineColor: '#ff0' } },
+  ]);
+  report.checks.decorations = ids.length === 1 && collection.length === 1 && collection.getRanges()[0]?.startLineNumber === 2 &&
+    structured.deltaDecorations(ids, []).length === 0;
+  structured.setModelMarkers('linter', [{ line: 1, startColumn: 1, endColumn: 2, message: 'owned', severity: 'info' }]);
+  const scrolls = [];
+  structured.onDidScrollChange((event) => scrolls.push(event.scrollTop));
+  structured.setScrollTop(60);
+  await waitFor(() => structured.getScrollTop() > 0, 3000).catch(() => {});
+  report.checks.scrollApi = structured.getScrollTop() > 0 && structured.getVisibleRanges()[0]?.startLineNumber > 1 &&
+    scrolls.length > 0 && structured.getScrollHeight() > 60;
+  structured.layout();
+  structured.dispose();
+  fourth.remove();
 } catch (e) {
   report.error = String(e && e.stack || e);
 } finally {

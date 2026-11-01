@@ -105,3 +105,26 @@ data class ColorInfo(val range: IntRange, val color: Color)
  */
 @Immutable
 data class ColorPresentation(val label: String, val textEdit: TextEdit? = null)
+
+/**
+ * Where the view of a [CodeEditorState] is, as the
+ * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing it reports it: what Monaco's
+ * `getScrollTop`, `getVisibleRanges` and `onDidScrollChange` read. Lengths are in dp.
+ *
+ * @property scrollTop How far the text is scrolled down.
+ * @property scrollLeft How far it is scrolled sideways.
+ * @property firstVisibleLine The first document line on screen, 0-based.
+ * @property lastVisibleLine The last, 0-based.
+ * @property height The height of the text area.
+ * @property contentHeight The height of all the text, as far as it is known (wrapped lines not laid
+ *   out yet are estimated).
+ */
+@Immutable
+data class ViewportInfo(
+    val scrollTop: Float = 0f,
+    val scrollLeft: Float = 0f,
+    val firstVisibleLine: Int = 0,
+    val lastVisibleLine: Int = 0,
+    val height: Float = 0f,
+    val contentHeight: Float = 0f,
+)

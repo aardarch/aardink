@@ -406,6 +406,16 @@ class CodeEditorState(
         for (listener in selectionListeners) listener(ranges, reason)
     }
 
+    // ── The view ──────────────────────────────────────────────────────────────
+
+    /**
+     * Where the view of the [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing
+     * this state is: its scroll position and the lines on screen. Snapshot state, updated as it
+     * scrolls; all zero while no layout shows the state. Scroll with [EditorCommand.ScrollTo].
+     */
+    var viewport: ViewportInfo by mutableStateOf(ViewportInfo())
+        internal set
+
     // ── Document symbols ──────────────────────────────────────────────────────
 
     private val symbolTracker = SymbolTracker()
@@ -530,6 +540,7 @@ class CodeEditorState(
         is EditorCommand.FoldLevel -> command.level >= 1 && EditorCommand.FoldAll in uiCommandsAvailable
         is EditorCommand.SortLines -> !readOnly
         is EditorCommand.ScrollLines -> uiCommandHandler != null
+        is EditorCommand.ScrollTo -> uiCommandHandler != null
         is EditorCommand.Reveal -> uiCommandHandler != null
         else -> command in availableCommands
     }

@@ -89,6 +89,28 @@ fun aardinkExecuteEdits(id: Int, editsJson: String, endSelectionsJson: String): 
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
+/** Monaco's `setModelMarkers`: a JSON array of diagnostics as [owner]'s, shown with every other owner's and the language's own. */
+@JsExport
+fun aardinkSetModelMarkers(id: Int, owner: String, diagnosticsJson: String) =
+    AardinkWeb.setDiagnosticsForOwnerJson(handle(id), owner, diagnosticsJson)
+
+/** The lines on screen, a JSON array of one Monaco `IRange`. */
+@JsExport fun aardinkGetVisibleRanges(id: Int): String = AardinkWeb.getVisibleRangesJson(handle(id))
+
+/** How far the text is scrolled down, in CSS pixels. */
+@JsExport fun aardinkGetScrollTop(id: Int): Double = AardinkWeb.getScrollTop(handle(id))
+
+@JsExport fun aardinkSetScrollTop(id: Int, top: Double) = AardinkWeb.setScrollTop(handle(id), top)
+
+/** The height of all the text, in CSS pixels. */
+@JsExport fun aardinkGetScrollHeight(id: Int): Double = AardinkWeb.getScrollHeight(handle(id))
+
+/** JSON `{ scrollTop, scrollLeft, scrollHeight }` as the text scrolls. */
+@JsExport fun aardinkOnScrollChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onScrollChange(handle(id), callback)
+
+/** Measures the container again now. */
+@JsExport fun aardinkLayout(id: Int) = AardinkWeb.layout(handle(id))
+
 /** Shows a JSON array of Monaco-shaped `{ range, options }` as [owner]'s decorations, replacing that owner's. */
 @JsExport
 fun aardinkSetDecorations(id: Int, owner: String, decorationsJson: String) =
