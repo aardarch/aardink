@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.web
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.ui.RenderWhitespace
@@ -276,5 +277,42 @@ class WebEditorApiTest {
         assertEquals(listOf("word.toy", "", "string.quoted.toy", "", "comment.toy"), types("tokenize-names", "go 'x' # note"))
         assertEquals("keyword", types("kotlin", "val x = 1").first())
         assertEquals(listOf("keyword.flow", "", "string", "string.escape", "string"), types("kotlin", "return \"a\\nb\""))
+    }
+
+    @Test
+    fun `decorations come in Monaco's shape, per owner, and their ranges follow the edits`() {
+        val handle = mount("one two\nthree")
+        AardinkWeb.setDecorationsJson(
+            handle,
+            "delta",
+            """[{ "range": { "startLineNumber": 1, "startColumn": 5, "endLineNumber": 1, "endColumn": 8 },
+                 "options": { "backgroundColor": "#ff000080", "isWholeLine": true, "hoverMessage": { "value": "changed" },
+                              "overviewRuler": { "color": "#0f0" }, "minimap": { "color": "#00f" }, "gutterColor": "#abc" } }]""",
+        )
+        val state = handle.state.value
+        val decoration = state.decorations("delta").single()
+        assertEquals(4..6, decoration.range)
+        assertEquals(Color(0x80FF0000), decoration.style.background)
+        assertTrue(decoration.style.wholeLine)
+        assertEquals("changed", decoration.style.hoverMessage)
+        assertEquals(Color(0xFF00FF00), decoration.style.overviewRulerColor)
+        assertEquals(Color(0xFF0000FF), decoration.style.minimapColor)
+        assertEquals(Color(0xFFAABBCC), decoration.style.gutterColor)
+        state.applyTextEdits(listOf(TextEdit(IntRange(0, -1), ">> ")))
+        assertEquals(
+            """[{"startLineNumber":1,"startColumn":8,"endLineNumber":1,"endColumn":11}]""",
+            AardinkWeb.getDecorationRangesJson(handle, "delta"),
+        )
+        AardinkWeb.setDecorationsJson(handle, "delta", "[]")
+        assertEquals("[]", AardinkWeb.getDecorationRangesJson(handle, "delta"))
+    }
+
+    @Test
+    fun `css hex colours in their four lengths`() {
+        assertEquals(Color(0xFFFF0000), cssHexColor("#f00"))
+        assertEquals(Color(0x88FF0000), cssHexColor("#f008"))
+        assertEquals(Color(0xFF123456), cssHexColor("#123456"))
+        assertEquals(Color(0x7F123456), cssHexColor("#1234567f"))
+        assertEquals(null, cssHexColor("red"))
     }
 }

@@ -74,9 +74,11 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun applyEdit-yZ3qJ5A (IILjava/lang/String;J)V
 	public final fun applyTextEdits (Ljava/util/List;)V
 	public final fun canExecute (Lcom/aardarch/aardink/core/EditorCommand;)Z
+	public final fun clearDecorations (Ljava/lang/String;)V
 	public final fun clearNavigation ()V
 	public final fun clearRename ()V
 	public final fun contentChanges ()Lkotlinx/coroutines/flow/Flow;
+	public final fun decorations (Ljava/lang/String;)Ljava/util/List;
 	public final fun execute (Lcom/aardarch/aardink/core/EditorCommand;)Z
 	public final fun executeEdits (Ljava/util/List;Ljava/util/List;)Z
 	public static synthetic fun executeEdits$default (Lcom/aardarch/aardink/core/CodeEditorState;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Z
@@ -117,6 +119,7 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun revalidate ()V
 	public final fun scheduleTokenization ()V
 	public final fun setComputeDispatcher (Lkotlinx/coroutines/CoroutineDispatcher;)V
+	public final fun setDecorations (Ljava/lang/String;Ljava/util/List;)V
 	public final fun setSelection-5zc-tL8 (J)V
 	public final fun setSelections (Ljava/util/List;)V
 	public final fun setTokenizer (Lcom/aardarch/aardink/core/IncrementalTokenizer;)V
@@ -301,6 +304,48 @@ public final class com/aardarch/aardink/core/ContentChange {
 	public final fun getVersion ()J
 	public fun hashCode ()I
 	public final fun isReset ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/Decoration {
+	public static final field $stable I
+	public fun <init> (Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/DecorationStyle;)V
+	public final fun component1 ()Lkotlin/ranges/IntRange;
+	public final fun component2 ()Lcom/aardarch/aardink/core/DecorationStyle;
+	public final fun copy (Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/DecorationStyle;)Lcom/aardarch/aardink/core/Decoration;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/Decoration;Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/DecorationStyle;ILjava/lang/Object;)Lcom/aardarch/aardink/core/Decoration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRange ()Lkotlin/ranges/IntRange;
+	public final fun getStyle ()Lcom/aardarch/aardink/core/DecorationStyle;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/core/DecorationStyle {
+	public static final field $stable I
+	public fun <init> ()V
+	public synthetic fun <init> (JJJZJJJLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJZJJJLjava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-0d7_KjU ()J
+	public final fun component2-0d7_KjU ()J
+	public final fun component3-0d7_KjU ()J
+	public final fun component4 ()Z
+	public final fun component5-0d7_KjU ()J
+	public final fun component6-0d7_KjU ()J
+	public final fun component7-0d7_KjU ()J
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy-mtM9azI (JJJZJJJLjava/lang/String;)Lcom/aardarch/aardink/core/DecorationStyle;
+	public static synthetic fun copy-mtM9azI$default (Lcom/aardarch/aardink/core/DecorationStyle;JJJZJJJLjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/DecorationStyle;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBackground-0d7_KjU ()J
+	public final fun getBorder-0d7_KjU ()J
+	public final fun getGutterColor-0d7_KjU ()J
+	public final fun getHoverMessage ()Ljava/lang/String;
+	public final fun getMinimapColor-0d7_KjU ()J
+	public final fun getOverviewRulerColor-0d7_KjU ()J
+	public final fun getUnderline-0d7_KjU ()J
+	public final fun getWholeLine ()Z
+	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -1240,7 +1285,7 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$AnnotationToolti
 public final class com/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt;
 	public fun <init> ()V
-	public final fun getLambda$258431684$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-271712649$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt {

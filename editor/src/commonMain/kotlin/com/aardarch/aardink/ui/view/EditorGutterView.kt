@@ -38,7 +38,9 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.LineDiffKind
+import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.ui.ANNOTATION_LANE_WIDTH
 import com.aardarch.aardink.ui.DIFF_LANE_WIDTH
 import com.aardarch.aardink.ui.EditorDefaults
@@ -70,6 +72,8 @@ internal class GutterContent(
     val showLineNumbers: Boolean,
     val onToggleFold: (Int) -> Unit,
     val onAnnotationTap: (Int) -> Unit,
+    /** The host's decorations with a gutter colour: a bar at the text edge on each line they mark. */
+    val decorationMarks: List<LineMark> = emptyList(),
 )
 
 /**
@@ -140,6 +144,11 @@ internal fun EditorGutterView(
                 val lineHeight = frame.metrics.lineHeight
                 val folds = view.foldLayout
                 val shown = current.value
+                // The marks that reach the lines on screen, found once per frame.
+                val firstShown = frame.lines.firstOrNull()?.line ?: 0
+                val lastShown = frame.lines.lastOrNull()?.line ?: -1
+                val marks = shown.decorationMarks.filter { it.lastLine >= firstShown && it.firstLine <= lastShown }
+                val markWidth = GUTTER_MARK_WIDTH.toPx()
                 for (line in frame.lines) {
                     val top = line.top - frame.scrollY
                     val rowsHeight = line.layout.lineCount * lineHeight
@@ -153,6 +162,9 @@ internal fun EditorGutterView(
                             topLeft = Offset(0f, top + 1f),
                             size = Size(diffLane, rowsHeight - 2f),
                         )
+                    }
+                    marks.lastOrNull { line.line in it.firstLine..it.lastLine }?.let { mark ->
+                        drawRect(mark.color, Offset(size.width - markWidth, top), Size(markWidth, rowsHeight))
                     }
                     if (shown.showLineNumbers) {
                         val label = (line.line + 1).toString()
@@ -203,6 +215,9 @@ internal fun EditorGutterView(
             },
     )
 }
+
+/** How wide a decoration's bar at the gutter's text edge is. */
+private val GUTTER_MARK_WIDTH = 3.dp
 
 /** Line-number layouts kept at once: a few screens of them. */
 private const val MAX_CACHED_NUMBERS = 512

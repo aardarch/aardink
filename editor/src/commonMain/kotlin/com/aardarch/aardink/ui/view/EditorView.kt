@@ -721,6 +721,19 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     /** Rows on screen in the whole document: wrapped rows count, folded lines do not. */
     val totalRows: Int get() = lineMap.totalRows
 
+    /**
+     * The rows lines [firstLine] to [lastLine] take on screen, from the first to one past the last,
+     * without laying any of them out: wrapped rows as estimated until a line is laid out. A folded
+     * line takes none, so a mark on one lands on the row after its fold's first line.
+     */
+    fun rowsOfLines(firstLine: Int, lastLine: Int): Pair<Int, Int> {
+        val count = lineMap.lineCount
+        if (count == 0) return 0 to 0
+        val a = firstLine.coerceIn(0, count - 1)
+        val b = lastLine.coerceIn(a, count - 1)
+        return lineMap.firstRowOf(a) to lineMap.firstRowOf(b + 1)
+    }
+
     /** The row on screen the caret at [offset] is on. */
     fun rowOf(offset: Int): Int {
         if (style == null || lineMap.totalRows == 0) return 0

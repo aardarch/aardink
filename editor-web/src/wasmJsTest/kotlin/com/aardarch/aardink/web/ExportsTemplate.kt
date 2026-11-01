@@ -100,6 +100,15 @@ fun aardinkExecuteEdits(id: Int, editsJson: String, endSelectionsJson: String): 
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
+/** Shows a JSON array of Monaco-shaped `{ range, options }` as [owner]'s decorations, replacing that owner's. */
+@JsExport
+fun aardinkSetDecorations(id: Int, owner: String, decorationsJson: String) =
+    AardinkWeb.setDecorationsJson(handle(id), owner, decorationsJson)
+
+/** [owner]'s decorations' ranges now, as a JSON array of Monaco `IRange`s in the order they were set. */
+@JsExport
+fun aardinkGetDecorationRanges(id: Int, owner: String): String = AardinkWeb.getDecorationRangesJson(handle(id), owner)
+
 /** The document's symbols as a JSON array of Monaco-shaped `DocumentSymbol`s, a tree. */
 @JsExport fun aardinkGetDocumentSymbols(id: Int): String = AardinkWeb.getDocumentSymbolsJson(handle(id))
 

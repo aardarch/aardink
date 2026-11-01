@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,7 @@ import com.aardarch.aardink.core.completionReplaceRange
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.core.flattenSymbols
+import com.aardarch.aardink.core.lineMarks
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
@@ -515,15 +517,24 @@ fun CodeEditorLayout(
     }
     val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
 
-    // ── Hover: the documentation of the symbol under a resting mouse ─────────
-    // ── Hover: the diagnostics and the documentation under a resting mouse ───
+    // ── Host decorations: their gutter bars ──────────────────────────────────
+    val gutterDecorationMarks by remember(state) {
+        derivedStateOf { lineMarks(state.shownDecorations, state.document) { it.gutterColor } }
+    }
+
+    // ── Hover: the decorations' messages, diagnostics and documentation under a resting mouse ─
     val showHover: suspend (Int) -> Unit = hover@{ offset ->
         val service = languageService
         val here = currentShownDiagnostics.value
             .filter { offset in it.range.first..it.range.last + 1 }
             .sortedBy { it.severity }
+        val decorated = state.shownDecorations.filter { decoration ->
+            decoration.style.hoverMessage != null && !decoration.range.isEmpty() &&
+                offset in decoration.range.first..decoration.range.last + 1
+        }
+        val messages = decorated.mapNotNull { it.style.hoverMessage }
         val word = TextNavigator.wordAt(state.document, offset)
-        if (here.isEmpty() && (service == null || word.isEmpty())) return@hover
+        if (here.isEmpty() && messages.isEmpty() && (service == null || word.isEmpty())) return@hover
         val version = state.textVersion
         val document = state.document.snapshot()
         val doc = if (service != null && !word.isEmpty()) {
@@ -536,10 +547,12 @@ fun CodeEditorLayout(
         } else {
             emptyList()
         }
-        if (state.textVersion != version || (doc == null && here.isEmpty())) return@hover
-        val start = (here.map { it.range.first } + listOfNotNull(word.first.takeUnless { word.isEmpty() })).min()
-        val end = (here.map { it.range.last + 1 } + listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })).max()
-        hover = HoverShown(doc, start, end, here, actions)
+        if (state.textVersion != version || (doc == null && here.isEmpty() && messages.isEmpty())) return@hover
+        val starts =
+            here.map { it.range.first } + decorated.map { it.range.first } + listOfNotNull(word.first.takeUnless { word.isEmpty() })
+        val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } +
+            listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })
+        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages)
     }
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
@@ -1225,6 +1238,7 @@ fun CodeEditorLayout(
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
+                    decorationMarks = gutterDecorationMarks,
                     onAnnotationTap = { lineIndex ->
                         problemCounter = null
                         tooltipDiagnostic = shownDiagnostics
@@ -1272,6 +1286,7 @@ fun CodeEditorLayout(
                         onDismiss = { hover = null },
                     ) {
                         EditorHoverCard(
+                            messages = shown.messages,
                             diagnostics = shown.diagnostics,
                             doc = shown.doc,
                             onQuickFix = if (shown.actions.isNotEmpty()) {
@@ -1367,6 +1382,7 @@ private class HoverShown(
     val end: Int,
     val diagnostics: List<Diagnostic> = emptyList(),
     val actions: List<CodeAction> = emptyList(),
+    val messages: List<String> = emptyList(),
 )
 
 /** The references list on screen: asked for at [offset], where it is anchored. */

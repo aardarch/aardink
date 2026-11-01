@@ -139,6 +139,9 @@ function monarchToJson(value) {
   return value;
 }
 
+/** The decorations owner deltaDecorations sets; each collection has its own. */
+const DELTA_OWNER = 'delta';
+
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
   if (!provider) return Promise.resolve(null);
@@ -279,6 +282,11 @@ export async function createEditor(container, onChange, options = {}) {
   // side calls `run` as a () -> Unit and drops the value.
   let actionResult;
 
+  // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
+  let deltaDecorations = [];
+  let nextDecorationId = 1;
+  let nextCollection = 1;
+
   const editor = {
     getValue: () => k.aardinkGetValue(id),
     setValue: (text) => k.aardinkSetValue(id, text),
@@ -357,6 +365,50 @@ export async function createEditor(container, onChange, options = {}) {
       return () => diagnosticsListeners.delete(listener);
     },
     revalidate: () => k.aardinkRevalidate(id),
+    deltaDecorations(oldIds, newDecorations) {
+      // Monaco's ids, kept here in the order the Kotlin side keeps the ranges, which follow the edits.
+      const ranges = JSON.parse(k.aardinkGetDecorationRanges(id, DELTA_OWNER));
+      const removed = new Set(oldIds ?? []);
+      const kept = [];
+      deltaDecorations.forEach((decoration, i) => {
+        if (!removed.has(decoration.id)) kept.push({ ...decoration, range: ranges[i] ?? decoration.range });
+      });
+      const added = (newDecorations ?? []).map((decoration) => ({ id: `aardink-decoration-${nextDecorationId++}`, ...decoration }));
+      deltaDecorations = kept.concat(added);
+      k.aardinkSetDecorations(id, DELTA_OWNER, JSON.stringify(deltaDecorations.map(({ range, options }) => ({ range, options }))));
+      return added.map((decoration) => decoration.id);
+    },
+    createDecorationsCollection(decorations) {
+      const owner = `collection-${nextCollection++}`;
+      let items = [];
+      const plain = (list) => (list ?? []).map(({ range, options }) => ({ range, options }));
+      const write = () => {
+        k.aardinkSetDecorations(id, owner, JSON.stringify(items));
+        return items.map((_, i) => `${owner}-${i}`);
+      };
+      const collection = {
+        get length() {
+          return items.length;
+        },
+        getRanges: () => JSON.parse(k.aardinkGetDecorationRanges(id, owner)),
+        set(list) {
+          items = plain(list);
+          return write();
+        },
+        append(list) {
+          // The ranges the Kotlin side has moved along with the edits, then the new ones.
+          const ranges = collection.getRanges();
+          items = items.map((item, i) => ({ ...item, range: ranges[i] ?? item.range })).concat(plain(list));
+          return write();
+        },
+        clear() {
+          items = [];
+          write();
+        },
+      };
+      if (decorations) collection.set(decorations);
+      return collection;
+    },
     getDocumentSymbols: () => JSON.parse(k.aardinkGetDocumentSymbols(id)),
     getSymbolPathAt: (position) => JSON.parse(k.aardinkGetSymbolPathAt(id, position.lineNumber, position.column)),
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),

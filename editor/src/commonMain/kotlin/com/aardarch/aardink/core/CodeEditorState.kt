@@ -18,6 +18,7 @@ package com.aardarch.aardink.core
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -429,6 +430,59 @@ class CodeEditorState(
     /** The layout's newest answer from the language service, for the document as it is now. */
     internal fun publishSymbols(list: List<DocumentSymbol>) {
         symbolTracker.replace(list)
+    }
+
+    // ── Decorations ───────────────────────────────────────────────────────────
+
+    private val decorationOwners = LinkedHashMap<String, DecorationTracker>()
+
+    /** Bumped when an owner is added or removed; each owner's list is snapshot state of its own. */
+    private var decorationOwnersVersion by mutableIntStateOf(0)
+
+    /**
+     * Shows [decorations] for [owner] (a name of the host's choosing: `"assistant"`, `"preview"`),
+     * in place of what that owner set before; other owners' stay. Their ranges address the
+     * document as it is now and follow each edit from then on, as Monaco's decorations do. An empty
+     * list is the same as [clearDecorations].
+     */
+    fun setDecorations(owner: String, decorations: List<Decoration>) {
+        if (decorations.isEmpty()) {
+            clearDecorations(owner)
+            return
+        }
+        val length = document.length
+        val clamped = decorations.map { decoration ->
+            val range = decoration.range
+            val first = range.first.coerceIn(0, length)
+            val last = if (range.isEmpty()) first - 1 else range.last.coerceIn(first, (length - 1).coerceAtLeast(first))
+            if (first == range.first && last == range.last) decoration else decoration.copy(range = first..last)
+        }
+        val tracker = decorationOwners[owner] ?: DecorationTracker().also {
+            decorationOwners[owner] = it
+            document.addChangeListener(it)
+            decorationOwnersVersion++
+        }
+        tracker.replace(clamped)
+    }
+
+    /** [owner]'s decorations as they are now, moved along with the edits since they were set. */
+    fun decorations(owner: String): List<Decoration> {
+        decorationOwnersVersion
+        return decorationOwners[owner]?.items.orEmpty()
+    }
+
+    /** Removes [owner]'s decorations. */
+    fun clearDecorations(owner: String) {
+        val tracker = decorationOwners.remove(owner) ?: return
+        document.removeChangeListener(tracker)
+        decorationOwnersVersion++
+    }
+
+    /** Every owner's decorations, in order of where they start: what the view draws. */
+    internal val shownDecorations: List<Decoration> by derivedStateOf {
+        decorationOwnersVersion
+        val all = decorationOwners.values.flatMap { it.items }
+        all.sortedBy { it.range.first }
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────

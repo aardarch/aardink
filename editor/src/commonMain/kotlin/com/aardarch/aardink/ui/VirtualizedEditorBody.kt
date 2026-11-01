@@ -58,6 +58,7 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.TokenStyleResolver
+import com.aardarch.aardink.core.lineMarks
 import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.platform.PlatformInfo
@@ -234,6 +235,9 @@ internal fun VirtualizedEditorBody(
     val sticky: () -> List<StickyLine> = { view.stickyLines(currentStickyRanges.value) }
     SideEffect { controller.pointer.stickyLineAt = { position -> view.stickyLineAt(currentStickyRanges.value, position) } }
     val lineCount = remember(state.textVersion) { state.document.lineCount }
+    val minimapMarks by remember(state) {
+        derivedStateOf { lineMarks(state.shownDecorations, state.document) { it.minimapColor } }
+    }
 
     EditorBody(
         view = view,
@@ -276,6 +280,7 @@ internal fun VirtualizedEditorBody(
                             snippet.version
                             snippet.placeholderRanges()
                         }.orEmpty(),
+                        hostDecorations = state.shownDecorations,
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },
@@ -314,6 +319,7 @@ internal fun VirtualizedEditorBody(
                     background = theme.background,
                     slider = textColor.copy(alpha = 0.12f),
                     tabSize = options.tabSize,
+                    marks = { minimapMarks },
                 )
             }
         },

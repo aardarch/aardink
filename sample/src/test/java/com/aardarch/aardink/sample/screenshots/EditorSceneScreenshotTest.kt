@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -26,10 +27,13 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
@@ -151,6 +155,7 @@ class EditorSceneScreenshotTest {
         diagnostics: List<Diagnostic> = emptyList(),
         softWrap: Boolean = false,
         editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
+        languageService: LanguageService? = null,
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
@@ -163,6 +168,7 @@ class EditorSceneScreenshotTest {
                         findReplaceState = findReplaceState,
                         diagnostics = diagnostics,
                         options = editorOptions,
+                        languageService = languageService,
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -288,5 +294,41 @@ class EditorSceneScreenshotTest {
         // Tab-indented, with a double space and trailing blanks: every kind of mark.
         val text = "fun main() {\n\tval x  = 1   \n\t\tprintln(x)\t\n}\n"
         capture("whitespace", stateOf(text), editorOptions = EditorOptions(renderWhitespace = RenderWhitespace.All))
+    }
+
+    @Test
+    fun decorations() {
+        // A whole-line highlight with a gutter bar (an assistant's change), a boxed word and an
+        // underlined one (a preview's hover), and a minimap mark.
+        val state = stateOf(code)
+        val text = state.document.text
+        val greeter = text.indexOf("Greeter")
+        val names = text.indexOf("names.size")
+        val line5 = state.document.lineStart(5)
+        state.setDecorations(
+            "assistant",
+            listOf(
+                Decoration(
+                    line5 until state.document.lineEnd(6),
+                    DecorationStyle(background = Color(0x3328A745), wholeLine = true, gutterColor = Color(0xFF28A745)),
+                ),
+            ),
+        )
+        state.setDecorations(
+            "preview",
+            listOf(
+                Decoration(greeter until greeter + 7, DecorationStyle(border = Color(0xFFE5C07B), background = Color(0x22E5C07B))),
+                Decoration(names until names + 5, DecorationStyle(underline = Color(0xFF61AFEF))),
+            ),
+        )
+        capture("decorations", state)
+    }
+
+    @Test
+    fun breadcrumbs() {
+        // The caret inside greetAll's loop: the row shows Greeter › greetAll.
+        val state = stateOf(code)
+        state.selection = TextRange(state.document.lineStart(6) + 12)
+        capture("breadcrumbs", state, editorOptions = EditorOptions(breadcrumbs = true), languageService = kotlin.languageService)
     }
 }

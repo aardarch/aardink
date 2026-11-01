@@ -260,6 +260,13 @@ export interface AardinkEditor {
    */
   getDocumentSymbols(): AardinkDocumentSymbol[];
   /**
+   * Monaco's `deltaDecorations`: removes the decorations with `oldIds` and adds `newDecorations`,
+   * returning the new ones' ids. Their ranges follow the edits made after.
+   */
+  deltaDecorations(oldIds: string[], newDecorations: AardinkModelDeltaDecoration[]): string[];
+  /** Monaco's `createDecorationsCollection`: a set of decorations of its own, replaced as a whole. */
+  createDecorationsCollection(decorations?: AardinkModelDeltaDecoration[]): AardinkDecorationsCollection;
+  /**
    * The symbols holding `position`, outermost first: the element the caret is in, its parent and
    * so on up. With `onDidChangeCursor`, this maps the caret to what the text describes.
    */
@@ -406,6 +413,43 @@ export interface AardinkDocumentSymbol {
   selectionRange?: AardinkRange;
   detail?: string;
   children?: AardinkDocumentSymbol[];
+}
+
+/** Monaco's `IModelDeltaDecoration`. */
+export interface AardinkModelDeltaDecoration {
+  range: AardinkRange;
+  options: AardinkDecorationOptions;
+}
+
+/**
+ * Monaco's `IModelDecorationOptions`, as far as the editor draws them. Where Monaco takes a CSS
+ * class (`className`, `inlineClassName`, `linesDecorationsClassName`), give a colour instead: CSS
+ * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`. Nothing here changes the text's layout, so
+ * Monaco's `before` and `after` are not read.
+ */
+export interface AardinkDecorationOptions {
+  /** Behind the characters; behind whole lines with `isWholeLine`. */
+  backgroundColor?: string;
+  /** A box around the characters. */
+  borderColor?: string;
+  /** A line under the characters. */
+  underlineColor?: string;
+  /** A bar at the gutter's text edge on each line, as Monaco's `linesDecorationsClassName` places one. */
+  gutterColor?: string;
+  isWholeLine?: boolean;
+  hoverMessage?: string | { value: string } | Array<string | { value: string }>;
+  overviewRuler?: { color: string; position?: number };
+  minimap?: { color: string; position?: number };
+}
+
+/** Monaco's `IEditorDecorationsCollection`. */
+export interface AardinkDecorationsCollection {
+  readonly length: number;
+  set(decorations: AardinkModelDeltaDecoration[]): string[];
+  append(decorations: AardinkModelDeltaDecoration[]): string[];
+  clear(): void;
+  /** The ranges as they are now, moved along with the edits since they were set. */
+  getRanges(): AardinkRange[];
 }
 
 /** Monaco's `IRange`: 1-based lines and columns, `endColumn` exclusive. */

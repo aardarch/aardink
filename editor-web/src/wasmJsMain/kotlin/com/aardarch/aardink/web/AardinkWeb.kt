@@ -45,6 +45,8 @@ import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.ContentChange
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
@@ -88,11 +90,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonArray
 import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -682,6 +689,75 @@ object AardinkWeb {
         handle.state.value.revalidate()
     }
 
+    // ── Decorations ──────────────────────────────────────────────────────────
+
+    /**
+     * Shows [decorationsJson], a JSON array of Monaco's `IModelDeltaDecoration` (`{ range, options }`),
+     * as [owner]'s decorations, in place of what that owner had; other owners' stay. The options
+     * read are Monaco's `isWholeLine`, `hoverMessage` (a string, `{ value }` or an array of them),
+     * `overviewRuler.color` and `minimap.color`, and, where Monaco takes a CSS class instead,
+     * `backgroundColor`, `borderColor`, `underlineColor` and `gutterColor` as CSS hex colours
+     * (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after. The npm
+     * package's `deltaDecorations` and `createDecorationsCollection` are built on this.
+     */
+    fun setDecorationsJson(handle: AardinkEditorHandle, owner: String, decorationsJson: String) {
+        val state = handle.state.value
+        val list = (parsedJson(decorationsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range =
+                (item["range"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                    ?: return@mapNotNull null
+            val options = item["options"] as? JsonObject ?: JsonObject(emptyMap())
+            val exclusive = rangeOf(state.document, range)
+            Decoration(exclusive, decorationStyle(options))
+        }
+        state.setDecorations(owner, list)
+    }
+
+    /** [owner]'s decorations' ranges as they are now, a JSON array of [WebRange] in the order they were set. */
+    fun getDecorationRangesJson(handle: AardinkEditorHandle, owner: String): String {
+        val state = handle.state.value
+        val ranges = state.decorations(owner).map { webRange(state.document, it.range) }
+        return json.encodeToString(rangesJsonSerializer, ranges)
+    }
+
+    private fun decorationStyle(options: JsonObject): DecorationStyle {
+        fun color(key: String): Color = (options[key] as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        fun nestedColor(key: String): Color =
+            ((options[key] as? JsonObject)?.get("color") as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        val hover = options["hoverMessage"]
+        val message = when (hover) {
+            is JsonPrimitive -> hover.contentOrNull
+
+            is JsonObject -> (hover["value"] as? JsonPrimitive)?.contentOrNull
+
+            is JsonArray ->
+                hover
+                    .mapNotNull {
+                        (it as? JsonPrimitive)?.contentOrNull
+                            ?: ((it as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull
+                    }
+                    .joinToString("\n")
+                    .takeIf { it.isNotEmpty() }
+
+            else -> null
+        }
+        return DecorationStyle(
+            background = color("backgroundColor"),
+            underline = color("underlineColor"),
+            border = color("borderColor"),
+            wholeLine = (options["isWholeLine"] as? JsonPrimitive)?.booleanOrNull == true,
+            gutterColor = color("gutterColor"),
+            minimapColor = nestedColor("minimap"),
+            overviewRulerColor = nestedColor("overviewRuler"),
+            hoverMessage = message,
+        )
+    }
+
+    private val rangesJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebRange.serializer())
+
+    private fun parsedJson(text: String): JsonElement? = runCatching { json.parseToJsonElement(text) }.getOrNull()
+
     // ── Document symbols ─────────────────────────────────────────────────────
 
     /**
@@ -1238,4 +1314,18 @@ internal fun renderWhitespaceOf(value: String): RenderWhitespace = when (value) 
     "trailing" -> RenderWhitespace.Trailing
     "all" -> RenderWhitespace.All
     else -> RenderWhitespace.Selection
+}
+
+/** A CSS hex colour (`#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`); null for anything else. */
+internal fun cssHexColor(text: String): Color? {
+    val hex = text.trim().removePrefix("#")
+    if (hex.any { it.digitToIntOrNull(16) == null }) return null
+    val full = when (hex.length) {
+        3, 4 -> hex.map { "$it$it" }.joinToString("")
+        6, 8 -> hex
+        else -> return null
+    }
+    val rgb = full.substring(0, 6).toLong(16)
+    val alpha = if (full.length == 8) full.substring(6, 8).toLong(16) else 0xFF
+    return Color((alpha shl 24 or rgb).toInt())
 }
