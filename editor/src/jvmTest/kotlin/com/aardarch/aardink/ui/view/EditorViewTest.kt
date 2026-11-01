@@ -35,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** [EditorView]'s geometry with a real text measurer: hit-testing, carets, movement, scrolling. */
@@ -51,7 +52,12 @@ class EditorViewTest {
 
     private val charWidth = measurer.measure("0".repeat(64), textStyle).getLineRight(0) / 64f
 
-    private fun viewOf(text: String, softWrap: Boolean = false, foldState: FoldState? = null): EditorView {
+    private fun viewOf(
+        text: String,
+        softWrap: Boolean = false,
+        foldState: FoldState? = null,
+        textStyle: TextStyle = this.textStyle,
+    ): EditorView {
         val state = CodeEditorState(initialText = "", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
             computeDispatcher = Dispatchers.Unconfined
             loadText(text)
@@ -151,6 +157,35 @@ class EditorViewTest {
         val next = view.verticalMove(0, rows = 1)
         assertEquals(0, view.state.document.offsetToLineCol(next).first, "still on the long line, one row down")
         assertTrue(next > 0)
+    }
+
+    @Test
+    fun `wrapped rows sit at the view's pitch, not the layout's`() {
+        // A text engine that lays wrapped rows out further apart than the view's rows (an Android
+        // phone did, by about a seventh): the rows, the caret and hit-testing follow the view.
+        val tall = textStyle.copy(lineHeight = 30.sp)
+        val long = (1..40).joinToString(" ") { "w$it" }
+        val view = viewOf("$long\nend", softWrap = true, textStyle = tall)
+        view.prepare(200, 400)
+        val layout = view.layoutFor(0)
+        assertTrue(layout.lineCount > 2, "the long line wraps")
+        assertTrue(layout.getLineTop(1) > 25f, "the layout's own pitch is the tall one: ${layout.getLineTop(1)}")
+        assertFalse(layout.rowsAtPitch(20f))
+        assertTrue(view.layoutFor(1).rowsAtPitch(20f), "a single row is always at pitch")
+        assertEquals(0f, layout.rowShift(0, 20f))
+        assertEquals(2 * 20f, layout.getLineTop(2) + layout.rowShift(2, 20f), 0.5f)
+
+        // Carets step by the view's rows, from wherever the font puts the caret inside row 0.
+        val row0 = view.caretRect(0).top
+        val onRow2 = view.verticalMove(0, rows = 2)
+        assertEquals(2, layout.rowFor(onRow2))
+        assertEquals(2 * 20f, view.caretRect(onRow2).top - row0, 0.5f)
+        val nextLine = view.state.document.lineStart(1)
+        assertEquals(layout.lineCount * 20f, view.caretRect(nextLine).top - row0, 0.5f)
+        // A tap on the third row's band lands on the third row.
+        val hit = view.offsetAt(Offset(8f + charWidth, 8f + 2 * 20f + 10f))
+        assertEquals(0, hit.line)
+        assertEquals(2, layout.rowFor(hit.offset))
     }
 
     @Test

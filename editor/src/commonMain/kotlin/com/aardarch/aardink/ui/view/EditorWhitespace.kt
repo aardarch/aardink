@@ -100,12 +100,15 @@ internal fun DrawScope.drawWhitespace(
     if (columns.isEmpty()) return
     val radius = max(1f, lineHeight * 0.06f)
     val stroke = max(1f, 1.dp.toPx())
+    val layout = line.layout
+    val atPitch = layout.rowsAtPitch(lineHeight)
     for (column in columns) {
-        val box = line.layout.getBoundingBox(column)
+        val box = layout.getBoundingBox(column)
         val x0 = left + box.left
         // Off screen sideways: nothing to draw, and on a long unwrapped line most marks are.
         if (x0 > size.width || left + box.right < 0f) continue
-        val y = top + (box.top + box.bottom) / 2f
+        val shift = if (atPitch) 0f else layout.rowShift(layout.rowFor(column), lineHeight)
+        val y = top + shift + (box.top + box.bottom) / 2f
         if (text[column] == ' ') {
             drawCircle(color, radius, Offset(left + (box.left + box.right) / 2f, y))
         } else {

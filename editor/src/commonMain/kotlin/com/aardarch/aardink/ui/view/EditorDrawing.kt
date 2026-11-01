@@ -21,7 +21,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,7 @@ internal class EditorDecorations(
 internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDecorations, colors: EditorColors) {
     val left = frame.textLeft
     val charWidth = frame.metrics.charWidth
+    val lineHeight = frame.metrics.lineHeight
     if (decorations.highlightCaretLines) {
         for (line in frame.lines) {
             val caretHere = decorations.selections.any { it.collapsed && it.end in line.start..line.end }
@@ -99,34 +102,68 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         val top = line.top - frame.scrollY
         for (stop in decorations.snippetTabStops) {
             if (stop.collapsed || stop.max <= line.start || stop.min > line.end) continue
-            drawRange(line, stop.min - line.start, stop.max - line.start, colors.snippetTabStop, left, top)
+            drawRange(line, stop.min - line.start, stop.max - line.start, colors.snippetTabStop, left, top, lineHeight)
         }
         for (selection in decorations.selections) {
             if (selection.collapsed || selection.max < line.start || selection.min > line.end) continue
-            drawRange(line, selection.min - line.start, selection.max - line.start, colors.selection, left, top)
+            drawRange(line, selection.min - line.start, selection.max - line.start, colors.selection, left, top, lineHeight)
             // The line break is selected too: show it, so an empty selected line is visible.
             if (selection.max > line.end) {
                 val layout = line.layout
                 val lastRow = layout.lineCount - 1
                 val x = layout.getLineRight(lastRow).coerceAtLeast(0f)
-                val rowTop = layout.getLineTop(lastRow)
-                drawRect(colors.selection, Offset(left + x, top + rowTop), Size(charWidth * 0.5f, layout.getLineBottom(lastRow) - rowTop))
+                val rowTop = layout.getLineTop(lastRow) + layout.rowShift(lastRow, lineHeight)
+                drawRect(
+                    colors.selection,
+                    Offset(left + x, top + rowTop),
+                    Size(charWidth * 0.5f, layout.getLineBottom(lastRow) - layout.getLineTop(lastRow)),
+                )
             }
         }
         // Over the selection, as in VS Code: a match inside a selection stays visible.
-        drawFindMatches(line, decorations, colors, left, top)
-        drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, frame.metrics.lineHeight)
-        drawText(line.layout, topLeft = Offset(left, top))
+        drawFindMatches(line, decorations, colors, left, top, lineHeight)
+        drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, lineHeight)
+        eachRow(line.layout, lineHeight, top) { rowTop -> drawText(line.layout, topLeft = Offset(left, rowTop)) }
     }
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
-        drawSquiggles(line, decorations.diagnostics, colors, left, top)
-        decorations.composition?.let { drawUnderline(line, it, colors.text, left, top) }
-        decorations.link?.let { drawUnderline(line, it, colors.text, left, top) }
+        drawSquiggles(line, decorations.diagnostics, colors, left, top, lineHeight)
+        decorations.composition?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
+        decorations.link?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
     }
 }
 
-private fun DrawScope.drawFindMatches(line: VisibleLine, decorations: EditorDecorations, colors: EditorColors, left: Float, top: Float) {
+/**
+ * Runs [block] with the y the text of a row of [layout] is drawn at: once with [top] when the rows
+ * already sit at the view's pitch, else once per row in [firstRow]..[lastRow], clipped to that
+ * row's own band and moved so the row sits at `row * lineHeight` ([TextLayoutResult.rowShift]).
+ */
+private inline fun DrawScope.eachRow(
+    layout: TextLayoutResult,
+    lineHeight: Float,
+    top: Float,
+    firstRow: Int = 0,
+    lastRow: Int = layout.lineCount - 1,
+    block: DrawScope.(top: Float) -> Unit,
+) {
+    if (layout.rowsAtPitch(lineHeight)) {
+        block(top)
+        return
+    }
+    for (row in firstRow..lastRow) {
+        val shifted = top + layout.rowShift(row, lineHeight)
+        clipRect(0f, shifted + layout.getLineTop(row), size.width, shifted + layout.getLineBottom(row)) { block(shifted) }
+    }
+}
+
+private fun DrawScope.drawFindMatches(
+    line: VisibleLine,
+    decorations: EditorDecorations,
+    colors: EditorColors,
+    left: Float,
+    top: Float,
+    lineHeight: Float,
+) {
     val matches = decorations.findMatches
     if (matches.isEmpty()) return
     // Matches are in document order: find the first that can reach this line.
@@ -140,21 +177,31 @@ private fun DrawScope.drawFindMatches(line: VisibleLine, decorations: EditorDeco
     while (i < matches.size && matches[i].first <= line.end) {
         val match = matches[i]
         val color = if (i == decorations.currentFindMatch) colors.currentFindMatch else colors.findMatch
-        drawRange(line, match.first - line.start, match.last + 1 - line.start, color, left, top)
+        drawRange(line, match.first - line.start, match.last + 1 - line.start, color, left, top, lineHeight)
         i++
     }
 }
 
 /** Fills columns [from, to) of [line], row by row. */
-private fun DrawScope.drawRange(line: VisibleLine, from: Int, to: Int, color: Color, left: Float, top: Float) {
+private fun DrawScope.drawRange(line: VisibleLine, from: Int, to: Int, color: Color, left: Float, top: Float, lineHeight: Float) {
     val a = from.coerceIn(0, line.shownLength)
     val b = to.coerceIn(a, line.shownLength)
     if (b <= a) return
-    val path = line.layout.getPathForRange(a, b)
-    translate(left, top) { drawPath(path, color) }
+    val layout = line.layout
+    val path = layout.getPathForRange(a, b)
+    eachRow(layout, lineHeight, top, layout.rowFor(a), layout.rowFor(b - 1)) { rowTop ->
+        translate(left, rowTop) { drawPath(path, color) }
+    }
 }
 
-private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnostic>, colors: EditorColors, left: Float, top: Float) {
+private fun DrawScope.drawSquiggles(
+    line: VisibleLine,
+    diagnostics: List<Diagnostic>,
+    colors: EditorColors,
+    left: Float,
+    top: Float,
+    lineHeight: Float,
+) {
     if (diagnostics.isEmpty()) return
     val layout = line.layout
     val minWidth = 20.dp.toPx()
@@ -175,6 +222,7 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
         val firstRow = layout.rowFor(a)
         val lastRow = layout.rowFor(max(a, b - 1))
         for (row in firstRow..lastRow) {
+            val rowTop = top + layout.rowShift(row, lineHeight)
             val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
             var x1 = if (row == lastRow && b > a) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
             // A tagged diagnostic shows by its tag, as in VS Code: no box drawn wider than its text.
@@ -183,7 +231,7 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
                     // Faded: the background laid over the text, so it is not laid out again.
                     drawRect(
                         colors.background.copy(alpha = UNNECESSARY_FADE),
-                        Offset(left + x0, top + layout.getLineTop(row)),
+                        Offset(left + x0, rowTop + layout.getLineTop(row)),
                         Size(
                             x1 - x0,
                             layout.getLineBottom(row) - layout.getLineTop(row),
@@ -191,22 +239,22 @@ private fun DrawScope.drawSquiggles(line: VisibleLine, diagnostics: List<Diagnos
                     )
                 }
                 if (x1 > x0 && deprecated) {
-                    val y = top + (layout.getLineTop(row) + layout.getLineBottom(row)) / 2f
+                    val y = rowTop + (layout.getLineTop(row) + layout.getLineBottom(row)) / 2f
                     drawLine(colors.text, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = 1.dp.toPx())
                 }
                 if (diagnostic.severity != DiagnosticSeverity.Hint && !unnecessary) {
                     if (x1 <= x0) x1 = x0 + minWidth
-                    drawSquiggleLine(left + x0, left + x1, top + layout.getLineBottom(row) + 1.dp.toPx(), color)
+                    drawSquiggleLine(left + x0, left + x1, rowTop + layout.getLineBottom(row) + 1.dp.toPx(), color)
                 }
                 continue
             }
             if (diagnostic.severity == DiagnosticSeverity.Hint) {
                 // Three dots under the start, as VS Code draws a hint: only on the line it starts on.
-                if (row == firstRow && start >= line.start) drawHintDots(left + x0, top + layout.getLineBottom(row), color)
+                if (row == firstRow && start >= line.start) drawHintDots(left + x0, rowTop + layout.getLineBottom(row), color)
                 continue
             }
             if (x1 <= x0) x1 = x0 + minWidth
-            drawSquiggleLine(left + x0, left + x1, top + layout.getLineBottom(row) + 1.dp.toPx(), color)
+            drawSquiggleLine(left + x0, left + x1, rowTop + layout.getLineBottom(row) + 1.dp.toPx(), color)
         }
     }
 }
@@ -222,7 +270,7 @@ private fun DrawScope.drawHintDots(x: Float, y: Float, color: Color) {
 private const val UNNECESSARY_FADE = 0.4f
 
 /** A thin line under [range], as an input method's composition and a link are drawn. */
-private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: Color, left: Float, top: Float) {
+private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: Color, left: Float, top: Float, lineHeight: Float) {
     if (range.collapsed || range.max < line.start || range.min > line.end) return
     val layout = line.layout
     val a = (range.min - line.start).coerceIn(0, line.shownLength)
@@ -234,7 +282,7 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
     for (row in firstRow..lastRow) {
         val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
         val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
-        val y = top + layout.getLineBaseline(row) + 2.dp.toPx()
+        val y = top + layout.rowShift(row, lineHeight) + layout.getLineBaseline(row) + 2.dp.toPx()
         drawLine(color, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = stroke)
     }
 }
@@ -244,7 +292,9 @@ private fun DrawScope.drawBracketBox(frame: ViewFrame, offset: Int, colors: Edit
     val line = frame.lineContaining(offset) ?: return
     val column = offset - line.start
     if (column >= line.shownLength) return
-    val box = line.layout.getBoundingBox(column).translate(left, line.top - frame.scrollY)
+    val layout = line.layout
+    val shift = layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
+    val box = layout.getBoundingBox(column).translate(left, line.top - frame.scrollY + shift)
     drawRect(colors.bracketMatch, box.topLeft, box.size)
     drawRect(
         colors.bracketMatch.copy(alpha = (colors.bracketMatch.alpha * 3f).coerceAtMost(1f)),
@@ -278,8 +328,9 @@ internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>,
     for (selection in selections) {
         val line = frame.lineContaining(selection.end) ?: continue
         val column = (selection.end - line.start).coerceAtMost(line.shownLength)
-        val rect = line.layout.getCursorRect(column)
-        val top = line.top - frame.scrollY
+        val layout = line.layout
+        val rect = layout.getCursorRect(column)
+        val top = line.top - frame.scrollY + layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
         // Like the text field: the caret starts at its x and is drawn rightwards.
         drawRect(color, Offset(left + rect.left, top + rect.top), Size(width, rect.height))
     }

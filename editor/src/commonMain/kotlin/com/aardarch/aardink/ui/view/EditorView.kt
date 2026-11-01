@@ -39,6 +39,7 @@ import com.aardarch.aardink.core.TokenStore
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.core.text.DocumentChange
 import com.aardarch.aardink.core.text.DocumentChangeListener
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -603,7 +604,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         // A caret inside a closed fold is drawn at the end of the fold's first line.
         val col = if (shownLine == line) column.coerceAtMost(shown) else shown
         val rect = layout.getCursorRect(col)
-        return rect.translate(metrics.paddingStart, contentTop(shownLine, metrics))
+        val shift = layout.rowShift(layout.rowFor(col), metrics.lineHeight)
+        return rect.translate(metrics.paddingStart, contentTop(shownLine, metrics) + shift)
     }
 
     /** The caret at [offset], in viewport coordinates. */
@@ -714,3 +716,15 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
  * straight from `getLineForOffset` can be one the layout's line getters reject.
  */
 internal fun TextLayoutResult.rowFor(offset: Int): Int = getLineForOffset(offset).coerceIn(0, lineCount - 1)
+
+/**
+ * How far row [row] of this layout moves to sit at `row * lineHeight`: the view's row pitch,
+ * not the platform's. The row map, the gutter, scrolling and hit-testing all step rows by
+ * [lineHeight], but a wrapped line's paragraph puts its rows wherever the platform's text
+ * engine does, and on some Android devices that is further apart. Row 0 never moves, so a
+ * single-row line is drawn as it always was.
+ */
+internal fun TextLayoutResult.rowShift(row: Int, lineHeight: Float): Float = if (row <= 0) 0f else row * lineHeight - getLineTop(row)
+
+/** Whether this layout's rows already sit at the view's pitch: then it is drawn in one go. */
+internal fun TextLayoutResult.rowsAtPitch(lineHeight: Float): Boolean = lineCount <= 1 || abs(getLineTop(1) - lineHeight) < 0.5f

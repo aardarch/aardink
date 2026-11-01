@@ -506,7 +506,9 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         val line = frame.lineContaining(offset) ?: return null
         val column = offset - line.start
         if (column >= line.shownLength) return null
-        val box = line.layout.getBoundingBox(column)
-        return box.translate(Offset(frame.textLeft, line.top - frame.scrollY) + coordinates.localToRoot(Offset.Zero))
+        val layout = line.layout
+        val box = layout.getBoundingBox(column)
+        val shift = layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
+        return box.translate(Offset(frame.textLeft, line.top - frame.scrollY + shift) + coordinates.localToRoot(Offset.Zero))
     }
 }
