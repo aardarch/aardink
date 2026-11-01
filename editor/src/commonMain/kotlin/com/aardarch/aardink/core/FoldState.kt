@@ -75,12 +75,54 @@ class FoldState {
      */
     fun foldLevel(level: Int): Boolean {
         val ranges = foldableRanges
-        fun encloses(outer: FoldRange, inner: FoldRange) = outer !== inner &&
-            outer.startLine <= inner.startLine && outer.endLine >= inner.endLine &&
-            (outer.startLine != inner.startLine || outer.endLine != inner.endLine)
-        val atLevel = ranges.filter { range -> ranges.count { encloses(it, range) } == level - 1 }
+        val enclosing = enclosingCounts(ranges)
+        val atLevel = ranges.filterIndexed { i, _ -> enclosing[i] == level - 1 }
         for (range in atLevel) if (range.startLine !in foldedMap) foldedMap[range.startLine] = range
         return atLevel.isNotEmpty()
+    }
+
+    /**
+     * How many other ranges of [ranges] enclose each one: start on or before it and end on or after
+     * it, without being the same lines. Counted in one ordered pass over a Fenwick tree of end lines,
+     * not by comparing every pair, so Fold Level stays fast with thousands of ranges.
+     */
+    private fun enclosingCounts(ranges: List<FoldRange>): IntArray {
+        val counts = IntArray(ranges.size)
+        if (ranges.isEmpty()) return counts
+        val maxEnd = ranges.maxOf { it.endLine }.coerceAtLeast(0)
+        // Indexed by maxEnd - endLine, so a prefix sum counts the ranges ending at or after a line.
+        val tree = IntArray(maxEnd + 2)
+        fun slot(endLine: Int) = maxEnd - endLine.coerceIn(0, maxEnd) + 1
+        fun add(endLine: Int) {
+            var i = slot(endLine)
+            while (i < tree.size) {
+                tree[i]++
+                i += i and -i
+            }
+        }
+        fun endingAtOrAfter(endLine: Int): Int {
+            var i = slot(endLine)
+            var sum = 0
+            while (i > 0) {
+                sum += tree[i]
+                i -= i and -i
+            }
+            return sum
+        }
+        // Earlier starts first, and on one start the longer first: what encloses a range comes before it.
+        val order = ranges.indices.sortedWith(compareBy<Int> { ranges[it].startLine }.thenByDescending { ranges[it].endLine })
+        var g = 0
+        while (g < order.size) {
+            val first = ranges[order[g]]
+            var end = g
+            while (end < order.size && ranges[order[end]].startLine == first.startLine && ranges[order[end]].endLine == first.endLine) end++
+            // Ranges over the same lines do not enclose each other: count the group before adding it.
+            val count = endingAtOrAfter(first.endLine)
+            for (k in g until end) counts[order[k]] = count
+            for (k in g until end) add(first.endLine)
+            g = end
+        }
+        return counts
     }
 
     /**

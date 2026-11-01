@@ -29,9 +29,6 @@ import kotlin.math.roundToInt
  */
 internal object HexColors {
 
-    /** A string literal (in double or single quotes) holding nothing but a hex colour. */
-    private val QUOTED = Regex("""(["'])#([0-9a-fA-F]{3,8})\1""")
-
     /** A hex colour token in CSS. */
     private val TOKEN = Regex("""#([0-9a-fA-F]{3,8})(?![0-9a-zA-Z_-])""")
 
@@ -84,35 +81,120 @@ internal object HexColors {
         return listOf(ColorPresentation(label, TextEdit(info.range, label)))
     }
 
-    /** The quoted strings in [text] that hold nothing but a hex colour, as JSON and TOML values do. */
-    fun quoted(text: CharSequence, alphaFirst: Boolean = false): List<ColorInfo> = QUOTED.findAll(text).mapNotNull { match ->
-        val color = parse(match.groupValues[2], alphaFirst) ?: return@mapNotNull null
-        ColorInfo((match.range.first + 1) until match.range.last, color)
-    }.toList()
-
-    /** The hex colour tokens in [text] (CSS), outside comments and inside a `{ }` block. */
-    fun cssTokens(text: CharSequence): List<ColorInfo> {
+    /**
+     * The string values in [text] that hold nothing but a hex colour, as JSON's ([json]) and TOML's
+     * values do. Comments are skipped, and so are keys (a string followed by `:` in JSON, by `=` or
+     * a dotted key's `.` in TOML) and TOML's multi-line strings.
+     */
+    fun quoted(text: CharSequence, json: Boolean): List<ColorInfo> {
         val colors = ArrayList<ColorInfo>()
-        var depth = 0
+        val n = text.length
         var i = 0
-        while (i < text.length) {
+        while (i < n) {
             val c = text[i]
             when {
-                c == '/' && i + 1 < text.length && text[i + 1] == '*' -> {
+                json && c == '/' && i + 1 < n && text[i + 1] == '/' -> i = lineEnd(text, i)
+
+                json && c == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     val end = indexOf(text, "*/", i + 2)
-                    i = if (end < 0) text.length else end + 2
+                    i = if (end < 0) n else end + 2
+                }
+
+                !json && c == '#' -> i = lineEnd(text, i)
+
+                !json && (startsWith(text, i, "\"\"\"") || startsWith(text, i, "'''")) -> {
+                    val end = indexOf(text, text.substring(i, i + 3), i + 3)
+                    i = if (end < 0) n else end + 3
+                }
+
+                c == '"' || (!json && c == '\'') -> {
+                    // A basic string has escapes; a TOML literal string ('...') has none.
+                    var j = i + 1
+                    while (j < n && text[j] != c && text[j] != '\n') j += if (c == '"' && text[j] == '\\') 2 else 1
+                    if (j >= n || text[j] != c) {
+                        i = j
+                        continue
+                    }
+                    val isKey = when (nextNonBlank(text, j + 1)) {
+                        ':' -> json
+                        '=', '.' -> !json
+                        else -> false
+                    }
+                    if (!isKey && text[i + 1] == '#') {
+                        val color = parse(text.substring(i + 2, j), alphaFirst = false)
+                        if (color != null) colors += ColorInfo((i + 1) until j, color)
+                    }
+                    i = j + 1
+                }
+
+                else -> i++
+            }
+        }
+        return colors
+    }
+
+    /**
+     * The hex colour tokens in [text] (CSS) in declaration values: after a declaration's `:`, inside
+     * a `{ }` block. A statement that ends in `{` is a selector (a nested rule's, or an at-rule's
+     * prelude), so its tokens (`#id`) are not colours; nor are those in comments, strings or `url()`.
+     */
+    fun cssTokens(text: CharSequence): List<ColorInfo> {
+        val colors = ArrayList<ColorInfo>()
+        // The colours of the statement being read, kept once it ends as a declaration.
+        val pending = ArrayList<ColorInfo>()
+        var inValue = false
+        var depth = 0
+        val n = text.length
+        var i = 0
+
+        fun endStatement(isDeclaration: Boolean) {
+            if (isDeclaration) colors += pending
+            pending.clear()
+            inValue = false
+        }
+
+        while (i < n) {
+            val c = text[i]
+            when {
+                c == '/' && i + 1 < n && text[i + 1] == '*' -> {
+                    val end = indexOf(text, "*/", i + 2)
+                    i = if (end < 0) n else end + 2
                     continue
                 }
 
-                c == '{' -> depth++
+                c == '"' || c == '\'' -> {
+                    var j = i + 1
+                    while (j < n && text[j] != c && text[j] != '\n') j += if (text[j] == '\\') 2 else 1
+                    i = j + 1
+                    continue
+                }
 
-                c == '}' -> depth = (depth - 1).coerceAtLeast(0)
+                (c == 'u' || c == 'U') && startsWith(text, i, "url(", ignoreCase = true) &&
+                    (i == 0 || !(text[i - 1].isLetterOrDigit() || text[i - 1] == '-' || text[i - 1] == '_')) -> {
+                    val end = indexOf(text, ")", i + 4)
+                    i = if (end < 0) n else end + 1
+                    continue
+                }
 
-                c == '#' && depth > 0 -> {
+                c == '{' -> {
+                    endStatement(isDeclaration = false)
+                    depth++
+                }
+
+                c == '}' -> {
+                    endStatement(isDeclaration = depth > 0)
+                    depth = (depth - 1).coerceAtLeast(0)
+                }
+
+                c == ';' -> endStatement(isDeclaration = depth > 0)
+
+                c == ':' -> inValue = true
+
+                c == '#' && depth > 0 && inValue -> {
                     val match = TOKEN.matchAt(text, i)
                     val color = match?.let { parse(it.groupValues[1], alphaFirst = false) }
                     if (match != null && color != null) {
-                        colors += ColorInfo(match.range, color)
+                        pending += ColorInfo(match.range, color)
                         i = match.range.last + 1
                         continue
                     }
@@ -122,6 +204,22 @@ internal object HexColors {
         }
         return colors
     }
+
+    private fun lineEnd(text: CharSequence, from: Int): Int {
+        var i = from
+        while (i < text.length && text[i] != '\n') i++
+        return i
+    }
+
+    /** The first character from [from] on that is not a space or tab, or null at the end of [text]. */
+    private fun nextNonBlank(text: CharSequence, from: Int): Char? {
+        var i = from
+        while (i < text.length && (text[i] == ' ' || text[i] == '\t')) i++
+        return if (i < text.length) text[i] else null
+    }
+
+    private fun startsWith(text: CharSequence, at: Int, prefix: String, ignoreCase: Boolean = false): Boolean =
+        at + prefix.length <= text.length && prefix.indices.all { text[at + it].equals(prefix[it], ignoreCase) }
 
     private fun indexOf(text: CharSequence, needle: String, from: Int): Int {
         var i = from

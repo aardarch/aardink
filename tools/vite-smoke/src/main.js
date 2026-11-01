@@ -151,6 +151,15 @@ try {
   await waitFor(() => structured.getScrollTop() > 0, 3000).catch(() => {});
   report.checks.scrollApi = structured.getScrollTop() > 0 && structured.getVisibleRanges()[0]?.startLineNumber > 1 &&
     scrolls.length > 0 && structured.getScrollHeight() > 60;
+  // setValue drops every decoration; the package's own copies must not bring any back.
+  const kept = structured.deltaDecorations([], [
+    { range: { startLineNumber: 3, startColumn: 1, endLineNumber: 3, endColumn: 2 }, options: { backgroundColor: '#f00' } },
+  ]);
+  structured.setValue(structured.getValue());
+  const afterAppend = collection.append([]);
+  structured.deltaDecorations([], []);
+  report.checks.decorationsGoneAfterSetValue = kept.length === 1 && collection.length === 0 && afterAppend.length === 0 &&
+    collection.getRanges().length === 0;
   structured.layout();
   structured.dispose();
   fourth.remove();

@@ -158,6 +158,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, lineHeight)
         eachRow(line.layout, lineHeight, top) { rowTop -> drawText(line.layout, topLeft = Offset(left, rowTop)) }
     }
+    val shownSwatches = visibleSwatches(frame, decorations.colorSwatches)
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         drawSquiggles(line, decorations.diagnostics, colors, left, top, lineHeight)
@@ -168,8 +169,8 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
             if (style.underline != Color.Unspecified) drawUnderline(line, range, style.underline, left, top, lineHeight)
             if (style.border != Color.Unspecified) drawBorder(line, range, style.border, left, top, lineHeight)
         }
-        for (swatch in decorations.colorSwatches) {
-            if (swatch.range.isEmpty() || swatch.range.last < line.start || swatch.range.first > line.end) continue
+        for (swatch in shownSwatches) {
+            if (swatch.range.last < line.start || swatch.range.first > line.end) continue
             drawSwatch(line, swatch, left, top, lineHeight)
         }
         decorations.composition?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
@@ -365,6 +366,17 @@ internal fun visibleDecorations(frame: ViewFrame, all: List<Decoration>): List<D
         if (end >= from) out += decoration
     }
     return out
+}
+
+/**
+ * The colours in [all] with a character on a line of [frame]: filtered once per frame, so each line
+ * looks only at the few on screen. A language service need not list them in order, so all are seen.
+ */
+internal fun visibleSwatches(frame: ViewFrame, all: List<ColorInfo>): List<ColorInfo> {
+    if (all.isEmpty() || frame.lines.isEmpty()) return emptyList()
+    val from = frame.lines.first().start
+    val to = frame.lines.last().end
+    return all.filter { !it.range.isEmpty() && it.range.last >= from && it.range.first <= to }
 }
 
 /** Whether this decoration covers a character of [line], or sits on it when it is empty. */

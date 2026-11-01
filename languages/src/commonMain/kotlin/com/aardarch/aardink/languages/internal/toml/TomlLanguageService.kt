@@ -124,7 +124,7 @@ object TomlLanguageService : BaseLanguageService() {
     }
 
     /** String values that are a hex colour, `#rgb` to `#rrggbbaa`. */
-    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text)
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text, json = false)
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         HexColors.presentation(document, info, color, alphaFirst = false)

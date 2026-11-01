@@ -132,4 +132,76 @@ class DocumentSymbolsTest {
         assertEquals("Title", symbols[0].nameIn(text))
         assertTrue(symbols[0].textIn(text).endsWith("## Two"))
     }
+
+    @Test
+    fun `markdown keeps a hash in a heading's text, drops a closing run`() = runTest {
+        val text = "# C#\n## Foo ##\n## F# #"
+        val symbols = symbolsOf(BuiltInLanguages.Markdown.languageService, text)
+        assertEquals(listOf("C#(Foo, F#)"), outline(symbols))
+        assertEquals("C#", symbols[0].nameIn(text))
+        assertEquals("F#", symbols[0].children[1].nameIn(text))
+    }
+
+    @Test
+    fun `a markdown fence closes only with as long a run of its own character`() = runTest {
+        val text = "# Top\n````md\n```\n# not a heading\n~~~~\n````\n## After"
+        assertEquals(listOf("Top(After)"), outline(symbolsOf(BuiltInLanguages.Markdown.languageService, text)))
+    }
+
+    @Test
+    fun `kotlin names are selected where they are declared`() = runTest {
+        val text = "val a = 1\nfun f() {}\n@Suppress(\"f\") fun f2() {}\nobject O {\n    companion object {}\n}"
+        val symbols = symbolsOf(BuiltInLanguages.Kotlin.languageService, text)
+        assertEquals(listOf("a", "f", "f2", "O(Companion)"), outline(symbols))
+        assertEquals(text.indexOf("a ="), symbols[0].selectionRange.first)
+        assertEquals(text.indexOf("f()"), symbols[1].selectionRange.first)
+        assertEquals("f2", symbols[2].nameIn(text))
+        assertEquals("object", symbols[3].children[0].nameIn(text))
+        assertEquals(text.indexOf("companion"), symbols[3].children[0].range.first)
+    }
+
+    @Test
+    fun `a kotlin header over several lines holds its body`() = runTest {
+        val text = """
+            class User(
+                val name: String,
+                val age: Int = maxOf(1, 2),
+            ) : Base(
+                name,
+            ) {
+                fun greet(
+                    loud: Boolean,
+                ): String {
+                    return name
+                }
+            }
+
+            data class Point(
+                val x: Int,
+            )
+
+            fun after() = 1
+        """.trimIndent()
+        val symbols = symbolsOf(BuiltInLanguages.Kotlin.languageService, text)
+        assertEquals(listOf("User(greet)", "Point", "after"), outline(symbols))
+        assertTrue(symbols[0].textIn(text).endsWith("return name\n    }\n}"))
+        assertTrue(symbols[0].children[0].textIn(text).endsWith("return name\n    }"))
+        assertTrue(symbols[1].textIn(text).endsWith(")"))
+    }
+
+    @Test
+    fun `an unclosed kotlin header does not hide what follows`() = runTest {
+        val text = "fun typing(\n\nclass Next {\n    fun inside() {}\n}"
+        assertEquals(listOf("typing", "Next(inside)"), outline(symbolsOf(BuiltInLanguages.Kotlin.languageService, text)))
+    }
+
+    @Test
+    fun `json keys are named with their escapes decoded`() = runTest {
+        // The keys as JSON spells them: an escaped `a` (backslash, u, 0061), a newline escape, and a backslash before q, no escape.
+        val escapedA = "\\" + "u0061"
+        val text = "{ \"$escapedA\": 1, \"a\\nb\": 2, \"\\q\": 3 }"
+        val symbols = symbolsOf(BuiltInLanguages.Json.languageService, text)
+        assertEquals(listOf("a", "a\nb", "\\q"), symbols.map { it.name })
+        assertEquals(escapedA, symbols[0].nameIn(text))
+    }
 }

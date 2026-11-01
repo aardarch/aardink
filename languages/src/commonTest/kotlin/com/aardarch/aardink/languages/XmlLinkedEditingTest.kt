@@ -47,6 +47,17 @@ class XmlLinkedEditingTest {
     }
 
     @Test
+    fun `text, attributes and comments are not tag names`() = runTest {
+        val text = "<a x=\"b\">text<!-- <c> --></a>"
+        assertNull(linkedNames(text, text.indexOf("text") + 2))
+        assertNull(linkedNames(text, text.indexOf("x=")))
+        assertNull(linkedNames(text, text.indexOf("c>")))
+        // The same text again, answered from what the first ask scanned.
+        assertEquals(listOf("a", "a"), linkedNames(text, 1))
+        assertEquals(listOf("a", "a"), linkedNames(text, text.lastIndexOf('a')))
+    }
+
+    @Test
     fun `attributes that refer elsewhere are links`() = runTest {
         val text = "<page><include component=\"header\"/><a href=\"https://x.io\">x</a><img src=\"logo.png\"/></page>"
         val links = xml.documentLinks(CodeDocument(text))

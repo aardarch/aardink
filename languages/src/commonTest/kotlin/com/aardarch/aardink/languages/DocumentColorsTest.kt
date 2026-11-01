@@ -71,6 +71,33 @@ class DocumentColorsTest {
     }
 
     @Test
+    fun `json and toml keys and comments are not colours`() = runTest {
+        assertEquals(
+            listOf("#0f0" to Color(0xFF00FF00)),
+            colorsIn(BuiltInLanguages.Json.languageService, "{ \"#fff\": \"#0f0\", // \"#000\"\n /* \"#111\" */ \"k\": [\"#zzz\"] }"),
+        )
+        assertEquals(
+            listOf("#fff" to Color(0xFFFFFFFF), "#000" to Color(0xFF000000)),
+            colorsIn(
+                BuiltInLanguages.Toml.languageService,
+                "# accent = '#f00'\n\"#abc\" = 1\n\"#def\".x = 2\ncolors = [\"#fff\", '#000'] # '#123'\nnote = \"\"\"\n'#456'\n\"\"\"",
+            ),
+        )
+    }
+
+    @Test
+    fun `css hashes in nested selectors, strings and urls are not colours`() = runTest {
+        assertEquals(
+            listOf("#fff" to Color(0xFFFFFFFF), "#000" to Color(0xFF000000)),
+            colorsIn(
+                BuiltInLanguages.Css.languageService,
+                "@media screen { #abc { color: #fff; } a:hover #bcd { background: url(#cde) #000 } }\n" +
+                    "p { content: \"#eee\"; }",
+            ),
+        )
+    }
+
+    @Test
     fun `css colours in declarations, not in selectors or comments`() = runTest {
         val text = "#abc { color: #fff; /* #000 */ border: 1px solid #12345678 }"
         assertEquals(

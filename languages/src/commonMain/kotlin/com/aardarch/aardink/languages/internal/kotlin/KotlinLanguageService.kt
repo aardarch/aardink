@@ -118,64 +118,90 @@ object KotlinLanguageService : BaseLanguageService() {
             (stack.lastOrNull()?.children ?: top) += symbol
         }
 
+        // The declaration whose header is being read: until its parameter list's parens close, and
+        // then its body's brace (if it has one) makes it a container, it is neither on the stack nor
+        // done. A multi-line constructor or signature keeps it here across lines.
+        var pending: Open? = null
+        var parens = 0
+
+        fun settle(last: Int) {
+            pending?.let { add(it.build(last)) }
+            pending = null
+        }
+
         for (i in 0 until lineCount) {
             pacer?.onProgress(i)
             val state = states[i]
             val code = state.code
-            val line = lines[i]
             val lineStart = document.lineStart(i)
+            val lineLast = document.lineEnd(i) - 1
             val parent = stack.lastOrNull()
             val atDeclarationLevel = depth == (parent?.depth?.plus(1) ?: 0) &&
                 parent?.kind != SymbolKind.Function && parent?.kind != SymbolKind.Method
-            var declared: Open? = null
-            if (atDeclarationLevel && code.isNotEmpty()) {
-                val match = DECLARATION.find(code)
-                if (match != null) {
-                    val keyword = match.groupValues[2]
-                    val name = match.groupValues[3].trim('`').ifEmpty { if (keyword == "object") "Companion" else "" }
-                    if (name.isNotEmpty()) {
-                        val modifiers = match.groupValues[1]
-                        val inType = parent?.kind in TYPE_KINDS
-                        val kind = when {
-                            keyword == "fun" -> if (inType) SymbolKind.Method else SymbolKind.Function
-                            keyword == "val" && "const" in modifiers -> SymbolKind.Constant
-                            keyword == "val" || keyword == "var" -> if (inType) SymbolKind.Property else SymbolKind.Variable
-                            keyword == "interface" -> SymbolKind.Interface
-                            keyword == "object" -> SymbolKind.Object
-                            "enum" in modifiers -> SymbolKind.Enum
-                            else -> SymbolKind.Class
-                        }
-                        val indent = line.length - line.trimStart().length
-                        val nameAt = line.indexOf(match.groupValues[3].ifEmpty { keyword }, indent).let { if (it < 0) indent else it }
-                        val nameLength = if (match.groupValues[3].isEmpty()) keyword.length else match.groupValues[3].length
-                        declared =
-                            Open(name, kind, lineStart + indent, (lineStart + nameAt) until (lineStart + nameAt + nameLength), depth, null)
+            var match = if (atDeclarationLevel && code.isNotEmpty()) DECLARATION.find(code) else null
+            if (match != null && pending != null) {
+                // Only a `val` or `var` starts a line of a parameter list. Anything else means the
+                // header's parens were never closed (it is being typed): it ends on the line before.
+                if (match.groupValues[2] == "val" || match.groupValues[2] == "var") match = null else settle(document.lineEnd(i - 1) - 1)
+            }
+            if (match != null) {
+                val keyword = match.groupValues[2]
+                val written = match.groupValues[3]
+                val name = written.trim('`').ifEmpty { if (keyword == "object") "Companion" else "" }
+                if (name.isNotEmpty()) {
+                    val modifiers = match.groupValues[1]
+                    val inType = parent?.kind in TYPE_KINDS
+                    val kind = when {
+                        keyword == "fun" -> if (inType) SymbolKind.Method else SymbolKind.Function
+                        keyword == "val" && "const" in modifiers -> SymbolKind.Constant
+                        keyword == "val" || keyword == "var" -> if (inType) SymbolKind.Property else SymbolKind.Variable
+                        keyword == "interface" -> SymbolKind.Interface
+                        keyword == "object" -> SymbolKind.Object
+                        "enum" in modifiers -> SymbolKind.Enum
+                        else -> SymbolKind.Class
                     }
+                    // The name is the match's last group, so it ends where the match does; a nameless
+                    // companion is selected by its keyword. Mapped back to the line's own columns.
+                    val matchEnd = match.range.last + 1
+                    val nameAt = if (written.isNotEmpty()) matchEnd - written.length else code.lastIndexOf(keyword, matchEnd - 1)
+                    val nameLength = if (written.isNotEmpty()) written.length else keyword.length
+                    val nameRange = (lineStart + state.columns[nameAt]) until (lineStart + state.columns[nameAt + nameLength - 1] + 1)
+                    pending = Open(name, kind, lineStart + state.columns[0], nameRange, depth, null)
+                    parens = 0
                 }
             }
-            // The braces on the line, after its comments and strings are gone: a block opened by the
-            // declaration makes it a container until the block closes.
+            // The brackets on the line, after its comments and strings are gone: a block opened by a
+            // declaration's header makes it a container until the block closes.
             for (c in code) {
                 when (c) {
-                    '{' -> depth++
+                    '(' -> parens++
+
+                    ')' -> parens--
+
+                    '{' -> {
+                        val header = pending
+                        if (header != null && parens <= 0 && depth == header.depth) {
+                            stack += header
+                            pending = null
+                        }
+                        depth++
+                    }
 
                     '}' -> {
                         depth = (depth - 1).coerceAtLeast(0)
+                        // Its parent's block closed around an unfinished header.
+                        pending?.let { if (depth < it.depth) settle(lineLast) }
                         while (stack.isNotEmpty() && stack.last().depth >= depth) {
                             val closed = stack.removeAt(stack.size - 1)
-                            add(closed.build(document.lineEnd(i) - 1))
+                            add(closed.build(lineLast))
                         }
                     }
                 }
             }
-            if (declared != null) {
-                if (depth > declared.depth) {
-                    stack += declared
-                } else {
-                    add(declared.build(document.lineEnd(i) - 1))
-                }
-            }
+            // A header that ends on this line without a body is a declaration of this line alone.
+            if (parens <= 0) settle(lineLast)
         }
+        settle(document.length - 1)
         while (stack.isNotEmpty()) add(stack.removeAt(stack.size - 1).build(document.length - 1))
         return top
     }
@@ -510,8 +536,9 @@ object KotlinLanguageService : BaseLanguageService() {
      *   trailing whitespace is data and must survive formatting verbatim.
      * @param code The line with comments and string contents removed, trimmed — what the indenter
      *   may draw structure from.
+     * @param columns The column in the line each character of [code] came from.
      */
-    private data class KotlinLineState(val touchesRawString: Boolean, val code: String)
+    private class KotlinLineState(val touchesRawString: Boolean, val code: String, val columns: IntArray)
 
     /**
      * Classifies every line of the document in one pass, tracking raw strings, block comments,
@@ -526,7 +553,14 @@ object KotlinLanguageService : BaseLanguageService() {
             val startedInRawString = inRawString
             var openedRawString = false
             val code = StringBuilder()
+            val columns = IntArray(line.length)
             var i = 0
+
+            // Each character kept comes from one column; a literal keeps no more than it spans.
+            fun keep(c: Char, column: Int) {
+                columns[code.length] = column
+                code.append(c)
+            }
 
             while (i < line.length) {
                 when {
@@ -575,10 +609,11 @@ object KotlinLanguageService : BaseLanguageService() {
                         // braces on the rest of the line.
                         val end = endOfCharLiteral(line, i)
                         if (end == i) {
-                            code.append('\'')
+                            keep('\'', i)
                             i++
                         } else {
-                            code.append("''")
+                            keep('\'', i)
+                            keep('\'', end - 1)
                             i = end
                         }
                     }
@@ -586,20 +621,23 @@ object KotlinLanguageService : BaseLanguageService() {
                     line[i] == '"' -> {
                         // Keep the quotes, drop the contents: the literal is a token to the
                         // indenter but its braces are not structure.
-                        code.append('"')
+                        keep('"', i)
                         val end = endOfSingleLineLiteral(line, i)
-                        if (end > i + 1) code.append('"')
+                        if (end > i + 1) keep('"', end - 1)
                         i = end
                     }
 
                     else -> {
-                        code.append(line[i])
+                        keep(line[i], i)
                         i++
                     }
                 }
             }
 
-            states.add(KotlinLineState(startedInRawString || openedRawString, code.toString().trim()))
+            // Trimmed as the indenter wants it, the columns along with it.
+            val first = code.indexOfFirst { !it.isWhitespace() }.let { if (it < 0) code.length else it }
+            val end = maxOf(first, code.indexOfLast { !it.isWhitespace() } + 1)
+            states.add(KotlinLineState(startedInRawString || openedRawString, code.substring(first, end), columns.copyOfRange(first, end)))
         }
         return states
     }

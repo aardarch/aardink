@@ -28,7 +28,11 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
  */
 internal object MarkdownLanguageService : BaseLanguageService() {
 
-    private val HEADING = Regex("^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t#]*$")
+    /** An ATX heading; a closing run of `#`s counts only after whitespace, so `# C#` keeps its `#`. */
+    private val HEADING = Regex("^ {0,3}(#{1,6})[ \\t]+(.*?)(?:[ \\t]+#+)?[ \\t]*$")
+
+    /** An open fenced code block: what it was opened with, which only as long a run of it closes. */
+    private class Fence(val char: Char, val length: Int)
 
     private class Open(val level: Int, val name: String, val start: Int, val nameRange: IntRange) {
         val children = ArrayList<DocumentSymbol>()
@@ -42,7 +46,7 @@ internal object MarkdownLanguageService : BaseLanguageService() {
         val pacer = diagnosticsPacer()
         val top = ArrayList<DocumentSymbol>()
         val stack = ArrayList<Open>()
-        var fence: String? = null
+        var fence: Fence? = null
 
         fun closeTo(level: Int, last: Int) {
             while (stack.isNotEmpty() && stack.last().level >= level) {
@@ -55,20 +59,21 @@ internal object MarkdownLanguageService : BaseLanguageService() {
             pacer?.onProgress(i)
             val line = document.lineText(i)
             val trimmed = line.trimStart()
-            val marker = when {
-                trimmed.startsWith("```") -> "```"
-                trimmed.startsWith("~~~") -> "~~~"
-                else -> null
-            }
-            if (marker != null) {
-                fence = if (fence == null) {
-                    marker
-                } else if (fence == marker) {
-                    null
-                } else {
-                    fence
+            val first = trimmed.firstOrNull()
+            val run = if (first == '`' || first == '~') trimmed.takeWhile { it == first }.length else 0
+            val open = fence
+            if (run >= 3 && first != null) {
+                val rest = trimmed.substring(run)
+                if (open == null) {
+                    // A backtick fence's info string has no backtick in it.
+                    if (first == '~' || '`' !in rest) {
+                        fence = Fence(first, run)
+                        continue
+                    }
+                } else if (first == open.char && run >= open.length && rest.isBlank()) {
+                    fence = null
+                    continue
                 }
-                continue
             }
             if (fence != null) continue
             val match = HEADING.find(line) ?: continue

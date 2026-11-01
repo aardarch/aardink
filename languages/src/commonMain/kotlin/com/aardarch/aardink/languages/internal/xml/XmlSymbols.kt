@@ -19,6 +19,7 @@ import com.aardarch.aardink.core.DocumentLink
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.CooperativePacer
+import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
  * The elements of an XML or HTML document as [DocumentSymbol]s: one per element, from its `<` to
@@ -99,10 +100,16 @@ internal object XmlSymbols {
      * that closes it. A closing tag closes the innermost open element of its name (without case in
      * [htmlMode]); self-closing tags, the [voidElements] and unfinished tags have no partner.
      */
-    fun partners(tags: List<XmlTag>, htmlMode: Boolean, voidElements: Set<String> = emptySet()): Map<Int, Int> {
+    suspend fun partners(
+        tags: List<XmlTag>,
+        htmlMode: Boolean,
+        voidElements: Set<String> = emptySet(),
+        pacer: CooperativePacer? = null,
+    ): Map<Int, Int> {
         val pairs = HashMap<Int, Int>()
         val open = ArrayList<Int>()
         for ((index, tag) in tags.withIndex()) {
+            pacer?.onProgress(index)
             if (tag.name.isEmpty()) continue
             if (tag.closing) {
                 val at = open.indexOfLast { tags[it].name.equals(tag.name, ignoreCase = htmlMode) }
@@ -118,18 +125,47 @@ internal object XmlSymbols {
         return pairs
     }
 
+    /** A text's tags and which close which, kept while caret moves ask about the same text. */
+    private class Parsed(
+        val text: CharSequence,
+        val htmlMode: Boolean,
+        val voidElements: Set<String>,
+        val tags: List<XmlTag>,
+        val partners: Map<Int, Int>,
+    )
+
+    // One entry, replaced whole: two editors asking at once at worst parse twice.
+    private var lastParsed: Parsed? = null
+
     /**
      * The tag names linked to the one at [offset]: the name in an element's opening tag and in its
      * closing tag, each `start until end`, when [offset] is in or just after one of them.
+     *
+     * The caret moves far more often than the text changes, so the scan of [text] is kept for the
+     * next call about the same text (a document snapshot shares its text until the next edit), and
+     * an offset that is not after `<` or `</` and a name is answered without one.
      */
     suspend fun linkedNames(text: CharSequence, offset: Int, htmlMode: Boolean, voidElements: Set<String>): List<IntRange>? {
-        val tags = XmlScan.tags(text)
+        if (!mayBeInTagName(text, offset)) return null
+        val parsed = lastParsed?.takeIf { it.text === text && it.htmlMode == htmlMode && it.voidElements === voidElements }
+            ?: XmlScan.tags(text, pacer = diagnosticsPacer()).let { tags ->
+                Parsed(text, htmlMode, voidElements, tags, partners(tags, htmlMode, voidElements, diagnosticsPacer()))
+            }.also { lastParsed = it }
+        val tags = parsed.tags
         val index = tags.indexOfFirst { it.name.isNotEmpty() && offset >= it.nameStart && offset <= it.nameEnd }
         if (index < 0) return null
-        val partner = partners(tags, htmlMode, voidElements)[index] ?: return null
+        val partner = parsed.partners[index] ?: return null
         val a = tags[index]
         val b = tags[partner]
         return listOf(a.nameStart until a.nameEnd, b.nameStart until b.nameEnd).sortedBy { it.first }
+    }
+
+    /** Whether [offset] follows `<` or `</` and the name characters between: all a tag name needs. */
+    private fun mayBeInTagName(text: CharSequence, offset: Int): Boolean {
+        var i = offset.coerceIn(0, text.length) - 1
+        while (i >= 0 && XmlScan.isNameChar(text[i])) i--
+        if (i >= 0 && text[i] == '/') i--
+        return i >= 0 && text[i] == '<'
     }
 
     /**

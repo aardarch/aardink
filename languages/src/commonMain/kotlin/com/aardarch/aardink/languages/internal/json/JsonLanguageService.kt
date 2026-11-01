@@ -39,7 +39,7 @@ object JsonLanguageService : BaseLanguageService() {
     override val triggerCharacters: Set<Char> = setOf('{', '[', ':', '"', ',')
 
     /** String values that are a hex colour, `#rgb` to `#rrggbbaa`. */
-    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text)
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text, json = true)
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         HexColors.presentation(document, info, color, alphaFirst = false)
@@ -360,7 +360,7 @@ object JsonLanguageService : BaseLanguageService() {
                             pos += 5
                         } else {
                             if (esc !in "\"\\/bfnrt") fail("Invalid escape \\$esc", pos - 1)
-                            decoded.append(unescape(esc))
+                            decoded.append(jsonUnescape(esc))
                             pos++
                         }
                     }
@@ -376,16 +376,6 @@ object JsonLanguageService : BaseLanguageService() {
                 }
             }
             fail("Unterminated string", start)
-        }
-
-        /** The character a single-letter escape stands for; the escape set is checked by the caller. */
-        private fun unescape(esc: Char): Char = when (esc) {
-            'b' -> '\b'
-            'f' -> '\u000C'
-            'n' -> '\n'
-            'r' -> '\r'
-            't' -> '\t'
-            else -> esc // '"', '\\' and '/' stand for themselves
         }
 
         private fun parseNumber() {
@@ -436,4 +426,14 @@ object JsonLanguageService : BaseLanguageService() {
 
         private class ParseFail(val start: Int, val end: Int, val description: String) : RuntimeException()
     }
+}
+
+/** The character a JSON single-letter escape stands for; the escape set is checked by the caller. */
+internal fun jsonUnescape(esc: Char): Char = when (esc) {
+    'b' -> '\b'
+    'f' -> '\u000C'
+    'n' -> '\n'
+    'r' -> '\r'
+    't' -> '\t'
+    else -> esc // '"', '\\' and '/' stand for themselves
 }

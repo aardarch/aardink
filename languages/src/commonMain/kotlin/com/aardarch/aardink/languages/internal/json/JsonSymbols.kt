@@ -89,8 +89,25 @@ internal object JsonSymbols {
                     val decoded = StringBuilder()
                     while (i < n && text[i] != '"' && text[i] != '\n') {
                         if (text[i] == '\\' && i + 1 < n) {
-                            decoded.append(text[i + 1])
-                            i += 2
+                            // Decoded as the parser decodes them; a malformed escape stays as written.
+                            val esc = text[i + 1]
+                            val hex = if (esc == 'u' && i + 6 <= n) text.substring(i + 2, i + 6) else null
+                            when {
+                                hex != null && hex.all { it.digitToIntOrNull(16) != null } -> {
+                                    decoded.append(hex.toInt(16).toChar())
+                                    i += 6
+                                }
+
+                                esc in "\"\\/bfnrt" -> {
+                                    decoded.append(jsonUnescape(esc))
+                                    i += 2
+                                }
+
+                                else -> {
+                                    decoded.appendRange(text, i, i + 2)
+                                    i += 2
+                                }
+                            }
                         } else {
                             decoded.append(text[i])
                             i++

@@ -398,11 +398,12 @@ export async function createEditor(container, onChange, options = {}) {
     revalidate: () => k.aardinkRevalidate(id),
     deltaDecorations(oldIds, newDecorations) {
       // Monaco's ids, kept here in the order the Kotlin side keeps the ranges, which follow the edits.
+      // A range it no longer has (setValue drops them all) is a decoration gone, not one to restore.
       const ranges = JSON.parse(k.aardinkGetDecorationRanges(id, DELTA_OWNER));
       const removed = new Set(oldIds ?? []);
       const kept = [];
       deltaDecorations.forEach((decoration, i) => {
-        if (!removed.has(decoration.id)) kept.push({ ...decoration, range: ranges[i] ?? decoration.range });
+        if (ranges[i] !== undefined && !removed.has(decoration.id)) kept.push({ ...decoration, range: ranges[i] });
       });
       const added = (newDecorations ?? []).map((decoration) => ({ id: `aardink-decoration-${nextDecorationId++}`, ...decoration }));
       deltaDecorations = kept.concat(added);
@@ -417,9 +418,15 @@ export async function createEditor(container, onChange, options = {}) {
         k.aardinkSetDecorations(id, owner, JSON.stringify(items));
         return items.map((_, i) => `${owner}-${i}`);
       };
+      // The items as the Kotlin side has them now: their ranges moved along with the edits, and
+      // none it has dropped (setValue drops them all).
+      const sync = () => {
+        const ranges = collection.getRanges();
+        items = items.slice(0, ranges.length).map((item, i) => ({ ...item, range: ranges[i] }));
+      };
       const collection = {
         get length() {
-          return items.length;
+          return collection.getRanges().length;
         },
         getRanges: () => JSON.parse(k.aardinkGetDecorationRanges(id, owner)),
         set(list) {
@@ -427,9 +434,8 @@ export async function createEditor(container, onChange, options = {}) {
           return write();
         },
         append(list) {
-          // The ranges the Kotlin side has moved along with the edits, then the new ones.
-          const ranges = collection.getRanges();
-          items = items.map((item, i) => ({ ...item, range: ranges[i] ?? item.range })).concat(plain(list));
+          sync();
+          items = items.concat(plain(list));
           return write();
         },
         clear() {
