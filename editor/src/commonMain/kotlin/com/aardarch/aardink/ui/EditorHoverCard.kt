@@ -42,14 +42,22 @@ import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.HoverDoc
 
 /**
- * What a resting mouse (or the touch menu's "Info") shows: the [diagnostics] under it, most severe
+ * What a resting mouse (or the touch menu's "Info") shows: the host's decoration [messages] under
+ * it, then the [diagnostics] under it, most severe
  * first, each with its source and code, and a Quick Fix button when [onQuickFix] is given; then the
  * symbol's documentation when there is [doc]. Monaco's hover shows markers above documentation the
  * same way.
  */
 @Composable
-internal fun EditorHoverCard(diagnostics: List<Diagnostic>, doc: HoverDoc?, onQuickFix: (() -> Unit)?, modifier: Modifier = Modifier) {
-    if (diagnostics.isEmpty()) {
+internal fun EditorHoverCard(
+    diagnostics: List<Diagnostic>,
+    doc: HoverDoc?,
+    onQuickFix: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    messages: List<String> = emptyList(),
+    onPickColor: (() -> Unit)? = null,
+) {
+    if (diagnostics.isEmpty() && messages.isEmpty() && onPickColor == null) {
         if (doc != null) HoverDocCard(doc, modifier)
         return
     }
@@ -64,6 +72,11 @@ internal fun EditorHoverCard(diagnostics: List<Diagnostic>, doc: HoverDoc?, onQu
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The host's decorations first, as Monaco shows decoration hovers above markers.
+                for (message in messages) {
+                    Text(text = message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                }
+                if (messages.isNotEmpty() && diagnostics.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp)
                 for (diagnostic in diagnostics) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
@@ -87,6 +100,11 @@ internal fun EditorHoverCard(diagnostics: List<Diagnostic>, doc: HoverDoc?, onQu
                                 )
                             }
                         }
+                    }
+                }
+                if (onPickColor != null) {
+                    TextButton(onClick = onPickColor) {
+                        Text(text = "Pick colour…", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
                 if (onQuickFix != null) {

@@ -37,6 +37,13 @@ import kotlinx.serialization.Serializable
  *   `boundary`, `selection` (the default), `trailing` or `all`. Anything else counts as `selection`.
  * @property quickSuggestions Typing a letter in code opens the completion list, as Monaco's
  *   `quickSuggestions`; off by default, as in 0.6.
+ * @property overviewRuler The overview ruler at the right edge; Monaco's `overviewRulerLanes`
+ *   above 0. Off by default.
+ * @property occurrencesHighlight The other occurrences of the symbol at the caret, highlighted.
+ * @property linkedEditing Typing a tag name changes its partner, as Monaco's `linkedEditing`.
+ * @property colorDecorators Colour swatches under the colours in the text, with a picker.
+ * @property breadcrumbs The path of symbols at the caret, in a row above the text.
+ * @property fontLigatures The font's ligatures; on by default.
  */
 @Serializable
 data class WebEditorOptions(
@@ -56,6 +63,12 @@ data class WebEditorOptions(
     val insertSpaces: Boolean = true,
     val renderWhitespace: String = "selection",
     val quickSuggestions: Boolean = false,
+    val overviewRuler: Boolean = false,
+    val occurrencesHighlight: Boolean = false,
+    val linkedEditing: Boolean = false,
+    val colorDecorators: Boolean = false,
+    val breadcrumbs: Boolean = false,
+    val fontLigatures: Boolean = true,
 )
 
 /**
@@ -131,3 +144,19 @@ data class WebRange(val startLineNumber: Int, val startColumn: Int, val endLineN
  */
 @Serializable
 data class WebEdit(val range: WebRange, val text: String? = null)
+
+/**
+ * A document symbol as a web host describes it: Monaco's `DocumentSymbol`. [kind] is Monaco's
+ * `SymbolKind` number (0 `File`, 4 `Class`, 11 `Function`, 17 `Array`, 18 `Object`, 19 `Key`...);
+ * [selectionRange], the part that names it, is [range] when absent. The shape of a
+ * `provideDocumentSymbols` answer and of `getDocumentSymbols`.
+ */
+@Serializable
+data class WebDocumentSymbol(
+    val name: String,
+    val kind: Int = 0,
+    val range: WebRange,
+    val selectionRange: WebRange? = null,
+    val detail: String? = null,
+    val children: List<WebDocumentSymbol>? = null,
+)

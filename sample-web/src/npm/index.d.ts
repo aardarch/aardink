@@ -48,6 +48,18 @@ export interface AardinkOptions {
    * option; Monaco's `{ other, comments, strings }` works too, `other` deciding. Off by default.
    */
   quickSuggestions?: boolean | { other?: boolean | 'on' | 'off' | 'inline'; comments?: unknown; strings?: unknown };
+  /** The overview ruler at the right edge, as Monaco's `overviewRulerLanes` above 0. Off by default. */
+  overviewRulerLanes?: number;
+  /** Highlights the other occurrences of the symbol at the caret. Off by default. */
+  occurrencesHighlight?: boolean | 'off' | 'singleFile';
+  /** Typing a tag name changes its partner. Off by default. */
+  linkedEditing?: boolean;
+  /** Swatches under the colours in the text, with a picker. Off by default. */
+  colorDecorators?: boolean;
+  /** The path of symbols at the caret, in a row above the text. Off by default. */
+  breadcrumbs?: boolean;
+  /** The font's ligatures; on by default. */
+  fontLigatures?: boolean;
 }
 
 /**
@@ -213,7 +225,15 @@ export interface AardinkEditor {
    * `editor.action.goToReferences`, `editor.action.marker.next`, `editor.action.marker.prev`,
    * `actions.find`, `editor.action.startFindReplaceAction`, `editor.action.gotoLine`,
    * `editor.foldAll`, `editor.unfoldAll`, `editor.foldLevel1` to `7`, `undo`, `redo`,
-   * `editor.action.commentLine`, `editor.action.selectHighlights`, and
+   * `editor.action.commentLine`, `editor.action.selectHighlights`, `editor.action.quickOutline`,
+   * `editor.action.smartSelect.expand` and `.shrink`, `editor.fold`, `editor.unfold`,
+   * `editor.action.joinLines`, `editor.action.sortLinesAscending` and `Descending`,
+   * `editor.action.transformToUppercase` and `Lowercase`, `editor.action.trimTrailingWhitespace`,
+   * `editor.action.jumpToBracket`, `cursorUndo`, `editor.action.moveSelectionToNextFindMatch`,
+   * `editor.action.changeAll`, `editor.action.insertCursorAtEndOfEachLineSelected`,
+   * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
+   * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
+   * `editor.action.showColorPicker`, and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -222,7 +242,9 @@ export interface AardinkEditor {
    * Monaco's `addCommand`: `handler` runs when `keybinding` is pressed in the editor, ahead of the
    * editor's own binding for it. A keybinding is text such as `'CtrlCmd+S'`, `'Shift+Alt+F'` or
    * `'F8'` (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere; `Ctrl` is Ctrl everywhere), or Monaco's
-   * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+   * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key. A
+   * chord of two keys is `'CtrlCmd+K CtrlCmd+S'` or `KeyMod.chord(...)`; its first key then starts
+   * your chords only, not the editor's own with the same first key.
    * Returns the command's id, for `trigger`; null for a keybinding it cannot read.
    */
   addCommand(keybinding: string | number, handler: () => void): string | null;
@@ -237,7 +259,27 @@ export interface AardinkEditor {
    * Shows these diagnostics in place of the language's own; `null` goes back to the language's
    * own. Either way they move along with the text as it is edited, until the next list.
    */
-  setDiagnostics(diagnostics: AardinkDiagnostic[] | null): void;
+  /**
+   * Without `owner`: shows `diagnostics` in place of the language's own, or the language's own
+   * again for `null`. With `owner`: as Monaco's `setModelMarkers`, `diagnostics` become that
+   * owner's, shown with every other owner's and the language's own; an empty list removes the
+   * owner, and the owner `'language'` replaces the language's own.
+   */
+  setDiagnostics(diagnostics: AardinkDiagnostic[] | null, owner?: string): void;
+  /** Monaco's `setModelMarkers(model, owner, markers)`, for this editor's model. */
+  setModelMarkers(owner: string, markers: AardinkDiagnostic[]): void;
+  /** The lines on screen: one range, 1-based. */
+  getVisibleRanges(): AardinkRange[];
+  /** How far the text is scrolled down, in CSS pixels. */
+  getScrollTop(): number;
+  /** Scrolls the text so `top` (CSS pixels) is at the top of the view, without moving the caret. */
+  setScrollTop(top: number): void;
+  /** The height of all the text, in CSS pixels (wrapped lines not laid out yet are estimated). */
+  getScrollHeight(): number;
+  /** Called as the text scrolls. Returns an unsubscribe function. */
+  onDidScrollChange(listener: (event: { scrollTop: number; scrollLeft: number; scrollHeight: number }) => void): () => void;
+  /** Measures the container again now; the editor follows its container's size by itself. */
+  layout(): void;
   /**
    * The language's own diagnostics each time they are collected: 500 ms after the editor appears,
    * after each pause in typing, and on `revalidate()`. Not called while a list from
@@ -252,6 +294,25 @@ export interface AardinkEditor {
    * is shown.
    */
   revalidate(): void;
+  /**
+   * The document's structure as the language describes it (its built-in service, or your
+   * `provideDocumentSymbols`): a tree in document order, its ranges moved along with the edits
+   * since the last answer. Asked about 300 ms after the editor appears and after each pause in
+   * typing; empty until then.
+   */
+  getDocumentSymbols(): AardinkDocumentSymbol[];
+  /**
+   * Monaco's `deltaDecorations`: removes the decorations with `oldIds` and adds `newDecorations`,
+   * returning the new ones' ids. Their ranges follow the edits made after.
+   */
+  deltaDecorations(oldIds: string[], newDecorations: AardinkModelDeltaDecoration[]): string[];
+  /** Monaco's `createDecorationsCollection`: a set of decorations of its own, replaced as a whole. */
+  createDecorationsCollection(decorations?: AardinkModelDeltaDecoration[]): AardinkDecorationsCollection;
+  /**
+   * The symbols holding `position`, outermost first: the element the caret is in, its parent and
+   * so on up. With `onDidChangeCursor`, this maps the caret to what the text describes.
+   */
+  getSymbolPathAt(position: AardinkPosition): AardinkDocumentSymbol[];
   revealPosition(line: number, column: number): void;
   /**
    * Opens the find panel and moves the keyboard focus to its find field, from wherever on the
@@ -382,6 +443,57 @@ export declare const CompletionItemInsertTextRule: {
   readonly InsertAsSnippet: 4;
 };
 
+/**
+ * Monaco's `DocumentSymbol`: `kind` is Monaco's `SymbolKind` number (0 File, 1 Module, 4 Class,
+ * 5 Method, 6 Property, 11 Function, 12 Variable, 14 String, 17 Array, 18 Object, 19 Key...).
+ * `selectionRange`, the part that names it, is `range` when absent.
+ */
+export interface AardinkDocumentSymbol {
+  name: string;
+  kind: number;
+  range: AardinkRange;
+  selectionRange?: AardinkRange;
+  detail?: string;
+  children?: AardinkDocumentSymbol[];
+}
+
+/** Monaco's `IModelDeltaDecoration`. */
+export interface AardinkModelDeltaDecoration {
+  range: AardinkRange;
+  options: AardinkDecorationOptions;
+}
+
+/**
+ * Monaco's `IModelDecorationOptions`, as far as the editor draws them. Where Monaco takes a CSS
+ * class (`className`, `inlineClassName`, `linesDecorationsClassName`), give a colour instead: CSS
+ * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`. Nothing here changes the text's layout, so
+ * Monaco's `before` and `after` are not read.
+ */
+export interface AardinkDecorationOptions {
+  /** Behind the characters; behind whole lines with `isWholeLine`. */
+  backgroundColor?: string;
+  /** A box around the characters. */
+  borderColor?: string;
+  /** A line under the characters. */
+  underlineColor?: string;
+  /** A bar at the gutter's text edge on each line, as Monaco's `linesDecorationsClassName` places one. */
+  gutterColor?: string;
+  isWholeLine?: boolean;
+  hoverMessage?: string | { value: string } | Array<string | { value: string }>;
+  overviewRuler?: { color: string; position?: number };
+  minimap?: { color: string; position?: number };
+}
+
+/** Monaco's `IEditorDecorationsCollection`. */
+export interface AardinkDecorationsCollection {
+  readonly length: number;
+  set(decorations: AardinkModelDeltaDecoration[]): string[];
+  append(decorations: AardinkModelDeltaDecoration[]): string[];
+  clear(): void;
+  /** The ranges as they are now, moved along with the edits since they were set. */
+  getRanges(): AardinkRange[];
+}
+
 /** Monaco's `IRange`: 1-based lines and columns, `endColumn` exclusive. */
 export interface AardinkRange {
   startLineNumber: number;
@@ -470,6 +582,24 @@ export interface AardinkLanguageProviders {
   ): AardinkCompletionItem[] | AardinkCompletionList | null | Promise<AardinkCompletionItem[] | AardinkCompletionList | null>;
   provideHover?(text: string, line: number, column: number): AardinkHover | null | Promise<AardinkHover | null>;
   provideDiagnostics?(text: string): AardinkDiagnostic[] | Promise<AardinkDiagnostic[]>;
+  /**
+   * The document's structure, as Monaco's `provideDocumentSymbols`, for Go to Symbol
+   * (Ctrl+Shift+O), the breadcrumbs, sticky scroll and `getSymbolPathAt`. With `extends`, the base
+   * language's are used while this answers none.
+   */
+  provideDocumentSymbols?(text: string): AardinkDocumentSymbol[] | null | Promise<AardinkDocumentSymbol[] | null>;
+  /**
+   * The colours written in the text, as Monaco's `provideDocumentColors`, for the swatches drawn
+   * with the `colorDecorators` option. With `extends`, the base language's are added. A colour
+   * picked in the editor's picker is written back as CSS hex (`#rrggbb`, `#rrggbbaa`).
+   */
+  provideDocumentColors?(text: string): AardinkColorInformation[] | null | Promise<AardinkColorInformation[] | null>;
+}
+
+/** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */
+export interface AardinkColorInformation {
+  range: AardinkRange;
+  color: { red: number; green: number; blue: number; alpha: number };
 }
 
 /** Adds a language for `createEditor`'s `language` option. Rejects with what is wrong with the definition. */

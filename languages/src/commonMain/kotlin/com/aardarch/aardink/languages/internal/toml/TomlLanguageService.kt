@@ -15,13 +15,20 @@
  */
 package com.aardarch.aardink.languages.internal.toml
 
+import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.ColorInfo
+import com.aardarch.aardink.core.ColorPresentation
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.CooperativePacer
+import com.aardarch.aardink.languages.internal.HexColors
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
@@ -55,6 +62,82 @@ object TomlLanguageService : BaseLanguageService() {
         "version.ref" to "Reference to [versions] entry",
     )
 
+    /**
+     * Tables (`[a.b]`, `[[array]]`) as symbols spanning to the next header, with their keys as
+     * children; keys before the first header are top-level symbols. A key's range covers its
+     * value, multiline ones included.
+     */
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> {
+        val lineCount = document.lineCount
+        if (lineCount == 0 || document.length == 0) return emptyList()
+        val states = lineStates(document, diagnosticsPacer())
+        val pacer = diagnosticsPacer()
+        val top = ArrayList<DocumentSymbol>()
+        var table: DocumentSymbol? = null
+        var tableKeys = ArrayList<DocumentSymbol>()
+        var lastLine = -1
+
+        fun endTable(last: Int) {
+            val open = table ?: return
+            top += open.copy(range = open.range.first..maxOf(open.range.first, last), children = tableKeys)
+            table = null
+            tableKeys = ArrayList()
+        }
+
+        var i = 0
+        while (i < lineCount) {
+            pacer?.onProgress(i)
+            val line = document.lineText(i)
+            val trimmed = line.trimStart()
+            val start = document.lineStart(i) + (line.length - trimmed.length)
+            if (states[i].isContinuation || trimmed.isEmpty() || trimmed.startsWith("#")) {
+                // A table runs on through the comments and blank lines after its last key.
+                lastLine = i
+                i++
+                continue
+            }
+            // The declaration runs on through the lines that continue its value.
+            var end = i
+            while (end + 1 < lineCount && states[end + 1].isContinuation) {
+                end++
+                pacer?.onProgress(end)
+            }
+            val last = document.lineEnd(end) - 1
+            if (trimmed.startsWith("[")) {
+                endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
+                val array = trimmed.startsWith("[[")
+                val open = if (array) 2 else 1
+                // A quoted name may hold a bracket: `["a]b"]` is the table `"a]b"`.
+                val close = indexOutsideStrings(trimmed, if (array) "]]" else "]", open).let { if (it < 0) trimmed.length else it }
+                val name = trimmed.substring(open, close).trim()
+                val nameStart = start + open + (trimmed.substring(open, close).length - trimmed.substring(open, close).trimStart().length)
+                table = DocumentSymbol(
+                    name = name,
+                    kind = if (array) SymbolKind.Array else SymbolKind.Object,
+                    range = start..maxOf(start, last),
+                    selectionRange = nameStart until nameStart + name.length,
+                )
+            } else {
+                val eq = assignmentIndex(trimmed)
+                if (eq > 0) {
+                    val key = trimmed.substring(0, eq).trim()
+                    val symbol = DocumentSymbol(key, SymbolKind.Property, start..maxOf(start, last), start until start + key.length)
+                    if (table != null) tableKeys += symbol else top += symbol
+                }
+            }
+            lastLine = end
+            i = end + 1
+        }
+        endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
+        return top
+    }
+
+    /** String values that are a hex colour, `#rgb` to `#rrggbbaa`. */
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text, json = false)
+
+    override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
+        HexColors.presentation(document, info, color, alphaFirst = false)
+
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val lineCount = document.lineCount
         if (lineCount == 0 || document.text.isBlank()) return emptyList()
@@ -70,7 +153,7 @@ object TomlLanguageService : BaseLanguageService() {
         val keysByTable = mutableMapOf<Pair<List<String>, Int>, MutableSet<List<String>>>()
         val arrayInstances = mutableMapOf<List<String>, Int>()
         var sectionKeys = keysByTable.getOrPut(emptyList<String>() to 0) { mutableSetOf() }
-        val lineStates = lineStates(document)
+        val lineStates = lineStates(document, diagnosticsPacer())
         val pacer = diagnosticsPacer()
 
         for (i in 0 until lineCount) {
@@ -261,7 +344,7 @@ object TomlLanguageService : BaseLanguageService() {
         if (lineCount == 0) return ""
 
         val formattedLines = mutableListOf<String>()
-        val lineStates = lineStates(document)
+        val lineStates = lineStates(document, diagnosticsPacer())
         for (i in 0 until lineCount) {
             val line = document.lineText(i)
             // Whitespace inside a multiline string is data — reformatting it changes the document.
@@ -307,14 +390,16 @@ object TomlLanguageService : BaseLanguageService() {
     /**
      * Classifies every line of [document]. TOML values span lines — `"""` / `'''` strings and
      * bracketed arrays or inline tables — so a line is only its own declaration once the lines
-     * above it have closed everything they opened.
+     * above it have closed everything they opened. A whole-document pass gives a [pacer] to pause
+     * for the browser.
      */
-    private fun lineStates(document: CodeDocument): List<TomlLineState> {
+    private suspend fun lineStates(document: CodeDocument, pacer: CooperativePacer?): List<TomlLineState> {
         val states = ArrayList<TomlLineState>(document.lineCount)
         var openDelimiter: String? = null
         var depth = 0
 
         for (i in 0 until document.lineCount) {
+            pacer?.onProgress(i)
             val line = document.lineText(i)
             val startedInsideString = openDelimiter != null
             val startedInsideValue = startedInsideString || depth > 0
@@ -538,13 +623,19 @@ object TomlLanguageService : BaseLanguageService() {
      * Index of the `=` that separates key from value in [line], or -1 when the line has none.
      * An `=` inside a quoted key or after a comment marker is not an assignment.
      */
-    private fun assignmentIndex(line: String): Int {
-        var i = 0
+    private fun assignmentIndex(line: String): Int = indexOutsideStrings(line, "=")
+
+    /**
+     * Index of [needle] in [line], searching from [from], or -1 when it has none. A [needle]
+     * inside a quoted string or after a comment marker does not count.
+     */
+    private fun indexOutsideStrings(line: String, needle: String, from: Int = 0): Int {
+        var i = from
         while (i < line.length) {
             val c = line[i]
             when {
                 c == '#' -> return -1
-                c == '=' -> return i
+                line.startsWith(needle, i) -> return i
                 c == '"' || c == '\'' -> i = endOfBasicString(line, i)
                 else -> i++
             }

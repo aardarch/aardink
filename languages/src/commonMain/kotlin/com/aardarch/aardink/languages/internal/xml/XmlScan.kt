@@ -58,9 +58,16 @@ internal object XmlScan {
 
     /**
      * The tags of [text] that start before [until]; a request about one offset needs no more than
-     * the tags up to it. A whole-document pass gives a [pacer] to pause for the browser.
+     * the tags up to it. A whole-document pass gives a [pacer] to pause for the browser. The
+     * content of an element named in [textOnly] (lower case; HTML's `script`, `title`, …) is text,
+     * not markup, and is skipped to its closing tag.
      */
-    suspend fun tags(text: CharSequence, until: Int = text.length, pacer: CooperativePacer? = null): List<XmlTag> {
+    suspend fun tags(
+        text: CharSequence,
+        until: Int = text.length,
+        pacer: CooperativePacer? = null,
+        textOnly: Set<String> = emptySet(),
+    ): List<XmlTag> {
         val tags = ArrayList<XmlTag>()
         val open = ArrayList<String>()
         val n = text.length
@@ -149,6 +156,10 @@ internal object XmlScan {
                 open += name
             }
             i = j
+            if (!closing && terminated && !selfClosing && textOnly.isNotEmpty() && name.lowercase() in textOnly) {
+                val close = text.indexOf("</$name", j, ignoreCase = true)
+                if (close >= 0) i = close
+            }
         }
         return tags
     }

@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.core
 
+import androidx.compose.ui.graphics.Color
+
 /**
  * One language service made of two: [primary], a host's own for its dialect, answers first and
  * [fallback], typically a built-in language's, fills in what it does not. This is how a language
@@ -28,6 +30,10 @@ package com.aardarch.aardink.core
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
  * - **Formatting:** the primary's when it changes anything, else the fallback's.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
+ * - **Document symbols, highlights and selection ranges:** the primary's, or the fallback's when
+ *   the primary has none. **Linked editing ranges:** likewise.
+ * - **Document links and colours:** both, without two for the same range. **Colour
+ *   presentations:** the primary's, or else the fallback's.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -97,6 +103,27 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? =
         primary.signatureHelp(document, offset) ?: fallback.signatureHelp(document, offset)
+
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> =
+        primary.documentSymbols(document).ifEmpty { fallback.documentSymbols(document) }
+
+    override suspend fun documentHighlights(document: CodeDocument, offset: Int): List<DocumentHighlight> =
+        primary.documentHighlights(document, offset).ifEmpty { fallback.documentHighlights(document, offset) }
+
+    override suspend fun selectionRanges(document: CodeDocument, offsets: List<Int>): List<SelectionRange> =
+        primary.selectionRanges(document, offsets).ifEmpty { fallback.selectionRanges(document, offsets) }
+
+    override suspend fun linkedEditingRanges(document: CodeDocument, offset: Int): LinkedEditingRanges? =
+        primary.linkedEditingRanges(document, offset) ?: fallback.linkedEditingRanges(document, offset)
+
+    override suspend fun documentLinks(document: CodeDocument): List<DocumentLink> =
+        (primary.documentLinks(document) + fallback.documentLinks(document)).distinctBy { it.range }
+
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> =
+        (primary.documentColors(document) + fallback.documentColors(document)).distinctBy { it.range }
+
+    override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
+        primary.colorPresentations(document, info, color).ifEmpty { fallback.colorPresentations(document, info, color) }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)
 

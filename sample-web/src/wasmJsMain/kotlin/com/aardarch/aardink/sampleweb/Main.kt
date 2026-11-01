@@ -48,6 +48,7 @@ private class Harness {
     private val wordWrap = element<HTMLInputElement>("wordWrap")
     private val showGutter = element<HTMLInputElement>("showGutter")
     private val readOnly = element<HTMLInputElement>("readOnly")
+    private val structure = element<HTMLInputElement>("structure")
     private val stats = element<HTMLElement>("stats")
     private val caret = element<HTMLElement>("caret")
     private val status = element<HTMLElement>("status")
@@ -64,7 +65,7 @@ private class Harness {
         AardinkWeb.onCursorChange(editor) { line, column -> caret.textContent = "Ln $line, Col $column" }
         showStats(SAMPLE_KOTLIN)
 
-        listOf(language, theme, wordWrap, showGutter, readOnly).forEach { control ->
+        listOf(language, theme, wordWrap, showGutter, readOnly, structure).forEach { control ->
             control.addEventListener("change", { AardinkWeb.updateOptions(editor, currentOptions()) })
         }
         element<HTMLButtonElement>("load-large").addEventListener("click", { loadLargeFile() })
@@ -77,6 +78,12 @@ private class Harness {
         wordWrap = wordWrap.checked,
         showGutter = showGutter.checked,
         readOnly = readOnly.checked,
+        overviewRuler = structure.checked,
+        breadcrumbs = structure.checked,
+        occurrencesHighlight = structure.checked,
+        linkedEditing = structure.checked,
+        colorDecorators = structure.checked,
+        stickyScroll = structure.checked,
     )
 
     private fun showStats(text: String) {

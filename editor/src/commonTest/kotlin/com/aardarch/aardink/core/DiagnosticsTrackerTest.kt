@@ -29,7 +29,7 @@ class DiagnosticsTrackerTest {
 
     private fun tracked(): Pair<CodeDocument, DiagnosticsTracker> {
         val document = CodeDocument(text)
-        val tracker = DiagnosticsTracker(document)
+        val tracker = DiagnosticsTracker()
         document.addChangeListener(tracker)
         tracker.replace(listOf(bad, worse))
         return document to tracker

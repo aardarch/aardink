@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.unit.TextUnit
 import com.aardarch.aardink.core.LineEnding
 
 /**
@@ -50,6 +51,42 @@ import com.aardarch.aardink.core.LineEnding
  * @property eol The line ending Enter, typing and pasting insert. Null, the default, keeps the
  *   document's own ([com.aardarch.aardink.core.CodeDocument.eol], from its first line break), so a
  *   CR LF file stays CR LF. The text already in the document is never converted.
+ * @property breadcrumbs A row above the text with the path of document symbols the caret is in
+ *   (`html › body › div`), from the language service's `documentSymbols`; a tap on one selects
+ *   it. Off by default.
+ * @property overviewRuler A narrow strip at the right edge that maps the whole document: marks
+ *   where its diagnostics, find matches, selections, changed lines and the host's decorations
+ *   (their `overviewRulerColor`) are; a click scrolls there. The scrollbar is drawn over it, as in
+ *   VS Code. Off by default.
+ * @property occurrencesHighlight While the caret rests on a symbol, its other occurrences are
+ *   highlighted: those the language service's `documentHighlights` gives, or else the other
+ *   occurrences of the word as a whole word. Off by default.
+ * @property linkedEditing Typing in a range the language service links to others (an XML or HTML
+ *   element's name, in its opening and closing tags) changes them all, as VS Code's
+ *   `editor.linkedEditing`. Off by default.
+ * @property colorDecorators The colours the language service finds in the text (`documentColors`:
+ *   hex colours in the built-in XML, JSON, TOML and CSS) get a swatch, a bar in the colour under
+ *   their text. Its picker opens from the hover, the touch menu, or
+ *   [EditorCommand.ShowColorPicker][com.aardarch.aardink.core.EditorCommand.ShowColorPicker] with
+ *   the caret in the colour, and writes the new colour back. Off by default.
+ * @property keyBindings The host's keys for commands, before the editor's own
+ *   ([EditorKeyBindings.Default]): a binding here wins over one of the editor's for the same keys,
+ *   and one with a null command removes the editor's. Moving Select All Occurrences to
+ *   Ctrl+Shift+D and freeing Ctrl+L, say:
+ *   `listOf(EditorKeyBinding(KeyChord(Key.D, ctrlCmd = true, shift = true), EditorCommand.SelectAllOccurrences),
+ *   EditorKeyBinding(KeyChord(Key.L, ctrlCmd = true), null))`. These bind the editor's commands;
+ *   a host's own actions (Ctrl+S to save) belong in its own key handling.
+ * @property fontSize The text's size, over [LocalEditorTypography]'s; unspecified, the default,
+ *   keeps the typography's. With `CodeEditorLayout(onFontSizeChange)` the host owns it: zooming
+ *   asks for a new size there.
+ * @property lineHeight The height of a row of text; unspecified, the default, scales the
+ *   typography's with [fontSize].
+ * @property pinchToZoom Two fingers pinching the text, Ctrl+wheel (Cmd+wheel on macOS), Ctrl+=,
+ *   Ctrl+- and Ctrl+0 change the font size, from 6 to 72 sp. Without `onFontSizeChange` the
+ *   editor keeps the size itself. Off by default; with `onFontSizeChange` given, zooming is on
+ *   whatever this says.
+ * @property fontLigatures The font's ligatures (`->` drawn as one arrow, in fonts that have them).
+ *   On by default, as text has always been drawn; off draws every character on its own.
  */
 @Immutable
 data class EditorOptions(
@@ -70,6 +107,16 @@ data class EditorOptions(
     val renderWhitespace: RenderWhitespace = RenderWhitespace.Selection,
     val eol: LineEnding? = null,
     val quickSuggestions: Boolean = false,
+    val breadcrumbs: Boolean = false,
+    val overviewRuler: Boolean = false,
+    val occurrencesHighlight: Boolean = false,
+    val linkedEditing: Boolean = false,
+    val colorDecorators: Boolean = false,
+    val keyBindings: List<EditorKeyBinding> = emptyList(),
+    val fontSize: TextUnit = TextUnit.Unspecified,
+    val lineHeight: TextUnit = TextUnit.Unspecified,
+    val pinchToZoom: Boolean = false,
+    val fontLigatures: Boolean = true,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

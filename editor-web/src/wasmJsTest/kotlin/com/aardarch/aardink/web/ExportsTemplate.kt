@@ -100,12 +100,50 @@ fun aardinkExecuteEdits(id: Int, editsJson: String, endSelectionsJson: String): 
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
+/** Monaco's `setModelMarkers`: a JSON array of diagnostics as [owner]'s, shown with every other owner's and the language's own. */
+@JsExport
+fun aardinkSetModelMarkers(id: Int, owner: String, diagnosticsJson: String) =
+    AardinkWeb.setDiagnosticsForOwnerJson(handle(id), owner, diagnosticsJson)
+
+/** The lines on screen, a JSON array of one Monaco `IRange`. */
+@JsExport fun aardinkGetVisibleRanges(id: Int): String = AardinkWeb.getVisibleRangesJson(handle(id))
+
+/** How far the text is scrolled down, in CSS pixels. */
+@JsExport fun aardinkGetScrollTop(id: Int): Double = AardinkWeb.getScrollTop(handle(id))
+
+@JsExport fun aardinkSetScrollTop(id: Int, top: Double) = AardinkWeb.setScrollTop(handle(id), top)
+
+/** The height of all the text, in CSS pixels. */
+@JsExport fun aardinkGetScrollHeight(id: Int): Double = AardinkWeb.getScrollHeight(handle(id))
+
+/** JSON `{ scrollTop, scrollLeft, scrollHeight }` as the text scrolls. */
+@JsExport fun aardinkOnScrollChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onScrollChange(handle(id), callback)
+
+/** Measures the container again now. */
+@JsExport fun aardinkLayout(id: Int) = AardinkWeb.layout(handle(id))
+
+/** Shows a JSON array of Monaco-shaped `{ range, options }` as [owner]'s decorations, replacing that owner's. */
+@JsExport
+fun aardinkSetDecorations(id: Int, owner: String, decorationsJson: String) =
+    AardinkWeb.setDecorationsJson(handle(id), owner, decorationsJson)
+
+/** [owner]'s decorations' ranges now, as a JSON array of Monaco `IRange`s in the order they were set. */
+@JsExport
+fun aardinkGetDecorationRanges(id: Int, owner: String): String = AardinkWeb.getDecorationRangesJson(handle(id), owner)
+
+/** The document's symbols as a JSON array of Monaco-shaped `DocumentSymbol`s, a tree. */
+@JsExport fun aardinkGetDocumentSymbols(id: Int): String = AardinkWeb.getDocumentSymbolsJson(handle(id))
+
+/** The symbols holding a 1-based position, outermost first, as the same JSON. */
+@JsExport
+fun aardinkGetSymbolPathAt(id: Int, line: Int, column: Int): String = AardinkWeb.getSymbolPathAtJson(handle(id), line, column)
+
 /** Collects the language's own diagnostics again at once, without an edit; they reach [aardinkOnDiagnosticsChange]. */
 @JsExport fun aardinkRevalidate(id: Int) = AardinkWeb.revalidate(handle(id))
 
 /**
  * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
- * [hover] and [diagnostics] answer with JSON through a Promise, or null for nothing (pass one that
+ * [hover], [diagnostics], [documentSymbols] and [documentColors] answer with JSON through a Promise, or null for nothing (pass one that
  * resolves to null for what the language does not have). Returns "" when it worked, else what was
  * wrong with the definition.
  */
@@ -115,6 +153,8 @@ fun aardinkRegisterLanguage(
     completions: (String, Int, Int) -> Promise<JsString?>,
     hover: (String, Int, Int) -> Promise<JsString?>,
     diagnostics: (String) -> Promise<JsString?>,
+    documentSymbols: (String) -> Promise<JsString?>,
+    documentColors: (String) -> Promise<JsString?>,
 ): String = try {
     AardinkWeb.registerLanguage(
         definitionJson,
@@ -122,6 +162,8 @@ fun aardinkRegisterLanguage(
             completions = { text, line, column -> completions(text, line, column).await<JsString?>()?.toString() },
             hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
             diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
+            documentSymbols = { text -> documentSymbols(text).await<JsString?>()?.toString() },
+            documentColors = { text -> documentColors(text).await<JsString?>()?.toString() },
         ),
     )
     ""

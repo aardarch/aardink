@@ -18,23 +18,25 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
-import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
+import com.aardarch.aardink.languages.IndentationFoldingProvider
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.XmlSchema
@@ -78,6 +80,10 @@ import kotlinx.serialization.json.jsonObject
  *     without one), as Monaco does; otherwise they keep the order given.
  * - [hover]: `{ title?, contents, example? }`, where `example` is shown as code below the text;
  * - [diagnostics]: an array of [WebDiagnostic].
+ * - [documentSymbols]: an array of [WebDocumentSymbol], the document's structure as a tree.
+ * - [documentColors]: an array of Monaco's `IColorInformation`, `{ range, color: { red, green,
+ *   blue, alpha } }` with each channel from 0 to 1, for the colour swatches. The picker writes a
+ *   picked colour back as CSS hex.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -89,6 +95,8 @@ class WebLanguageProviders(
     val completions: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
     val hover: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
     val diagnostics: (suspend (text: String) -> String?)? = null,
+    val documentSymbols: (suspend (text: String) -> String?)? = null,
+    val documentColors: (suspend (text: String) -> String?)? = null,
 )
 
 /**
@@ -175,6 +183,14 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = asked {
         providers.diagnostics?.invoke(document.text)
     }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
+
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = asked {
+        providers.documentSymbols?.invoke(document.text)
+    }?.let { AardinkWeb.parseSymbols(document, it) }.orEmpty()
+
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = asked {
+        providers.documentColors?.invoke(document.text)
+    }?.let { AardinkWeb.parseColors(document, it) }.orEmpty()
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 
@@ -417,7 +433,9 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         displayName = root.string("displayName") ?: id,
         fileExtensions = extensions,
         tokenizer = DeclarativeTokenizer(grammar),
-        foldingProvider = base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else NoOpFoldingProvider,
+        // A language with no folding of its own folds by indentation, as VS Code does.
+        foldingProvider =
+        base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
         languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
     )
     return definition

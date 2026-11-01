@@ -27,7 +27,7 @@ facts about the aardflex apps are as of the same day (Android on 0.6.2, aardflex
 | --- | --- | --- |
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
 | 0.7 | Done, not released (branch `feat/0.7`, 2026-10-22) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
-| 0.8 | Planned; ledger drafted (§14), not approved | §6: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
+| 0.8 | Done, not released (branch `feat/0.8`, 2026-11-01) | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Planned | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
 | 0.10 | Planned | §8: more built-in languages, web provider parity, view options, find extras, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
@@ -317,7 +317,7 @@ it.
 
 ### 6.1 Tracked ranges (`:editor`; 1 PR, first)
 
-- Generalise `DiagnosticsTracker.mapRange` and `mapOffset` (`core/DiagnosticsTracker.kt:65`) into
+- Generalise `DiagnosticsTracker.mapRange` and `mapOffset` (`core/DiagnosticsTracker.kt:68`, `:75`) into
   a `TrackedRanges<T>` document listener that diagnostics, decorations, symbols and colour
   swatches share.
 
@@ -619,10 +619,10 @@ Found during the audits; none of them is Aardink's to fix.
 - **aardflex specs:** `specs/index.md` still lists the syntax highlighter as in progress and the
   Monaco web editor as built; `specs/roadmap.md` row 0.6 still says "regex-based highlighting".
 
-## 14. API ledger for 0.8 (draft, for approval)
+## 14. API ledger for 0.8
 
-Drafted from §6 once 0.7 was built. Nothing here is written until it is approved, line by line
-or as a whole, as 0.7's was.
+Drafted from §6 once 0.7 was built, and approved as a whole on 2026-11-01. What was built where
+it differs, and the symbols it does not name, go in §14.1.
 
 ### `:editor`, new
 
@@ -665,6 +665,44 @@ or as a whole, as 0.7's was.
 | --- | --- | --- |
 | `FoldRange` | gains `kind` (data class signature) | §6.7 |
 | `EditorOptions` | gains the fields above (data class signature) | §6.3 to §6.9 |
+
+### 14.1 As built
+
+The 0.8 work follows the ledger above, with these differences and additions, each forced by the
+design or found while building it:
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `onSymbolAtCaretChange` (§6.2) | Not built; `symbols` is snapshot state and `symbolPathAt` is read in `snapshotFlow` | One mechanism for every reader; a callback would duplicate it |
+| `LanguageService.documentHighlights`, `selectionRanges`, `linkedEditingRanges` | With their return types `DocumentHighlight`, `DocumentHighlightKind`, `SelectionRange`, `LinkedEditingRanges` | LSP's shapes; the ledger named only the methods |
+| `colorPresentations` | Returns `ColorPresentation(label, textEdit)` | LSP's shape |
+| Colour swatch drawn before the token (§6.6) | A 3 dp bar in the colour under the text; the picker opens from `EditorCommand.ShowColorPicker`, the hover and the touch menu | A swatch before the token changes the line's layout, which §6.3 moves to 0.9 |
+| `FoldingRegionMarkers` on `LanguageDefinition` | `FoldingRegionMarkers(start, end)` with presets, and `FoldingProvider.withRegionMarkers`, which the built-in definitions use | A data class cannot wrap its own folding provider; a field the host had to apply would be easy to miss |
+| An indentation folding provider | `IndentationFoldingProvider(tabSize)`; the web's registered languages without a base use it | Plain text keeps none, so no existing screen changes |
+| `EditorKeyBinding(chord, command)`, `KeyChord` | `KeyChord(key, ctrlCmd, shift, alt, winCtrl)` with `matches` and `parse`; `EditorKeyBinding(chord: List<KeyChord>, command: EditorCommand?)`; `EditorKeyBindings.Default` | Monaco's modifier names, so web and Kotlin bindings read alike; two strokes for chords; a null command removes a binding |
+| `EditorKeyBindings` a public map | A list, platform-aware; caret movement, typing, the clipboard, line moves, Ctrl+D, F3, Alt+Enter and Shift+Alt+F stay fixed keys | Only keys that run public commands can be data; the rest have no command to bind |
+| `EditorCommand.GoToSymbol`, `ExpandSelection`, `ShrinkSelection`, `Fold`, `Unfold` | Also `ShowColorPicker`, `JoinLines`, `SortLines`, `UpperCase`, `LowerCase`, `TrimTrailingWhitespace`, `JumpToBracket`, `CursorUndo`, `SkipOccurrence`, `ChangeAllOccurrences`, `CursorsAtLineEnds`, `ScrollLines`, `AddLineComment`, `RemoveLineComment`, `BlockComment`, `InsertLineBelow`, `InsertLineAbove`, `SelectLine`, `ZoomIn`, `ZoomOut`, `ZoomReset`, `ScrollTo` | Every bindable key needs a command, and the web reaches the view only through commands |
+| — | A bound key whose command cannot run goes on to other handlers | Zoom keys must not take a browser's page zoom from an editor that does not zoom |
+| `EditorOptions.overviewRuler`; `EditorTheme.overviewRulerColors` | `OverviewRulerColors(background, border, findMatch, selection, added, modified)`, from `editorOverviewRuler.*`, unspecified colours following the theme | One field on the theme for the whole set |
+| `EditorOptions.occurrencesHighlight`, `linkedEditing`, `colorDecorators`, `fontLigatures` | All off by default except `fontLigatures`, which is on as text was drawn | An upgrade changes nothing on screen |
+| `EditorTheme.fromColorScheme` | An extension on a new, empty `EditorTheme.Companion` | The function lives with Material 3 in `ui` |
+| — | `FoldState.foldLevel`, `foldAt`, `unfoldAt` | The fold commands run on the fold state |
+| — | `CodeEditorState.viewport` (`ViewportInfo`, in dp) | The web's scroll and visible-range APIs read the view through the state |
+| Decorations' gutter glyph and minimap colour | A bar at the gutter's text edge; a mark at the minimap's edge, over its tiles | No new gutter lane, so the text never shifts; the minimap's tiles are not redrawn |
+| `CodeEditorLayout(onOpenLink)` | Ctrl/Cmd+click opens a link before trying go to definition; plain URLs are found by the editor | Links need no service for URLs |
+| — | Markdown and CSS get built-in (internal) services, for headings and colours | Symbols and colours come from a service |
+| — | `WebDocumentSymbol`; `WebLanguageProviders.documentSymbols`, `documentColors`; `AardinkWeb.getDocumentSymbolsJson`, `getSymbolPathAtJson`, `setDecorationsJson`, `getDecorationRangesJson`, `setDiagnosticsForOwner(Json)`, `getVisibleRangesJson`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onScrollChange`, `layout`; `WebEditorOptions.overviewRuler`, `occurrencesHighlight`, `linkedEditing`, `colorDecorators`, `breadcrumbs`, `fontLigatures` | The Kotlin side of the approved npm lines, and the web's reads of symbols, without which the caret-to-preview mapping does not reach the web |
+| `setDiagnostics(list, owner)` | Owners' lists are shown with the language's own, which the web bridge collects while owners are set; owner `language` replaces them | Monaco's `setModelMarkers` model |
+| — | npm `getDocumentSymbols`, `getSymbolPathAt`, `getScrollHeight`, `setModelMarkers`; two-key chords in `addCommand` and `addAction` | As above; the host's chords take their first key from the editor's own |
+
+Also changed without new API: linked editing ends at a space or any character that is not part
+of a name, and does not follow an input method's composition; the built-in XML service reads and
+writes colours alpha first (`#AARRGGBB`), as Android does, and colours element text that is a
+colour; the minimap marks errors, warnings and find matches.
+
+The web performance gate's key-to-idle p95 measures about 265 ms on this machine's Chrome
+156.0.8078.74, for v0.7.1 (261 ms) and for 0.8 (267 ms) alike: a local Chrome effect like the
+Chrome 155 one in §1.3, not 0.8's. Every other measurement meets its target.
 
 ## 13. Verification
 

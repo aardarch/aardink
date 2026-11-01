@@ -17,6 +17,7 @@ package com.aardarch.aardink.web
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.ui.KeyChord
 import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import kotlin.test.AfterTest
@@ -50,15 +51,19 @@ class WebCommandsTest {
 
     @Test
     fun `keybindings are read from text and from Monaco's numbers`() {
-        assertEquals(KeyChord(Key.S, ctrlCmd = true), KeyChord.parse("CtrlCmd+S"))
-        assertEquals(KeyChord(Key.F8, shift = true), KeyChord.parse("Shift+F8"))
-        assertEquals(KeyChord(Key.Enter, alt = true, winCtrl = true), KeyChord.parse("ctrl+alt+enter"))
-        assertEquals(KeyChord(Key.Period, ctrlCmd = true), KeyChord.parse("CtrlCmd+."))
+        assertEquals(listOf(KeyChord(Key.S, ctrlCmd = true)), parseKeybinding("CtrlCmd+S"))
+        assertEquals(listOf(KeyChord(Key.F8, shift = true)), parseKeybinding("Shift+F8"))
+        assertEquals(listOf(KeyChord(Key.Enter, alt = true, winCtrl = true)), parseKeybinding("ctrl+alt+enter"))
+        assertEquals(listOf(KeyChord(Key.Period, ctrlCmd = true)), parseKeybinding("CtrlCmd+."))
         // KeyMod.CtrlCmd | KeyCode.KeyS, KeyMod.Shift | KeyMod.Alt | KeyCode.KeyF
-        assertEquals(KeyChord(Key.S, ctrlCmd = true), KeyChord.parse((2048 or 49).toString()))
-        assertEquals(KeyChord(Key.F, shift = true, alt = true), KeyChord.parse((1024 or 512 or 36).toString()))
-        assertNull(KeyChord.parse("CtrlCmd+NoSuchKey"))
-        assertNull(KeyChord.parse("Shift"))
+        assertEquals(listOf(KeyChord(Key.S, ctrlCmd = true)), parseKeybinding((2048 or 49).toString()))
+        assertEquals(listOf(KeyChord(Key.F, shift = true, alt = true)), parseKeybinding((1024 or 512 or 36).toString()))
+        // Chords: as text, and KeyMod.chord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyS).
+        val chord = listOf(KeyChord(Key.K, ctrlCmd = true), KeyChord(Key.S, ctrlCmd = true))
+        assertEquals(chord, parseKeybinding("CtrlCmd+K CtrlCmd+S"))
+        assertEquals(chord, parseKeybinding(((2048 or 41) or ((2048 or 49) shl 16)).toString()))
+        assertNull(parseKeybinding("CtrlCmd+NoSuchKey"))
+        assertNull(parseKeybinding("Shift"))
     }
 
     @Test

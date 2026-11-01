@@ -86,16 +86,20 @@ internal fun EditorBody(
     scrollbars: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     minimap: @Composable () -> Unit = {},
+    overviewRuler: @Composable () -> Unit = {},
 ) {
-    Layout(contents = listOf(gutter, viewport, scrollbars, minimap), modifier = modifier) { measurables, constraints ->
+    Layout(contents = listOf(gutter, viewport, scrollbars, minimap, overviewRuler), modifier = modifier) { measurables, constraints ->
         val (gutterMeasurables, viewportMeasurables, scrollbarMeasurables, minimapMeasurables) = measurables
+        val rulerMeasurables = measurables[4]
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.minWidth
         val boundedHeight = constraints.hasBoundedHeight
         // The gutter and the minimap size themselves; their intrinsic widths say how wide.
         val gutterWidth = (gutterMeasurables.maxOfOrNull { it.maxIntrinsicWidth(Constraints.Infinity) } ?: 0).coerceAtMost(width)
         val minimapWidth = (minimapMeasurables.maxOfOrNull { it.maxIntrinsicWidth(Constraints.Infinity) } ?: 0)
             .coerceAtMost((width - gutterWidth).coerceAtLeast(0))
-        val viewportWidth = (width - gutterWidth - minimapWidth).coerceAtLeast(0)
+        val rulerWidth = (rulerMeasurables.maxOfOrNull { it.maxIntrinsicWidth(Constraints.Infinity) } ?: 0)
+            .coerceAtMost((width - gutterWidth - minimapWidth).coerceAtLeast(0))
+        val viewportWidth = (width - gutterWidth - minimapWidth - rulerWidth).coerceAtLeast(0)
         val height = if (boundedHeight) {
             constraints.maxHeight
         } else {
@@ -107,13 +111,16 @@ internal fun EditorBody(
         val fixed = Constraints.fixed(viewportWidth, height)
         val viewports = viewportMeasurables.map { it.measure(fixed) }
         // The vertical scrollbar at the far right, as in VS Code: over the minimap's edge when there is one.
-        val bars = scrollbarMeasurables.map { it.measure(Constraints.fixed(viewportWidth + minimapWidth, height)) }
+        // Over the overview ruler too, as VS Code's scrollbar is drawn over its ruler.
+        val bars = scrollbarMeasurables.map { it.measure(Constraints.fixed(viewportWidth + minimapWidth + rulerWidth, height)) }
+        val rulers = rulerMeasurables.map { it.measure(Constraints.fixed(rulerWidth, height)) }
         val gutters = gutterMeasurables.map { it.measure(Constraints.fixed(gutterWidth, height)) }
         val minimaps = minimapMeasurables.map { it.measure(Constraints.fixed(minimapWidth, height)) }
         layout(width, height) {
             gutters.forEach { it.place(0, 0) }
             viewports.forEach { it.place(gutterWidth, 0) }
             minimaps.forEach { it.place(gutterWidth + viewportWidth, 0) }
+            rulers.forEach { it.place(gutterWidth + viewportWidth + minimapWidth, 0) }
             bars.forEach { it.place(gutterWidth, 0) }
         }
     }

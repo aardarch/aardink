@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.PlainTextTokenizer
+import com.aardarch.aardink.languages.internal.css.CssLanguageService
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
@@ -27,6 +28,7 @@ import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinLanguageService
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
+import com.aardarch.aardink.languages.internal.markdown.MarkdownLanguageService
 import com.aardarch.aardink.languages.internal.markdown.MarkdownTokenizer
 import com.aardarch.aardink.languages.internal.toml.TomlLanguageService
 import com.aardarch.aardink.languages.internal.toml.TomlTokenizer
@@ -48,7 +50,7 @@ object BuiltInLanguages {
         displayName = "Kotlin",
         fileExtensions = listOf("kt", "kts"),
         tokenizer = KotlinTokenizer,
-        foldingProvider = BraceFoldingProvider(supportsTripleQuoted = true),
+        foldingProvider = BraceFoldingProvider(supportsTripleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
         languageService = KotlinLanguageService,
     )
 
@@ -57,7 +59,7 @@ object BuiltInLanguages {
         displayName = "TypeScript",
         fileExtensions = listOf("ts", "tsx", "js", "jsx", "mjs", "cjs"),
         tokenizer = TypeScriptTokenizer,
-        foldingProvider = BraceFoldingProvider(supportsTripleQuoted = false),
+        foldingProvider = BraceFoldingProvider(supportsTripleQuoted = false).withRegionMarkers(FoldingRegionMarkers.LineComment),
     )
 
     val Json: LanguageDefinition = LanguageDefinition(
@@ -78,7 +80,7 @@ object BuiltInLanguages {
         displayName = "TOML",
         fileExtensions = listOf("toml"),
         tokenizer = TomlTokenizer,
-        foldingProvider = TomlFoldingProvider,
+        foldingProvider = TomlFoldingProvider.withRegionMarkers(FoldingRegionMarkers.HashComment),
         languageService = TomlLanguageService,
     )
 
@@ -87,7 +89,7 @@ object BuiltInLanguages {
         displayName = "XML",
         fileExtensions = listOf("xml", "xsd", "xsl", "svg"),
         tokenizer = XmlTokenizer,
-        foldingProvider = TagFoldingProvider(htmlMode = false),
+        foldingProvider = TagFoldingProvider(htmlMode = false).withRegionMarkers(FoldingRegionMarkers.XmlComment),
         languageService = XmlLanguageService,
     )
 
@@ -96,7 +98,7 @@ object BuiltInLanguages {
         displayName = "HTML",
         fileExtensions = listOf("html", "htm"),
         tokenizer = HtmlTokenizer,
-        foldingProvider = TagFoldingProvider(htmlMode = true),
+        foldingProvider = TagFoldingProvider(htmlMode = true).withRegionMarkers(FoldingRegionMarkers.XmlComment),
         languageService = HtmlLanguageService,
     )
 
@@ -108,7 +110,8 @@ object BuiltInLanguages {
         foldingProvider = BraceFoldingProvider(
             supportsLineComments = false,
             supportsSingleQuoted = true,
-        ),
+        ).withRegionMarkers(FoldingRegionMarkers.BlockComment),
+        languageService = CssLanguageService,
     )
 
     val Markdown: LanguageDefinition = LanguageDefinition(
@@ -116,7 +119,8 @@ object BuiltInLanguages {
         displayName = "Markdown",
         fileExtensions = listOf("md", "markdown"),
         tokenizer = MarkdownTokenizer,
-        foldingProvider = MarkdownFoldingProvider,
+        foldingProvider = MarkdownFoldingProvider.withRegionMarkers(FoldingRegionMarkers.XmlComment),
+        languageService = MarkdownLanguageService,
     )
 
     val PlainText: LanguageDefinition = LanguageDefinition(

@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.core.TokenType
 import kotlin.math.floor
 import kotlin.math.min
@@ -239,28 +240,47 @@ internal class MinimapTiles(private val view: EditorView) {
      * Draws the minimap for the editor as it is scrolled now: the tiles on screen, scaled from their
      * pixels to dp without smoothing, and the slider over the rows the editor shows.
      */
-    fun draw(scope: DrawScope, geometry: MinimapGeometry, rowUnits: Int, color: (TokenType) -> Color, tabSize: Int, slider: Color) =
-        with(scope) {
-            val scale = geometry.rowPx / rowUnits
-            val tileHeight = MINIMAP_TILE_ROWS * geometry.rowPx
-            if (geometry.totalRows > 0) {
-                val first = (geometry.minimapScroll / tileHeight).toInt()
-                val last = ((geometry.minimapScroll + size.height) / tileHeight).toInt().coerceAtMost(
-                    (geometry.totalRows - 1) / MINIMAP_TILE_ROWS,
+    fun draw(
+        scope: DrawScope,
+        geometry: MinimapGeometry,
+        rowUnits: Int,
+        color: (TokenType) -> Color,
+        tabSize: Int,
+        slider: Color,
+        marks: List<LineMark> = emptyList(),
+    ) = with(scope) {
+        val scale = geometry.rowPx / rowUnits
+        val tileHeight = MINIMAP_TILE_ROWS * geometry.rowPx
+        if (geometry.totalRows > 0) {
+            val first = (geometry.minimapScroll / tileHeight).toInt()
+            val last = ((geometry.minimapScroll + size.height) / tileHeight).toInt().coerceAtMost(
+                (geometry.totalRows - 1) / MINIMAP_TILE_ROWS,
+            )
+            for (index in first..last) {
+                val image = tile(index, rowUnits, color, tabSize)
+                val y = index * tileHeight - geometry.minimapScroll
+                drawImage(
+                    image,
+                    dstOffset = IntOffset(0, y.roundToInt()),
+                    dstSize = IntSize((MINIMAP_COLUMNS * scale).roundToInt(), tileHeight.roundToInt()),
+                    filterQuality = FilterQuality.None,
                 )
-                for (index in first..last) {
-                    val image = tile(index, rowUnits, color, tabSize)
-                    val y = index * tileHeight - geometry.minimapScroll
-                    drawImage(
-                        image,
-                        dstOffset = IntOffset(0, y.roundToInt()),
-                        dstSize = IntSize((MINIMAP_COLUMNS * scale).roundToInt(), tileHeight.roundToInt()),
-                        filterQuality = FilterQuality.None,
-                    )
-                }
             }
-            drawRect(slider, Offset(0f, geometry.sliderTop), Size(size.width, geometry.sliderHeight))
         }
+        // Marks (decorations, diagnostics, find matches) at the left edge, over the tiles, so the
+        // tiles need not be drawn again when they change.
+        if (marks.isNotEmpty()) {
+            val width = MINIMAP_MARK_WIDTH.toPx()
+            for (mark in marks) {
+                val (first, end) = view.rowsOfLines(mark.firstLine, mark.lastLine)
+                val top = first * geometry.rowPx - geometry.minimapScroll
+                val height = maxOf(end - first, 1) * geometry.rowPx
+                if (top + height < 0f || top > size.height) continue
+                drawRect(mark.color, Offset(0f, top), Size(width, height))
+            }
+        }
+        drawRect(slider, Offset(0f, geometry.sliderTop), Size(size.width, geometry.sliderHeight))
+    }
 
     private companion object {
         const val MAX_TILES = 16
@@ -279,6 +299,8 @@ internal fun MinimapView(
     slider: Color,
     tabSize: Int,
     modifier: Modifier = Modifier,
+    /** The lines to mark at the minimap's edge, read when it draws. */
+    marks: () -> List<LineMark> = { emptyList() },
 ) {
     val tiles = remember(view) { MinimapTiles(view) }
     fun geometry(height: Float, density: Float): MinimapGeometry? {
@@ -331,7 +353,10 @@ internal fun MinimapView(
                 view.frame
                 view.state.tokenVersion
                 val rowUnits = if (geometry.totalRows > MINIMAP_SCALE_ROWS) 1 else 2
-                tiles.draw(this, geometry, rowUnits, tokenColor, tabSize, slider)
+                tiles.draw(this, geometry, rowUnits, tokenColor, tabSize, slider, marks())
             },
     )
 }
+
+/** How wide a mark at the minimap's edge is. */
+private val MINIMAP_MARK_WIDTH = 3.dp

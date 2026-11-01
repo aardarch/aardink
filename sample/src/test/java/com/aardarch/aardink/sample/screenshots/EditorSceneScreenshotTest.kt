@@ -15,28 +15,41 @@
  */
 package com.aardarch.aardink.sample.screenshots
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.ui.CodeBlock
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
+import com.aardarch.aardink.ui.fromColorScheme
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -151,11 +164,13 @@ class EditorSceneScreenshotTest {
         diagnostics: List<Diagnostic> = emptyList(),
         softWrap: Boolean = false,
         editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
+        languageService: LanguageService? = null,
+        theme: EditorTheme = EditorThemes.VsCodeDark,
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                CompositionLocalProvider(LocalEditorTheme provides theme) {
                     CodeEditorLayout(
                         state = state,
                         foldState = foldState,
@@ -163,6 +178,7 @@ class EditorSceneScreenshotTest {
                         findReplaceState = findReplaceState,
                         diagnostics = diagnostics,
                         options = editorOptions,
+                        languageService = languageService,
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -288,5 +304,134 @@ class EditorSceneScreenshotTest {
         // Tab-indented, with a double space and trailing blanks: every kind of mark.
         val text = "fun main() {\n\tval x  = 1   \n\t\tprintln(x)\t\n}\n"
         capture("whitespace", stateOf(text), editorOptions = EditorOptions(renderWhitespace = RenderWhitespace.All))
+    }
+
+    @Test
+    fun decorations() {
+        // A whole-line highlight with a gutter bar (an assistant's change), a boxed word and an
+        // underlined one (a preview's hover), and a minimap mark.
+        val state = stateOf(code)
+        val text = state.document.text
+        val greeter = text.indexOf("Greeter")
+        val names = text.indexOf("names.size")
+        val line5 = state.document.lineStart(5)
+        state.setDecorations(
+            "assistant",
+            listOf(
+                Decoration(
+                    line5 until state.document.lineEnd(6),
+                    DecorationStyle(background = Color(0x3328A745), wholeLine = true, gutterColor = Color(0xFF28A745)),
+                ),
+            ),
+        )
+        state.setDecorations(
+            "preview",
+            listOf(
+                Decoration(greeter until greeter + 7, DecorationStyle(border = Color(0xFFE5C07B), background = Color(0x22E5C07B))),
+                Decoration(names until names + 5, DecorationStyle(underline = Color(0xFF61AFEF))),
+            ),
+        )
+        capture("decorations", state)
+    }
+
+    @Test
+    fun breadcrumbs() {
+        // The caret inside greetAll's loop: the row shows Greeter › greetAll.
+        val state = stateOf(code)
+        state.selection = TextRange(state.document.lineStart(6) + 12)
+        capture("breadcrumbs", state, editorOptions = EditorOptions(breadcrumbs = true), languageService = kotlin.languageService)
+    }
+
+    @Test
+    fun overviewRuler() {
+        // The long sample with an error, a warning, find matches, a decoration and the caret:
+        // each in its lane of the ruler at the right edge, the visible region banded.
+        val state = stateOf(longCode)
+        val text = state.document.text
+        val shape = text.indexOf("Shape")
+        val area = text.lastIndexOf("area")
+        state.setDecorations(
+            "assistant",
+            listOf(
+                Decoration(
+                    state.document.lineStart(20) until state.document.lineEnd(24),
+                    DecorationStyle(overviewRulerColor = Color(0xFF28A745)),
+                ),
+            ),
+        )
+        val find = FindReplaceState().apply {
+            show()
+            query = "name"
+        }
+        capture(
+            "overview-ruler",
+            state,
+            findReplaceState = find,
+            diagnostics = listOf(
+                Diagnostic(range = shape until shape + 5, message = "Unresolved", severity = DiagnosticSeverity.Error),
+                Diagnostic(range = area until area + 4, message = "Unused", severity = DiagnosticSeverity.Warning),
+            ),
+            editorOptions = EditorOptions(overviewRuler = true),
+        )
+    }
+
+    @Test
+    fun occurrences() {
+        // The caret resting on names: its other occurrences are highlighted.
+        val state = stateOf(code)
+        state.selection = TextRange(state.document.text.indexOf("names") + 2)
+        capture("occurrences", state, editorOptions = EditorOptions(occurrencesHighlight = true))
+    }
+
+    @Test
+    fun colors() {
+        // Colour resources: each hex value gets a swatch under it, alpha first as Android writes them.
+        val xml = LanguageRegistry.withBuiltIns().all.first { it.id == "xml" }
+        val text = """
+            |<resources>
+            |    <color name="primary">#FF6200EE</color>
+            |    <item name="accent" value="#03DAC5" />
+            |    <item name="scrim" value="#80000000" />
+            |    <item name="warning" value="#FFB300" />
+            |</resources>
+        """.trimMargin()
+        val state = CodeEditorState(initialText = text, tokenizer = xml.tokenizer, tokenizeDebounceMs = 0).apply {
+            computeDispatcher = Dispatchers.Unconfined
+        }
+        capture(
+            "colors",
+            state,
+            editorOptions = EditorOptions(softWrap = true, colorDecorators = true),
+            languageService = xml.languageService,
+        )
+    }
+
+    @Test
+    fun zoom() {
+        // A larger font, set through the options, with ligatures off.
+        capture("zoom", stateOf(code), editorOptions = EditorOptions(fontSize = 20.sp, fontLigatures = false))
+    }
+
+    @Test
+    fun material() {
+        // The editor in an app's Material 3 colours.
+        val scheme = lightColorScheme(primary = Color(0xFF00658E), secondary = Color(0xFF4F616E), tertiary = Color(0xFF7C4E7E))
+        capture("material", stateOf(code), theme = EditorTheme.fromColorScheme(scheme, dark = false))
+    }
+
+    @Test
+    fun codeBlock() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                    Box(Modifier.fillMaxSize().background(Color(0xFF303030)).padding(16.dp)) {
+                        CodeBlock(text = code.lines().take(10).joinToString("\n"), tokenizer = kotlin.tokenizer)
+                    }
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("../screenshots/scene-codeblock.png", roborazziOptions = options)
     }
 }

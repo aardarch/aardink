@@ -139,6 +139,9 @@ function monarchToJson(value) {
   return value;
 }
 
+/** The decorations owner deltaDecorations sets; each collection has its own. */
+const DELTA_OWNER = 'delta';
+
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
   if (!provider) return Promise.resolve(null);
@@ -175,6 +178,8 @@ export async function registerLanguage(definition, providers = {}) {
           ((t) => Promise.resolve(providers.provideDiagnostics(t)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic)))),
         text,
       ),
+    (text) => answer(providers.provideDocumentSymbols, text),
+    (text) => answer(providers.provideDocumentColors, text),
   );
   if (error) throw new Error(`Aardink: ${error}`);
 }
@@ -227,6 +232,13 @@ function toKotlinOptions(options) {
     const other = typeof value === 'object' && value !== null ? value.other : value;
     out.quickSuggestions = other !== false && other !== 'off' && other !== undefined;
   }
+  if (options.overviewRulerLanes !== undefined) out.overviewRuler = options.overviewRulerLanes > 0;
+  if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
+  if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
+  if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs']) {
+    if (options[key] !== undefined) out[key] = !!options[key];
+  }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];
     if (value !== undefined) out[key] = typeof value === 'object' && value !== null ? value.enabled !== false : !!value;
@@ -277,6 +289,18 @@ export async function createEditor(container, onChange, options = {}) {
   // What the last host action run returned, so getAction().run() can wait for it: the Kotlin
   // side calls `run` as a () -> Unit and drops the value.
   let actionResult;
+
+  const scrollListeners = new Set();
+  k.aardinkOnScrollChange(id, (json) => {
+    if (!scrollListeners.size) return;
+    const event = JSON.parse(json);
+    for (const listener of scrollListeners) listener(event);
+  });
+
+  // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
+  let deltaDecorations = [];
+  let nextDecorationId = 1;
+  let nextCollection = 1;
 
   const editor = {
     getValue: () => k.aardinkGetValue(id),
@@ -350,12 +374,80 @@ export async function createEditor(container, onChange, options = {}) {
         },
       };
     },
-    setDiagnostics: (diagnostics) => k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic))),
+    setDiagnostics(diagnostics, owner) {
+      if (owner !== undefined && owner !== null) {
+        k.aardinkSetModelMarkers(id, String(owner), JSON.stringify((diagnostics ?? []).map(toKotlinDiagnostic)));
+      } else {
+        k.aardinkSetDiagnostics(id, JSON.stringify(diagnostics == null ? null : diagnostics.map(toKotlinDiagnostic)));
+      }
+    },
+    setModelMarkers: (owner, markers) => k.aardinkSetModelMarkers(id, String(owner), JSON.stringify((markers ?? []).map(toKotlinDiagnostic))),
+    getVisibleRanges: () => JSON.parse(k.aardinkGetVisibleRanges(id)),
+    getScrollTop: () => k.aardinkGetScrollTop(id),
+    setScrollTop: (top) => k.aardinkSetScrollTop(id, Number(top)),
+    getScrollHeight: () => k.aardinkGetScrollHeight(id),
+    onDidScrollChange(listener) {
+      scrollListeners.add(listener);
+      return () => scrollListeners.delete(listener);
+    },
+    layout: () => k.aardinkLayout(id),
     onDidChangeDiagnostics(listener) {
       diagnosticsListeners.add(listener);
       return () => diagnosticsListeners.delete(listener);
     },
     revalidate: () => k.aardinkRevalidate(id),
+    deltaDecorations(oldIds, newDecorations) {
+      // Monaco's ids, kept here in the order the Kotlin side keeps the ranges, which follow the edits.
+      // A range it no longer has (setValue drops them all) is a decoration gone, not one to restore.
+      const ranges = JSON.parse(k.aardinkGetDecorationRanges(id, DELTA_OWNER));
+      const removed = new Set(oldIds ?? []);
+      const kept = [];
+      deltaDecorations.forEach((decoration, i) => {
+        if (ranges[i] !== undefined && !removed.has(decoration.id)) kept.push({ ...decoration, range: ranges[i] });
+      });
+      const added = (newDecorations ?? []).map((decoration) => ({ id: `aardink-decoration-${nextDecorationId++}`, ...decoration }));
+      deltaDecorations = kept.concat(added);
+      k.aardinkSetDecorations(id, DELTA_OWNER, JSON.stringify(deltaDecorations.map(({ range, options }) => ({ range, options }))));
+      return added.map((decoration) => decoration.id);
+    },
+    createDecorationsCollection(decorations) {
+      const owner = `collection-${nextCollection++}`;
+      let items = [];
+      const plain = (list) => (list ?? []).map(({ range, options }) => ({ range, options }));
+      const write = () => {
+        k.aardinkSetDecorations(id, owner, JSON.stringify(items));
+        return items.map((_, i) => `${owner}-${i}`);
+      };
+      // The items as the Kotlin side has them now: their ranges moved along with the edits, and
+      // none it has dropped (setValue drops them all).
+      const sync = () => {
+        const ranges = collection.getRanges();
+        items = items.slice(0, ranges.length).map((item, i) => ({ ...item, range: ranges[i] }));
+      };
+      const collection = {
+        get length() {
+          return collection.getRanges().length;
+        },
+        getRanges: () => JSON.parse(k.aardinkGetDecorationRanges(id, owner)),
+        set(list) {
+          items = plain(list);
+          return write();
+        },
+        append(list) {
+          sync();
+          items = items.concat(plain(list));
+          return write();
+        },
+        clear() {
+          items = [];
+          write();
+        },
+      };
+      if (decorations) collection.set(decorations);
+      return collection;
+    },
+    getDocumentSymbols: () => JSON.parse(k.aardinkGetDocumentSymbols(id)),
+    getSymbolPathAt: (position) => JSON.parse(k.aardinkGetSymbolPathAt(id, position.lineNumber, position.column)),
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),
     setBaseline: (text) => k.aardinkSetBaseline(id, text ?? ''),
     format: () => new Promise((resolve) => k.aardinkFormat(id, resolve)),
@@ -378,6 +470,7 @@ export async function createEditor(container, onChange, options = {}) {
       selectionListeners.clear();
       focusListeners.clear();
       blurListeners.clear();
+      scrollListeners.clear();
       k.aardinkDispose(id);
     },
   };

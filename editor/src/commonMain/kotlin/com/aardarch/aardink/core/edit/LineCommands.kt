@@ -216,4 +216,198 @@ internal object LineCommands {
         }.map { mapOffset(it, changes, stickToEnd = false) }
         return CommandEdit(changes, after.clampedTo(document.length - changes.sumOf { it.end - it.start }))
     }
+
+    /**
+     * Ctrl+J: joins each block of covered lines into one, or a caret's line with the next, as VS
+     * Code does: each line break and the indentation after it become one space (none next to an
+     * empty line), trailing whitespace before it goes.
+     */
+    fun joinLines(document: CodeDocument, selections: SelectionSet): CommandEdit? {
+        val changes = ArrayList<TextChange>()
+        for (block in lineBlocks(document, selections)) {
+            val last = if (block.first == block.last) block.first + 1 else block.last
+            if (last >= document.lineCount) continue
+            for (line in block.first until last) {
+                val text = document.lineText(line)
+                val next = document.lineText(line + 1)
+                val trimmedEnd = text.trimEnd()
+                val nextContent = next.trimStart()
+                val start = document.lineStart(line) + trimmedEnd.length
+                val end = document.lineStart(line + 1) + (next.length - nextContent.length)
+                val joint = if (trimmedEnd.isEmpty() || nextContent.isEmpty()) "" else " "
+                changes += TextChange(start, end, joint)
+            }
+        }
+        if (changes.isEmpty()) return null
+        return CommandEdit(changes, selections.map { mapOffset(it, changes) })
+    }
+
+    /** Sorts the lines of each block of covered lines, ascending or [descending]; null with nothing to sort. */
+    fun sortLines(document: CodeDocument, selections: SelectionSet, descending: Boolean): CommandEdit? {
+        val changes = lineBlocks(document, selections).filter { it.last > it.first }.mapNotNull { block ->
+            val lines = block.map { document.lineText(it) }
+            val sorted = if (descending) lines.sortedDescending() else lines.sorted()
+            if (sorted ==
+                lines
+            ) {
+                null
+            } else {
+                TextChange(document.lineStart(block.first), document.lineEnd(block.last), sorted.joinToString("\n"))
+            }
+        }
+        if (changes.isEmpty()) return null
+        return CommandEdit(changes, selections)
+    }
+
+    /** Upper- or lower-cases each selection, or the word at each caret. */
+    fun transformCase(document: CodeDocument, selections: SelectionSet, upper: Boolean): CommandEdit? {
+        val changes = selections.inDocumentOrder.mapNotNull { range ->
+            val target = if (range.collapsed) {
+                TextNavigator.wordAt(document, range.start).takeUnless { it.isEmpty() }?.let { it.first until it.last + 1 }
+            } else {
+                range.min until range.max
+            } ?: return@mapNotNull null
+            val text = document.subSequence(target.first, target.last + 1).toString()
+            val changed = if (upper) text.uppercase() else text.lowercase()
+            if (changed == text) null else TextChange(target.first, target.last + 1, changed)
+        }.distinctBy { it.start }
+        if (changes.isEmpty()) return null
+        // Where the case changes no lengths (nearly always), every caret and selection stays put.
+        val sameLengths = changes.all { it.text.length == it.end - it.start }
+        return CommandEdit(changes, if (sameLengths) selections else selections.map { mapOffset(it, changes, stickToEnd = false) })
+    }
+
+    /** Removes the spaces and tabs at the end of every line of [document]. */
+    fun trimTrailingWhitespace(document: CodeDocument, selections: SelectionSet): CommandEdit? {
+        val changes = (0 until document.lineCount).mapNotNull { line ->
+            val text = document.lineText(line)
+            val trimmed = text.trimEnd(' ', '\t')
+            if (trimmed.length ==
+                text.length
+            ) {
+                null
+            } else {
+                document.lineStart(line).let { TextChange(it + trimmed.length, it + text.length, "") }
+            }
+        }
+        if (changes.isEmpty()) return null
+        return CommandEdit(changes, selections.map { mapOffset(it, changes) })
+    }
+
+    /**
+     * Ctrl+Enter / Ctrl+Shift+Enter: a new line below (or [above]) each caret's line, indented as
+     * that line, with the caret on it, whatever the caret's place in its line.
+     */
+    fun insertLine(document: CodeDocument, selections: SelectionSet, above: Boolean, lineBreak: String = "\n"): CommandEdit {
+        val lines = selections.inDocumentOrder.map { document.offsetToLineCol(it.end).first }.distinct()
+        val changes = lines.map { line ->
+            val text = document.lineText(line)
+            val indent = text.takeWhile { it == ' ' || it == '\t' }
+            if (above) {
+                document.lineStart(line).let { TextChange(it, it, indent + lineBreak) }
+            } else {
+                document.lineEnd(line).let { TextChange(it, it, lineBreak + indent) }
+            }
+        }
+        // Each caret goes to the end of the indentation it inserted.
+        var shift = 0
+        val carets = changes.map { change ->
+            val caret = change.start + shift + if (above) change.text.length - lineBreak.length else change.text.length
+            shift += change.text.length
+            TextRange(caret)
+        }
+        return CommandEdit(changes, SelectionSet.of(carets))
+    }
+
+    /**
+     * Ctrl+L: selects each selection's lines whole, line break included; a selection that already
+     * is whole lines grows by the next line.
+     */
+    fun selectLines(document: CodeDocument, selections: SelectionSet): SelectionSet = SelectionSet.of(
+        selections.ranges.map { range ->
+            val first = document.offsetToLineCol(range.min).first
+            val wholeLines = !range.collapsed && document.lineStart(first) == range.min &&
+                (range.max == document.length || document.offsetToLineCol(range.max).second == 0)
+            val lastLine = when {
+                wholeLines && range.max < document.length -> document.offsetToLineCol(range.max).first
+                wholeLines -> document.lineCount - 1
+                else -> document.offsetToLineCol(range.max).first
+            }
+            val end = if (lastLine + 1 < document.lineCount) document.lineStart(lastLine + 1) else document.length
+            TextRange(document.lineStart(first), end)
+        },
+    )
+
+    /**
+     * Ctrl+K Ctrl+C ([add]) or Ctrl+K Ctrl+U: comments every non-blank covered line with the line
+     * comment, or uncomments those that are. Null without a line comment, or with nothing to do.
+     */
+    fun setLineComments(document: CodeDocument, selections: SelectionSet, syntax: CommentSyntax?, add: Boolean): CommandEdit? {
+        val prefix = syntax?.line ?: return null
+        val lines = lineBlocks(document, selections).flatMap { it.toList() }.filter { document.lineText(it).isNotBlank() }
+        val changes = if (add) {
+            if (lines.isEmpty()) return null
+            val indent = lines.minOf { line -> document.lineText(line).takeWhile { it == ' ' || it == '\t' }.length }
+            lines.map { line -> (document.lineStart(line) + indent).let { TextChange(it, it, "$prefix ") } }
+        } else {
+            lines.filter { document.lineText(it).trimStart().startsWith(prefix) }.map { line ->
+                val text = document.lineText(line)
+                val at = text.indexOf(prefix)
+                val removeEnd = at + prefix.length + if (text.getOrNull(at + prefix.length) == ' ') 1 else 0
+                val start = document.lineStart(line)
+                TextChange(start + at, start + removeEnd, "")
+            }
+        }
+        if (changes.isEmpty()) return null
+        return CommandEdit(changes, selections.map { mapOffset(it, changes) })
+    }
+
+    /**
+     * Shift+Alt+A: wraps each selection in the block comment markers, or unwraps one that already
+     * is; at a caret, inserts an empty block comment with the caret inside.
+     */
+    fun toggleBlockComment(document: CodeDocument, selections: SelectionSet, syntax: CommentSyntax?): CommandEdit? {
+        val open = syntax?.blockStart ?: return null
+        val close = syntax.blockEnd ?: return null
+        val changes = ArrayList<TextChange>()
+        val carets = ArrayList<Pair<TextRange, Int>>()
+        for (range in selections.inDocumentOrder) {
+            if (range.collapsed) {
+                changes += TextChange(range.start, range.start, "$open  $close")
+                carets += range to open.length + 1
+                continue
+            }
+            val text = document.subSequence(range.min, range.max).toString()
+            if (text.startsWith(open) && text.endsWith(close) && text.length >= open.length + close.length) {
+                val inner = text.substring(open.length, text.length - close.length)
+                changes += TextChange(range.min, range.max, inner.removePrefix(" ").removeSuffix(" "))
+            } else {
+                changes += TextChange(range.min, range.max, "$open $text $close")
+            }
+        }
+        val after = if (selections.ranges.all { it.collapsed }) {
+            var shift = 0
+            SelectionSet.of(
+                carets.map { (range, inside) ->
+                    val caret = range.start + shift + inside
+                    shift += open.length + close.length + 2
+                    TextRange(caret)
+                },
+            )
+        } else {
+            SelectionSet.of(
+                changes.runningFold(0) { acc, c -> acc + c.text.length - (c.end - c.start) }.zip(changes).map { (shift, c) ->
+                    TextRange(c.start + shift, c.start + shift + c.text.length)
+                },
+            )
+        }
+        return CommandEdit(changes, after)
+    }
+
+    /** Shift+Alt+I: a caret at the end of every line each selection covers, the selections gone. */
+    fun cursorsAtLineEnds(document: CodeDocument, selections: SelectionSet): SelectionSet? {
+        if (selections.ranges.all { it.collapsed }) return null
+        val carets = lineBlocks(document, selections).flatMap { block -> block.map { TextRange(document.lineEnd(it)) } }
+        return SelectionSet.of(carets)
+    }
 }

@@ -36,6 +36,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.8 lets the editor understand the document's structure and lets hosts draw on it. Every new
+option is off by default. It breaks source in two places: `FoldRange` gains a `kind`, and
+`EditorCommand` has new members, so an exhaustive `when` over it needs a branch for them.
+[`docs/MIGRATION_0.8.md`](docs/MIGRATION_0.8.md) has the details.
+
+### Added
+
+- **Document symbols.** `LanguageService.documentSymbols` returns a `DocumentSymbol` tree; the
+  built-in XML, HTML, JSON, TOML, Kotlin and Markdown services provide one. `CodeEditorState.symbols`
+  holds it, moved with each edit, and `symbolPathAt(offset)` maps the caret to the symbols around
+  it. Ctrl+Shift+O opens Go to Symbol, `EditorOptions.breadcrumbs` shows the path at the caret,
+  and sticky scroll prefers symbols over fold ranges.
+- **Decorations.** `CodeEditorState.setDecorations(owner, list)`: backgrounds, whole lines,
+  underlines, borders, gutter bars, minimap and overview-ruler marks, and hover messages, kept on
+  their text as it is edited. On the web, `deltaDecorations` and `createDecorationsCollection`.
+- **Overview ruler** (`EditorOptions.overviewRuler`): diagnostics, find matches, carets, changed
+  lines and decorations along the right edge; a click scrolls there. The minimap marks errors,
+  warnings and find matches too.
+- **Occurrences** (`occurrencesHighlight`), **expand and shrink selection** (Shift+Alt+Right and
+  Left), **linked editing** of tag pairs (`linkedEditing`), and **links** opened with Ctrl+click
+  through `CodeEditorLayout(onOpenLink)`.
+- **Colour decorators** (`colorDecorators`): a swatch under each colour, and a picker with hue,
+  saturation, value, alpha and hex. Built in for hex colours in XML (as Android writes them),
+  HTML, JSON, TOML and CSS.
+- **Folding:** `FoldKind`, region markers (`FoldingProvider.withRegionMarkers`), an
+  `IndentationFoldingProvider`, Ctrl+Shift+[ and ] at the caret, and the Ctrl+K chords: Ctrl+K
+  Ctrl+0, Ctrl+J and Ctrl+1 to 5.
+- **Keybindings as data:** `KeyChord`, `EditorKeyBinding`, `EditorKeyBindings.Default` and
+  `EditorOptions.keyBindings`, and VS Code's remaining keys: join lines, jump to bracket, cursor
+  undo, skip occurrence, change all occurrences, carets at line ends, line and block comments,
+  insert line above and below, select line, scroll by line, trim trailing whitespace. A click on
+  a line number selects the line.
+- **Zoom and typography:** `EditorOptions.fontSize`, `lineHeight`, `pinchToZoom` (also Ctrl+wheel
+  and Ctrl+= / Ctrl+- / Ctrl+0) and `fontLigatures`; `CodeEditorLayout(onFontSizeChange)`.
+  `EditorTheme.fromColorScheme` for Material 3 colours, and `CodeBlock` for read-only code.
+- **Web:** `getDocumentSymbols`, `getSymbolPathAt`, `provideDocumentSymbols` and
+  `provideDocumentColors`; `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`,
+  `onDidScrollChange` and `layout`; diagnostics per owner (`setDiagnostics(list, owner)`,
+  `setModelMarkers`); two-key chords in `addCommand`; the new options under Monaco's names.
+
+### Changed
+
+- A bound key whose command cannot run now goes on to whatever else takes it, rather than being
+  swallowed: a browser's page zoom keeps working in an editor that does not zoom.
+- Markdown and CSS have a built-in language service, so the gutter keeps a diagnostics lane for
+  them.
+- A language registered on the web without `extends` folds by indentation.
+
 ## [0.7.1] - 2026-11-01
 
 ### Fixed

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,7 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
@@ -87,6 +89,7 @@ private fun SampleWindow() {
     var language by remember { mutableStateOf(registry.byId("kotlin") ?: registry.all.first()) }
     var themeName by remember { mutableStateOf("VS Code Dark") }
     var showGoToLine by remember { mutableStateOf(false) }
+    var structure by remember { mutableStateOf(true) }
 
     val themes = remember {
         linkedMapOf(
@@ -117,6 +120,11 @@ private fun SampleWindow() {
                 themeName = themes.keys.toList()[index]
             }
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = structure, onCheckedChange = { structure = it })
+                Text("0.8: ruler, breadcrumbs, occurrences, colours, linked tags, zoom", style = MaterialTheme.typography.bodySmall)
+            }
+
             Text(
                 text = "Ctrl/Cmd+Z/Y undo/redo · +F find · +G go to line · +D next occurrence · Alt+click add caret",
                 style = MaterialTheme.typography.bodySmall,
@@ -132,6 +140,16 @@ private fun SampleWindow() {
                 foldingProvider = language.foldingProvider,
                 keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
                 onRequestGoToLine = { showGoToLine = true },
+                options = EditorOptions(
+                    overviewRuler = structure,
+                    breadcrumbs = structure,
+                    occurrencesHighlight = structure,
+                    colorDecorators = structure,
+                    linkedEditing = structure,
+                    stickyScroll = structure,
+                    pinchToZoom = structure,
+                ),
+                onOpenLink = { target -> println("Open link: $target") },
                 modifier = Modifier.fillMaxSize(),
             )
         }

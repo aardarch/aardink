@@ -32,9 +32,23 @@ fun interface FoldingProvider {
  * @param startLine 0-based line index where the fold starts (the line shown when collapsed).
  * @param endLine 0-based line index of the last line included in the fold.
  * @param placeholder Text shown in place of the collapsed lines.
+ * @param kind What the range is, when it is something particular: a comment, a block of imports,
+ *   a region between markers. Null, the default, for an ordinary block.
  */
-data class FoldRange(val startLine: Int, val endLine: Int, val placeholder: String = "…") {
+data class FoldRange(val startLine: Int, val endLine: Int, val placeholder: String = "…", val kind: FoldKind? = null) {
     val lineCount: Int get() = endLine - startLine + 1
+}
+
+/** What a [FoldRange] is, as LSP's `FoldingRangeKind`. */
+enum class FoldKind {
+    /** A comment. */
+    Comment,
+
+    /** A block of imports. */
+    Imports,
+
+    /** A region between markers, such as `// #region` and `// #endregion`. */
+    Region,
 }
 
 /** Fallback used when no language-specific provider is configured. */

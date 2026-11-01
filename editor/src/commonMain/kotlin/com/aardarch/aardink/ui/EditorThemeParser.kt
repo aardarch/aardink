@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.DefaultBracketPairColors
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.LightBracketPairColors
 import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.OverviewRulerColors
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenStyleResolver
 import com.aardarch.aardink.core.TokenType
@@ -159,6 +160,14 @@ object EditorThemeParser {
             bracketPairColors = bracketColors,
             whitespaceColor = colors.hexColor("editorWhitespace.foreground") ?: Color.Unspecified,
             tokenFontStyles = tokenStyles.fontStyles,
+            overviewRulerColors = OverviewRulerColors(
+                background = colors.hexColor("editorOverviewRuler.background") ?: fallback.overviewRulerColors.background,
+                border = colors.hexColor("editorOverviewRuler.border") ?: fallback.overviewRulerColors.border,
+                findMatch = colors.hexColor("editorOverviewRuler.findMatchForeground") ?: fallback.overviewRulerColors.findMatch,
+                selection = colors.hexColor("editorOverviewRuler.selectionHighlightForeground") ?: fallback.overviewRulerColors.selection,
+                added = colors.hexColor("editorOverviewRuler.addedForeground") ?: fallback.overviewRulerColors.added,
+                modified = colors.hexColor("editorOverviewRuler.modifiedForeground") ?: fallback.overviewRulerColors.modified,
+            ),
         )
     }
 

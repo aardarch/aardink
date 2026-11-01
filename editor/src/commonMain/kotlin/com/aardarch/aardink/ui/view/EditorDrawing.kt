@@ -27,6 +27,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.ColorInfo
+import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
@@ -74,6 +76,10 @@ internal class EditorDecorations(
     val renderWhitespace: RenderWhitespace = RenderWhitespace.None,
     /** The tab stops of a snippet being filled in. */
     val snippetTabStops: List<TextRange> = emptyList(),
+    /** The host's decorations, in order of where they start. */
+    val hostDecorations: List<Decoration> = emptyList(),
+    /** The colours in the text, each drawn as a swatch bar under it. */
+    val colorSwatches: List<ColorInfo> = emptyList(),
 )
 
 /**
@@ -94,12 +100,39 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
             drawRect(colors.lineHighlight, Offset(0f, line.top - frame.scrollY), Size(size.width, rows))
         }
     }
+    // The host's decorations that reach the lines on screen: filtered once per frame, not per line.
+    val shownDecorations = visibleDecorations(frame, decorations.hostDecorations)
+    for (decoration in shownDecorations) {
+        val style = decoration.style
+        if (!style.wholeLine || style.background == Color.Unspecified) continue
+        for (line in frame.lines) {
+            if (!decoration.touches(line)) continue
+            drawRect(style.background, Offset(0f, line.top - frame.scrollY), Size(size.width, line.layout.lineCount * lineHeight))
+        }
+    }
     decorations.bracketMatch?.let { (open, close) ->
         drawBracketBox(frame, open, colors, left)
         drawBracketBox(frame, close, colors, left)
     }
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
+        for (decoration in shownDecorations) {
+            val style = decoration.style
+            if (style.wholeLine || style.background == Color.Unspecified || decoration.range.isEmpty() ||
+                !decoration.touches(line)
+            ) {
+                continue
+            }
+            drawRange(
+                line,
+                decoration.range.first - line.start,
+                decoration.range.last + 1 - line.start,
+                style.background,
+                left,
+                top,
+                lineHeight,
+            )
+        }
         for (stop in decorations.snippetTabStops) {
             if (stop.collapsed || stop.max <= line.start || stop.min > line.end) continue
             drawRange(line, stop.min - line.start, stop.max - line.start, colors.snippetTabStop, left, top, lineHeight)
@@ -125,9 +158,21 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, lineHeight)
         eachRow(line.layout, lineHeight, top) { rowTop -> drawText(line.layout, topLeft = Offset(left, rowTop)) }
     }
+    val shownSwatches = visibleSwatches(frame, decorations.colorSwatches)
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         drawSquiggles(line, decorations.diagnostics, colors, left, top, lineHeight)
+        for (decoration in shownDecorations) {
+            val style = decoration.style
+            if (decoration.range.isEmpty() || !decoration.touches(line)) continue
+            val range = TextRange(decoration.range.first, decoration.range.last + 1)
+            if (style.underline != Color.Unspecified) drawUnderline(line, range, style.underline, left, top, lineHeight)
+            if (style.border != Color.Unspecified) drawBorder(line, range, style.border, left, top, lineHeight)
+        }
+        for (swatch in shownSwatches) {
+            if (swatch.range.last < line.start || swatch.range.first > line.end) continue
+            drawSwatch(line, swatch, left, top, lineHeight)
+        }
         decorations.composition?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
         decorations.link?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
     }
@@ -284,6 +329,79 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
         val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
         val y = top + layout.rowShift(row, lineHeight) + layout.getLineBaseline(row) + 2.dp.toPx()
         drawLine(color, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = stroke)
+    }
+}
+
+/**
+ * A colour's swatch: a bar in the colour under its text, over a contrasting edge so a colour
+ * close to the background still shows. Drawn below the text, so nothing is laid out again.
+ */
+private fun DrawScope.drawSwatch(line: VisibleLine, swatch: ColorInfo, left: Float, top: Float, lineHeight: Float) {
+    val layout = line.layout
+    val a = (swatch.range.first - line.start).coerceIn(0, line.shownLength)
+    val b = (swatch.range.last + 1 - line.start).coerceIn(a, line.shownLength)
+    if (b <= a) return
+    val height = 3.dp.toPx()
+    val edge = 1.dp.toPx()
+    val firstRow = layout.rowFor(a)
+    val lastRow = layout.rowFor(b - 1)
+    for (row in firstRow..lastRow) {
+        val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
+        val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
+        val y = top + layout.rowShift(row, lineHeight) + layout.getLineBottom(row) - height
+        drawRect(Color.Gray, Offset(left + x0 - edge, y - edge), Size(x1 - x0 + 2 * edge, height + 2 * edge))
+        drawRect(swatch.color, Offset(left + x0, y), Size(x1 - x0, height))
+    }
+}
+
+/** The decorations in [all] (in order of where they start) that reach a line of [frame]. */
+internal fun visibleDecorations(frame: ViewFrame, all: List<Decoration>): List<Decoration> {
+    if (all.isEmpty() || frame.lines.isEmpty()) return emptyList()
+    val from = frame.lines.first().start
+    val to = frame.lines.last().end
+    val out = ArrayList<Decoration>()
+    for (decoration in all) {
+        if (decoration.range.first > to) break
+        val end = if (decoration.range.isEmpty()) decoration.range.first else decoration.range.last
+        if (end >= from) out += decoration
+    }
+    return out
+}
+
+/**
+ * The colours in [all] with a character on a line of [frame]: filtered once per frame, so each line
+ * looks only at the few on screen. A language service need not list them in order, so all are seen.
+ */
+internal fun visibleSwatches(frame: ViewFrame, all: List<ColorInfo>): List<ColorInfo> {
+    if (all.isEmpty() || frame.lines.isEmpty()) return emptyList()
+    val from = frame.lines.first().start
+    val to = frame.lines.last().end
+    return all.filter { !it.range.isEmpty() && it.range.last >= from && it.range.first <= to }
+}
+
+/** Whether this decoration covers a character of [line], or sits on it when it is empty. */
+private fun Decoration.touches(line: VisibleLine): Boolean {
+    val first = range.first
+    val last = if (range.isEmpty()) first else range.last
+    return first <= line.end && last >= line.start
+}
+
+/** A box around [range] on [line], one per row it spans, as a decoration's border. */
+private fun DrawScope.drawBorder(line: VisibleLine, range: TextRange, color: Color, left: Float, top: Float, lineHeight: Float) {
+    if (range.collapsed || range.max < line.start || range.min > line.end) return
+    val layout = line.layout
+    val a = (range.min - line.start).coerceIn(0, line.shownLength)
+    val b = (range.max - line.start).coerceIn(a, line.shownLength)
+    if (b <= a) return
+    val stroke = 1.dp.toPx()
+    val firstRow = layout.rowFor(a)
+    val lastRow = layout.rowFor(b - 1)
+    for (row in firstRow..lastRow) {
+        val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
+        val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
+        val rowTop = top + layout.rowShift(row, lineHeight) + layout.getLineTop(row)
+        val height = layout.getLineBottom(row) - layout.getLineTop(row)
+        drawRect(color, Offset(left + x0, rowTop), Size(max(x1 - x0, stroke), height), style = Stroke(stroke))
     }
 }
 

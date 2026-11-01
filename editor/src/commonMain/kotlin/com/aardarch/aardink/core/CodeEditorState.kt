@@ -18,6 +18,7 @@ package com.aardarch.aardink.core
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -33,6 +34,7 @@ import com.aardarch.aardink.core.edit.EditingCommands
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.OccurrenceFinder
+import com.aardarch.aardink.core.edit.SelectionExpander
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.SnippetParser
 import com.aardarch.aardink.core.edit.SnippetSession
@@ -185,6 +187,7 @@ class CodeEditorState(
 
     private fun applySelections(set: SelectionSet) {
         val changed = set != selectionSet
+        if (changed) rememberSelections(selectionSet)
         selectionSet = set
         leaveSnippetIfOutside()
         if (changed) emitSelectionChange(selectionReasonContext ?: SelectionChangeReason.Api)
@@ -403,6 +406,97 @@ class CodeEditorState(
         for (listener in selectionListeners) listener(ranges, reason)
     }
 
+    // ── The view ──────────────────────────────────────────────────────────────
+
+    /**
+     * Where the view of the [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing
+     * this state is: its scroll position and the lines on screen. Snapshot state, updated as it
+     * scrolls; all zero while no layout shows the state. Scroll with [EditorCommand.ScrollTo].
+     */
+    var viewport: ViewportInfo by mutableStateOf(ViewportInfo())
+        internal set
+
+    // ── Document symbols ──────────────────────────────────────────────────────
+
+    private val symbolTracker = SymbolTracker()
+
+    /**
+     * The document's structure, as the language service of the
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing this state last described
+     * it ([LanguageService.documentSymbols]): a tree in document order. The layout asks again after
+     * each pause in typing; between answers each symbol's range moves along with the edits. Empty
+     * while no layout with a language service shows the state. Snapshot state: reading it in
+     * composition, or in `snapshotFlow`, follows each new answer and each edit.
+     */
+    val symbols: List<DocumentSymbol>
+        get() = symbolTracker.items
+
+    /**
+     * The symbols whose range holds [offset], outermost first: the element the caret is in, its
+     * parent and so on up. This is how a host maps the caret to what it describes (an element of a
+     * preview, say): `snapshotFlow { state.symbolPathAt(state.selection.end) }`. Empty when no
+     * symbol holds it.
+     */
+    fun symbolPathAt(offset: Int): List<DocumentSymbol> = symbolPath(symbols, offset)
+
+    /** The layout's newest answer from the language service, for the document as it is now. */
+    internal fun publishSymbols(list: List<DocumentSymbol>) {
+        symbolTracker.replace(list)
+    }
+
+    // ── Decorations ───────────────────────────────────────────────────────────
+
+    private val decorationOwners = LinkedHashMap<String, DecorationTracker>()
+
+    /** Bumped when an owner is added or removed; each owner's list is snapshot state of its own. */
+    private var decorationOwnersVersion by mutableIntStateOf(0)
+
+    /**
+     * Shows [decorations] for [owner] (a name of the host's choosing: `"assistant"`, `"preview"`),
+     * in place of what that owner set before; other owners' stay. Their ranges address the
+     * document as it is now and follow each edit from then on, as Monaco's decorations do. An empty
+     * list is the same as [clearDecorations].
+     */
+    fun setDecorations(owner: String, decorations: List<Decoration>) {
+        if (decorations.isEmpty()) {
+            clearDecorations(owner)
+            return
+        }
+        val length = document.length
+        val clamped = decorations.map { decoration ->
+            val range = decoration.range
+            val first = range.first.coerceIn(0, length)
+            val last = if (range.isEmpty()) first - 1 else range.last.coerceIn(first, (length - 1).coerceAtLeast(first))
+            if (first == range.first && last == range.last) decoration else decoration.copy(range = first..last)
+        }
+        val tracker = decorationOwners[owner] ?: DecorationTracker().also {
+            decorationOwners[owner] = it
+            document.addChangeListener(it)
+            decorationOwnersVersion++
+        }
+        tracker.replace(clamped)
+    }
+
+    /** [owner]'s decorations as they are now, moved along with the edits since they were set. */
+    fun decorations(owner: String): List<Decoration> {
+        decorationOwnersVersion
+        return decorationOwners[owner]?.items.orEmpty()
+    }
+
+    /** Removes [owner]'s decorations. */
+    fun clearDecorations(owner: String) {
+        val tracker = decorationOwners.remove(owner) ?: return
+        document.removeChangeListener(tracker)
+        decorationOwnersVersion++
+    }
+
+    /** Every owner's decorations, in order of where they start: what the view draws. */
+    internal val shownDecorations: List<Decoration> by derivedStateOf {
+        decorationOwnersVersion
+        val all = decorationOwners.values.flatMap { it.items }
+        all.sortedBy { it.range.first }
+    }
+
     // ── Commands ──────────────────────────────────────────────────────────────
 
     /** Read-only, as the layout's options say: the editing commands do nothing then, as their keys do. */
@@ -426,8 +520,17 @@ class CodeEditorState(
                 if (canUndo) add(EditorCommand.Undo)
                 if (canRedo) add(EditorCommand.Redo)
                 if (tokenizer.commentSyntax != null) add(EditorCommand.ToggleComment)
+                if (tokenizer.commentSyntax?.line != null) addAll(listOf(EditorCommand.AddLineComment, EditorCommand.RemoveLineComment))
+                if (tokenizer.commentSyntax?.blockStart != null) add(EditorCommand.BlockComment)
+                addAll(listOf(EditorCommand.JoinLines, EditorCommand.UpperCase, EditorCommand.LowerCase))
+                addAll(listOf(EditorCommand.TrimTrailingWhitespace, EditorCommand.InsertLineBelow, EditorCommand.InsertLineAbove))
             }
             add(EditorCommand.SelectAllOccurrences)
+            add(EditorCommand.ExpandSelection)
+            addAll(listOf(EditorCommand.SelectLine, EditorCommand.CursorsAtLineEnds, EditorCommand.SkipOccurrence))
+            addAll(listOf(EditorCommand.ChangeAllOccurrences, EditorCommand.JumpToBracket))
+            if (cursorHistory.isNotEmpty()) add(EditorCommand.CursorUndo)
+            if (canShrinkSelection) add(EditorCommand.ShrinkSelection)
             addAll(uiCommandsAvailable)
         }
 
@@ -435,6 +538,9 @@ class CodeEditorState(
     fun canExecute(command: EditorCommand): Boolean = when (command) {
         is EditorCommand.InsertSnippet -> !readOnly
         is EditorCommand.FoldLevel -> command.level >= 1 && EditorCommand.FoldAll in uiCommandsAvailable
+        is EditorCommand.SortLines -> !readOnly
+        is EditorCommand.ScrollLines -> uiCommandHandler != null
+        is EditorCommand.ScrollTo -> uiCommandHandler != null
         is EditorCommand.Reveal -> uiCommandHandler != null
         else -> command in availableCommands
     }
@@ -456,6 +562,43 @@ class CodeEditorState(
             EditorCommand.ToggleComment -> toggleComment()
 
             EditorCommand.SelectAllOccurrences -> selectAllOccurrences()
+
+            // A layout asks its language service; without one, the editor's own ranges.
+            EditorCommand.ExpandSelection -> uiCommandHandler?.invoke(command) ?: expandSelectionByText()
+
+            EditorCommand.ShrinkSelection -> shrinkSelection()
+
+            EditorCommand.JoinLines -> joinLines()
+
+            is EditorCommand.SortLines -> sortLines(command.descending)
+
+            EditorCommand.UpperCase -> transformCase(upper = true)
+
+            EditorCommand.LowerCase -> transformCase(upper = false)
+
+            EditorCommand.TrimTrailingWhitespace -> trimTrailingWhitespace()
+
+            EditorCommand.JumpToBracket -> jumpToBracket()
+
+            EditorCommand.CursorUndo -> cursorUndo()
+
+            EditorCommand.SkipOccurrence -> skipOccurrence()
+
+            EditorCommand.ChangeAllOccurrences -> changeAllOccurrences()
+
+            EditorCommand.CursorsAtLineEnds -> cursorsAtLineEnds()
+
+            EditorCommand.AddLineComment -> setLineComments(add = true)
+
+            EditorCommand.RemoveLineComment -> setLineComments(add = false)
+
+            EditorCommand.BlockComment -> blockComment()
+
+            EditorCommand.InsertLineBelow -> insertLine(above = false)
+
+            EditorCommand.InsertLineAbove -> insertLine(above = true)
+
+            EditorCommand.SelectLine -> selectLine()
 
             is EditorCommand.InsertSnippet -> {
                 val primary = selection
@@ -663,6 +806,94 @@ class CodeEditorState(
     /** Shift+Alt+Down / Up: copies the selected lines below themselves. */
     internal fun copyLines(down: Boolean): Boolean = applyCommand(LineCommands.copyLines(document, currentSelections(), down))
 
+    // ── The editing commands of 0.8 ──────────────────────────────────────────
+
+    internal fun joinLines(): Boolean = applyCommand(LineCommands.joinLines(document, currentSelections()))
+
+    internal fun sortLines(descending: Boolean): Boolean = applyCommand(LineCommands.sortLines(document, currentSelections(), descending))
+
+    internal fun transformCase(upper: Boolean): Boolean = applyCommand(LineCommands.transformCase(document, currentSelections(), upper))
+
+    internal fun trimTrailingWhitespace(): Boolean = applyCommand(LineCommands.trimTrailingWhitespace(document, currentSelections()))
+
+    internal fun insertLine(above: Boolean): Boolean =
+        applyCommand(LineCommands.insertLine(document, currentSelections(), above, lineEnding.text))
+
+    internal fun setLineComments(add: Boolean): Boolean =
+        applyCommand(LineCommands.setLineComments(document, currentSelections(), tokenizer.commentSyntax, add))
+
+    internal fun blockComment(): Boolean =
+        applyCommand(LineCommands.toggleBlockComment(document, currentSelections(), tokenizer.commentSyntax))
+
+    internal fun selectLine(): Boolean {
+        applySelections(LineCommands.selectLines(document, currentSelections()).clampedTo(document.length))
+        return true
+    }
+
+    internal fun cursorsAtLineEnds(): Boolean {
+        val carets = LineCommands.cursorsAtLineEnds(document, currentSelections()) ?: return false
+        applySelections(carets.clampedTo(document.length))
+        return true
+    }
+
+    /** To the bracket matching the one the caret touches. */
+    internal fun jumpToBracket(): Boolean {
+        val match = matchingBracket() ?: return false
+        val caret = selection.end
+        // From the opening bracket (on either side of it) to just before the closing one, and back.
+        val target = if (caret == match.open || caret == match.open + 1) match.close else match.open
+        applySelections(SelectionSet.caret(target))
+        return true
+    }
+
+    /** Moves the last added selection (the primary) to the next occurrence of the selection. */
+    internal fun skipOccurrence(): Boolean {
+        val current = currentSelections()
+        val primary = current.primary
+        if (primary.collapsed) return addNextOccurrence()
+        val word = TextNavigator.wordAt(document, primary.min)
+        val wholeWord = word.first == primary.min && word.last + 1 == primary.max
+        val next = OccurrenceFinder.addNext(document, current, wholeWord) ?: return false
+        // The new one is first; the one it replaces, the old primary, second.
+        applySelections(SelectionSet.of(listOf(next.ranges.first()) + next.ranges.drop(2)))
+        return true
+    }
+
+    /** A selection at every occurrence of the word at the caret, as a whole word. */
+    internal fun changeAllOccurrences(): Boolean {
+        val primary = selection
+        if (primary.collapsed) {
+            val word = TextNavigator.wordAt(document, primary.start)
+            if (word.isEmpty()) return false
+            applySelections(SelectionSet.single(TextRange(word.first, word.last + 1)))
+        }
+        return selectAllOccurrences()
+    }
+
+    // ── Cursor undo (Ctrl+U) ──────────────────────────────────────────────────
+
+    /** The selections before each change of them, the latest last, up to [CURSOR_HISTORY]. */
+    private var cursorHistory: List<SelectionSet> = emptyList()
+    private var undoingCursor = false
+
+    private fun rememberSelections(previous: SelectionSet) {
+        if (undoingCursor) return
+        cursorHistory = (cursorHistory + previous).takeLast(CURSOR_HISTORY)
+    }
+
+    /** Back to the selections before the last change of them. */
+    internal fun cursorUndo(): Boolean {
+        val previous = cursorHistory.lastOrNull() ?: return false
+        cursorHistory = cursorHistory.dropLast(1)
+        undoingCursor = true
+        try {
+            applySelections(previous.clampedTo(document.length))
+        } finally {
+            undoingCursor = false
+        }
+        return true
+    }
+
     /** Ctrl+Shift+K: deletes the selected lines. */
     internal fun deleteLines(): Boolean = applyCommand(LineCommands.deleteLines(document, currentSelections()))
 
@@ -712,16 +943,124 @@ class CodeEditorState(
         selectionsAfter: () -> SelectionSet,
     ): Boolean {
         val before = currentSelections()
-        val applied = document.applyChanges(changes)
-        val after = selectionsAfter().clampedTo(document.length)
+        val versionBefore = document.version
+        val applied = document.applyChanges(changes).toMutableList()
+        var after = selectionsAfter().clampedTo(document.length)
         if (applied.isEmpty()) {
             applySelections(after)
             return false
+        }
+        val linkable = before.isSingle && (kind == EditKind.DeletingLeft || kind == EditKind.DeletingRight)
+        if (linkable) {
+            mirrorLinked(changes, after, versionBefore)?.let { (mirrored, moved) ->
+                applied += mirrored
+                after = moved
+            }
         }
         history.record(kind, applied, before, after)
         afterEdit(after, external)
         return true
     }
+
+    // ── Linked editing ────────────────────────────────────────────────────────
+
+    /**
+     * The ranges linked editing keeps equal ([com.aardarch.aardink.ui.EditorOptions.linkedEditing]),
+     * each `start until end`, for the document at [linkedVersion]; set by the layout from the
+     * language service, kept up by the edits mirrored here, and stale after any other edit.
+     */
+    private var linkedRanges: List<IntRange> = emptyList()
+    private var linkedVersion = -1L
+
+    /** The linked ranges the language service gave for the document at [version] (`start until end` each). */
+    internal fun setLinkedRanges(ranges: List<IntRange>, version: Long) {
+        if (version != document.version) return
+        linkedRanges = ranges.sortedBy { it.first }
+        linkedVersion = version
+    }
+
+    /** The linked ranges, while they still describe the document. */
+    internal val currentLinkedRanges: List<IntRange>
+        get() = if (linkedVersion == document.version) linkedRanges else emptyList()
+
+    /**
+     * When [changes] (just applied to the document at [versionBefore]) are one edit inside one of
+     * the linked ranges that leaves a name there, the same name written into the others: returns
+     * those changes as applied and [after] moved by them, or null when there is nothing to mirror.
+     */
+    private fun mirrorLinked(
+        changes: List<TextChange>,
+        after: SelectionSet,
+        versionBefore: Long,
+    ): Pair<List<AppliedChange>, SelectionSet>? {
+        val ranges = linkedRanges
+        if (ranges.size < 2 || linkedVersion != versionBefore) return null
+        val change = changes.singleOrNull() ?: return null
+        val own = ranges.indexOfFirst { change.start >= it.first && change.end <= it.last + 1 }
+        if (own < 0 || change.text.any { !it.isLinkedNameChar() }) return null
+        val delta = change.text.length - (change.end - change.start)
+        // The ranges after the edit: its own grows or shrinks, those after it move.
+        val moved = ranges.mapIndexed { index, range ->
+            when {
+                index == own -> range.first until range.last + 1 + delta
+                range.first >= change.end -> (range.first + delta) until (range.last + 1 + delta)
+                else -> range
+            }
+        }
+        val name = document.subSequence(moved[own].first, moved[own].last + 1).toString()
+        if (name.any { !it.isLinkedNameChar() }) return null
+        val mirrors = moved.withIndex().filter { it.index != own }.map { TextChange(it.value.first, it.value.last + 1, name) }
+        val applied = document.applyChanges(mirrors)
+        val selections = SelectionSet.of(after.ranges.map { TextRange(mapOffset(it.start, mirrors), mapOffset(it.end, mirrors)) })
+            .clampedTo(document.length)
+        var shift = 0
+        linkedRanges = moved.map { range ->
+            val start = range.first + shift
+            shift += name.length - (range.last + 1 - range.first)
+            start until start + name.length
+        }
+        linkedVersion = document.version
+        return applied to selections
+    }
+
+    private fun Char.isLinkedNameChar(): Boolean = isLetterOrDigit() || this == '_' || this == '-' || this == '.' || this == ':'
+
+    // ── Selection growth (Shift+Alt+Right and Left) ──────────────────────────
+
+    /** Grows the primary selection by the editor's own ranges ([SelectionExpander]); false at the whole document. */
+    internal fun expandSelectionByText(): Boolean {
+        val primary = selection
+        val next = SelectionExpander.ranges(document, primary.min, primary.max).firstOrNull() ?: return false
+        growSelection(next.first until next.last + 1)
+        return true
+    }
+
+    /** The selections before each growth, innermost last, while the selection is still the grown one. */
+    private var shrinkStack: List<SelectionSet> = emptyList()
+    private var grown: SelectionSet? = null
+
+    /** Grows the primary selection to [range] (`start until end`), remembering the one before for [shrinkSelection]. */
+    internal fun growSelection(range: IntRange) {
+        val current = currentSelections()
+        if (grown != current) shrinkStack = emptyList()
+        shrinkStack = shrinkStack + current
+        applySelections(SelectionSet.single(TextRange(range.first, range.last + 1)).clampedTo(document.length))
+        grown = currentSelections()
+    }
+
+    /** Back to the selection before the last growth; false when the selection is not a grown one. */
+    internal fun shrinkSelection(): Boolean {
+        if (!canShrinkSelection) return false
+        val previous = shrinkStack.last()
+        shrinkStack = shrinkStack.dropLast(1)
+        applySelections(previous)
+        grown = if (shrinkStack.isEmpty()) null else currentSelections()
+        return true
+    }
+
+    /** Whether [shrinkSelection] would do anything. */
+    internal val canShrinkSelection: Boolean
+        get() = grown == currentSelections() && shrinkStack.isNotEmpty()
 
     /** What every edit ends with: the selections placed, history state and versions updated, tokenization scheduled. */
     private fun afterEdit(selections: SelectionSet, external: Boolean) {
@@ -880,6 +1219,7 @@ class CodeEditorState(
             listOf(TextChange(from, to, normalized))
         }
         if (composing) trackComposition(from, to, normalized.length, before, aroundPrimary)
+        val versionBefore = document.version
         val applied = document.applyChanges(changes).toMutableList()
         // A caret the input method placed means nothing once normalisation changed the text's length.
         val primaryAfter = selectionAfter?.takeIf { normalized.length == text.length } ?: TextRange(from + normalized.length)
@@ -895,6 +1235,14 @@ class CodeEditorState(
         if (applied.isEmpty()) {
             applySelections(after)
             return null
+        }
+        // Linked editing: typing a name inside a linked range (an element's tag name) writes it in
+        // the others too, in the same undo step.
+        if (!mirrored && !composing && before.isSingle) {
+            mirrorLinked(changes, after, versionBefore)?.let { (mirroredChanges, moved) ->
+                applied += mirroredChanges
+                after = moved
+            }
         }
         // Enter in a CR LF document inserts two characters, and is still a typed line break.
         val typedChar = if (normalized == eol.text) '\n' else normalized.singleOrNull()
@@ -1115,6 +1463,7 @@ class CodeEditorState(
 
     init {
         document.addChangeListener(contentRecorder)
+        document.addChangeListener(symbolTracker)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)
@@ -1209,6 +1558,7 @@ class CodeEditorState(
      */
     private fun placeSelections(selections: SelectionSet, external: Boolean = true): Boolean {
         val changed = selections != selectionSet
+        if (changed) rememberSelections(selectionSet)
         selectionSet = selections
         leaveSnippetIfOutside()
         if (external) externalEditVersion++
@@ -1235,3 +1585,6 @@ private const val INITIAL_VISIBLE_LINES = 100
 
 /** A partial tokenization pass slower than this is treated as a full scan on single-threaded hosts. */
 private const val SLOW_PARTIAL_PASS_MS = 50L
+
+/** How many earlier selections cursor undo (Ctrl+U) can go back through. */
+private const val CURSOR_HISTORY = 64

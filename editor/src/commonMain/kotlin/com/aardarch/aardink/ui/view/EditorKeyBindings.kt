@@ -47,23 +47,16 @@ internal enum class KeyCommand {
     Enter,
     Indent,
     Outdent,
-    Undo,
-    Redo,
     SelectAll,
     Copy,
     Cut,
     Paste,
-    Find,
-    Replace,
-    GoToLine,
-    ToggleComment,
     MoveLinesUp,
     MoveLinesDown,
     CopyLinesUp,
     CopyLinesDown,
     DeleteLines,
     AddNextOccurrence,
-    SelectAllOccurrences,
     AddCursorAbove,
     AddCursorBelow,
     ColumnSelectLeft,
@@ -73,14 +66,7 @@ internal enum class KeyCommand {
     ColumnSelectPageUp,
     ColumnSelectPageDown,
     Escape,
-    TriggerSuggest,
-    GoToDefinition,
-    FindReferences,
     FormatDocument,
-    NextProblem,
-    PreviousProblem,
-    Rename,
-    QuickFix,
     FindNext,
     FindPrevious,
     SelectAllMatches,
@@ -90,13 +76,16 @@ internal enum class KeyCommand {
 internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false)
 
 /**
- * The editor's keyboard, as a table: VS Code's default bindings, with Cmd for Ctrl on macOS and
- * macOS's own movement keys (Option+arrows by word, Cmd+arrows to line and document ends).
+ * The editor's fixed keys, as a table: moving the caret and selecting, deleting, typing's own keys
+ * (Enter, Tab, Escape), the clipboard, line moves and copies, and the find panel's keys, as VS
+ * Code binds them, with Cmd for Ctrl on macOS and macOS's own movement keys (Option+arrows by word,
+ * Cmd+arrows to line and document ends). The keys that run public commands are data instead:
+ * [com.aardarch.aardink.ui.EditorKeyBindings], which a host overrides.
  *
  * Keys the browser keeps for itself (Ctrl+W, Ctrl+T, Ctrl+N) never reach a web page, so they are
  * not bound.
  */
-internal object EditorKeyBindings {
+internal object KeyTable {
 
     fun resolve(event: KeyEvent, isMac: Boolean): KeyBinding? {
         if (event.type != KeyEventType.KeyDown) return null
@@ -207,31 +196,14 @@ internal object EditorKeyBindings {
 
             Key.Escape -> if (plain && !shift) KeyBinding(KeyCommand.Escape) else null
 
-            Key.F2 -> if (plain && !shift) KeyBinding(KeyCommand.Rename) else null
-
             Key.F3 -> when {
                 shift && !alt && !primary -> KeyBinding(KeyCommand.FindPrevious)
                 plain && !shift -> KeyBinding(KeyCommand.FindNext)
                 else -> null
             }
 
-            Key.F8 -> when {
-                shift && !alt && !primary -> KeyBinding(KeyCommand.PreviousProblem)
-                plain && !shift -> KeyBinding(KeyCommand.NextProblem)
-                else -> null
-            }
-
-            Key.F12 -> when {
-                shift && !alt && !primary -> KeyBinding(KeyCommand.FindReferences)
-                plain && !shift -> KeyBinding(KeyCommand.GoToDefinition)
-                else -> null
-            }
-
-            Key.Spacebar -> if (ctrl && !alt && !meta && !shift) KeyBinding(KeyCommand.TriggerSuggest) else null
-
             Key.F -> when {
                 shift && alt && !primary -> KeyBinding(KeyCommand.FormatDocument)
-                primary && !alt && !shift -> KeyBinding(KeyCommand.Find)
                 else -> null
             }
 
@@ -241,19 +213,12 @@ internal object EditorKeyBindings {
 
     /** Cmd/Ctrl chords on letters and punctuation. */
     private fun chord(key: Key, shift: Boolean): KeyBinding? = when (key) {
-        Key.Z -> KeyBinding(if (shift) KeyCommand.Redo else KeyCommand.Undo)
-        Key.Y -> if (shift) null else KeyBinding(KeyCommand.Redo)
         Key.A -> if (shift) null else KeyBinding(KeyCommand.SelectAll)
         Key.C -> if (shift) null else KeyBinding(KeyCommand.Copy)
         Key.X -> if (shift) null else KeyBinding(KeyCommand.Cut)
         Key.V -> if (shift) null else KeyBinding(KeyCommand.Paste)
-        Key.H -> if (shift) null else KeyBinding(KeyCommand.Replace)
-        Key.G -> if (shift) null else KeyBinding(KeyCommand.GoToLine)
-        Key.Slash -> if (shift) null else KeyBinding(KeyCommand.ToggleComment)
         Key.K -> if (shift) KeyBinding(KeyCommand.DeleteLines) else null
         Key.D -> if (shift) null else KeyBinding(KeyCommand.AddNextOccurrence)
-        Key.L -> if (shift) KeyBinding(KeyCommand.SelectAllOccurrences) else null
-        Key.Period -> if (shift) null else KeyBinding(KeyCommand.QuickFix)
         else -> null
     }
 }

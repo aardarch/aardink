@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.core
 
+import androidx.compose.ui.graphics.Color
+
 /**
  * LSP language service contract.
  *
@@ -136,6 +138,58 @@ interface LanguageService {
      */
     val completionsAreIncomplete: Boolean
         get() = true
+
+    /**
+     * The structure of [document] as a tree of [DocumentSymbol]s in document order: its elements,
+     * its properties, its classes and functions. The editor asks after a pause in typing, as it asks
+     * for [diagnostics], and uses them for Go to Symbol (Ctrl+Shift+O), the breadcrumbs row and
+     * sticky scroll; [CodeEditorState.symbols] and [CodeEditorState.symbolPathAt] hand them to the
+     * host. The default is none.
+     */
+    suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = emptyList()
+
+    /**
+     * The occurrences of the symbol at [offset], for the editor to highlight while the caret rests
+     * there ([com.aardarch.aardink.ui.EditorOptions.occurrencesHighlight]). The default is none:
+     * the editor then highlights the other occurrences of the word at the caret itself.
+     */
+    suspend fun documentHighlights(document: CodeDocument, offset: Int): List<DocumentHighlight> = emptyList()
+
+    /**
+     * For each of [offsets], the ranges the selection grows through from there (Shift+Alt+Right),
+     * innermost first through [SelectionRange.parent]: the same number as [offsets], in order. The
+     * default is none: the editor grows the selection by word, string, brackets and line itself.
+     */
+    suspend fun selectionRanges(document: CodeDocument, offsets: List<Int>): List<SelectionRange> = emptyList()
+
+    /**
+     * The ranges linked to the one at [offset], which always hold the same text (an element's name
+     * in its opening and closing tags), or null for none. With
+     * [com.aardarch.aardink.ui.EditorOptions.linkedEditing] the editor makes an edit inside one in
+     * all of them. The built-in XML and HTML services have them.
+     */
+    suspend fun linkedEditingRanges(document: CodeDocument, offset: Int): LinkedEditingRanges? = null
+
+    /**
+     * The links in [document] besides plain URLs, which the editor finds itself: references the
+     * service can resolve, an `<include component="…">` say. Ctrl+click (Cmd+click) opens one
+     * through [com.aardarch.aardink.ui.CodeEditorLayout]'s `onOpenLink`. The default is none.
+     */
+    suspend fun documentLinks(document: CodeDocument): List<DocumentLink> = emptyList()
+
+    /**
+     * The colours written in [document], for the editor to draw as swatches
+     * ([com.aardarch.aardink.ui.EditorOptions.colorDecorators]). The built-in XML, JSON, TOML and
+     * CSS services find hex colours. The default is none.
+     */
+    suspend fun documentColors(document: CodeDocument): List<ColorInfo> = emptyList()
+
+    /**
+     * Ways to write [color] in place of [info], best first, for the colour picker to apply: the
+     * editor applies the first. The default is none: the editor then writes a CSS hex colour,
+     * `#rrggbb`, or `#rrggbbaa` when it is not opaque.
+     */
+    suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> = emptyList()
 
     /**
      * Characters that should trigger a completion request when typed.

@@ -37,6 +37,11 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Go to definition, find references, format document or selection | ✓ | ✓ | ✓ |
 | Bracket-pair colours and matching, current-line highlight | ✓ | ✓ | ✓ |
 | Minimap and sticky scroll | ✓ | ✓ | ✓ |
+| Document symbols: Go to Symbol, breadcrumbs, the symbols around the caret for a preview | ✓ | ✓ | ✓ |
+| Decorations from the host, an overview ruler, occurrence highlights | ✓ | ✓ | ✓ |
+| Colour swatches with a picker; linked editing of tag pairs; links opened with Ctrl+click | ✓ | ✓ | ✓ |
+| Keybindings as data, with the host's overrides; Ctrl+K chords; region markers and indentation folding | ✓ | ✓ | ✓ |
+| Zoom: pinch, Ctrl+wheel, Ctrl+= and Ctrl+-; Material 3 colours from the app's scheme | ✓ | ✓ | ✓ |
 | Diff lane against a saved baseline | ✓ | ✓ | ✓ |
 | VS Code's keyboard shortcuts (Cmd on macOS) | with a keyboard | ✓ | ✓ |
 | Input methods: composition, and a phone keyboard's autocorrect and voice input | ✓ | ✓ | ✓ |

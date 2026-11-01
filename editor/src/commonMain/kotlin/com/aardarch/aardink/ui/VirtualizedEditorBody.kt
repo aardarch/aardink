@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -43,6 +45,7 @@ import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -53,11 +56,15 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.core.TokenStyleResolver
+import com.aardarch.aardink.core.lineMarks
 import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.platform.PlatformInfo
@@ -76,9 +83,12 @@ import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.INDENT_GLYPH
 import com.aardarch.aardink.ui.view.MinimapView
+import com.aardarch.aardink.ui.view.OverviewRuler
+import com.aardarch.aardink.ui.view.RulerColors
 import com.aardarch.aardink.ui.view.StickyLine
 import com.aardarch.aardink.ui.view.ViewStyle
 import com.aardarch.aardink.ui.view.drawStickyLines
+import com.aardarch.aardink.ui.view.overviewRulerMarks
 import com.aardarch.aardink.ui.view.stickyLineAt
 import com.aardarch.aardink.ui.view.stickyLines
 import kotlinx.coroutines.delay
@@ -107,14 +117,20 @@ internal fun VirtualizedEditorBody(
     /** The ranges sticky scroll pins the first lines of, sorted by start line, outer ones first. */
     stickyRanges: List<FoldRange> = emptyList(),
     popups: @Composable () -> Unit = {},
+    /** The colours to draw swatches under, read when the text draws. */
+    colorSwatches: () -> List<ColorInfo> = { emptyList() },
+    /** Pinch and Ctrl+wheel: called with how much larger to make the font; null when the editor does not zoom. */
+    onZoom: ((Float) -> Unit)? = null,
 ) {
     val view = controller.view
     val density = LocalDensity.current
     val typography = LocalEditorTypography.current
     val theme = LocalEditorTheme.current
     val measurer = rememberTextMeasurer(cacheSize = 0)
-    val textStyle = remember(typography, textColor) {
+    val ligatures = options.fontLigatures
+    val textStyle = remember(typography, textColor, ligatures) {
         TextStyle(
+            fontFeatureSettings = if (ligatures) null else "liga 0, calt 0, dlig 0",
             fontFamily = typography.fontFamily,
             fontSize = typography.fontSize,
             lineHeight = typography.lineHeight,
@@ -234,6 +250,57 @@ internal fun VirtualizedEditorBody(
     val sticky: () -> List<StickyLine> = { view.stickyLines(currentStickyRanges.value) }
     SideEffect { controller.pointer.stickyLineAt = { position -> view.stickyLineAt(currentStickyRanges.value, position) } }
     val lineCount = remember(state.textVersion) { state.document.lineCount }
+    // The overview ruler's marks, and the minimap's: worked out when what they show changes, not
+    // per frame.
+    val currentDiagnostics = rememberUpdatedState(diagnostics)
+    val currentFind = rememberUpdatedState(findReplaceState)
+    val currentDiff = rememberUpdatedState(gutter?.diffAnnotations.orEmpty())
+    val rulerColors = remember(theme) {
+        val ruler = theme.overviewRulerColors
+        RulerColors(
+            error = theme.errorColor,
+            warning = theme.warningColor,
+            info = theme.infoColor,
+            findMatch = ruler.findMatch.takeOrElse { theme.findMatchColor.copy(alpha = 1f) },
+            selection = ruler.selection.takeOrElse { theme.cursorColor.copy(alpha = 0.6f) },
+            added = ruler.added.takeOrElse { Color(0xFF4CAF50) },
+            modified = ruler.modified.takeOrElse { Color(0xFF2196F3) },
+        )
+    }
+    val showRuler = options.overviewRuler
+    val rulerMarks by remember(state, rulerColors) {
+        derivedStateOf {
+            overviewRulerMarks(
+                document = state.document,
+                diagnostics = currentDiagnostics.value,
+                findMatches = currentFind.value?.matches.orEmpty(),
+                selections = state.selections,
+                diff = currentDiff.value,
+                decorations = state.shownDecorations,
+                colors = rulerColors,
+            )
+        }
+    }
+    // The minimap marks the host's decorations, and diagnostics and find matches as the ruler does.
+    val minimapMarks by remember(state, rulerColors) {
+        derivedStateOf {
+            val decorated = lineMarks(state.shownDecorations, state.document) { it.minimapColor }
+            val document = state.document
+            val length = document.length
+            val found = currentFind.value?.matches.orEmpty().map {
+                val line = document.offsetToLineCol(it.first.coerceIn(0, length)).first
+                LineMark(line, line, rulerColors.findMatch)
+            }
+            val problems = currentDiagnostics.value
+                .filter { it.severity == DiagnosticSeverity.Error || it.severity == DiagnosticSeverity.Warning }
+                .sortedByDescending { it.severity }
+                .map {
+                    val line = document.offsetToLineCol(it.range.first.coerceIn(0, length)).first
+                    LineMark(line, line, if (it.severity == DiagnosticSeverity.Error) rulerColors.error else rulerColors.warning)
+                }
+            decorated + found + problems
+        }
+    }
 
     EditorBody(
         view = view,
@@ -276,6 +343,8 @@ internal fun VirtualizedEditorBody(
                             snippet.version
                             snippet.placeholderRanges()
                         }.orEmpty(),
+                        hostDecorations = state.shownDecorations,
+                        colorSwatches = colorSwatches(),
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },
@@ -285,7 +354,8 @@ internal fun VirtualizedEditorBody(
                     .fillMaxSize()
                     .testTag(EditorTestTags.EDITOR)
                     .pointerHoverIcon(if (controller.linkModifier && controller.link != null) PointerIcon.Hand else PointerIcon.Text)
-                    .pointerInput(controller) { trackHover(controller) },
+                    .pointerInput(controller) { trackHover(controller) }
+                    .then(if (onZoom != null) Modifier.pointerInput(Unit) { zoomGestures(onZoom) } else Modifier),
                 inputModifier = Modifier
                     .then(EditorInputElement(controller))
                     .focusRequester(focusRequester)
@@ -306,6 +376,17 @@ internal fun VirtualizedEditorBody(
             )
         },
         scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        overviewRuler = {
+            if (showRuler) {
+                OverviewRuler(
+                    view = view,
+                    marks = { rulerMarks },
+                    background = theme.overviewRulerColors.background.takeOrElse { theme.background },
+                    border = theme.overviewRulerColors.border.takeOrElse { textColor.copy(alpha = 0.12f) },
+                    visibleRegion = textColor.copy(alpha = 0.08f),
+                )
+            }
+        },
         minimap = {
             if (options.showMinimap) {
                 MinimapView(
@@ -314,6 +395,7 @@ internal fun VirtualizedEditorBody(
                     background = theme.background,
                     slider = textColor.copy(alpha = 0.12f),
                     tabSize = options.tabSize,
+                    marks = { minimapMarks },
                 )
             }
         },
@@ -350,3 +432,45 @@ private const val CARET_BLINK_MS = 530L
 
 /** Measured to find the advance of one character of the (monospace) editor font. */
 private const val CHAR_WIDTH_SAMPLE = "0000000000000000000000000000000000000000000000000000000000000000"
+
+/**
+ * Pinch and Ctrl+wheel (Cmd+wheel on macOS) zoom: [onZoom] gets how much larger to make the font.
+ * Looks at events before the text's scrolling does, and takes only those it uses: two fingers on
+ * the text, or a wheel turned with the modifier held. One finger and a plain wheel scroll as before.
+ */
+private suspend fun PointerInputScope.zoomGestures(onZoom: (Float) -> Unit) {
+    awaitPointerEventScope {
+        var pinch = 1f
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.type == PointerEventType.Scroll) {
+                val modifiers = event.keyboardModifiers
+                val zoomKey = if (PlatformInfo.isMacOs) modifiers.isMetaPressed else modifiers.isCtrlPressed
+                val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                if (zoomKey && delta != 0f) {
+                    onZoom(if (delta < 0f) WHEEL_ZOOM else 1f / WHEEL_ZOOM)
+                    event.changes.forEach { it.consume() }
+                }
+                continue
+            }
+            val pressed = event.changes.count { it.pressed }
+            if (pressed >= 2) {
+                pinch *= event.calculateZoom()
+                // In steps, so a slow pinch does not lay the text out again on every frame.
+                if (pinch > 1f + PINCH_STEP || pinch < 1f - PINCH_STEP) {
+                    onZoom(pinch)
+                    pinch = 1f
+                }
+                event.changes.forEach { if (it.positionChanged()) it.consume() }
+            } else {
+                pinch = 1f
+            }
+        }
+    }
+}
+
+/** How much larger one notch of Ctrl+wheel makes the font. */
+private const val WHEEL_ZOOM = 1.1f
+
+/** How far a pinch goes before the font size follows it. */
+private const val PINCH_STEP = 0.06f

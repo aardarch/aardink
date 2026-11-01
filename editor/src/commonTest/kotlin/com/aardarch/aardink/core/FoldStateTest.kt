@@ -101,4 +101,28 @@ class FoldStateTest {
         state.onLinesChanged(line = 12, removedLines = 1, addedLines = 0)
         assertEquals(0, state.foldedCount)
     }
+
+    @Test
+    fun `foldLevel folds the ranges nested that deep`() {
+        val ranges = listOf(
+            FoldRange(0, 20),
+            FoldRange(2, 10),
+            FoldRange(3, 5),
+            // Over the same lines as each other: neither encloses the other.
+            FoldRange(12, 18),
+            FoldRange(12, 18, placeholder = "{…}"),
+            // Overlaps the one at 2 without nesting in it: only the outermost encloses it.
+            FoldRange(8, 15),
+        )
+        fun foldedAt(level: Int): List<Int> {
+            val state = FoldState()
+            state.updateFoldableRanges(ranges)
+            state.foldLevel(level)
+            return state.foldedRanges().map { it.startLine }
+        }
+        assertEquals(listOf(0), foldedAt(1))
+        assertEquals(listOf(2, 8, 12), foldedAt(2))
+        assertEquals(listOf(3), foldedAt(3))
+        assertFalse(FoldState().apply { updateFoldableRanges(ranges) }.foldLevel(4))
+    }
 }

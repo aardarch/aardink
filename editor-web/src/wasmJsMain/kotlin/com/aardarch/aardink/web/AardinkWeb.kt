@@ -25,6 +25,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,7 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Font
@@ -44,11 +50,15 @@ import androidx.compose.ui.window.ComposeViewport
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ContentChange
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
@@ -57,6 +67,7 @@ import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.LanguageDefinition
@@ -67,6 +78,7 @@ import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.EditorTypography
 import com.aardarch.aardink.ui.GoToLineDialog
+import com.aardarch.aardink.ui.KeyChord
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
@@ -81,16 +93,23 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonArray
 import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -122,6 +141,14 @@ class AardinkEditorHandle internal constructor(
 
     /** The host's diagnostics, or null while the language's own are shown. */
     internal val diagnostics: MutableState<List<Diagnostic>?> = mutableStateOf(null)
+
+    /** The host's diagnostics by owner, as Monaco's `setModelMarkers` keeps them; shown with the language's own. */
+    internal val ownerDiagnostics = mutableStateMapOf<String, List<Diagnostic>>()
+
+    /** The language's own diagnostics, collected here while owners' are shown (the layout then shows a list it is given). */
+    internal val languageDiagnostics: MutableState<List<Diagnostic>> = mutableStateOf(emptyList())
+
+    internal var onScrollChange: ((String) -> Unit)? = null
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -143,6 +170,9 @@ class AardinkEditorHandle internal constructor(
 
     /** The focus last reported to [onFocusChange]. */
     internal var reportedFocus = false
+
+    /** The first key of one of the host's chords, while the second is awaited. */
+    internal var pendingHostChord: KeyChord? = null
 
     /** The commands and actions the host added, keys and context-menu entries included. */
     internal val hostActions = mutableStateListOf<WebAction>()
@@ -533,7 +563,7 @@ object AardinkWeb {
         run: () -> Unit,
     ) {
         handle.hostActions.removeAll { it.id == id }
-        handle.hostActions += WebAction(id, label, keybindings.mapNotNull(KeyChord::parse), inContextMenu, run)
+        handle.hostActions += WebAction(id, label, keybindings.mapNotNull(::parseKeybinding), inContextMenu, run)
     }
 
     /** Removes an action [addAction] or [addCommand] added. */
@@ -545,11 +575,13 @@ object AardinkWeb {
      * Binds a key to [run] while the editor has the focus, ahead of the editor's own binding for
      * it, as Monaco's `addCommand`. [keybinding] is text, `"CtrlCmd+S"`, `"Shift+Alt+F"`, `"F8"`
      * (`CtrlCmd` is Cmd on macOS and Ctrl elsewhere, `Ctrl` is Ctrl everywhere), or Monaco's
-     * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key.
+     * `KeyMod | KeyCode` number for a letter, digit, function, navigation or punctuation key. A
+     * chord of two keys is `"CtrlCmd+K CtrlCmd+S"`, or Monaco's `KeyMod.chord(...)`; its first key
+     * then starts the host's chords only, not the editor's own with the same first key.
      * Returns the command's id, for [trigger] and [removeAction]; null for a key it cannot read.
      */
     fun addCommand(handle: AardinkEditorHandle, keybinding: String, run: () -> Unit): String? {
-        val chord = KeyChord.parse(keybinding) ?: return null
+        val chord = parseKeybinding(keybinding) ?: return null
         val id = "aardink.command.${handle.nextCommandId++}"
         handle.hostActions += WebAction(id, id, listOf(chord), inContextMenu = false, run = run)
         return id
@@ -661,6 +693,62 @@ object AardinkWeb {
     }
 
     /**
+     * Monaco's `setModelMarkers(model, owner, markers)`: [diagnostics] as [owner]'s, in place of what
+     * that owner had, shown together with every other owner's and the language's own. An empty list
+     * removes the owner. The owner `"language"` stands for the language's own: setting it replaces
+     * them. Separate from [setDiagnostics], which replaces everything.
+     */
+    fun setDiagnosticsForOwner(handle: AardinkEditorHandle, owner: String, diagnostics: List<WebDiagnostic>) {
+        val list = toDiagnostics(handle.state.value.document, diagnostics)
+        if (list.isEmpty()) handle.ownerDiagnostics.remove(owner) else handle.ownerDiagnostics[owner] = list
+    }
+
+    /** [setDiagnosticsForOwner] from a JSON array of [WebDiagnostic]. */
+    fun setDiagnosticsForOwnerJson(handle: AardinkEditorHandle, owner: String, diagnosticsJson: String) {
+        setDiagnosticsForOwner(handle, owner, parseDiagnostics(diagnosticsJson))
+    }
+
+    // ── The view ─────────────────────────────────────────────────────────────
+
+    /** The lines on screen, Monaco's `getVisibleRanges`: a JSON array of one [WebRange], 1-based. */
+    fun getVisibleRangesJson(handle: AardinkEditorHandle): String {
+        val state = handle.state.value
+        val viewport = state.viewport
+        val document = state.document
+        val last = viewport.lastVisibleLine.coerceIn(0, document.lineCount - 1)
+        val range = WebRange(viewport.firstVisibleLine + 1, 1, last + 1, document.lineEnd(last) - document.lineStart(last) + 1)
+        return json.encodeToString(rangesJsonSerializer, listOf(range))
+    }
+
+    /** How far the text is scrolled down, in CSS pixels: Monaco's `getScrollTop`. */
+    fun getScrollTop(handle: AardinkEditorHandle): Double = handle.state.value.viewport.scrollTop.toDouble()
+
+    /** Scrolls the text so [top] (CSS pixels) is at the top of the view: Monaco's `setScrollTop`. */
+    fun setScrollTop(handle: AardinkEditorHandle, top: Double) {
+        handle.state.value.execute(EditorCommand.ScrollTo(top.toFloat()))
+    }
+
+    /** The height of all the text, in CSS pixels: Monaco's `getScrollHeight`. */
+    fun getScrollHeight(handle: AardinkEditorHandle): Double = handle.state.value.viewport.contentHeight.toDouble()
+
+    /**
+     * Registers the single scroll listener, replacing any previous one: called with JSON
+     * `{ scrollTop, scrollLeft, scrollHeight }` (CSS pixels) as the text scrolls, as Monaco's
+     * `onDidScrollChange`.
+     */
+    fun onScrollChange(handle: AardinkEditorHandle, callback: ((String) -> Unit)?) {
+        handle.onScrollChange = callback
+    }
+
+    /**
+     * Monaco's `layout()`: the editor measures its container again now. It follows the container's
+     * size by itself, so this is only needed when something it cannot see moved it.
+     */
+    fun layout(handle: AardinkEditorHandle) {
+        if (!handle.disposed.value) dispatchResize()
+    }
+
+    /**
      * Registers the single diagnostics listener, replacing any previous one; `null` removes it.
      * Called with a JSON array of [WebDiagnostic] each time the language's own diagnostics are
      * collected: 500 ms after the editor appears, and after each pause in typing. Not called while
@@ -679,6 +767,166 @@ object AardinkWeb {
     fun revalidate(handle: AardinkEditorHandle) {
         handle.state.value.revalidate()
     }
+
+    // ── Decorations ──────────────────────────────────────────────────────────
+
+    /**
+     * Shows [decorationsJson], a JSON array of Monaco's `IModelDeltaDecoration` (`{ range, options }`),
+     * as [owner]'s decorations, in place of what that owner had; other owners' stay. The options
+     * read are Monaco's `isWholeLine`, `hoverMessage` (a string, `{ value }` or an array of them),
+     * `overviewRuler.color` and `minimap.color`, and, where Monaco takes a CSS class instead,
+     * `backgroundColor`, `borderColor`, `underlineColor` and `gutterColor` as CSS hex colours
+     * (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after. The npm
+     * package's `deltaDecorations` and `createDecorationsCollection` are built on this.
+     */
+    fun setDecorationsJson(handle: AardinkEditorHandle, owner: String, decorationsJson: String) {
+        val state = handle.state.value
+        val list = (parsedJson(decorationsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range =
+                (item["range"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                    ?: return@mapNotNull null
+            val options = item["options"] as? JsonObject ?: JsonObject(emptyMap())
+            val exclusive = rangeOf(state.document, range)
+            Decoration(exclusive, decorationStyle(options))
+        }
+        state.setDecorations(owner, list)
+    }
+
+    /** [owner]'s decorations' ranges as they are now, a JSON array of [WebRange] in the order they were set. */
+    fun getDecorationRangesJson(handle: AardinkEditorHandle, owner: String): String {
+        val state = handle.state.value
+        val ranges = state.decorations(owner).map { webRange(state.document, it.range) }
+        return json.encodeToString(rangesJsonSerializer, ranges)
+    }
+
+    private fun decorationStyle(options: JsonObject): DecorationStyle {
+        fun color(key: String): Color = (options[key] as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        fun nestedColor(key: String): Color =
+            ((options[key] as? JsonObject)?.get("color") as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        val hover = options["hoverMessage"]
+        val message = when (hover) {
+            is JsonPrimitive -> hover.contentOrNull
+
+            is JsonObject -> (hover["value"] as? JsonPrimitive)?.contentOrNull
+
+            is JsonArray ->
+                hover
+                    .mapNotNull {
+                        (it as? JsonPrimitive)?.contentOrNull
+                            ?: ((it as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull
+                    }
+                    .joinToString("\n")
+                    .takeIf { it.isNotEmpty() }
+
+            else -> null
+        }
+        return DecorationStyle(
+            background = color("backgroundColor"),
+            underline = color("underlineColor"),
+            border = color("borderColor"),
+            wholeLine = (options["isWholeLine"] as? JsonPrimitive)?.booleanOrNull == true,
+            gutterColor = color("gutterColor"),
+            minimapColor = nestedColor("minimap"),
+            overviewRulerColor = nestedColor("overviewRuler"),
+            hoverMessage = message,
+        )
+    }
+
+    private val rangesJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebRange.serializer())
+
+    private fun parsedJson(text: String): JsonElement? = runCatching { json.parseToJsonElement(text) }.getOrNull()
+
+    // ── Document symbols ─────────────────────────────────────────────────────
+
+    /**
+     * The document's symbols as the language's service last described them (its built-in one, or a
+     * registered language's `provideDocumentSymbols`), as a JSON array of [WebDocumentSymbol]: a
+     * tree in document order, its ranges moved along with the edits since. Empty until the first
+     * answer, about 300 ms after the editor appears and after each pause in typing.
+     */
+    fun getDocumentSymbolsJson(handle: AardinkEditorHandle): String {
+        val state = handle.state.value
+        return json.encodeToString(symbolsJsonSerializer, toWebSymbols(state.document, state.symbols))
+    }
+
+    /**
+     * The symbols that hold the 1-based [line] and [column], outermost first, as a JSON array of
+     * [WebDocumentSymbol] (each with its children): the element the caret is in, its parent and up.
+     * How a host maps the caret to what the text describes.
+     */
+    fun getSymbolPathAtJson(handle: AardinkEditorHandle, line: Int, column: Int): String {
+        val state = handle.state.value
+        val path = state.symbolPathAt(offsetOf(state.document, line, column))
+        return json.encodeToString(symbolsJsonSerializer, toWebSymbols(state.document, path))
+    }
+
+    /**
+     * A JSON array of Monaco's `IColorInformation` (`{ range, color: { red, green, blue, alpha } }`,
+     * channels 0 to 1) as colours in [document]; those it cannot read are left out.
+     */
+    internal fun parseColors(document: CodeDocument, colorsJson: String): List<ColorInfo> =
+        (parsedJson(colorsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range =
+                (item["range"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                    ?: return@mapNotNull null
+            val color = item["color"] as? JsonObject ?: return@mapNotNull null
+            fun channel(key: String, default: Float? = null): Float? =
+                ((color[key] as? JsonPrimitive)?.contentOrNull?.toFloatOrNull() ?: default)?.coerceIn(0f, 1f)
+            val red = channel("red") ?: return@mapNotNull null
+            val green = channel("green") ?: return@mapNotNull null
+            val blue = channel("blue") ?: return@mapNotNull null
+            val alpha = channel("alpha", 1f)!!
+            val offsets = rangeOf(document, range)
+            if (offsets.isEmpty()) return@mapNotNull null
+            ColorInfo(offsets, Color(red, green, blue, alpha))
+        }
+
+    /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
+    internal fun parseSymbols(document: CodeDocument, symbolsJson: String): List<DocumentSymbol> = runCatching {
+        json.decodeFromString(symbolsJsonSerializer, symbolsJson)
+    }.getOrDefault(emptyList()).let { toDocumentSymbols(document, it) }
+
+    internal fun toDocumentSymbols(document: CodeDocument, symbols: List<WebDocumentSymbol>): List<DocumentSymbol> = symbols.map { web ->
+        val range = rangeOf(document, web.range)
+        DocumentSymbol(
+            name = web.name,
+            kind = SymbolKind.entries.getOrElse(web.kind) { SymbolKind.Object },
+            range = range,
+            selectionRange = web.selectionRange?.let { rangeOf(document, it) } ?: range,
+            detail = web.detail,
+            children = toDocumentSymbols(document, web.children.orEmpty()),
+        )
+    }
+
+    internal fun toWebSymbols(document: CodeDocument, symbols: List<DocumentSymbol>): List<WebDocumentSymbol> = symbols.map { symbol ->
+        WebDocumentSymbol(
+            name = symbol.name,
+            kind = symbol.kind.ordinal,
+            range = webRange(document, symbol.range),
+            selectionRange = webRange(document, symbol.selectionRange),
+            detail = symbol.detail,
+            children = toWebSymbols(document, symbol.children),
+        )
+    }
+
+    /** [range] (end-exclusive, 1-based) as an inclusive range of [document]; empty for an empty one. */
+    internal fun rangeOf(document: CodeDocument, range: WebRange): IntRange {
+        val start = offsetOf(document, range.startLineNumber, range.startColumn)
+        val end = offsetOf(document, range.endLineNumber, range.endColumn)
+        return minOf(start, end) until maxOf(start, end)
+    }
+
+    /** An inclusive (possibly empty) [range] of [document] as an end-exclusive [WebRange]. */
+    internal fun webRange(document: CodeDocument, range: IntRange): WebRange {
+        val length = document.length
+        val (startLine, startColumn) = document.offsetToLineCol(range.first.coerceIn(0, length))
+        val (endLine, endColumn) = document.offsetToLineCol((range.last + 1).coerceIn(range.first.coerceIn(0, length), length))
+        return WebRange(startLine + 1, startColumn + 1, endLine + 1, endColumn + 1)
+    }
+
+    private val symbolsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebDocumentSymbol.serializer())
 
     /** [diagnostics] in the host's shape, over as many lines as they run. */
     internal fun toWebDiagnostics(document: CodeDocument, diagnostics: List<Diagnostic>): List<WebDiagnostic> =
@@ -949,6 +1197,30 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         }
     }
     LaunchedEffect(state) {
+        snapshotFlow { state.viewport }.collect { viewport ->
+            handle.onScrollChange?.invoke(
+                """{"scrollTop":${viewport.scrollTop},"scrollLeft":${viewport.scrollLeft},"scrollHeight":${viewport.contentHeight}}""",
+            )
+        }
+    }
+    // While owners' diagnostics are shown, the layout shows the list it is given; the language's
+    // own are collected here, on the layout's schedule, to go with them.
+    val owners = handle.ownerDiagnostics.toMap()
+    val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
+    LaunchedEffect(state, language, collectLanguage) {
+        val service = language.languageService
+        if (!collectLanguage || service == null) return@LaunchedEffect
+        snapshotFlow { state.textVersion }.collectLatest { asked ->
+            delay(500)
+            val document = state.document.snapshot()
+            val list = service.diagnostics(document)
+            if (state.textVersion == asked) {
+                handle.languageDiagnostics.value = list
+                AardinkWeb.reportDiagnostics(handle, list)
+            }
+        }
+    }
+    LaunchedEffect(state) {
         snapshotFlow { state.isFocused }.collect { focused ->
             if (focused != handle.reportedFocus) {
                 handle.reportedFocus = focused
@@ -988,9 +1260,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 state = state,
                 // The host's keys come first, as Monaco's addCommand ones do.
                 modifier = Modifier.fillMaxSize().focusRequester(focusRequester).onPreviewKeyEvent { event ->
-                    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it.matches(event) } }
-                    action?.run?.invoke()
-                    action != null
+                    hostKey(handle, event)
                 },
                 contextMenuItems = handle.hostActions.filter {
                     it.inContextMenu
@@ -999,7 +1269,11 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 findReplaceState = handle.findReplaceState,
                 foldState = handle.foldState,
                 foldingProvider = language.foldingProvider,
-                diagnostics = handle.diagnostics.value,
+                diagnostics = handle.diagnostics.value ?: if (owners.isEmpty()) {
+                    null
+                } else {
+                    owners.values.flatten() + if ("language" in owners) emptyList() else handle.languageDiagnostics.value
+                },
                 savedText = handle.baseline.value,
                 onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
                 onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
@@ -1018,6 +1292,12 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     insertSpaces = options.insertSpaces,
                     renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
                     quickSuggestions = options.quickSuggestions,
+                    overviewRuler = options.overviewRuler,
+                    occurrencesHighlight = options.occurrencesHighlight,
+                    linkedEditing = options.linkedEditing,
+                    colorDecorators = options.colorDecorators,
+                    breadcrumbs = options.breadcrumbs,
+                    fontLigatures = options.fontLigatures,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
             )
@@ -1064,6 +1344,9 @@ private fun followSize(element: Element): JsAny = js(
     };
 }""",
 )
+
+/** Sends the window a `resize`, which makes Compose measure the editor again. */
+private fun dispatchResize(): Unit = js("window.dispatchEvent(new Event('resize'))")
 
 /** Calls the function [followSize] returned. */
 private fun callStop(stop: JsAny): Unit = js("stop()")
@@ -1167,4 +1450,66 @@ internal fun renderWhitespaceOf(value: String): RenderWhitespace = when (value) 
     "trailing" -> RenderWhitespace.Trailing
     "all" -> RenderWhitespace.All
     else -> RenderWhitespace.Selection
+}
+
+/**
+ * Runs the host's action bound to [event], as Monaco's `addCommand` keys come first: a key of its
+ * own, or the second of a chord whose first the host's bindings started. Returns whether the key
+ * was the host's.
+ */
+private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
+    val pending = handle.pendingHostChord
+    if (pending != null) {
+        if (event.key in CHORD_MODIFIER_KEYS) return false
+        if (event.type != KeyEventType.KeyDown) return true
+        handle.pendingHostChord = null
+        val action = handle.hostActions.lastOrNull { action ->
+            action.keybindings.any { binding ->
+                binding.size == 2 && binding[0] == pending &&
+                    (binding[1].matches(event) || binding[1].copy(ctrlCmd = !binding[1].ctrlCmd).matches(event))
+            }
+        }
+        action?.run?.invoke()
+        // A pair that means nothing is swallowed, as Monaco does.
+        return true
+    }
+    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it.size == 1 && it[0].matches(event) } }
+    if (action != null) {
+        action.run()
+        return true
+    }
+    val chord = handle.hostActions.asReversed().firstNotNullOfOrNull { action ->
+        action.keybindings.firstOrNull { it.size == 2 && it[0].matches(event) }
+    }
+    if (chord != null) {
+        handle.pendingHostChord = chord[0]
+        return true
+    }
+    return false
+}
+
+/** Keys that are only modifiers, which do not complete a chord. */
+private val CHORD_MODIFIER_KEYS = setOf(
+    Key.CtrlLeft,
+    Key.CtrlRight,
+    Key.ShiftLeft,
+    Key.ShiftRight,
+    Key.AltLeft,
+    Key.AltRight,
+    Key.MetaLeft,
+    Key.MetaRight,
+)
+
+/** A CSS hex colour (`#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`); null for anything else. */
+internal fun cssHexColor(text: String): Color? {
+    val hex = text.trim().removePrefix("#")
+    if (hex.any { it.digitToIntOrNull(16) == null }) return null
+    val full = when (hex.length) {
+        3, 4 -> hex.map { "$it$it" }.joinToString("")
+        6, 8 -> hex
+        else -> return null
+    }
+    val rgb = full.substring(0, 6).toLong(16)
+    val alpha = if (full.length == 8) full.substring(6, 8).toLong(16) else 0xFF
+    return Color((alpha shl 24 or rgb).toInt())
 }

@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -49,14 +52,25 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.takeOrElse
 import com.aardarch.aardink.core.CodeAction
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
+import com.aardarch.aardink.core.DocumentLink
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
@@ -75,9 +89,14 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SimpleDiffProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.core.TrackedRanges
+import com.aardarch.aardink.core.UrlDetector
+import com.aardarch.aardink.core.ViewportInfo
 import com.aardarch.aardink.core.completionReplaceRange
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.core.flattenSymbols
+import com.aardarch.aardink.core.lineMarks
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
@@ -142,7 +161,99 @@ fun CodeEditorLayout(
     keyboardToolbarItems: List<KeyboardToolbarItem> = emptyList(),
     touchMenuItems: List<EditorMenuItem> = emptyList(),
     contextMenuItems: List<EditorMenuItem> = emptyList(),
+    onOpenLink: (target: String) -> Unit = {},
+    onFontSizeChange: ((TextUnit) -> Unit)? = null,
 ) {
+    // The typography with the options' size, and the size the editor zoomed to itself when it
+    // owns the size (pinchToZoom without onFontSizeChange).
+    val baseTypography = LocalEditorTypography.current
+    var ownFontSize by remember { mutableStateOf(TextUnit.Unspecified) }
+    val zoomable = options.pinchToZoom || onFontSizeChange != null
+    val fontSize = when {
+        onFontSizeChange == null && options.pinchToZoom && ownFontSize.isSpecified -> ownFontSize
+        options.fontSize.isSpecified -> options.fontSize
+        else -> baseTypography.fontSize
+    }
+    val typography = remember(baseTypography, fontSize, options.lineHeight) {
+        val lineHeight = options.lineHeight.takeOrElse {
+            if (fontSize == baseTypography.fontSize) {
+                baseTypography.lineHeight
+            } else {
+                (baseTypography.lineHeight.value * fontSize.value / baseTypography.fontSize.value).sp
+            }
+        }
+        baseTypography.copy(fontSize = fontSize, lineHeight = lineHeight)
+    }
+    val currentFontSize = rememberUpdatedState(fontSize)
+    val currentOnFontSizeChange = rememberUpdatedState(onFontSizeChange)
+    val zoomTo: (TextUnit) -> Unit = { wanted ->
+        val size = (kotlin.math.round(wanted.value.coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE) * 2f) / 2f).sp
+        if (size != currentFontSize.value) {
+            val callback = currentOnFontSizeChange.value
+            if (callback != null) callback(size) else ownFontSize = size
+        }
+    }
+    CompositionLocalProvider(LocalEditorTypography provides typography) {
+        CodeEditorLayoutContent(
+            state = state,
+            modifier = modifier,
+            options = options,
+            languageService = languageService,
+            findReplaceState = findReplaceState,
+            foldState = foldState,
+            foldingProvider = foldingProvider,
+            diagnostics = diagnostics,
+            savedText = savedText,
+            onCursorChange = onCursorChange,
+            onDiagnosticsChange = onDiagnosticsChange,
+            onNavigateToLocation = onNavigateToLocation,
+            toolbarStyle = toolbarStyle,
+            keyboardToolbarPlacement = keyboardToolbarPlacement,
+            onRequestGoToLine = onRequestGoToLine,
+            keyboardToolbarItems = keyboardToolbarItems,
+            touchMenuItems = touchMenuItems,
+            contextMenuItems = contextMenuItems,
+            onOpenLink = onOpenLink,
+            zoom = if (zoomable) {
+                ZoomControl(
+                    zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
+                    step = { steps -> zoomTo((currentFontSize.value.value + steps).sp) },
+                    reset = { zoomTo(if (options.fontSize.isSpecified) options.fontSize else baseTypography.fontSize) },
+                )
+            } else {
+                null
+            },
+        )
+    }
+}
+
+/** What zooming does, for the commands and the gestures; null when the editor does not zoom. */
+private class ZoomControl(val zoomBy: (Float) -> Unit, val step: (Int) -> Unit, val reset: () -> Unit)
+
+@Composable
+private fun CodeEditorLayoutContent(
+    state: CodeEditorState,
+    modifier: Modifier,
+    options: EditorOptions,
+    languageService: LanguageService?,
+    findReplaceState: FindReplaceState?,
+    foldState: FoldState?,
+    foldingProvider: FoldingProvider,
+    diagnostics: List<Diagnostic>?,
+    savedText: String,
+    onCursorChange: (line: Int, column: Int) -> Unit,
+    onDiagnosticsChange: (List<Diagnostic>) -> Unit,
+    onNavigateToLocation: (Location) -> Unit,
+    toolbarStyle: KeyboardToolbarStyle,
+    keyboardToolbarPlacement: KeyboardToolbarPlacement,
+    onRequestGoToLine: () -> Unit,
+    keyboardToolbarItems: List<KeyboardToolbarItem>,
+    touchMenuItems: List<EditorMenuItem>,
+    contextMenuItems: List<EditorMenuItem>,
+    onOpenLink: (target: String) -> Unit,
+    zoom: ZoomControl?,
+) {
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
     // A theme without a default token colour falls back to the chrome's text colour, not the host's.
@@ -159,7 +270,7 @@ fun CodeEditorLayout(
 
     // ── Diagnostics: the host's list, or the language service's ──────────────
     // Either way the tracker moves their ranges along with each edit until the next list.
-    val diagnosticsTracker = remember(state) { DiagnosticsTracker(state.document) }
+    val diagnosticsTracker = remember(state) { DiagnosticsTracker() }
     DisposableEffect(diagnosticsTracker) {
         state.document.addChangeListener(diagnosticsTracker)
         onDispose { state.document.removeChangeListener(diagnosticsTracker) }
@@ -210,6 +321,57 @@ fun CodeEditorLayout(
         SideEffect { if (diagnosticsTracker.given !== diagnostics) diagnosticsTracker.replace(diagnostics) }
     }
     val currentShownDiagnostics = rememberUpdatedState(shownDiagnostics)
+
+    // ── Document symbols: asked after each pause in typing, moved with edits between ─
+    LaunchedEffect(state, languageService) {
+        val service = languageService
+        if (service == null) {
+            state.publishSymbols(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(SYMBOLS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val list = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) { service.documentSymbols(document) }
+            }
+            if (state.document.version != document.version) return@collectLatest
+            state.publishSymbols(list)
+        }
+    }
+    var showSymbolPicker by remember { mutableStateOf(false) }
+
+    // Shift+Alt+Right: the language service's next larger range, else the editor's own.
+    val expandSelection: suspend () -> Unit = expand@{
+        val service = languageService
+        val selection = state.selection
+        val version = state.textVersion
+        if (service != null) {
+            val document = state.document.snapshot()
+            val chain = withContext(state.computeDispatcher) { service.selectionRanges(document, listOf(selection.min)) }.firstOrNull()
+            if (state.textVersion != version) return@expand
+            var range = chain
+            while (range != null) {
+                val r = range.range
+                val holds = r.first <= selection.min && r.last + 1 >= selection.max
+                if (holds && (r.first < selection.min || r.last + 1 > selection.max)) {
+                    state.growSelection(r)
+                    return@expand
+                }
+                range = range.parent
+            }
+        }
+        state.expandSelectionByText()
+    }
+    val goToSymbol: (DocumentSymbol) -> Unit = { symbol ->
+        showSymbolPicker = false
+        val name = symbol.selectionRange
+        val end = if (name.isEmpty()) name.first else name.last + 1
+        state.navigateTo(name.first, TextRange(name.first, end))
+        controller.requestFocus()
+    }
 
     // Completion state. With a hardware keyboard the list sits at the caret and the arrows move
     // its selection; on a touch device it is a strip above the keyboard.
@@ -469,18 +631,159 @@ fun CodeEditorLayout(
             }
         }
     }
-    val stickySource = if (options.stickyScroll) foldState?.foldableRanges ?: ownStickyRanges else emptyList()
+    // Symbols that span lines, when the language service has any, as VS Code's sticky scroll
+    // prefers its outline; the fold ranges otherwise.
+    val symbolStickyRanges = if (options.stickyScroll) {
+        val symbols = state.symbols
+        remember(symbols) { symbolStickyRanges(symbols, state.document) }
+    } else {
+        emptyList()
+    }
+    val stickySource = when {
+        !options.stickyScroll -> emptyList()
+        symbolStickyRanges.isNotEmpty() -> symbolStickyRanges
+        else -> foldState?.foldableRanges ?: ownStickyRanges
+    }
     val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
 
-    // ── Hover: the documentation of the symbol under a resting mouse ─────────
-    // ── Hover: the diagnostics and the documentation under a resting mouse ───
+    // ── The view's place, for the host ───────────────────────────────────────
+    LaunchedEffect(state, view, density) {
+        snapshotFlow {
+            val frame = view.frame
+            val scroll = view.scroll
+            with(density) {
+                ViewportInfo(
+                    scrollTop = scroll.scrollY.toDp().value,
+                    scrollLeft = scroll.scrollX.toDp().value,
+                    firstVisibleLine = frame.lines.firstOrNull()?.line ?: 0,
+                    lastVisibleLine = frame.lines.lastOrNull()?.line ?: 0,
+                    height = scroll.viewportHeight.toFloat().toDp().value,
+                    contentHeight = scroll.contentHeight.toDp().value,
+                )
+            }
+        }.collect { state.viewport = it }
+    }
+
+    // ── Occurrences of the symbol at a resting caret ─────────────────────────
+    val occurrenceStyle =
+        remember(theme) { DecorationStyle(background = theme.selectionColor.copy(alpha = theme.selectionColor.alpha * 0.5f)) }
+    LaunchedEffect(state, languageService, options.occurrencesHighlight, occurrenceStyle) {
+        if (!options.occurrencesHighlight) {
+            state.clearDecorations(OCCURRENCES_OWNER)
+            return@LaunchedEffect
+        }
+        val service = languageService
+        snapshotFlow { state.selection to state.textVersion }.collectLatest { (selection, _) ->
+            state.clearDecorations(OCCURRENCES_OWNER)
+            if (!selection.collapsed || state.exceedsAnalysisLimit) return@collectLatest
+            delay(OCCURRENCES_DELAY_MS)
+            val caret = selection.end
+            val document = state.document.snapshot()
+            val given = if (service != null) {
+                withContext(state.computeDispatcher) { service.documentHighlights(document, caret) }.map { it.range }
+            } else {
+                emptyList()
+            }
+            val ranges = given.ifEmpty {
+                // The word at the caret, as a whole word, as VS Code highlights without a service.
+                val word = TextNavigator.wordAt(document, caret)
+                if (word.isEmpty()) {
+                    emptyList()
+                } else {
+                    val query = document.subSequence(word.first, word.last + 1).toString()
+                    val options = FindEngine.Options(caseSensitive = true, wholeWord = true)
+                    withContext(state.computeDispatcher) {
+                        FindEngine.findAllCooperatively(document.text, query, options, EditorLimits.maxFindMatches).matches
+                    }
+                }
+            }
+            if (state.document.version != document.version) return@collectLatest
+            state.setDecorations(OCCURRENCES_OWNER, ranges.map { Decoration(it, occurrenceStyle) })
+        }
+    }
+
+    // ── Linked editing: the ranges linked to the one at the caret ────────────
+    LaunchedEffect(state, languageService, options.linkedEditing) {
+        val service = languageService
+        if (!options.linkedEditing || service == null) {
+            state.setLinkedRanges(emptyList(), state.document.version)
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.selection to state.textVersion }.collectLatest { (selection, _) ->
+            delay(LINKED_EDITING_DELAY_MS)
+            val document = state.document.snapshot()
+            val linked = withContext(state.computeDispatcher) { service.linkedEditingRanges(document, selection.end) }
+            state.setLinkedRanges(linked?.ranges.orEmpty().map { it.first until it.last + 1 }, document.version)
+        }
+    }
+
+    // ── Colours: swatches under the colours the language service finds, and their picker ─
+    val colorTracker = remember(state) {
+        TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
+    }
+    DisposableEffect(colorTracker) {
+        state.document.addChangeListener(colorTracker)
+        onDispose { state.document.removeChangeListener(colorTracker) }
+    }
+    LaunchedEffect(colorTracker, languageService, options.colorDecorators) {
+        val service = languageService
+        if (service == null || !options.colorDecorators) {
+            colorTracker.replace(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(COLORS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val found = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) {
+                    service.documentColors(document)
+                }
+            }
+            if (state.document.version == document.version) colorTracker.replace(found)
+        }
+    }
+    val colorAt: (Int) -> ColorInfo? = { offset ->
+        colorTracker.items.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
+    }
+    // The colour the picker is open for, while it is.
+    var pickingColor by remember { mutableStateOf<ColorInfo?>(null) }
+    val applyColor: (ColorInfo, Color) -> Unit = { info, color ->
+        pickingColor = null
+        val service = languageService
+        val version = state.textVersion
+        coroutineScope.launch {
+            val document = state.document.snapshot()
+            val presentation = service?.let {
+                withContext(state.computeDispatcher) { it.colorPresentations(document, info, color) }
+            }?.firstOrNull()
+            if (state.textVersion != version) return@launch
+            val edit = presentation?.textEdit ?: TextEdit(info.range, presentation?.label ?: cssHex(color))
+            state.applyTextEdits(listOf(edit))
+        }
+        controller.requestFocus()
+    }
+
+    // ── Host decorations: their gutter bars ──────────────────────────────────
+    val gutterDecorationMarks by remember(state) {
+        derivedStateOf { lineMarks(state.shownDecorations, state.document) { it.gutterColor } }
+    }
+
+    // ── Hover: the decorations' messages, diagnostics and documentation under a resting mouse ─
     val showHover: suspend (Int) -> Unit = hover@{ offset ->
         val service = languageService
         val here = currentShownDiagnostics.value
             .filter { offset in it.range.first..it.range.last + 1 }
             .sortedBy { it.severity }
+        val decorated = state.shownDecorations.filter { decoration ->
+            decoration.style.hoverMessage != null && !decoration.range.isEmpty() &&
+                offset in decoration.range.first..decoration.range.last + 1
+        }
+        val messages = decorated.mapNotNull { it.style.hoverMessage }
         val word = TextNavigator.wordAt(state.document, offset)
-        if (here.isEmpty() && (service == null || word.isEmpty())) return@hover
+        val colorHere = if (options.colorDecorators && !options.readOnly) colorAt(offset) else null
+        if (here.isEmpty() && messages.isEmpty() && colorHere == null && (service == null || word.isEmpty())) return@hover
         val version = state.textVersion
         val document = state.document.snapshot()
         val doc = if (service != null && !word.isEmpty()) {
@@ -493,10 +796,12 @@ fun CodeEditorLayout(
         } else {
             emptyList()
         }
-        if (state.textVersion != version || (doc == null && here.isEmpty())) return@hover
-        val start = (here.map { it.range.first } + listOfNotNull(word.first.takeUnless { word.isEmpty() })).min()
-        val end = (here.map { it.range.last + 1 } + listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })).max()
-        hover = HoverShown(doc, start, end, here, actions)
+        if (state.textVersion != version || (doc == null && here.isEmpty() && messages.isEmpty() && colorHere == null)) return@hover
+        val starts = here.map { it.range.first } + decorated.map { it.range.first } + listOfNotNull(colorHere?.range?.first) +
+            listOfNotNull(word.first.takeUnless { word.isEmpty() })
+        val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } + listOfNotNull(colorHere?.range?.last?.plus(1)) +
+            listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })
+        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages)
     }
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
@@ -590,16 +895,7 @@ fun CodeEditorLayout(
         true
     }
     // VS Code's "Fold Level N": the ranges nested N deep, 1 the outermost.
-    val foldLevel: (Int) -> Boolean = level@{ level ->
-        val folds = foldState ?: return@level false
-        val ranges = folds.foldableRanges
-        fun encloses(outer: FoldRange, inner: FoldRange) = outer !== inner &&
-            outer.startLine <= inner.startLine && outer.endLine >= inner.endLine &&
-            (outer.startLine != inner.startLine || outer.endLine != inner.endLine)
-        val atLevel = ranges.filter { range -> ranges.count { encloses(it, range) } == level - 1 }
-        for (range in atLevel) if (!folds.isFolded(range.startLine)) folds.toggle(range.startLine)
-        atLevel.isNotEmpty()
-    }
+    val foldLevel: (Int) -> Boolean = { level -> foldState?.foldLevel(level) ?: false }
     // F8 / Shift+F8: the next or previous problem after the caret, wrapping, selected and shown in
     // the tooltip with its place in the list; hints are not problems.
     val goToProblem: (Boolean) -> Boolean = problem@{ forward ->
@@ -624,18 +920,74 @@ fun CodeEditorLayout(
     LaunchedEffect(state) {
         snapshotFlow { state.textVersion }.collect { references = null }
     }
-    // Ctrl (Cmd) over a symbol with a definition: it becomes a link. Asked once per word the mouse
-    // is over, not per pixel it moves.
+    // ── Document links: the language service's, kept on their text; plain URLs found as needed ─
+    val linkTracker = remember(state) {
+        TrackedRanges<DocumentLink>({ it.range }, { link, range -> link.copy(range = range) }, keepsOneCharacter = false)
+    }
+    DisposableEffect(linkTracker) {
+        state.document.addChangeListener(linkTracker)
+        onDispose { state.document.removeChangeListener(linkTracker) }
+    }
+    LaunchedEffect(linkTracker, languageService) {
+        val service = languageService
+        if (service == null) {
+            linkTracker.replace(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(LINKS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val links = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) {
+                    service.documentLinks(document)
+                }
+            }
+            if (state.document.version == document.version) linkTracker.replace(links)
+        }
+    }
+    // The link at an offset: the service's, else a URL on its line.
+    val linkAt: (Int) -> DocumentLink? = link@{ offset ->
+        linkTracker.items.firstOrNull { !it.range.isEmpty() && offset in it.range.first..it.range.last + 1 }?.let { return@link it }
+        val document = state.document
+        val line = document.offsetToLineCol(offset.coerceIn(0, document.length)).first
+        val lineStart = document.lineStart(line)
+        val text = document.lineText(line)
+        val url = UrlDetector.urlAt(text, offset - lineStart) ?: return@link null
+        DocumentLink((lineStart + url.first) until (lineStart + url.last + 1), text.substring(url.first, url.last + 1))
+    }
+    val currentOnOpenLink = rememberUpdatedState(onOpenLink)
+    val openLinkAt: (Int) -> Boolean = { offset ->
+        val link = linkAt(offset)
+        if (link != null) currentOnOpenLink.value(link.target)
+        link != null
+    }
+
+    // Ctrl (Cmd) over a link, or over a symbol with a definition: it becomes a link. Asked once per
+    // word the mouse is over, not per pixel it moves.
     LaunchedEffect(controller, languageService) {
         snapshotFlow {
-            val at = controller.hoverAt?.takeIf { controller.linkModifier && languageService != null }
+            val at = controller.hoverAt?.takeIf { controller.linkModifier }
             at?.let { view.offsetAt(it).offset }?.let { offset ->
-                TextNavigator.wordAt(state.document, offset).takeUnless { it.isEmpty() }?.let { word -> offset to word }
+                val link = linkAt(offset)
+                if (link != null) {
+                    offset to link.range
+                } else {
+                    TextNavigator.wordAt(state.document, offset).takeUnless { it.isEmpty() || languageService == null }?.let { word ->
+                        offset to
+                            word
+                    }
+                }
             }
         }.distinctUntilChangedBy { it?.second }.collectLatest { found ->
             controller.link = null
-            val service = languageService ?: return@collectLatest
             val (offset, word) = found ?: return@collectLatest
+            if (linkAt(offset) != null) {
+                controller.link = TextRange(word.first, word.last + 1)
+                return@collectLatest
+            }
+            val service = languageService ?: return@collectLatest
             val version = state.textVersion
             val document = state.document.snapshot()
             withContext(state.computeDispatcher) { service.definition(document, offset) } ?: return@collectLatest
@@ -900,6 +1252,29 @@ fun CodeEditorLayout(
 
             is EditorCommand.FoldLevel -> foldLevel(command.level)
 
+            EditorCommand.Fold -> foldState?.foldAt(state.document.offsetToLineCol(state.selection.end).first) ?: false
+
+            EditorCommand.Unfold -> foldState?.unfoldAt(state.document.offsetToLineCol(state.selection.end).first) ?: false
+
+            EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
+
+            EditorCommand.ZoomIn -> zoom?.step?.invoke(1) != null
+
+            EditorCommand.ZoomOut -> zoom?.step?.invoke(-1) != null
+
+            EditorCommand.ZoomReset -> zoom?.reset?.invoke() != null
+
+            is EditorCommand.ScrollTo -> true.also { view.scroll.scrollToY(with(density) { command.top.dp.toPx() }) }
+
+            is EditorCommand.ScrollLines -> true.also {
+                val lineHeight = view.style?.metrics?.lineHeight ?: 0f
+                view.scroll.scrollToY(view.scroll.scrollY + command.delta * lineHeight)
+            }
+
+            EditorCommand.ShowColorPicker -> colorAt(state.selection.end)?.let { pickingColor = it } != null
+
+            EditorCommand.ExpandSelection -> true.also { coroutineScope.launch { expandSelection() } }
+
             is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
 
             else -> false
@@ -914,10 +1289,13 @@ fun CodeEditorLayout(
             }
             addAll(listOf(EditorCommand.ShowHover, EditorCommand.GoToDefinition, EditorCommand.FindReferences))
             if (editable && languageService.supportsRename) add(EditorCommand.Rename)
+            add(EditorCommand.GoToSymbol)
         }
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
-        if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll))
+        if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
+        if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
+        if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))
     }
     DisposableEffect(state) {
         onDispose {
@@ -935,6 +1313,7 @@ fun CodeEditorLayout(
         controller.scope = coroutineScope
         controller.languageService = { currentLanguageService.value }
         controller.touchMenuItems = touchMenuItems
+        controller.keyBindings = options.keyBindings
         controller.contextMenuItems = contextMenuItems
         controller.actions = EditorHostActions(
             onFind = {
@@ -978,6 +1357,7 @@ fun CodeEditorLayout(
                 }
             },
             onGoToProblem = goToProblem,
+            onOpenLink = openLinkAt,
             onQuickFix = showCodeActions,
             onRename = { (languageService?.supportsRename == true).also { if (it) state.requestRename() } },
             onFindNext = findNext,
@@ -1052,7 +1432,6 @@ fun CodeEditorLayout(
     // the rest of the IME inset may push the content up: plain imePadding() would lift the
     // keyboard toolbar by the whole keyboard height and leave a gap the size of the host's bars.
     var bottomGapPx by remember { mutableIntStateOf(0) }
-    val density = LocalDensity.current
 
     Column(
         modifier = modifier
@@ -1154,6 +1533,14 @@ fun CodeEditorLayout(
             toolbar()
         }
 
+        if (options.breadcrumbs) {
+            EditorBreadcrumbs(
+                path = state.symbolPathAt(state.selection.end),
+                onPick = goToSymbol,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         // ── Editor body: gutter + text area ──────────────────────────────────
         VirtualizedEditorBody(
             state = state,
@@ -1171,6 +1558,16 @@ fun CodeEditorLayout(
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
+                    onLineNumberTap = { line ->
+                        val document = state.document
+                        val end = if (line + 1 < document.lineCount) document.lineStart(line + 1) else document.length
+                        state.withSelectionReason(SelectionChangeReason.Pointer) {
+                            state.selection =
+                                TextRange(document.lineStart(line), end)
+                        }
+                        controller.requestFocus()
+                    },
+                    decorationMarks = gutterDecorationMarks,
                     onAnnotationTap = { lineIndex ->
                         problemCounter = null
                         tooltipDiagnostic = shownDiagnostics
@@ -1184,6 +1581,8 @@ fun CodeEditorLayout(
             options = options,
             textColor = textColor,
             stickyRanges = stickyRanges,
+            colorSwatches = { colorTracker.items },
+            onZoom = zoom?.zoomBy,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -1217,7 +1616,15 @@ fun CodeEditorLayout(
                         anchor = Rect(start.left, start.top, maxOf(end.right, start.left + 1f), start.bottom),
                         onDismiss = { hover = null },
                     ) {
+                        val hoveredColor = if (options.readOnly) null else colorAt(shown.start)
                         EditorHoverCard(
+                            onPickColor = hoveredColor?.let { color ->
+                                {
+                                    hover = null
+                                    pickingColor = color
+                                }
+                            },
+                            messages = shown.messages,
                             diagnostics = shown.diagnostics,
                             doc = shown.doc,
                             onQuickFix = if (shown.actions.isNotEmpty()) {
@@ -1229,6 +1636,41 @@ fun CodeEditorLayout(
                                 }
                             } else {
                                 null
+                            },
+                        )
+                    }
+                }
+                pickingColor?.let { info ->
+                    EditorAnchoredPopup(
+                        anchor = view.caretRect(info.range.first),
+                        focusable = true,
+                        onDismiss = { pickingColor = null },
+                    ) {
+                        ColorPickerCard(
+                            initial = info.color,
+                            onPick = { color -> applyColor(info, color) },
+                            onDismiss = {
+                                pickingColor = null
+                                controller.requestFocus()
+                            },
+                        )
+                    }
+                }
+                if (showSymbolPicker) {
+                    EditorAnchoredPopup(
+                        anchor = Rect(0f, 0f, 0f, 0f),
+                        focusable = true,
+                        onDismiss = {
+                            showSymbolPicker = false
+                            controller.requestFocus()
+                        },
+                    ) {
+                        SymbolPickerCard(
+                            symbols = state.symbols,
+                            onPick = goToSymbol,
+                            onDismiss = {
+                                showSymbolPicker = false
+                                controller.requestFocus()
                             },
                         )
                     }
@@ -1294,6 +1736,7 @@ private class HoverShown(
     val end: Int,
     val diagnostics: List<Diagnostic> = emptyList(),
     val actions: List<CodeAction> = emptyList(),
+    val messages: List<String> = emptyList(),
 )
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
@@ -1354,6 +1797,28 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
 
 /** The longest selection Ctrl+F takes as its query, as VS Code's. */
 private const val FIND_SEED_LIMIT = 200
+
+/** The decorations owner the editor highlights occurrences under; owners starting `aardink.` are the editor's own. */
+internal const val OCCURRENCES_OWNER = "aardink.occurrences"
+
+/** How long the caret rests before its symbol's occurrences are highlighted, as VS Code's. */
+private const val OCCURRENCES_DELAY_MS = 250L
+
+/** How long after the caret moves the linked ranges at it are asked for. */
+private const val LINKED_EDITING_DELAY_MS = 50L
+
+/** How long after the last edit the editor asks the language service for the document's colours. */
+private const val COLORS_DEBOUNCE_MS = 300L
+
+/** The smallest and largest font size zooming goes to, in sp. */
+private const val MIN_FONT_SIZE = 6f
+private const val MAX_FONT_SIZE = 72f
+
+/** How long after the last edit the editor asks the language service for the document's links. */
+private const val LINKS_DEBOUNCE_MS = 500L
+
+/** How long after the last edit the editor asks the language service for the document's symbols. */
+private const val SYMBOLS_DEBOUNCE_MS = 300L
 
 /** Delay before the language service is asked for diagnostics, after the editor appears or an edit. */
 private const val DIAGNOSTICS_DEBOUNCE_MS = 500L
@@ -1422,4 +1887,21 @@ private fun endOfLiteral(text: CharSequence, start: Int, limit: Int): Int {
         }
     }
     return limit
+}
+
+/**
+ * The symbols in [symbols] that span more than one line, as fold ranges for sticky scroll: each
+ * from the line it starts on to the line it ends on.
+ */
+internal fun symbolStickyRanges(symbols: List<DocumentSymbol>, document: CodeDocument): List<FoldRange> {
+    if (symbols.isEmpty()) return emptyList()
+    val out = ArrayList<FoldRange>()
+    val length = document.length
+    for ((symbol, _) in flattenSymbols(symbols)) {
+        if (symbol.range.isEmpty()) continue
+        val start = document.offsetToLineCol(symbol.range.first.coerceIn(0, length)).first
+        val end = document.offsetToLineCol(symbol.range.last.coerceIn(0, length)).first
+        if (end > start) out += FoldRange(start, end)
+    }
+    return out
 }
