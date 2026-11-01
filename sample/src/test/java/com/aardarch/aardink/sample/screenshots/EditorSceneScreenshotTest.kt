@@ -15,8 +15,12 @@
  */
 package com.aardarch.aardink.sample.screenshots
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,21 +30,26 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.ui.CodeBlock
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
+import com.aardarch.aardink.ui.fromColorScheme
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -156,11 +165,12 @@ class EditorSceneScreenshotTest {
         softWrap: Boolean = false,
         editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
         languageService: LanguageService? = null,
+        theme: EditorTheme = EditorThemes.VsCodeDark,
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                CompositionLocalProvider(LocalEditorTheme provides theme) {
                     CodeEditorLayout(
                         state = state,
                         foldState = foldState,
@@ -394,5 +404,34 @@ class EditorSceneScreenshotTest {
             editorOptions = EditorOptions(softWrap = true, colorDecorators = true),
             languageService = xml.languageService,
         )
+    }
+
+    @Test
+    fun zoom() {
+        // A larger font, set through the options, with ligatures off.
+        capture("zoom", stateOf(code), editorOptions = EditorOptions(fontSize = 20.sp, fontLigatures = false))
+    }
+
+    @Test
+    fun material() {
+        // The editor in an app's Material 3 colours.
+        val scheme = lightColorScheme(primary = Color(0xFF00658E), secondary = Color(0xFF4F616E), tertiary = Color(0xFF7C4E7E))
+        capture("material", stateOf(code), theme = EditorTheme.fromColorScheme(scheme, dark = false))
+    }
+
+    @Test
+    fun codeBlock() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                    Box(Modifier.fillMaxSize().background(Color(0xFF303030)).padding(16.dp)) {
+                        CodeBlock(text = code.lines().take(10).joinToString("\n"), tokenizer = kotlin.tokenizer)
+                    }
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("../screenshots/scene-codeblock.png", roborazziOptions = options)
     }
 }

@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.unit.TextUnit
 import com.aardarch.aardink.core.LineEnding
 
 /**
@@ -75,6 +76,17 @@ import com.aardarch.aardink.core.LineEnding
  *   `listOf(EditorKeyBinding(KeyChord(Key.D, ctrlCmd = true, shift = true), EditorCommand.SelectAllOccurrences),
  *   EditorKeyBinding(KeyChord(Key.L, ctrlCmd = true), null))`. These bind the editor's commands;
  *   a host's own actions (Ctrl+S to save) belong in its own key handling.
+ * @property fontSize The text's size, over [LocalEditorTypography]'s; unspecified, the default,
+ *   keeps the typography's. With `CodeEditorLayout(onFontSizeChange)` the host owns it: zooming
+ *   asks for a new size there.
+ * @property lineHeight The height of a row of text; unspecified, the default, scales the
+ *   typography's with [fontSize].
+ * @property pinchToZoom Two fingers pinching the text, Ctrl+wheel (Cmd+wheel on macOS), Ctrl+=,
+ *   Ctrl+- and Ctrl+0 change the font size, from 6 to 72 sp. Without `onFontSizeChange` the
+ *   editor keeps the size itself. Off by default; with `onFontSizeChange` given, zooming is on
+ *   whatever this says.
+ * @property fontLigatures The font's ligatures (`->` drawn as one arrow, in fonts that have them).
+ *   On by default, as text has always been drawn; off draws every character on its own.
  */
 @Immutable
 data class EditorOptions(
@@ -101,6 +113,10 @@ data class EditorOptions(
     val linkedEditing: Boolean = false,
     val colorDecorators: Boolean = false,
     val keyBindings: List<EditorKeyBinding> = emptyList(),
+    val fontSize: TextUnit = TextUnit.Unspecified,
+    val lineHeight: TextUnit = TextUnit.Unspecified,
+    val pinchToZoom: Boolean = false,
+    val fontLigatures: Boolean = true,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

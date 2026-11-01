@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -51,6 +52,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.takeOrElse
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
@@ -155,6 +160,96 @@ fun CodeEditorLayout(
     touchMenuItems: List<EditorMenuItem> = emptyList(),
     contextMenuItems: List<EditorMenuItem> = emptyList(),
     onOpenLink: (target: String) -> Unit = {},
+    onFontSizeChange: ((TextUnit) -> Unit)? = null,
+) {
+    // The typography with the options' size, and the size the editor zoomed to itself when it
+    // owns the size (pinchToZoom without onFontSizeChange).
+    val baseTypography = LocalEditorTypography.current
+    var ownFontSize by remember { mutableStateOf(TextUnit.Unspecified) }
+    val zoomable = options.pinchToZoom || onFontSizeChange != null
+    val fontSize = when {
+        onFontSizeChange == null && options.pinchToZoom && ownFontSize.isSpecified -> ownFontSize
+        options.fontSize.isSpecified -> options.fontSize
+        else -> baseTypography.fontSize
+    }
+    val typography = remember(baseTypography, fontSize, options.lineHeight) {
+        val lineHeight = options.lineHeight.takeOrElse {
+            if (fontSize == baseTypography.fontSize) {
+                baseTypography.lineHeight
+            } else {
+                (baseTypography.lineHeight.value * fontSize.value / baseTypography.fontSize.value).sp
+            }
+        }
+        baseTypography.copy(fontSize = fontSize, lineHeight = lineHeight)
+    }
+    val currentFontSize = rememberUpdatedState(fontSize)
+    val currentOnFontSizeChange = rememberUpdatedState(onFontSizeChange)
+    val zoomTo: (TextUnit) -> Unit = { wanted ->
+        val size = (kotlin.math.round(wanted.value.coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE) * 2f) / 2f).sp
+        if (size != currentFontSize.value) {
+            val callback = currentOnFontSizeChange.value
+            if (callback != null) callback(size) else ownFontSize = size
+        }
+    }
+    CompositionLocalProvider(LocalEditorTypography provides typography) {
+        CodeEditorLayoutContent(
+            state = state,
+            modifier = modifier,
+            options = options,
+            languageService = languageService,
+            findReplaceState = findReplaceState,
+            foldState = foldState,
+            foldingProvider = foldingProvider,
+            diagnostics = diagnostics,
+            savedText = savedText,
+            onCursorChange = onCursorChange,
+            onDiagnosticsChange = onDiagnosticsChange,
+            onNavigateToLocation = onNavigateToLocation,
+            toolbarStyle = toolbarStyle,
+            keyboardToolbarPlacement = keyboardToolbarPlacement,
+            onRequestGoToLine = onRequestGoToLine,
+            keyboardToolbarItems = keyboardToolbarItems,
+            touchMenuItems = touchMenuItems,
+            contextMenuItems = contextMenuItems,
+            onOpenLink = onOpenLink,
+            zoom = if (zoomable) {
+                ZoomControl(
+                    zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
+                    step = { steps -> zoomTo((currentFontSize.value.value + steps).sp) },
+                    reset = { zoomTo(if (options.fontSize.isSpecified) options.fontSize else baseTypography.fontSize) },
+                )
+            } else {
+                null
+            },
+        )
+    }
+}
+
+/** What zooming does, for the commands and the gestures; null when the editor does not zoom. */
+private class ZoomControl(val zoomBy: (Float) -> Unit, val step: (Int) -> Unit, val reset: () -> Unit)
+
+@Composable
+private fun CodeEditorLayoutContent(
+    state: CodeEditorState,
+    modifier: Modifier,
+    options: EditorOptions,
+    languageService: LanguageService?,
+    findReplaceState: FindReplaceState?,
+    foldState: FoldState?,
+    foldingProvider: FoldingProvider,
+    diagnostics: List<Diagnostic>?,
+    savedText: String,
+    onCursorChange: (line: Int, column: Int) -> Unit,
+    onDiagnosticsChange: (List<Diagnostic>) -> Unit,
+    onNavigateToLocation: (Location) -> Unit,
+    toolbarStyle: KeyboardToolbarStyle,
+    keyboardToolbarPlacement: KeyboardToolbarPlacement,
+    onRequestGoToLine: () -> Unit,
+    keyboardToolbarItems: List<KeyboardToolbarItem>,
+    touchMenuItems: List<EditorMenuItem>,
+    contextMenuItems: List<EditorMenuItem>,
+    onOpenLink: (target: String) -> Unit,
+    zoom: ZoomControl?,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
@@ -1142,6 +1237,12 @@ fun CodeEditorLayout(
 
             EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
 
+            EditorCommand.ZoomIn -> zoom?.step?.invoke(1) != null
+
+            EditorCommand.ZoomOut -> zoom?.step?.invoke(-1) != null
+
+            EditorCommand.ZoomReset -> zoom?.reset?.invoke() != null
+
             is EditorCommand.ScrollLines -> true.also {
                 val lineHeight = view.style?.metrics?.lineHeight ?: 0f
                 view.scroll.scrollToY(view.scroll.scrollY + command.delta * lineHeight)
@@ -1171,6 +1272,7 @@ fun CodeEditorLayout(
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
+        if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))
     }
     DisposableEffect(state) {
         onDispose {
@@ -1458,6 +1560,7 @@ fun CodeEditorLayout(
             textColor = textColor,
             stickyRanges = stickyRanges,
             colorSwatches = { colorTracker.items },
+            onZoom = zoom?.zoomBy,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -1684,6 +1787,10 @@ private const val LINKED_EDITING_DELAY_MS = 50L
 
 /** How long after the last edit the editor asks the language service for the document's colours. */
 private const val COLORS_DEBOUNCE_MS = 300L
+
+/** The smallest and largest font size zooming goes to, in sp. */
+private const val MIN_FONT_SIZE = 6f
+private const val MAX_FONT_SIZE = 72f
 
 /** How long after the last edit the editor asks the language service for the document's links. */
 private const val LINKS_DEBOUNCE_MS = 500L

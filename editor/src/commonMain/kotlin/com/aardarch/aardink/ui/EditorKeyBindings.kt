@@ -179,6 +179,12 @@ object EditorKeyBindings {
         add(bind(KeyChord(Key.Enter, ctrlCmd = true), EditorCommand.InsertLineBelow))
         add(bind(KeyChord(Key.Enter, ctrlCmd = true, shift = true), EditorCommand.InsertLineAbove))
         add(bind(KeyChord(Key.L, ctrlCmd = true), EditorCommand.SelectLine))
+        add(bind(KeyChord(Key.Equals, ctrlCmd = true), EditorCommand.ZoomIn))
+        add(bind(KeyChord(Key.Equals, ctrlCmd = true, shift = true), EditorCommand.ZoomIn))
+        add(bind(KeyChord(Key.NumPadAdd, ctrlCmd = true), EditorCommand.ZoomIn))
+        add(bind(KeyChord(Key.Minus, ctrlCmd = true), EditorCommand.ZoomOut))
+        add(bind(KeyChord(Key.NumPadSubtract, ctrlCmd = true), EditorCommand.ZoomOut))
+        add(bind(KeyChord(Key.Zero, ctrlCmd = true), EditorCommand.ZoomReset))
     }
 
     private val MAC = common(isMac = true)

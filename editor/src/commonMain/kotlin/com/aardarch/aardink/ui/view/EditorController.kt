@@ -234,7 +234,9 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         }
         if (actions.onPopupKey(event)) return true
         when (val match = resolveKeyBinding(keyBindings + EditorKeyBindings.defaults(isMac), event, isMac, pending = null)) {
-            is KeyBindingMatch.Run -> {
+            // A command that cannot run now (zoom in an editor that does not zoom, undo with nothing
+            // to undo) leaves its key to whatever else takes it, a browser's zoom say.
+            is KeyBindingMatch.Run -> if (state.canExecute(match.command)) {
                 run(match.command)
                 touchMode = false
                 return true

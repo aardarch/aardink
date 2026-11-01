@@ -168,6 +168,15 @@ sealed class EditorCommand {
     /** Ctrl/Cmd+L: selects the caret's line, then the next with each repeat. */
     data object SelectLine : EditorCommand()
 
+    /** Ctrl/Cmd+=: a larger font, when the layout zooms (`pinchToZoom` or `onFontSizeChange`). */
+    data object ZoomIn : EditorCommand()
+
+    /** Ctrl/Cmd+-: a smaller font. */
+    data object ZoomOut : EditorCommand()
+
+    /** Ctrl/Cmd+0: the font size the editor started with. */
+    data object ZoomReset : EditorCommand()
+
     /** Scrolls [offset] into view, to the middle when [center], without moving the caret. */
     data class Reveal(val offset: Int, val center: Boolean = false) : EditorCommand()
 }

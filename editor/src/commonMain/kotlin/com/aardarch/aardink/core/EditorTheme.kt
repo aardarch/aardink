@@ -76,7 +76,10 @@ data class EditorTheme(
      * [Color.Unspecified], the default, follows from the theme's other colours.
      */
     val overviewRulerColors: OverviewRulerColors = OverviewRulerColors(),
-)
+) {
+    /** For themes built from elsewhere: `EditorTheme.fromColorScheme(...)` in `com.aardarch.aardink.ui`. */
+    companion object
+}
 
 /**
  * The overview ruler's colours, VS Code's `editorOverviewRuler.*`. Diagnostics take the theme's
