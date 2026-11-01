@@ -117,6 +117,12 @@ The script runs: secret scan, Apache 2.0 header check, Spotless, lint, the ABI c
 JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; skipped with
 `-SkipWasm`), the sample build, the Roborazzi screenshot check, and the consumer smoke test.
 
+> **Expected noise:** on a configuration-cache miss the npm package step prints
+> `Configuration 'wasmJsNpmAggregated' was resolved during configuration time` twice. That is
+> the Kotlin Gradle Plugin resolving its npm configurations eagerly
+> ([KT-60466](https://youtrack.jetbrains.com/issue/KT-60466), open), reported by AGP's
+> resolution check. Nothing in this repo triggers it and AGP has no switch to silence it.
+
 ## Code Conventions
 
 - **Modern Android** - No explicit support for ancient, legacy Android versions, full support for modern Android
