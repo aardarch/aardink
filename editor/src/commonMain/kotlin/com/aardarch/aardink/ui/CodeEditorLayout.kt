@@ -779,16 +779,7 @@ fun CodeEditorLayout(
         true
     }
     // VS Code's "Fold Level N": the ranges nested N deep, 1 the outermost.
-    val foldLevel: (Int) -> Boolean = level@{ level ->
-        val folds = foldState ?: return@level false
-        val ranges = folds.foldableRanges
-        fun encloses(outer: FoldRange, inner: FoldRange) = outer !== inner &&
-            outer.startLine <= inner.startLine && outer.endLine >= inner.endLine &&
-            (outer.startLine != inner.startLine || outer.endLine != inner.endLine)
-        val atLevel = ranges.filter { range -> ranges.count { encloses(it, range) } == level - 1 }
-        for (range in atLevel) if (!folds.isFolded(range.startLine)) folds.toggle(range.startLine)
-        atLevel.isNotEmpty()
-    }
+    val foldLevel: (Int) -> Boolean = { level -> foldState?.foldLevel(level) ?: false }
     // F8 / Shift+F8: the next or previous problem after the caret, wrapping, selected and shown in
     // the tooltip with its place in the list; hints are not problems.
     val goToProblem: (Boolean) -> Boolean = problem@{ forward ->
@@ -1145,6 +1136,10 @@ fun CodeEditorLayout(
 
             is EditorCommand.FoldLevel -> foldLevel(command.level)
 
+            EditorCommand.Fold -> foldState?.foldAt(state.document.offsetToLineCol(state.selection.end).first) ?: false
+
+            EditorCommand.Unfold -> foldState?.unfoldAt(state.document.offsetToLineCol(state.selection.end).first) ?: false
+
             EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
 
             EditorCommand.ShowColorPicker -> colorAt(state.selection.end)?.let { pickingColor = it } != null
@@ -1170,7 +1165,7 @@ fun CodeEditorLayout(
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
-        if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll))
+        if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
     }
     DisposableEffect(state) {
         onDispose {

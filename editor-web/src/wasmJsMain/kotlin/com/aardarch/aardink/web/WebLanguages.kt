@@ -30,13 +30,13 @@ import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
-import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
+import com.aardarch.aardink.languages.IndentationFoldingProvider
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.XmlSchema
@@ -433,7 +433,9 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         displayName = root.string("displayName") ?: id,
         fileExtensions = extensions,
         tokenizer = DeclarativeTokenizer(grammar),
-        foldingProvider = base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else NoOpFoldingProvider,
+        // A language with no folding of its own folds by indentation, as VS Code does.
+        foldingProvider =
+        base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
         languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
     )
     return definition

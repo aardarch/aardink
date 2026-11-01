@@ -107,6 +107,18 @@ final enum class com.aardarch.aardink.core/EditChangeKind : kotlin/Enum<com.aard
     final fun values(): kotlin/Array<com.aardarch.aardink.core/EditChangeKind> // com.aardarch.aardink.core/EditChangeKind.values|values#static(){}[0]
 }
 
+final enum class com.aardarch.aardink.core/FoldKind : kotlin/Enum<com.aardarch.aardink.core/FoldKind> { // com.aardarch.aardink.core/FoldKind|null[0]
+    enum entry Comment // com.aardarch.aardink.core/FoldKind.Comment|null[0]
+    enum entry Imports // com.aardarch.aardink.core/FoldKind.Imports|null[0]
+    enum entry Region // com.aardarch.aardink.core/FoldKind.Region|null[0]
+
+    final val entries // com.aardarch.aardink.core/FoldKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.aardarch.aardink.core/FoldKind> // com.aardarch.aardink.core/FoldKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.aardarch.aardink.core/FoldKind // com.aardarch.aardink.core/FoldKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.aardarch.aardink.core/FoldKind> // com.aardarch.aardink.core/FoldKind.values|values#static(){}[0]
+}
+
 final enum class com.aardarch.aardink.core/LineDiffKind : kotlin/Enum<com.aardarch.aardink.core/LineDiffKind> { // com.aardarch.aardink.core/LineDiffKind|null[0]
     enum entry Added // com.aardarch.aardink.core/LineDiffKind.Added|null[0]
     enum entry Modified // com.aardarch.aardink.core/LineDiffKind.Modified|null[0]
@@ -958,10 +970,12 @@ final class com.aardarch.aardink.core/FindReplaceState { // com.aardarch.aardink
 }
 
 final class com.aardarch.aardink.core/FoldRange { // com.aardarch.aardink.core/FoldRange|null[0]
-    constructor <init>(kotlin/Int, kotlin/Int, kotlin/String = ...) // com.aardarch.aardink.core/FoldRange.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.String){}[0]
+    constructor <init>(kotlin/Int, kotlin/Int, kotlin/String = ..., com.aardarch.aardink.core/FoldKind? = ...) // com.aardarch.aardink.core/FoldRange.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.String;com.aardarch.aardink.core.FoldKind?){}[0]
 
     final val endLine // com.aardarch.aardink.core/FoldRange.endLine|{}endLine[0]
         final fun <get-endLine>(): kotlin/Int // com.aardarch.aardink.core/FoldRange.endLine.<get-endLine>|<get-endLine>(){}[0]
+    final val kind // com.aardarch.aardink.core/FoldRange.kind|{}kind[0]
+        final fun <get-kind>(): com.aardarch.aardink.core/FoldKind? // com.aardarch.aardink.core/FoldRange.kind.<get-kind>|<get-kind>(){}[0]
     final val lineCount // com.aardarch.aardink.core/FoldRange.lineCount|{}lineCount[0]
         final fun <get-lineCount>(): kotlin/Int // com.aardarch.aardink.core/FoldRange.lineCount.<get-lineCount>|<get-lineCount>(){}[0]
     final val placeholder // com.aardarch.aardink.core/FoldRange.placeholder|{}placeholder[0]
@@ -972,7 +986,8 @@ final class com.aardarch.aardink.core/FoldRange { // com.aardarch.aardink.core/F
     final fun component1(): kotlin/Int // com.aardarch.aardink.core/FoldRange.component1|component1(){}[0]
     final fun component2(): kotlin/Int // com.aardarch.aardink.core/FoldRange.component2|component2(){}[0]
     final fun component3(): kotlin/String // com.aardarch.aardink.core/FoldRange.component3|component3(){}[0]
-    final fun copy(kotlin/Int = ..., kotlin/Int = ..., kotlin/String = ...): com.aardarch.aardink.core/FoldRange // com.aardarch.aardink.core/FoldRange.copy|copy(kotlin.Int;kotlin.Int;kotlin.String){}[0]
+    final fun component4(): com.aardarch.aardink.core/FoldKind? // com.aardarch.aardink.core/FoldRange.component4|component4(){}[0]
+    final fun copy(kotlin/Int = ..., kotlin/Int = ..., kotlin/String = ..., com.aardarch.aardink.core/FoldKind? = ...): com.aardarch.aardink.core/FoldRange // com.aardarch.aardink.core/FoldRange.copy|copy(kotlin.Int;kotlin.Int;kotlin.String;com.aardarch.aardink.core.FoldKind?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/FoldRange.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/FoldRange.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/FoldRange.toString|toString(){}[0]
@@ -988,12 +1003,15 @@ final class com.aardarch.aardink.core/FoldState { // com.aardarch.aardink.core/F
         final fun <get-foldableRanges>(): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.core/FoldState.foldableRanges.<get-foldableRanges>|<get-foldableRanges>(){}[0]
 
     final fun foldAll() // com.aardarch.aardink.core/FoldState.foldAll|foldAll(){}[0]
+    final fun foldAt(kotlin/Int): kotlin/Boolean // com.aardarch.aardink.core/FoldState.foldAt|foldAt(kotlin.Int){}[0]
+    final fun foldLevel(kotlin/Int): kotlin/Boolean // com.aardarch.aardink.core/FoldState.foldLevel|foldLevel(kotlin.Int){}[0]
     final fun foldedRanges(): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.core/FoldState.foldedRanges|foldedRanges(){}[0]
     final fun isFoldable(kotlin/Int): kotlin/Boolean // com.aardarch.aardink.core/FoldState.isFoldable|isFoldable(kotlin.Int){}[0]
     final fun isFolded(kotlin/Int): kotlin/Boolean // com.aardarch.aardink.core/FoldState.isFolded|isFolded(kotlin.Int){}[0]
     final fun rangeAt(kotlin/Int): com.aardarch.aardink.core/FoldRange? // com.aardarch.aardink.core/FoldState.rangeAt|rangeAt(kotlin.Int){}[0]
     final fun toggle(kotlin/Int) // com.aardarch.aardink.core/FoldState.toggle|toggle(kotlin.Int){}[0]
     final fun unfoldAll() // com.aardarch.aardink.core/FoldState.unfoldAll|unfoldAll(){}[0]
+    final fun unfoldAt(kotlin/Int): kotlin/Boolean // com.aardarch.aardink.core/FoldState.unfoldAt|unfoldAt(kotlin.Int){}[0]
     final fun updateFoldableRanges(kotlin.collections/List<com.aardarch.aardink.core/FoldRange>) // com.aardarch.aardink.core/FoldState.updateFoldableRanges|updateFoldableRanges(kotlin.collections.List<com.aardarch.aardink.core.FoldRange>){}[0]
 }
 
@@ -1526,6 +1544,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.FindReferences.toString|toString(){}[0]
     }
 
+    final object Fold : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.Fold|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.Fold.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.Fold.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.Fold.toString|toString(){}[0]
+    }
+
     final object FoldAll : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.FoldAll|null[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.FoldAll.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.FoldAll.hashCode|hashCode(){}[0]
@@ -1644,6 +1668,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.Undo.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.Undo.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.Undo.toString|toString(){}[0]
+    }
+
+    final object Unfold : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.Unfold|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.Unfold.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.Unfold.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.Unfold.toString|toString(){}[0]
     }
 
     final object UnfoldAll : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.UnfoldAll|null[0]
@@ -1797,6 +1827,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_DocumentSymbol$sta
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand$stableprop|#static{}com_aardarch_aardink_core_EditorCommand$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Fold$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Format$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Format$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Format$stableprop[0]
@@ -1820,6 +1851,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Shri
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Undo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Undo$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Undo$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Unfold$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Unfold$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Unfold$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop|#static{}com_aardarch_aardink_core_EditorLimits$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop|#static{}com_aardarch_aardink_core_EditorTheme$stableprop[0]
@@ -1900,6 +1932,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_DocumentSymbol$sta
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand$stableprop_getter|com_aardarch_aardink_core_EditorCommand$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter|com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop_getter|com_aardarch_aardink_core_EditorCommand_FoldAll$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop_getter|com_aardarch_aardink_core_EditorCommand_FoldLevel$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Format$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Format$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Format$stableprop_getter(){}[0]
@@ -1923,6 +1956,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Shri
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ToggleComment$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop_getter|com_aardarch_aardink_core_EditorCommand_TriggerSuggest$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Undo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Undo$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Undo$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Unfold$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Unfold$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Unfold$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop_getter|com_aardarch_aardink_core_EditorCommand_UnfoldAll$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorLimits$stableprop_getter|com_aardarch_aardink_core_EditorLimits$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorTheme$stableprop_getter|com_aardarch_aardink_core_EditorTheme$stableprop_getter(){}[0]

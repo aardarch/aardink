@@ -89,6 +89,39 @@ final class com.aardarch.aardink.languages/DeclarativeTokenizer : com.aardarch.a
     final suspend fun tokenizeFullCooperative(kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.languages/DeclarativeTokenizer.tokenizeFullCooperative|tokenizeFullCooperative(kotlin.String){}[0]
 }
 
+final class com.aardarch.aardink.languages/FoldingRegionMarkers { // com.aardarch.aardink.languages/FoldingRegionMarkers|null[0]
+    constructor <init>(kotlin.text/Regex, kotlin.text/Regex) // com.aardarch.aardink.languages/FoldingRegionMarkers.<init>|<init>(kotlin.text.Regex;kotlin.text.Regex){}[0]
+
+    final val end // com.aardarch.aardink.languages/FoldingRegionMarkers.end|{}end[0]
+        final fun <get-end>(): kotlin.text/Regex // com.aardarch.aardink.languages/FoldingRegionMarkers.end.<get-end>|<get-end>(){}[0]
+    final val start // com.aardarch.aardink.languages/FoldingRegionMarkers.start|{}start[0]
+        final fun <get-start>(): kotlin.text/Regex // com.aardarch.aardink.languages/FoldingRegionMarkers.start.<get-start>|<get-start>(){}[0]
+
+    final fun component1(): kotlin.text/Regex // com.aardarch.aardink.languages/FoldingRegionMarkers.component1|component1(){}[0]
+    final fun component2(): kotlin.text/Regex // com.aardarch.aardink.languages/FoldingRegionMarkers.component2|component2(){}[0]
+    final fun copy(kotlin.text/Regex = ..., kotlin.text/Regex = ...): com.aardarch.aardink.languages/FoldingRegionMarkers // com.aardarch.aardink.languages/FoldingRegionMarkers.copy|copy(kotlin.text.Regex;kotlin.text.Regex){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/FoldingRegionMarkers.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/FoldingRegionMarkers.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages/FoldingRegionMarkers.toString|toString(){}[0]
+
+    final object Companion { // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion|null[0]
+        final val BlockComment // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.BlockComment|{}BlockComment[0]
+            final fun <get-BlockComment>(): com.aardarch.aardink.languages/FoldingRegionMarkers // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.BlockComment.<get-BlockComment>|<get-BlockComment>(){}[0]
+        final val HashComment // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.HashComment|{}HashComment[0]
+            final fun <get-HashComment>(): com.aardarch.aardink.languages/FoldingRegionMarkers // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.HashComment.<get-HashComment>|<get-HashComment>(){}[0]
+        final val LineComment // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.LineComment|{}LineComment[0]
+            final fun <get-LineComment>(): com.aardarch.aardink.languages/FoldingRegionMarkers // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.LineComment.<get-LineComment>|<get-LineComment>(){}[0]
+        final val XmlComment // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.XmlComment|{}XmlComment[0]
+            final fun <get-XmlComment>(): com.aardarch.aardink.languages/FoldingRegionMarkers // com.aardarch.aardink.languages/FoldingRegionMarkers.Companion.XmlComment.<get-XmlComment>|<get-XmlComment>(){}[0]
+    }
+}
+
+final class com.aardarch.aardink.languages/IndentationFoldingProvider : com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.languages/IndentationFoldingProvider|null[0]
+    constructor <init>(kotlin/Int = ...) // com.aardarch.aardink.languages/IndentationFoldingProvider.<init>|<init>(kotlin.Int){}[0]
+
+    final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages/IndentationFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+}
+
 final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.aardink.languages/LanguageDefinition|null[0]
     constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<kotlin/String>, com.aardarch.aardink.core/IncrementalTokenizer, com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...) // com.aardarch.aardink.languages/LanguageDefinition.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
 
@@ -413,6 +446,8 @@ final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop|#static{}com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop|#static{}com_aardarch_aardink_languages_LanguageDefinition$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop|#static{}com_aardarch_aardink_languages_LanguageRegistry$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema$stableprop[0]
@@ -421,6 +456,7 @@ final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchem
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Element$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema_Element$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema_Value$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema_Value$stableprop[0]
 
+final fun (com.aardarch.aardink.core/FoldingProvider).com.aardarch.aardink.languages/withRegionMarkers(com.aardarch.aardink.languages/FoldingRegionMarkers): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.languages/withRegionMarkers|withRegionMarkers@com.aardarch.aardink.core.FoldingProvider(com.aardarch.aardink.languages.FoldingRegionMarkers){}[0]
 final fun com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.css/com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter|com_aardarch_aardink_languages_internal_css_CssTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_BraceFoldingProvider$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages.internal.folding/com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_internal_folding_MarkdownFoldingProvider$stableprop_getter(){}[0]
@@ -455,6 +491,8 @@ final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop_getter|com_aardarch_aardink_languages_DeclarativeGrammar_Next_PopAll$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop_getter|com_aardarch_aardink_languages_DeclarativeGrammar_Next_Push$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter|com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter|com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter|com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter|com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter|com_aardarch_aardink_languages_XmlSchema$stableprop_getter(){}[0]

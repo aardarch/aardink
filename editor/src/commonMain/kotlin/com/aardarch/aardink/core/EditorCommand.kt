@@ -89,6 +89,12 @@ sealed class EditorCommand {
     /** Unfolds everything. */
     data object UnfoldAll : EditorCommand()
 
+    /** Ctrl+Shift+[ (Cmd+Option+[ on macOS): folds the innermost unfolded range at the caret. */
+    data object Fold : EditorCommand()
+
+    /** Ctrl+Shift+] (Cmd+Option+] on macOS): unfolds the innermost folded range at the caret. */
+    data object Unfold : EditorCommand()
+
     /** Folds the ranges nested [level] deep, 1 being the outermost, as VS Code's "Fold Level". */
     data class FoldLevel(val level: Int) : EditorCommand()
 

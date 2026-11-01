@@ -541,6 +541,14 @@ public final class com/aardarch/aardink/core/EditorCommand$FindReferences : com/
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$Fold : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$Fold;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$FoldAll : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$FoldAll;
@@ -740,6 +748,14 @@ public final class com/aardarch/aardink/core/EditorCommand$Undo : com/aardarch/a
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$Unfold : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$Unfold;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$UnfoldAll : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$UnfoldAll;
@@ -852,17 +868,28 @@ public final class com/aardarch/aardink/core/FindReplaceState {
 	public final fun toOptions ()Lcom/aardarch/aardink/core/FindEngine$Options;
 }
 
+public final class com/aardarch/aardink/core/FoldKind : java/lang/Enum {
+	public static final field Comment Lcom/aardarch/aardink/core/FoldKind;
+	public static final field Imports Lcom/aardarch/aardink/core/FoldKind;
+	public static final field Region Lcom/aardarch/aardink/core/FoldKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/core/FoldKind;
+	public static fun values ()[Lcom/aardarch/aardink/core/FoldKind;
+}
+
 public final class com/aardarch/aardink/core/FoldRange {
 	public static final field $stable I
-	public fun <init> (IILjava/lang/String;)V
-	public synthetic fun <init> (IILjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (IILjava/lang/String;Lcom/aardarch/aardink/core/FoldKind;)V
+	public synthetic fun <init> (IILjava/lang/String;Lcom/aardarch/aardink/core/FoldKind;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
 	public final fun component2 ()I
 	public final fun component3 ()Ljava/lang/String;
-	public final fun copy (IILjava/lang/String;)Lcom/aardarch/aardink/core/FoldRange;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/FoldRange;IILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/FoldRange;
+	public final fun component4 ()Lcom/aardarch/aardink/core/FoldKind;
+	public final fun copy (IILjava/lang/String;Lcom/aardarch/aardink/core/FoldKind;)Lcom/aardarch/aardink/core/FoldRange;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/FoldRange;IILjava/lang/String;Lcom/aardarch/aardink/core/FoldKind;ILjava/lang/Object;)Lcom/aardarch/aardink/core/FoldRange;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEndLine ()I
+	public final fun getKind ()Lcom/aardarch/aardink/core/FoldKind;
 	public final fun getLineCount ()I
 	public final fun getPlaceholder ()Ljava/lang/String;
 	public final fun getStartLine ()I
@@ -874,6 +901,8 @@ public final class com/aardarch/aardink/core/FoldState {
 	public static final field $stable I
 	public fun <init> ()V
 	public final fun foldAll ()V
+	public final fun foldAt (I)Z
+	public final fun foldLevel (I)Z
 	public final fun foldedRanges ()Ljava/util/List;
 	public final fun getFoldableRanges ()Ljava/util/List;
 	public final fun getFoldedCount ()I
@@ -882,6 +911,7 @@ public final class com/aardarch/aardink/core/FoldState {
 	public final fun rangeAt (I)Lcom/aardarch/aardink/core/FoldRange;
 	public final fun toggle (I)V
 	public final fun unfoldAll ()V
+	public final fun unfoldAt (I)Z
 	public final fun updateFoldableRanges (Ljava/util/List;)V
 }
 

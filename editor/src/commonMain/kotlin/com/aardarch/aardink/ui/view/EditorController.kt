@@ -21,9 +21,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.Clipboard
@@ -200,10 +204,28 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     fun onKeyEvent(event: KeyEvent): Boolean = state.withSelectionReason(SelectionChangeReason.Keyboard) { handleKey(event) }
 
+    /** Ctrl+K (Cmd+K) was pressed: the next key completes a chord. */
+    internal var chordPending = false
+        private set
+
     private fun handleKey(event: KeyEvent): Boolean {
         linkModifier = if (PlatformInfo.isMacOs) event.isMetaPressed else event.isCtrlPressed
         showToolbarAtCaret = false
+        if (chordPending) {
+            // Modifier keys on their own neither complete nor cancel the chord.
+            if (event.key in MODIFIER_KEYS) return false
+            if (event.type != KeyEventType.KeyDown) return true
+            chordPending = false
+            // A pair that means nothing is swallowed, as VS Code does, and so is Escape.
+            val second = EditorKeyBindings.resolveChord(event, PlatformInfo.isMacOs) ?: return true
+            execute(second)
+            return true
+        }
         if (actions.onPopupKey(event)) return true
+        if (EditorKeyBindings.startsChord(event, PlatformInfo.isMacOs)) {
+            chordPending = true
+            return true
+        }
         val binding = EditorKeyBindings.resolve(event, PlatformInfo.isMacOs)
         if (binding != null && execute(binding)) {
             touchMode = false
@@ -516,3 +538,15 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         return box.translate(Offset(frame.textLeft, line.top - frame.scrollY + shift) + coordinates.localToRoot(Offset.Zero))
     }
 }
+
+/** Keys that are only modifiers, which do not complete a chord. */
+private val MODIFIER_KEYS = setOf(
+    Key.CtrlLeft,
+    Key.CtrlRight,
+    Key.ShiftLeft,
+    Key.ShiftRight,
+    Key.AltLeft,
+    Key.AltRight,
+    Key.MetaLeft,
+    Key.MetaRight,
+)

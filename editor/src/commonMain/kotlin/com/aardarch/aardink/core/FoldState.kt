@@ -70,6 +70,40 @@ class FoldState {
     }
 
     /**
+     * Folds the ranges nested [level] deep, 1 being the outermost, as VS Code's "Fold Level n"
+     * (Ctrl+K Ctrl+1 to 5); returns whether there were any.
+     */
+    fun foldLevel(level: Int): Boolean {
+        val ranges = foldableRanges
+        fun encloses(outer: FoldRange, inner: FoldRange) = outer !== inner &&
+            outer.startLine <= inner.startLine && outer.endLine >= inner.endLine &&
+            (outer.startLine != inner.startLine || outer.endLine != inner.endLine)
+        val atLevel = ranges.filter { range -> ranges.count { encloses(it, range) } == level - 1 }
+        for (range in atLevel) if (range.startLine !in foldedMap) foldedMap[range.startLine] = range
+        return atLevel.isNotEmpty()
+    }
+
+    /**
+     * Folds the innermost unfolded range that holds [line] (Ctrl+Shift+[), as VS Code's "Fold":
+     * one starting on [line] first. Returns whether one was folded.
+     */
+    fun foldAt(line: Int): Boolean {
+        val range = foldableRanges
+            .filter { it.startLine !in foldedMap && line in it.startLine..it.endLine }
+            .minWithOrNull(compareBy<FoldRange> { if (it.startLine == line) 0 else 1 }.thenBy { it.lineCount })
+            ?: return false
+        foldedMap[range.startLine] = range
+        return true
+    }
+
+    /** Unfolds the innermost folded range that holds [line] (Ctrl+Shift+]); returns whether one was. */
+    fun unfoldAt(line: Int): Boolean {
+        val range = foldedMap.values.filter { line in it.startLine..it.endLine }.minByOrNull { it.lineCount } ?: return false
+        foldedMap.remove(range.startLine)
+        return true
+    }
+
+    /**
      * Moves the ranges along with an edit that merged [removedLines] lines into [line] and added
      * [addedLines] lines after it, so what is folded stays folded, over the same text, until the
      * next [updateFoldableRanges]. A range whose first line was merged into another is dropped; one

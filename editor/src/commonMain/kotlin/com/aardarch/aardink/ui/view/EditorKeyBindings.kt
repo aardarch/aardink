@@ -246,6 +246,22 @@ internal object EditorKeyBindings {
                 else -> null
             }
 
+            Key.LeftBracket, Key.RightBracket -> when {
+                isMac && meta && alt && !shift && !ctrl -> KeyBinding(
+                    if (event.key ==
+                        Key.LeftBracket
+                    ) {
+                        EditorCommand.Fold
+                    } else {
+                        EditorCommand.Unfold
+                    },
+                )
+
+                primary && !alt -> chord(event.key, shift)
+
+                else -> null
+            }
+
             else -> if (primary && !alt) chord(event.key, shift) else null
         }
     }
@@ -253,6 +269,35 @@ internal object EditorKeyBindings {
     /** The modifiers of Expand and Shrink Selection: Shift+Alt, and Ctrl+Shift+Cmd on macOS. */
     private fun growsSelection(isMac: Boolean, shift: Boolean, alt: Boolean, ctrl: Boolean, meta: Boolean): Boolean =
         if (isMac) shift && ctrl && meta && !alt else shift && alt && !ctrl && !meta
+
+    /**
+     * Whether [event] starts a two-key chord (Ctrl+K, Cmd+K on macOS): the editor then waits for the
+     * second key and resolves the pair with [resolveChord].
+     */
+    fun startsChord(event: KeyEvent, isMac: Boolean): Boolean {
+        if (event.type != KeyEventType.KeyDown || event.key != Key.K) return false
+        val primary = if (isMac) event.isMetaPressed else event.isCtrlPressed
+        return primary && !event.isShiftPressed && !event.isAltPressed && (isMac || !event.isMetaPressed)
+    }
+
+    /**
+     * The second key of a chord begun with Ctrl+K (Cmd+K), as VS Code binds them; the primary
+     * modifier may be held or not. Null for a pair that means nothing.
+     */
+    fun resolveChord(event: KeyEvent, isMac: Boolean): KeyBinding? {
+        if (event.type != KeyEventType.KeyDown) return null
+        if (event.isShiftPressed || event.isAltPressed) return null
+        return when (event.key) {
+            Key.Zero, Key.NumPad0 -> KeyBinding(EditorCommand.FoldAll)
+            Key.J -> KeyBinding(EditorCommand.UnfoldAll)
+            Key.One, Key.NumPad1 -> KeyBinding(EditorCommand.FoldLevel(1))
+            Key.Two, Key.NumPad2 -> KeyBinding(EditorCommand.FoldLevel(2))
+            Key.Three, Key.NumPad3 -> KeyBinding(EditorCommand.FoldLevel(3))
+            Key.Four, Key.NumPad4 -> KeyBinding(EditorCommand.FoldLevel(4))
+            Key.Five, Key.NumPad5 -> KeyBinding(EditorCommand.FoldLevel(5))
+            else -> null
+        }
+    }
 
     /** Cmd/Ctrl chords on letters and punctuation. */
     private fun chord(key: Key, shift: Boolean): KeyBinding? = when (key) {
@@ -270,6 +315,8 @@ internal object EditorKeyBindings {
         Key.L -> if (shift) KeyBinding(KeyCommand.SelectAllOccurrences) else null
         Key.Period -> if (shift) null else KeyBinding(KeyCommand.QuickFix)
         Key.O -> if (shift) KeyBinding(EditorCommand.GoToSymbol) else null
+        Key.LeftBracket -> if (shift) KeyBinding(EditorCommand.Fold) else null
+        Key.RightBracket -> if (shift) KeyBinding(EditorCommand.Unfold) else null
         else -> null
     }
 }
