@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-02
+
 0.8 lets the editor understand the document's structure and lets hosts draw on it. Every new
 option is off by default. It breaks source in two places: `FoldRange` gains a `kind`, and
 `EditorCommand` has new members, so an exhaustive `when` over it needs a branch for them.
