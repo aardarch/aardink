@@ -53,4 +53,8 @@ internal object EditorTestTags {
 
     /** The breadcrumbs row. */
     const val BREADCRUMBS = "aardink.breadcrumbs"
+
+    /** The colour picker, and its hex field. */
+    const val COLOR_PICKER = "aardink.colorPicker"
+    const val COLOR_PICKER_HEX = "aardink.colorPicker.hex"
 }

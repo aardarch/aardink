@@ -415,4 +415,22 @@ class WebLanguagesTest {
         assertEquals(WebRange(2, 3, 2, 7), web.single().children!!.single().range)
         assertEquals(symbols, AardinkWeb.toDocumentSymbols(document, web))
     }
+
+    @Test
+    fun `a host's colours in Monaco's shape`() = runTest {
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-colors", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                documentColors = {
+                    """[{ "range": { "startLineNumber": 1, "startColumn": 5, "endLineNumber": 1, "endColumn": 8 },
+                          "color": { "red": 1, "green": 0, "blue": 0, "alpha": 0.5 } },
+                        { "range": "not a range", "color": {} }]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-colors")!!.languageService!!
+        val colors = service.documentColors(CodeDocument("bg: red;"))
+        assertEquals(listOf(4..6), colors.map { it.range })
+        assertEquals(Color(1f, 0f, 0f, 0.5f), colors.single().color)
+    }
 }

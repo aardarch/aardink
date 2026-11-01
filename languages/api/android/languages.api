@@ -176,9 +176,11 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun <init> ()V
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentHighlights (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -263,8 +265,10 @@ public final class com/aardarch/aardink/languages/internal/json/JsonLanguageServ
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/json/JsonLanguageService;
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
@@ -307,8 +311,10 @@ public final class com/aardarch/aardink/languages/internal/toml/TomlLanguageServ
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/toml/TomlLanguageService;
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
@@ -338,8 +344,10 @@ public abstract class com/aardarch/aardink/languages/internal/xml/TagValidator :
 	public static final field $stable I
 	public fun <init> (ZLjava/lang/String;)V
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
+	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

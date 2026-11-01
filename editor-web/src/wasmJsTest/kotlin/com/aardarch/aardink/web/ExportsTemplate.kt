@@ -121,7 +121,7 @@ fun aardinkGetSymbolPathAt(id: Int, line: Int, column: Int): String = AardinkWeb
 
 /**
  * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
- * [hover], [diagnostics] and [documentSymbols] answer with JSON through a Promise, or null for nothing (pass one that
+ * [hover], [diagnostics], [documentSymbols] and [documentColors] answer with JSON through a Promise, or null for nothing (pass one that
  * resolves to null for what the language does not have). Returns "" when it worked, else what was
  * wrong with the definition.
  */
@@ -132,6 +132,7 @@ fun aardinkRegisterLanguage(
     hover: (String, Int, Int) -> Promise<JsString?>,
     diagnostics: (String) -> Promise<JsString?>,
     documentSymbols: (String) -> Promise<JsString?>,
+    documentColors: (String) -> Promise<JsString?>,
 ): String = try {
     AardinkWeb.registerLanguage(
         definitionJson,
@@ -140,6 +141,7 @@ fun aardinkRegisterLanguage(
             hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
             diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
             documentSymbols = { text -> documentSymbols(text).await<JsString?>()?.toString() },
+            documentColors = { text -> documentColors(text).await<JsString?>()?.toString() },
         ),
     )
     ""

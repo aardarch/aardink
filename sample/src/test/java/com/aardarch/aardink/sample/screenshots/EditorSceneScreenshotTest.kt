@@ -372,4 +372,27 @@ class EditorSceneScreenshotTest {
         state.selection = TextRange(state.document.text.indexOf("names") + 2)
         capture("occurrences", state, editorOptions = EditorOptions(occurrencesHighlight = true))
     }
+
+    @Test
+    fun colors() {
+        // Colour resources: each hex value gets a swatch under it, alpha first as Android writes them.
+        val xml = LanguageRegistry.withBuiltIns().all.first { it.id == "xml" }
+        val text = """
+            |<resources>
+            |    <color name="primary">#FF6200EE</color>
+            |    <item name="accent" value="#03DAC5" />
+            |    <item name="scrim" value="#80000000" />
+            |    <item name="warning" value="#FFB300" />
+            |</resources>
+        """.trimMargin()
+        val state = CodeEditorState(initialText = text, tokenizer = xml.tokenizer, tokenizeDebounceMs = 0).apply {
+            computeDispatcher = Dispatchers.Unconfined
+        }
+        capture(
+            "colors",
+            state,
+            editorOptions = EditorOptions(softWrap = true, colorDecorators = true),
+            languageService = xml.languageService,
+        )
+    }
 }

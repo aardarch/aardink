@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.FindReplaceState
@@ -113,6 +114,8 @@ internal fun VirtualizedEditorBody(
     /** The ranges sticky scroll pins the first lines of, sorted by start line, outer ones first. */
     stickyRanges: List<FoldRange> = emptyList(),
     popups: @Composable () -> Unit = {},
+    /** The colours to draw swatches under, read when the text draws. */
+    colorSwatches: () -> List<ColorInfo> = { emptyList() },
 ) {
     val view = controller.view
     val density = LocalDensity.current
@@ -334,6 +337,7 @@ internal fun VirtualizedEditorBody(
                             snippet.placeholderRanges()
                         }.orEmpty(),
                         hostDecorations = state.shownDecorations,
+                        colorSwatches = colorSwatches(),
                     )
                 },
                 carets = { if (controller.focused && caretOn) state.selections else emptyList() },

@@ -44,6 +44,7 @@ import androidx.compose.ui.window.ComposeViewport
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ContentChange
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
@@ -781,6 +782,28 @@ object AardinkWeb {
         val path = state.symbolPathAt(offsetOf(state.document, line, column))
         return json.encodeToString(symbolsJsonSerializer, toWebSymbols(state.document, path))
     }
+
+    /**
+     * A JSON array of Monaco's `IColorInformation` (`{ range, color: { red, green, blue, alpha } }`,
+     * channels 0 to 1) as colours in [document]; those it cannot read are left out.
+     */
+    internal fun parseColors(document: CodeDocument, colorsJson: String): List<ColorInfo> =
+        (parsedJson(colorsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range =
+                (item["range"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                    ?: return@mapNotNull null
+            val color = item["color"] as? JsonObject ?: return@mapNotNull null
+            fun channel(key: String, default: Float? = null): Float? =
+                ((color[key] as? JsonPrimitive)?.contentOrNull?.toFloatOrNull() ?: default)?.coerceIn(0f, 1f)
+            val red = channel("red") ?: return@mapNotNull null
+            val green = channel("green") ?: return@mapNotNull null
+            val blue = channel("blue") ?: return@mapNotNull null
+            val alpha = channel("alpha", 1f)!!
+            val offsets = rangeOf(document, range)
+            if (offsets.isEmpty()) return@mapNotNull null
+            ColorInfo(offsets, Color(red, green, blue, alpha))
+        }
 
     /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
     internal fun parseSymbols(document: CodeDocument, symbolsJson: String): List<DocumentSymbol> = runCatching {

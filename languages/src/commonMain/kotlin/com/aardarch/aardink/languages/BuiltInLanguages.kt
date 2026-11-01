@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.PlainTextTokenizer
+import com.aardarch.aardink.languages.internal.css.CssLanguageService
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
@@ -110,6 +111,7 @@ object BuiltInLanguages {
             supportsLineComments = false,
             supportsSingleQuoted = true,
         ),
+        languageService = CssLanguageService,
     )
 
     val Markdown: LanguageDefinition = LanguageDefinition(

@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
@@ -599,6 +601,54 @@ fun CodeEditorLayout(
         }
     }
 
+    // ── Colours: swatches under the colours the language service finds, and their picker ─
+    val colorTracker = remember(state) {
+        TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
+    }
+    DisposableEffect(colorTracker) {
+        state.document.addChangeListener(colorTracker)
+        onDispose { state.document.removeChangeListener(colorTracker) }
+    }
+    LaunchedEffect(colorTracker, languageService, options.colorDecorators) {
+        val service = languageService
+        if (service == null || !options.colorDecorators) {
+            colorTracker.replace(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(COLORS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val found = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) {
+                    service.documentColors(document)
+                }
+            }
+            if (state.document.version == document.version) colorTracker.replace(found)
+        }
+    }
+    val colorAt: (Int) -> ColorInfo? = { offset ->
+        colorTracker.items.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
+    }
+    // The colour the picker is open for, while it is.
+    var pickingColor by remember { mutableStateOf<ColorInfo?>(null) }
+    val applyColor: (ColorInfo, Color) -> Unit = { info, color ->
+        pickingColor = null
+        val service = languageService
+        val version = state.textVersion
+        coroutineScope.launch {
+            val document = state.document.snapshot()
+            val presentation = service?.let {
+                withContext(state.computeDispatcher) { it.colorPresentations(document, info, color) }
+            }?.firstOrNull()
+            if (state.textVersion != version) return@launch
+            val edit = presentation?.textEdit ?: TextEdit(info.range, presentation?.label ?: cssHex(color))
+            state.applyTextEdits(listOf(edit))
+        }
+        controller.requestFocus()
+    }
+
     // ── Host decorations: their gutter bars ──────────────────────────────────
     val gutterDecorationMarks by remember(state) {
         derivedStateOf { lineMarks(state.shownDecorations, state.document) { it.gutterColor } }
@@ -616,7 +666,8 @@ fun CodeEditorLayout(
         }
         val messages = decorated.mapNotNull { it.style.hoverMessage }
         val word = TextNavigator.wordAt(state.document, offset)
-        if (here.isEmpty() && messages.isEmpty() && (service == null || word.isEmpty())) return@hover
+        val colorHere = if (options.colorDecorators && !options.readOnly) colorAt(offset) else null
+        if (here.isEmpty() && messages.isEmpty() && colorHere == null && (service == null || word.isEmpty())) return@hover
         val version = state.textVersion
         val document = state.document.snapshot()
         val doc = if (service != null && !word.isEmpty()) {
@@ -629,10 +680,10 @@ fun CodeEditorLayout(
         } else {
             emptyList()
         }
-        if (state.textVersion != version || (doc == null && here.isEmpty() && messages.isEmpty())) return@hover
-        val starts =
-            here.map { it.range.first } + decorated.map { it.range.first } + listOfNotNull(word.first.takeUnless { word.isEmpty() })
-        val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } +
+        if (state.textVersion != version || (doc == null && here.isEmpty() && messages.isEmpty() && colorHere == null)) return@hover
+        val starts = here.map { it.range.first } + decorated.map { it.range.first } + listOfNotNull(colorHere?.range?.first) +
+            listOfNotNull(word.first.takeUnless { word.isEmpty() })
+        val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } + listOfNotNull(colorHere?.range?.last?.plus(1)) +
             listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })
         hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages)
     }
@@ -1096,6 +1147,8 @@ fun CodeEditorLayout(
 
             EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
 
+            EditorCommand.ShowColorPicker -> colorAt(state.selection.end)?.let { pickingColor = it } != null
+
             EditorCommand.ExpandSelection -> true.also { coroutineScope.launch { expandSelection() } }
 
             is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
@@ -1116,6 +1169,7 @@ fun CodeEditorLayout(
         }
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
+        if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll))
     }
     DisposableEffect(state) {
@@ -1393,6 +1447,7 @@ fun CodeEditorLayout(
             options = options,
             textColor = textColor,
             stickyRanges = stickyRanges,
+            colorSwatches = { colorTracker.items },
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -1426,7 +1481,14 @@ fun CodeEditorLayout(
                         anchor = Rect(start.left, start.top, maxOf(end.right, start.left + 1f), start.bottom),
                         onDismiss = { hover = null },
                     ) {
+                        val hoveredColor = if (options.readOnly) null else colorAt(shown.start)
                         EditorHoverCard(
+                            onPickColor = hoveredColor?.let { color ->
+                                {
+                                    hover = null
+                                    pickingColor = color
+                                }
+                            },
                             messages = shown.messages,
                             diagnostics = shown.diagnostics,
                             doc = shown.doc,
@@ -1439,6 +1501,22 @@ fun CodeEditorLayout(
                                 }
                             } else {
                                 null
+                            },
+                        )
+                    }
+                }
+                pickingColor?.let { info ->
+                    EditorAnchoredPopup(
+                        anchor = view.caretRect(info.range.first),
+                        focusable = true,
+                        onDismiss = { pickingColor = null },
+                    ) {
+                        ColorPickerCard(
+                            initial = info.color,
+                            onPick = { color -> applyColor(info, color) },
+                            onDismiss = {
+                                pickingColor = null
+                                controller.requestFocus()
                             },
                         )
                     }
@@ -1593,6 +1671,9 @@ private const val OCCURRENCES_DELAY_MS = 250L
 
 /** How long after the caret moves the linked ranges at it are asked for. */
 private const val LINKED_EDITING_DELAY_MS = 50L
+
+/** How long after the last edit the editor asks the language service for the document's colours. */
+private const val COLORS_DEBOUNCE_MS = 300L
 
 /** How long after the last edit the editor asks the language service for the document's links. */
 private const val LINKS_DEBOUNCE_MS = 500L

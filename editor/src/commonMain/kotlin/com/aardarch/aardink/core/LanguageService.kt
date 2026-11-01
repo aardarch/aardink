@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.core
 
+import androidx.compose.ui.graphics.Color
+
 /**
  * LSP language service contract.
  *
@@ -174,6 +176,20 @@ interface LanguageService {
      * through [com.aardarch.aardink.ui.CodeEditorLayout]'s `onOpenLink`. The default is none.
      */
     suspend fun documentLinks(document: CodeDocument): List<DocumentLink> = emptyList()
+
+    /**
+     * The colours written in [document], for the editor to draw as swatches
+     * ([com.aardarch.aardink.ui.EditorOptions.colorDecorators]). The built-in XML, JSON, TOML and
+     * CSS services find hex colours. The default is none.
+     */
+    suspend fun documentColors(document: CodeDocument): List<ColorInfo> = emptyList()
+
+    /**
+     * Ways to write [color] in place of [info], best first, for the colour picker to apply: the
+     * editor applies the first. The default is none: the editor then writes a CSS hex colour,
+     * `#rrggbb`, or `#rrggbbaa` when it is not opaque.
+     */
+    suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> = emptyList()
 
     /**
      * Characters that should trigger a completion request when typed.

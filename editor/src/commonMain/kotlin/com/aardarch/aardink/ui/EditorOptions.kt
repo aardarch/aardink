@@ -63,6 +63,11 @@ import com.aardarch.aardink.core.LineEnding
  * @property linkedEditing Typing in a range the language service links to others (an XML or HTML
  *   element's name, in its opening and closing tags) changes them all, as VS Code's
  *   `editor.linkedEditing`. Off by default.
+ * @property colorDecorators The colours the language service finds in the text (`documentColors`:
+ *   hex colours in the built-in XML, JSON, TOML and CSS) get a swatch, a bar in the colour under
+ *   their text. Its picker opens from the hover, the touch menu, or
+ *   [EditorCommand.ShowColorPicker][com.aardarch.aardink.core.EditorCommand.ShowColorPicker] with
+ *   the caret in the colour, and writes the new colour back. Off by default.
  */
 @Immutable
 data class EditorOptions(
@@ -87,6 +92,7 @@ data class EditorOptions(
     val overviewRuler: Boolean = false,
     val occurrencesHighlight: Boolean = false,
     val linkedEditing: Boolean = false,
+    val colorDecorators: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

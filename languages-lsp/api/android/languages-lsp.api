@@ -612,12 +612,14 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didChange (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didClose (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didOpen (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentHighlights (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

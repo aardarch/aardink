@@ -15,7 +15,10 @@
  */
 package com.aardarch.aardink.languages.internal.json
 
+import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.ColorInfo
+import com.aardarch.aardink.core.ColorPresentation
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
@@ -24,6 +27,7 @@ import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.CooperativePacer
+import com.aardarch.aardink.languages.internal.HexColors
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
@@ -33,6 +37,12 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
 object JsonLanguageService : BaseLanguageService() {
 
     override val triggerCharacters: Set<Char> = setOf('{', '[', ':', '"', ',')
+
+    /** String values that are a hex colour, `#rgb` to `#rrggbbaa`. */
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.quoted(document.text)
+
+    override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
+        HexColors.presentation(document, info, color, alphaFirst = false)
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val text = document.text

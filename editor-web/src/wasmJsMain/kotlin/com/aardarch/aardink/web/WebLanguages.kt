@@ -18,6 +18,7 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.CompositeLanguageService
@@ -80,6 +81,9 @@ import kotlinx.serialization.json.jsonObject
  * - [hover]: `{ title?, contents, example? }`, where `example` is shown as code below the text;
  * - [diagnostics]: an array of [WebDiagnostic].
  * - [documentSymbols]: an array of [WebDocumentSymbol], the document's structure as a tree.
+ * - [documentColors]: an array of Monaco's `IColorInformation`, `{ range, color: { red, green,
+ *   blue, alpha } }` with each channel from 0 to 1, for the colour swatches. The picker writes a
+ *   picked colour back as CSS hex.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -92,6 +96,7 @@ class WebLanguageProviders(
     val hover: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
     val diagnostics: (suspend (text: String) -> String?)? = null,
     val documentSymbols: (suspend (text: String) -> String?)? = null,
+    val documentColors: (suspend (text: String) -> String?)? = null,
 )
 
 /**
@@ -182,6 +187,10 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = asked {
         providers.documentSymbols?.invoke(document.text)
     }?.let { AardinkWeb.parseSymbols(document, it) }.orEmpty()
+
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = asked {
+        providers.documentColors?.invoke(document.text)
+    }?.let { AardinkWeb.parseColors(document, it) }.orEmpty()
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 

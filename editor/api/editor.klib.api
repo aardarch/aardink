@@ -266,7 +266,9 @@ abstract interface com.aardarch.aardink.core/LanguageService { // com.aardarch.a
     abstract suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions = ...): kotlin/String // com.aardarch.aardink.core/LanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
     abstract suspend fun hoverDoc(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/HoverDoc? // com.aardarch.aardink.core/LanguageService.hoverDoc|hoverDoc(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun codeActions(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/CodeAction> // com.aardarch.aardink.core/LanguageService.codeActions|codeActions(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
+    open suspend fun colorPresentations(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/ColorInfo, androidx.compose.ui.graphics/Color): kotlin.collections/List<com.aardarch.aardink.core/ColorPresentation> // com.aardarch.aardink.core/LanguageService.colorPresentations|colorPresentations(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.ColorInfo;androidx.compose.ui.graphics.Color){}[0]
     open suspend fun definition(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/Location? // com.aardarch.aardink.core/LanguageService.definition|definition(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    open suspend fun documentColors(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/ColorInfo> // com.aardarch.aardink.core/LanguageService.documentColors|documentColors(com.aardarch.aardink.core.CodeDocument){}[0]
     open suspend fun documentHighlights(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/DocumentHighlight> // com.aardarch.aardink.core/LanguageService.documentHighlights|documentHighlights(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun documentLinks(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/DocumentLink> // com.aardarch.aardink.core/LanguageService.documentLinks|documentLinks(com.aardarch.aardink.core.CodeDocument){}[0]
     open suspend fun documentSymbols(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/DocumentSymbol> // com.aardarch.aardink.core/LanguageService.documentSymbols|documentSymbols(com.aardarch.aardink.core.CodeDocument){}[0]
@@ -563,6 +565,38 @@ final class com.aardarch.aardink.core/CodeEditorState { // com.aardarch.aardink.
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/CodeEditorState.Rename.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/CodeEditorState.Rename.toString|toString(){}[0]
     }
+}
+
+final class com.aardarch.aardink.core/ColorInfo { // com.aardarch.aardink.core/ColorInfo|null[0]
+    constructor <init>(kotlin.ranges/IntRange, androidx.compose.ui.graphics/Color) // com.aardarch.aardink.core/ColorInfo.<init>|<init>(kotlin.ranges.IntRange;androidx.compose.ui.graphics.Color){}[0]
+
+    final val color // com.aardarch.aardink.core/ColorInfo.color|{}color[0]
+        final fun <get-color>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ColorInfo.color.<get-color>|<get-color>(){}[0]
+    final val range // com.aardarch.aardink.core/ColorInfo.range|{}range[0]
+        final fun <get-range>(): kotlin.ranges/IntRange // com.aardarch.aardink.core/ColorInfo.range.<get-range>|<get-range>(){}[0]
+
+    final fun component1(): kotlin.ranges/IntRange // com.aardarch.aardink.core/ColorInfo.component1|component1(){}[0]
+    final fun component2(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ColorInfo.component2|component2(){}[0]
+    final fun copy(kotlin.ranges/IntRange = ..., androidx.compose.ui.graphics/Color = ...): com.aardarch.aardink.core/ColorInfo // com.aardarch.aardink.core/ColorInfo.copy|copy(kotlin.ranges.IntRange;androidx.compose.ui.graphics.Color){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/ColorInfo.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/ColorInfo.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/ColorInfo.toString|toString(){}[0]
+}
+
+final class com.aardarch.aardink.core/ColorPresentation { // com.aardarch.aardink.core/ColorPresentation|null[0]
+    constructor <init>(kotlin/String, com.aardarch.aardink.core/TextEdit? = ...) // com.aardarch.aardink.core/ColorPresentation.<init>|<init>(kotlin.String;com.aardarch.aardink.core.TextEdit?){}[0]
+
+    final val label // com.aardarch.aardink.core/ColorPresentation.label|{}label[0]
+        final fun <get-label>(): kotlin/String // com.aardarch.aardink.core/ColorPresentation.label.<get-label>|<get-label>(){}[0]
+    final val textEdit // com.aardarch.aardink.core/ColorPresentation.textEdit|{}textEdit[0]
+        final fun <get-textEdit>(): com.aardarch.aardink.core/TextEdit? // com.aardarch.aardink.core/ColorPresentation.textEdit.<get-textEdit>|<get-textEdit>(){}[0]
+
+    final fun component1(): kotlin/String // com.aardarch.aardink.core/ColorPresentation.component1|component1(){}[0]
+    final fun component2(): com.aardarch.aardink.core/TextEdit? // com.aardarch.aardink.core/ColorPresentation.component2|component2(){}[0]
+    final fun copy(kotlin/String = ..., com.aardarch.aardink.core/TextEdit? = ...): com.aardarch.aardink.core/ColorPresentation // com.aardarch.aardink.core/ColorPresentation.copy|copy(kotlin.String;com.aardarch.aardink.core.TextEdit?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/ColorPresentation.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/ColorPresentation.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/ColorPresentation.toString|toString(){}[0]
 }
 
 final class com.aardarch.aardink.core/CommentSyntax { // com.aardarch.aardink.core/CommentSyntax|null[0]
@@ -1255,12 +1289,14 @@ final class com.aardarch.aardink.ui/EditorMenuItem { // com.aardarch.aardink.ui/
 }
 
 final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/EditorOptions|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
 
     final val bracketPairColorization // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization|{}bracketPairColorization[0]
         final fun <get-bracketPairColorization>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization.<get-bracketPairColorization>|<get-bracketPairColorization>(){}[0]
     final val breadcrumbs // com.aardarch.aardink.ui/EditorOptions.breadcrumbs|{}breadcrumbs[0]
         final fun <get-breadcrumbs>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.breadcrumbs.<get-breadcrumbs>|<get-breadcrumbs>(){}[0]
+    final val colorDecorators // com.aardarch.aardink.ui/EditorOptions.colorDecorators|{}colorDecorators[0]
+        final fun <get-colorDecorators>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.colorDecorators.<get-colorDecorators>|<get-colorDecorators>(){}[0]
     final val eol // com.aardarch.aardink.ui/EditorOptions.eol|{}eol[0]
         final fun <get-eol>(): com.aardarch.aardink.core/LineEnding? // com.aardarch.aardink.ui/EditorOptions.eol.<get-eol>|<get-eol>(){}[0]
     final val highlightCurrentLine // com.aardarch.aardink.ui/EditorOptions.highlightCurrentLine|{}highlightCurrentLine[0]
@@ -1314,6 +1350,7 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
     final fun component2(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component2|component2(){}[0]
     final fun component20(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component20|component20(){}[0]
     final fun component21(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component21|component21(){}[0]
+    final fun component22(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component22|component22(){}[0]
     final fun component3(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component3|component3(){}[0]
     final fun component4(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component4|component4(){}[0]
     final fun component5(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component5|component5(){}[0]
@@ -1321,7 +1358,7 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
     final fun component7(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component7|component7(){}[0]
     final fun component8(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component8|component8(){}[0]
     final fun component9(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component9|component9(){}[0]
-    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.ui/EditorOptions.toString|toString(){}[0]
@@ -1415,9 +1452,11 @@ open class com.aardarch.aardink.core/CompositeLanguageService : com.aardarch.aar
     open fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.core/CompositeLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
     open fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.core/CompositeLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     open suspend fun codeActions(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/CodeAction> // com.aardarch.aardink.core/CompositeLanguageService.codeActions|codeActions(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
+    open suspend fun colorPresentations(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/ColorInfo, androidx.compose.ui.graphics/Color): kotlin.collections/List<com.aardarch.aardink.core/ColorPresentation> // com.aardarch.aardink.core/CompositeLanguageService.colorPresentations|colorPresentations(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.ColorInfo;androidx.compose.ui.graphics.Color){}[0]
     open suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.core/CompositeLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun definition(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/Location? // com.aardarch.aardink.core/CompositeLanguageService.definition|definition(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun diagnostics(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Diagnostic> // com.aardarch.aardink.core/CompositeLanguageService.diagnostics|diagnostics(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun documentColors(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/ColorInfo> // com.aardarch.aardink.core/CompositeLanguageService.documentColors|documentColors(com.aardarch.aardink.core.CodeDocument){}[0]
     open suspend fun documentHighlights(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/DocumentHighlight> // com.aardarch.aardink.core/CompositeLanguageService.documentHighlights|documentHighlights(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun documentLinks(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/DocumentLink> // com.aardarch.aardink.core/CompositeLanguageService.documentLinks|documentLinks(com.aardarch.aardink.core.CodeDocument){}[0]
     open suspend fun documentSymbols(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/DocumentSymbol> // com.aardarch.aardink.core/CompositeLanguageService.documentSymbols|documentSymbols(com.aardarch.aardink.core.CodeDocument){}[0]
@@ -1557,6 +1596,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.ShowCodeActions.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.ShowCodeActions.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.ShowCodeActions.toString|toString(){}[0]
+    }
+
+    final object ShowColorPicker : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.ShowColorPicker|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.ShowColorPicker.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.ShowColorPicker.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.ShowColorPicker.toString|toString(){}[0]
     }
 
     final object ShowFind : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.ShowFind|null[0]
@@ -1736,6 +1781,8 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDocument$stabl
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState$stableprop|#static{}com_aardarch_aardink_core_CodeEditorState$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop|#static{}com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop|#static{}com_aardarch_aardink_core_CodeEditorState_Rename$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_ColorInfo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_ColorInfo$stableprop|#static{}com_aardarch_aardink_core_ColorInfo$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_ColorPresentation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_ColorPresentation$stableprop|#static{}com_aardarch_aardink_core_ColorPresentation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CommentSyntax$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CommentSyntax$stableprop|#static{}com_aardarch_aardink_core_CommentSyntax$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop|#static{}com_aardarch_aardink_core_CompletionItem$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CompositeLanguageService$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CompositeLanguageService$stableprop|#static{}com_aardarch_aardink_core_CompositeLanguageService$stableprop[0]
@@ -1765,6 +1812,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rena
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Reveal$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop[0]
@@ -1836,6 +1884,8 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDocument$stabl
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState$stableprop_getter|com_aardarch_aardink_core_CodeEditorState$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop_getter|com_aardarch_aardink_core_CodeEditorState_Navigation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter|com_aardarch_aardink_core_CodeEditorState_Rename$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_ColorInfo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_ColorInfo$stableprop_getter|com_aardarch_aardink_core_ColorInfo$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_ColorPresentation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_ColorPresentation$stableprop_getter|com_aardarch_aardink_core_ColorPresentation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CommentSyntax$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CommentSyntax$stableprop_getter|com_aardarch_aardink_core_CommentSyntax$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CompletionItem$stableprop_getter|com_aardarch_aardink_core_CompletionItem$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CompositeLanguageService$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CompositeLanguageService$stableprop_getter|com_aardarch_aardink_core_CompositeLanguageService$stableprop_getter(){}[0]
@@ -1865,6 +1915,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rena
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter|com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowColorPicker$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowFind$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowHover$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowReplace$stableprop_getter(){}[0]

@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.platform.PlatformInfo
@@ -239,6 +240,12 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
                     done()
                     controller.actions.onQuickFix()
                 }) { Text("Quick Fix") }
+            }
+            if (editable && state.canExecute(EditorCommand.ShowColorPicker)) {
+                TextButton(onClick = {
+                    done()
+                    state.execute(EditorCommand.ShowColorPicker)
+                }) { Text("Colour") }
             }
             for (item in controller.touchMenuItems) {
                 TextButton(enabled = controller.canRun(item), onClick = {

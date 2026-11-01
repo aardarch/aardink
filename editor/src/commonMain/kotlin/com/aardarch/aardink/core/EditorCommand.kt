@@ -102,6 +102,12 @@ sealed class EditorCommand {
     /** Shift+Alt+Left (Ctrl+Shift+Cmd+Left on macOS): back to the selection before the last growth. */
     data object ShrinkSelection : EditorCommand()
 
+    /**
+     * The colour picker for the colour at the caret, with
+     * [EditorOptions.colorDecorators][com.aardarch.aardink.ui.EditorOptions.colorDecorators] on.
+     */
+    data object ShowColorPicker : EditorCommand()
+
     /** Ctrl/Cmd+Shift+O: a list of the document's symbols to filter and jump to, as VS Code's "Go to Symbol". */
     data object GoToSymbol : EditorCommand()
 

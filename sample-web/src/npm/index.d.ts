@@ -546,6 +546,18 @@ export interface AardinkLanguageProviders {
    * language's are used while this answers none.
    */
   provideDocumentSymbols?(text: string): AardinkDocumentSymbol[] | null | Promise<AardinkDocumentSymbol[] | null>;
+  /**
+   * The colours written in the text, as Monaco's `provideDocumentColors`, for the swatches drawn
+   * with the `colorDecorators` option. With `extends`, the base language's are added. A colour
+   * picked in the editor's picker is written back as CSS hex (`#rrggbb`, `#rrggbbaa`).
+   */
+  provideDocumentColors?(text: string): AardinkColorInformation[] | null | Promise<AardinkColorInformation[] | null>;
+}
+
+/** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */
+export interface AardinkColorInformation {
+  range: AardinkRange;
+  color: { red: number; green: number; blue: number; alpha: number };
 }
 
 /** Adds a language for `createEditor`'s `language` option. Rejects with what is wrong with the definition. */

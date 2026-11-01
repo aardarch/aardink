@@ -179,6 +179,7 @@ export async function registerLanguage(definition, providers = {}) {
         text,
       ),
     (text) => answer(providers.provideDocumentSymbols, text),
+    (text) => answer(providers.provideDocumentColors, text),
   );
   if (error) throw new Error(`Aardink: ${error}`);
 }

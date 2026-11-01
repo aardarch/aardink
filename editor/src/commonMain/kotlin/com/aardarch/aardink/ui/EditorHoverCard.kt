@@ -55,8 +55,9 @@ internal fun EditorHoverCard(
     onQuickFix: (() -> Unit)?,
     modifier: Modifier = Modifier,
     messages: List<String> = emptyList(),
+    onPickColor: (() -> Unit)? = null,
 ) {
-    if (diagnostics.isEmpty() && messages.isEmpty()) {
+    if (diagnostics.isEmpty() && messages.isEmpty() && onPickColor == null) {
         if (doc != null) HoverDocCard(doc, modifier)
         return
     }
@@ -99,6 +100,11 @@ internal fun EditorHoverCard(
                                 )
                             }
                         }
+                    }
+                }
+                if (onPickColor != null) {
+                    TextButton(onClick = onPickColor) {
+                        Text(text = "Pick colour…", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
                 if (onQuickFix != null) {

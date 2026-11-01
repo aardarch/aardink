@@ -27,6 +27,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
@@ -77,6 +78,8 @@ internal class EditorDecorations(
     val snippetTabStops: List<TextRange> = emptyList(),
     /** The host's decorations, in order of where they start. */
     val hostDecorations: List<Decoration> = emptyList(),
+    /** The colours in the text, each drawn as a swatch bar under it. */
+    val colorSwatches: List<ColorInfo> = emptyList(),
 )
 
 /**
@@ -164,6 +167,10 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
             val range = TextRange(decoration.range.first, decoration.range.last + 1)
             if (style.underline != Color.Unspecified) drawUnderline(line, range, style.underline, left, top, lineHeight)
             if (style.border != Color.Unspecified) drawBorder(line, range, style.border, left, top, lineHeight)
+        }
+        for (swatch in decorations.colorSwatches) {
+            if (swatch.range.isEmpty() || swatch.range.last < line.start || swatch.range.first > line.end) continue
+            drawSwatch(line, swatch, left, top, lineHeight)
         }
         decorations.composition?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
         decorations.link?.let { drawUnderline(line, it, colors.text, left, top, lineHeight) }
@@ -321,6 +328,28 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
         val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
         val y = top + layout.rowShift(row, lineHeight) + layout.getLineBaseline(row) + 2.dp.toPx()
         drawLine(color, Offset(left + x0, y), Offset(left + x1, y), strokeWidth = stroke)
+    }
+}
+
+/**
+ * A colour's swatch: a bar in the colour under its text, over a contrasting edge so a colour
+ * close to the background still shows. Drawn below the text, so nothing is laid out again.
+ */
+private fun DrawScope.drawSwatch(line: VisibleLine, swatch: ColorInfo, left: Float, top: Float, lineHeight: Float) {
+    val layout = line.layout
+    val a = (swatch.range.first - line.start).coerceIn(0, line.shownLength)
+    val b = (swatch.range.last + 1 - line.start).coerceIn(a, line.shownLength)
+    if (b <= a) return
+    val height = 3.dp.toPx()
+    val edge = 1.dp.toPx()
+    val firstRow = layout.rowFor(a)
+    val lastRow = layout.rowFor(b - 1)
+    for (row in firstRow..lastRow) {
+        val x0 = if (row == firstRow) layout.getHorizontalPosition(a, usePrimaryDirection = true) else layout.getLineLeft(row)
+        val x1 = if (row == lastRow) layout.getBoundingBox(b - 1).right else layout.getLineRight(row)
+        val y = top + layout.rowShift(row, lineHeight) + layout.getLineBottom(row) - height
+        drawRect(Color.Gray, Offset(left + x0 - edge, y - edge), Size(x1 - x0 + 2 * edge, height + 2 * edge))
+        drawRect(swatch.color, Offset(left + x0, y), Size(x1 - x0, height))
     }
 }
 

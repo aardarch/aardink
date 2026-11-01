@@ -16,6 +16,7 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 
 /**
  * One occurrence of the symbol at the caret, as LSP's `DocumentHighlight`: what
@@ -85,3 +86,22 @@ internal object UrlDetector {
 
     private const val TRAILING = ".,;:!?"
 }
+
+/**
+ * A colour written in the document, as LSP's `ColorInformation`: what
+ * [LanguageService.documentColors] returns. With
+ * [com.aardarch.aardink.ui.EditorOptions.colorDecorators] the editor draws it as a swatch under
+ * its text, and its picker changes it through [LanguageService.colorPresentations].
+ *
+ * @property range The text that writes the colour, first to last character (inclusive).
+ * @property color The colour it means.
+ */
+@Immutable
+data class ColorInfo(val range: IntRange, val color: Color)
+
+/**
+ * One way to write a colour, as LSP's `ColorPresentation`: [label] is the text, and [textEdit],
+ * when given, the edit that writes it (otherwise [label] replaces the colour's range).
+ */
+@Immutable
+data class ColorPresentation(val label: String, val textEdit: TextEdit? = null)

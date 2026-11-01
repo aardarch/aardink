@@ -15,7 +15,10 @@
  */
 package com.aardarch.aardink.languages.internal.xml
 
+import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.ColorInfo
+import com.aardarch.aardink.core.ColorPresentation
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
@@ -26,6 +29,7 @@ import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.LinkedEditingRanges
 import com.aardarch.aardink.languages.XmlSchema
 import com.aardarch.aardink.languages.internal.BaseLanguageService
+import com.aardarch.aardink.languages.internal.HexColors
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
 /**
@@ -52,6 +56,37 @@ abstract class TagValidator(private val htmlMode: Boolean, private val sourceLab
         XmlSymbols.linkedNames(document.text, offset, htmlMode, HTML_VOID_ELEMENTS)
             ?.map { it.first..it.last }
             ?.let(::LinkedEditingRanges)
+
+    /**
+     * Attribute values that are a hex colour: Android's `#argb` and `#aarrggbb` in XML, CSS's
+     * `#rgba` and `#rrggbbaa` in HTML.
+     */
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> {
+        val colors = ArrayList<ColorInfo>()
+        val text = document.text
+        val tags = XmlScan.tags(text, pacer = diagnosticsPacer())
+        for ((index, tag) in tags.withIndex()) {
+            for (attribute in tag.attributes) {
+                val value = attribute.value ?: continue
+                if (!value.startsWith("#")) continue
+                val color = HexColors.parse(value.substring(1), alphaFirst = !htmlMode) ?: continue
+                colors += ColorInfo(attribute.valueStart until attribute.valueEnd, color)
+            }
+            // An element whose text is a colour, as an Android colour resource: `<color>#AARRGGBB</color>`.
+            val next = tags.getOrNull(index + 1) ?: continue
+            if (tag.closing || tag.selfClosing || !next.closing || next.start <= tag.end) continue
+            val content = text.substring(tag.end, next.start)
+            val trimmed = content.trim()
+            if (!trimmed.startsWith("#")) continue
+            val color = HexColors.parse(trimmed.substring(1), alphaFirst = !htmlMode) ?: continue
+            val start = tag.end + content.indexOf(trimmed)
+            colors += ColorInfo(start until start + trimmed.length, color)
+        }
+        return colors
+    }
+
+    override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
+        HexColors.presentation(document, info, color, alphaFirst = !htmlMode)
 
     /** `href` and `src` values, and an `include`'s `component`. */
     override suspend fun documentLinks(document: CodeDocument): List<DocumentLink> = XmlSymbols.links(document.text, diagnosticsPacer())
