@@ -284,6 +284,14 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
 | `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`, `detail`, `commitCharacters` and Monaco's `kind` names or numbers. Answer `{ suggestions, incomplete: false }` to be asked once per word, Monaco's behaviour; without it your provider is asked on each letter, as in 0.6. |
 | Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
+| `deltaDecorations`, `createDecorationsCollection` | The same | `isWholeLine`, `hoverMessage`, `overviewRuler.color` and `minimap.color` as Monaco's; colours (`backgroundColor`, `borderColor`, `underlineColor`, `gutterColor`, CSS hex) where Monaco takes a CSS class. Nothing that changes the text's layout (`before`, `after`). |
+| `overviewRulerLanes` | `overviewRulerLanes` | Above 0 shows the ruler; off by default. |
+| `occurrencesHighlight`, `linkedEditing`, `colorDecorators` | The same | Off by default. |
+| `fontLigatures` | The same | On by default. |
+| `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
+| `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
+| `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |
+| `KeyMod.chord(...)` | The same, or `'CtrlCmd+K CtrlCmd+S'` | In `addCommand` and `addAction`. |
 | `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
 
 ## Fonts

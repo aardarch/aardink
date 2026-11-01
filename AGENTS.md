@@ -203,7 +203,11 @@ The `editor` module is intentionally language-agnostic:
 | `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
 | `FoldingProvider` | Interface — implement for code folding |
-| `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal |
+| `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal; `EditorTheme.fromColorScheme` for Material 3 |
+| `DocumentSymbol` / `CodeEditorState.symbolPathAt` | The document's structure from the language service; the symbols around an offset |
+| `Decoration` / `CodeEditorState.setDecorations` | A host's highlights on the text, per owner, kept on their text through edits |
+| `KeyChord` / `EditorKeyBinding` / `EditorKeyBindings.Default` | Keys as data; `EditorOptions.keyBindings` overrides the editor's own |
+| `CodeBlock` | Read-only highlighted code, for short snippets |
 | `EditorThemes` | Pre-built themes (VsCodeDark, VsCodeLight, MaterialDark, MaterialLight, MidnightOcean, SolarizedDark) |
 
 ## Versioning
