@@ -54,9 +54,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.core.TokenStyleResolver
 import com.aardarch.aardink.core.lineMarks
 import com.aardarch.aardink.platform.EditorClipboardEvents
@@ -77,9 +79,12 @@ import com.aardarch.aardink.ui.view.EditorViewport
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.INDENT_GLYPH
 import com.aardarch.aardink.ui.view.MinimapView
+import com.aardarch.aardink.ui.view.OverviewRuler
+import com.aardarch.aardink.ui.view.RulerColors
 import com.aardarch.aardink.ui.view.StickyLine
 import com.aardarch.aardink.ui.view.ViewStyle
 import com.aardarch.aardink.ui.view.drawStickyLines
+import com.aardarch.aardink.ui.view.overviewRulerMarks
 import com.aardarch.aardink.ui.view.stickyLineAt
 import com.aardarch.aardink.ui.view.stickyLines
 import kotlinx.coroutines.delay
@@ -235,8 +240,56 @@ internal fun VirtualizedEditorBody(
     val sticky: () -> List<StickyLine> = { view.stickyLines(currentStickyRanges.value) }
     SideEffect { controller.pointer.stickyLineAt = { position -> view.stickyLineAt(currentStickyRanges.value, position) } }
     val lineCount = remember(state.textVersion) { state.document.lineCount }
-    val minimapMarks by remember(state) {
-        derivedStateOf { lineMarks(state.shownDecorations, state.document) { it.minimapColor } }
+    // The overview ruler's marks, and the minimap's: worked out when what they show changes, not
+    // per frame.
+    val currentDiagnostics = rememberUpdatedState(diagnostics)
+    val currentFind = rememberUpdatedState(findReplaceState)
+    val currentDiff = rememberUpdatedState(gutter?.diffAnnotations.orEmpty())
+    val rulerColors = remember(theme) {
+        val ruler = theme.overviewRulerColors
+        RulerColors(
+            error = theme.errorColor,
+            warning = theme.warningColor,
+            info = theme.infoColor,
+            findMatch = ruler.findMatch.takeOrElse { theme.findMatchColor.copy(alpha = 1f) },
+            selection = ruler.selection.takeOrElse { theme.cursorColor.copy(alpha = 0.6f) },
+            added = ruler.added.takeOrElse { Color(0xFF4CAF50) },
+            modified = ruler.modified.takeOrElse { Color(0xFF2196F3) },
+        )
+    }
+    val showRuler = options.overviewRuler
+    val rulerMarks by remember(state, rulerColors) {
+        derivedStateOf {
+            overviewRulerMarks(
+                document = state.document,
+                diagnostics = currentDiagnostics.value,
+                findMatches = currentFind.value?.matches.orEmpty(),
+                selections = state.selections,
+                diff = currentDiff.value,
+                decorations = state.shownDecorations,
+                colors = rulerColors,
+            )
+        }
+    }
+    // The minimap marks the host's decorations, and diagnostics and find matches as the ruler does.
+    val minimapMarks by remember(state, rulerColors) {
+        derivedStateOf {
+            val decorated = lineMarks(state.shownDecorations, state.document) { it.minimapColor }
+            val document = state.document
+            val length = document.length
+            val found = currentFind.value?.matches.orEmpty().map {
+                val line = document.offsetToLineCol(it.first.coerceIn(0, length)).first
+                LineMark(line, line, rulerColors.findMatch)
+            }
+            val problems = currentDiagnostics.value
+                .filter { it.severity == DiagnosticSeverity.Error || it.severity == DiagnosticSeverity.Warning }
+                .sortedByDescending { it.severity }
+                .map {
+                    val line = document.offsetToLineCol(it.range.first.coerceIn(0, length)).first
+                    LineMark(line, line, if (it.severity == DiagnosticSeverity.Error) rulerColors.error else rulerColors.warning)
+                }
+            decorated + found + problems
+        }
     }
 
     EditorBody(
@@ -311,6 +364,17 @@ internal fun VirtualizedEditorBody(
             )
         },
         scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        overviewRuler = {
+            if (showRuler) {
+                OverviewRuler(
+                    view = view,
+                    marks = { rulerMarks },
+                    background = theme.overviewRulerColors.background.takeOrElse { theme.background },
+                    border = theme.overviewRulerColors.border.takeOrElse { textColor.copy(alpha = 0.12f) },
+                    visibleRegion = textColor.copy(alpha = 0.08f),
+                )
+            }
+        },
         minimap = {
             if (options.showMinimap) {
                 MinimapView(

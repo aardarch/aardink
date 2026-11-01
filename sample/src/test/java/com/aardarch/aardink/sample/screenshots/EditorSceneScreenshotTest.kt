@@ -331,4 +331,37 @@ class EditorSceneScreenshotTest {
         state.selection = TextRange(state.document.lineStart(6) + 12)
         capture("breadcrumbs", state, editorOptions = EditorOptions(breadcrumbs = true), languageService = kotlin.languageService)
     }
+
+    @Test
+    fun overviewRuler() {
+        // The long sample with an error, a warning, find matches, a decoration and the caret:
+        // each in its lane of the ruler at the right edge, the visible region banded.
+        val state = stateOf(longCode)
+        val text = state.document.text
+        val shape = text.indexOf("Shape")
+        val area = text.lastIndexOf("area")
+        state.setDecorations(
+            "assistant",
+            listOf(
+                Decoration(
+                    state.document.lineStart(20) until state.document.lineEnd(24),
+                    DecorationStyle(overviewRulerColor = Color(0xFF28A745)),
+                ),
+            ),
+        )
+        val find = FindReplaceState().apply {
+            show()
+            query = "name"
+        }
+        capture(
+            "overview-ruler",
+            state,
+            findReplaceState = find,
+            diagnostics = listOf(
+                Diagnostic(range = shape until shape + 5, message = "Unresolved", severity = DiagnosticSeverity.Error),
+                Diagnostic(range = area until area + 4, message = "Unused", severity = DiagnosticSeverity.Warning),
+            ),
+            editorOptions = EditorOptions(overviewRuler = true),
+        )
+    }
 }

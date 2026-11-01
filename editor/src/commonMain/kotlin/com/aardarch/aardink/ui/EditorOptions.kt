@@ -53,6 +53,10 @@ import com.aardarch.aardink.core.LineEnding
  * @property breadcrumbs A row above the text with the path of document symbols the caret is in
  *   (`html › body › div`), from the language service's `documentSymbols`; a tap on one selects
  *   it. Off by default.
+ * @property overviewRuler A narrow strip at the right edge that maps the whole document: marks
+ *   where its diagnostics, find matches, selections, changed lines and the host's decorations
+ *   (their `overviewRulerColor`) are; a click scrolls there. The scrollbar is drawn over it, as in
+ *   VS Code. Off by default.
  */
 @Immutable
 data class EditorOptions(
@@ -74,6 +78,7 @@ data class EditorOptions(
     val eol: LineEnding? = null,
     val quickSuggestions: Boolean = false,
     val breadcrumbs: Boolean = false,
+    val overviewRuler: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

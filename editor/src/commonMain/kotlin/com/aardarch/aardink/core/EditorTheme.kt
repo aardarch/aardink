@@ -69,6 +69,29 @@ data class EditorTheme(
      * prefix's style. Empty by default: every token upright and regular.
      */
     val tokenFontStyles: Map<TokenType, TokenFontStyle> = emptyMap(),
+
+    // ── Overview ruler ────────────────────────────────────────────────────────
+    /**
+     * The colours of the overview ruler (`EditorOptions.overviewRuler`). Each one left
+     * [Color.Unspecified], the default, follows from the theme's other colours.
+     */
+    val overviewRulerColors: OverviewRulerColors = OverviewRulerColors(),
+)
+
+/**
+ * The overview ruler's colours, VS Code's `editorOverviewRuler.*`. Diagnostics take the theme's
+ * error, warning and info colours. [Color.Unspecified], the default for each, follows from the
+ * theme: [background] its background, [findMatch] its find-match colour made opaque, [selection]
+ * its caret colour, [added] and [modified] the diff lane's green and blue.
+ */
+@Immutable
+data class OverviewRulerColors(
+    val background: Color = Color.Unspecified,
+    val border: Color = Color.Unspecified,
+    val findMatch: Color = Color.Unspecified,
+    val selection: Color = Color.Unspecified,
+    val added: Color = Color.Unspecified,
+    val modified: Color = Color.Unspecified,
 )
 
 /** VS Code's bracket-pair colours for dark themes: gold, orchid, blue. */
