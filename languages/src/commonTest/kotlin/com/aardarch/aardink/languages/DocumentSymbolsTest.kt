@@ -204,4 +204,26 @@ class DocumentSymbolsTest {
         assertEquals(listOf("a", "a\nb", "\\q"), symbols.map { it.name })
         assertEquals(escapedA, symbols[0].nameIn(text))
     }
+
+    @Test
+    fun `a json comment right after a value is skipped`() = runTest {
+        val text = "{\"a\":1/*}*/,\"b\":2}"
+        assertEquals(listOf("a", "b"), outline(symbolsOf(BuiltInLanguages.Json.languageService, text)))
+    }
+
+    @Test
+    fun `a markdown fence indented four spaces is code, not a fence`() = runTest {
+        val text = "    ```\n\n# Visible"
+        assertEquals(listOf("Visible"), outline(symbolsOf(BuiltInLanguages.Markdown.languageService, text)))
+    }
+
+    @Test
+    fun `toml names keep quoted brackets and equals signs`() = runTest {
+        val text = "[\"a]b\"]\n\"k=v\" = 1\n[[\"x]]y\"]]\nz = 2"
+        val symbols = symbolsOf(BuiltInLanguages.Toml.languageService, text)
+        assertEquals(listOf("\"a]b\"(\"k=v\")", "\"x]]y\"(z)"), outline(symbols))
+        assertEquals("\"a]b\"", symbols[0].nameIn(text))
+        assertEquals("\"k=v\"", symbols[0].children[0].nameIn(text))
+        assertEquals("\"x]]y\"", symbols[1].nameIn(text))
+    }
 }

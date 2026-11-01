@@ -99,7 +99,8 @@ object TomlLanguageService : BaseLanguageService() {
                 endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
                 val array = trimmed.startsWith("[[")
                 val open = if (array) 2 else 1
-                val close = trimmed.indexOf(if (array) "]]" else "]", open).let { if (it < 0) trimmed.length else it }
+                // A quoted name may hold a bracket: `["a]b"]` is the table `"a]b"`.
+                val close = indexOutsideStrings(trimmed, if (array) "]]" else "]", open).let { if (it < 0) trimmed.length else it }
                 val name = trimmed.substring(open, close).trim()
                 val nameStart = start + open + (trimmed.substring(open, close).length - trimmed.substring(open, close).trimStart().length)
                 table = DocumentSymbol(
@@ -109,7 +110,7 @@ object TomlLanguageService : BaseLanguageService() {
                     selectionRange = nameStart until nameStart + name.length,
                 )
             } else {
-                val eq = trimmed.indexOf('=')
+                val eq = assignmentIndex(trimmed)
                 if (eq > 0) {
                     val key = trimmed.substring(0, eq).trim()
                     val symbol = DocumentSymbol(key, SymbolKind.Property, start..maxOf(start, last), start until start + key.length)
@@ -612,13 +613,19 @@ object TomlLanguageService : BaseLanguageService() {
      * Index of the `=` that separates key from value in [line], or -1 when the line has none.
      * An `=` inside a quoted key or after a comment marker is not an assignment.
      */
-    private fun assignmentIndex(line: String): Int {
-        var i = 0
+    private fun assignmentIndex(line: String): Int = indexOutsideStrings(line, "=")
+
+    /**
+     * Index of [needle] in [line], searching from [from], or -1 when it has none. A [needle]
+     * inside a quoted string or after a comment marker does not count.
+     */
+    private fun indexOutsideStrings(line: String, needle: String, from: Int = 0): Int {
+        var i = from
         while (i < line.length) {
             val c = line[i]
             when {
                 c == '#' -> return -1
-                c == '=' -> return i
+                line.startsWith(needle, i) -> return i
                 c == '"' || c == '\'' -> i = endOfBasicString(line, i)
                 else -> i++
             }

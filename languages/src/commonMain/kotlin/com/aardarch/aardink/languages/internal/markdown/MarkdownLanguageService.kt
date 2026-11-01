@@ -58,7 +58,9 @@ internal object MarkdownLanguageService : BaseLanguageService() {
         for (i in 0 until lineCount) {
             pacer?.onProgress(i)
             val line = document.lineText(i)
-            val trimmed = line.trimStart()
+            // A fence, like a heading, is indented at most three spaces; any further is indented code.
+            val indent = line.takeWhile { it == ' ' }.length
+            val trimmed = if (indent <= 3) line.substring(indent) else ""
             val first = trimmed.firstOrNull()
             val run = if (first == '`' || first == '~') trimmed.takeWhile { it == first }.length else 0
             val open = fence

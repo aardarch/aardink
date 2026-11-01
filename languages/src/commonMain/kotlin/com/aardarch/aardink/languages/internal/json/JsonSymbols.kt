@@ -141,7 +141,8 @@ internal object JsonSymbols {
 
                 else -> {
                     val start = i
-                    while (i < n && !text[i].isWhitespace() && text[i] !in ",:]}[{\"") i++
+                    // Stops at `/` too, so a comment right after a value is skipped whole.
+                    while (i < n && !text[i].isWhitespace() && text[i] !in ",:]}[{\"/") i++
                     if (i == start) {
                         i++
                         continue
