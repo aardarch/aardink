@@ -27,7 +27,7 @@ facts about the aardflex apps are as of the same day (Android on 0.6.2, aardflex
 | --- | --- | --- |
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
 | 0.7 | Done, not released (branch `feat/0.7`, 2026-10-22) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
-| 0.8 | Planned; ledger drafted (§14), not approved | §6: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
+| 0.8 | In progress (branch `feat/0.8`, 2026-11-01) | Ledger approved as a whole 2026-11-01 (§14). §6: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Planned | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
 | 0.10 | Planned | §8: more built-in languages, web provider parity, view options, find extras, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
@@ -317,7 +317,7 @@ it.
 
 ### 6.1 Tracked ranges (`:editor`; 1 PR, first)
 
-- Generalise `DiagnosticsTracker.mapRange` and `mapOffset` (`core/DiagnosticsTracker.kt:65`) into
+- Generalise `DiagnosticsTracker.mapRange` and `mapOffset` (`core/DiagnosticsTracker.kt:68`, `:75`) into
   a `TrackedRanges<T>` document listener that diagnostics, decorations, symbols and colour
   swatches share.
 
@@ -619,10 +619,10 @@ Found during the audits; none of them is Aardink's to fix.
 - **aardflex specs:** `specs/index.md` still lists the syntax highlighter as in progress and the
   Monaco web editor as built; `specs/roadmap.md` row 0.6 still says "regex-based highlighting".
 
-## 14. API ledger for 0.8 (draft, for approval)
+## 14. API ledger for 0.8
 
-Drafted from §6 once 0.7 was built. Nothing here is written until it is approved, line by line
-or as a whole, as 0.7's was.
+Drafted from §6 once 0.7 was built, and approved as a whole on 2026-11-01. What was built where
+it differs, and the symbols it does not name, go in §14.1.
 
 ### `:editor`, new
 

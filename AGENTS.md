@@ -132,7 +132,7 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
   and commit the updated dumps under `*/api/`. Every public symbol added, changed or removed
   must be in the current version's API ledger, [docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md)
-  §11 for 0.7 and §14 for 0.8, once approved (the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
+  §14 for 0.8 (0.7's is §11; the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
   if it breaks consumers, in that version's `docs/MIGRATION_0.x.md`. Nothing public is added
   without that.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
@@ -223,7 +223,7 @@ The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the
 vanniktech Maven Publish plugin, and `:sample-web` stamps it into the npm package — never
 hardcode a version in `build.gradle.kts`. Between releases `VERSION_NAME` is the next version
-with a `-SNAPSHOT` suffix (now `0.7.0-SNAPSHOT`); `create-release.ps1` suggests the version
+with a `-SNAPSHOT` suffix (now `0.8.0-SNAPSHOT`); `create-release.ps1` suggests the version
 without the suffix, and the first commit after a release moves `VERSION_NAME` to the next
 `-SNAPSHOT`.
 
