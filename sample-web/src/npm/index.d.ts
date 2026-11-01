@@ -252,6 +252,18 @@ export interface AardinkEditor {
    * is shown.
    */
   revalidate(): void;
+  /**
+   * The document's structure as the language describes it (its built-in service, or your
+   * `provideDocumentSymbols`): a tree in document order, its ranges moved along with the edits
+   * since the last answer. Asked about 300 ms after the editor appears and after each pause in
+   * typing; empty until then.
+   */
+  getDocumentSymbols(): AardinkDocumentSymbol[];
+  /**
+   * The symbols holding `position`, outermost first: the element the caret is in, its parent and
+   * so on up. With `onDidChangeCursor`, this maps the caret to what the text describes.
+   */
+  getSymbolPathAt(position: AardinkPosition): AardinkDocumentSymbol[];
   revealPosition(line: number, column: number): void;
   /**
    * Opens the find panel and moves the keyboard focus to its find field, from wherever on the
@@ -382,6 +394,20 @@ export declare const CompletionItemInsertTextRule: {
   readonly InsertAsSnippet: 4;
 };
 
+/**
+ * Monaco's `DocumentSymbol`: `kind` is Monaco's `SymbolKind` number (0 File, 1 Module, 4 Class,
+ * 5 Method, 6 Property, 11 Function, 12 Variable, 14 String, 17 Array, 18 Object, 19 Key...).
+ * `selectionRange`, the part that names it, is `range` when absent.
+ */
+export interface AardinkDocumentSymbol {
+  name: string;
+  kind: number;
+  range: AardinkRange;
+  selectionRange?: AardinkRange;
+  detail?: string;
+  children?: AardinkDocumentSymbol[];
+}
+
 /** Monaco's `IRange`: 1-based lines and columns, `endColumn` exclusive. */
 export interface AardinkRange {
   startLineNumber: number;
@@ -470,6 +496,12 @@ export interface AardinkLanguageProviders {
   ): AardinkCompletionItem[] | AardinkCompletionList | null | Promise<AardinkCompletionItem[] | AardinkCompletionList | null>;
   provideHover?(text: string, line: number, column: number): AardinkHover | null | Promise<AardinkHover | null>;
   provideDiagnostics?(text: string): AardinkDiagnostic[] | Promise<AardinkDiagnostic[]>;
+  /**
+   * The document's structure, as Monaco's `provideDocumentSymbols`, for Go to Symbol
+   * (Ctrl+Shift+O), the breadcrumbs, sticky scroll and `getSymbolPathAt`. With `extends`, the base
+   * language's are used while this answers none.
+   */
+  provideDocumentSymbols?(text: string): AardinkDocumentSymbol[] | null | Promise<AardinkDocumentSymbol[] | null>;
 }
 
 /** Adds a language for `createEditor`'s `language` option. Rejects with what is wrong with the definition. */

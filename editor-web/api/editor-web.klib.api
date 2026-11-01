@@ -66,6 +66,49 @@ final class com.aardarch.aardink.web/WebDiagnostic { // com.aardarch.aardink.web
     }
 }
 
+final class com.aardarch.aardink.web/WebDocumentSymbol { // com.aardarch.aardink.web/WebDocumentSymbol|null[0]
+    constructor <init>(kotlin/String, kotlin/Int = ..., com.aardarch.aardink.web/WebRange, com.aardarch.aardink.web/WebRange? = ..., kotlin/String? = ..., kotlin.collections/List<com.aardarch.aardink.web/WebDocumentSymbol>? = ...) // com.aardarch.aardink.web/WebDocumentSymbol.<init>|<init>(kotlin.String;kotlin.Int;com.aardarch.aardink.web.WebRange;com.aardarch.aardink.web.WebRange?;kotlin.String?;kotlin.collections.List<com.aardarch.aardink.web.WebDocumentSymbol>?){}[0]
+
+    final val children // com.aardarch.aardink.web/WebDocumentSymbol.children|{}children[0]
+        final fun <get-children>(): kotlin.collections/List<com.aardarch.aardink.web/WebDocumentSymbol>? // com.aardarch.aardink.web/WebDocumentSymbol.children.<get-children>|<get-children>(){}[0]
+    final val detail // com.aardarch.aardink.web/WebDocumentSymbol.detail|{}detail[0]
+        final fun <get-detail>(): kotlin/String? // com.aardarch.aardink.web/WebDocumentSymbol.detail.<get-detail>|<get-detail>(){}[0]
+    final val kind // com.aardarch.aardink.web/WebDocumentSymbol.kind|{}kind[0]
+        final fun <get-kind>(): kotlin/Int // com.aardarch.aardink.web/WebDocumentSymbol.kind.<get-kind>|<get-kind>(){}[0]
+    final val name // com.aardarch.aardink.web/WebDocumentSymbol.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.aardarch.aardink.web/WebDocumentSymbol.name.<get-name>|<get-name>(){}[0]
+    final val range // com.aardarch.aardink.web/WebDocumentSymbol.range|{}range[0]
+        final fun <get-range>(): com.aardarch.aardink.web/WebRange // com.aardarch.aardink.web/WebDocumentSymbol.range.<get-range>|<get-range>(){}[0]
+    final val selectionRange // com.aardarch.aardink.web/WebDocumentSymbol.selectionRange|{}selectionRange[0]
+        final fun <get-selectionRange>(): com.aardarch.aardink.web/WebRange? // com.aardarch.aardink.web/WebDocumentSymbol.selectionRange.<get-selectionRange>|<get-selectionRange>(){}[0]
+
+    final fun component1(): kotlin/String // com.aardarch.aardink.web/WebDocumentSymbol.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.aardarch.aardink.web/WebDocumentSymbol.component2|component2(){}[0]
+    final fun component3(): com.aardarch.aardink.web/WebRange // com.aardarch.aardink.web/WebDocumentSymbol.component3|component3(){}[0]
+    final fun component4(): com.aardarch.aardink.web/WebRange? // com.aardarch.aardink.web/WebDocumentSymbol.component4|component4(){}[0]
+    final fun component5(): kotlin/String? // com.aardarch.aardink.web/WebDocumentSymbol.component5|component5(){}[0]
+    final fun component6(): kotlin.collections/List<com.aardarch.aardink.web/WebDocumentSymbol>? // com.aardarch.aardink.web/WebDocumentSymbol.component6|component6(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/Int = ..., com.aardarch.aardink.web/WebRange = ..., com.aardarch.aardink.web/WebRange? = ..., kotlin/String? = ..., kotlin.collections/List<com.aardarch.aardink.web/WebDocumentSymbol>? = ...): com.aardarch.aardink.web/WebDocumentSymbol // com.aardarch.aardink.web/WebDocumentSymbol.copy|copy(kotlin.String;kotlin.Int;com.aardarch.aardink.web.WebRange;com.aardarch.aardink.web.WebRange?;kotlin.String?;kotlin.collections.List<com.aardarch.aardink.web.WebDocumentSymbol>?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.web/WebDocumentSymbol.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.web/WebDocumentSymbol.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.web/WebDocumentSymbol.toString|toString(){}[0]
+
+    final object $serializer : kotlinx.serialization.internal/GeneratedSerializer<com.aardarch.aardink.web/WebDocumentSymbol> { // com.aardarch.aardink.web/WebDocumentSymbol.$serializer|null[0]
+        final val descriptor // com.aardarch.aardink.web/WebDocumentSymbol.$serializer.descriptor|{}descriptor[0]
+            final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.aardarch.aardink.web/WebDocumentSymbol.$serializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+
+        final fun childSerializers(): kotlin/Array<kotlinx.serialization/KSerializer<*>> // com.aardarch.aardink.web/WebDocumentSymbol.$serializer.childSerializers|childSerializers(){}[0]
+        final fun deserialize(kotlinx.serialization.encoding/Decoder): com.aardarch.aardink.web/WebDocumentSymbol // com.aardarch.aardink.web/WebDocumentSymbol.$serializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+        final fun serialize(kotlinx.serialization.encoding/Encoder, com.aardarch.aardink.web/WebDocumentSymbol) // com.aardarch.aardink.web/WebDocumentSymbol.$serializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;com.aardarch.aardink.web.WebDocumentSymbol){}[0]
+    }
+
+    final object Companion { // com.aardarch.aardink.web/WebDocumentSymbol.Companion|null[0]
+        final val $childSerializers // com.aardarch.aardink.web/WebDocumentSymbol.Companion.$childSerializers|{}$childSerializers[0]
+
+        final fun serializer(): kotlinx.serialization/KSerializer<com.aardarch.aardink.web/WebDocumentSymbol> // com.aardarch.aardink.web/WebDocumentSymbol.Companion.serializer|serializer(){}[0]
+    }
+}
+
 final class com.aardarch.aardink.web/WebEdit { // com.aardarch.aardink.web/WebEdit|null[0]
     constructor <init>(com.aardarch.aardink.web/WebRange, kotlin/String? = ...) // com.aardarch.aardink.web/WebEdit.<init>|<init>(com.aardarch.aardink.web.WebRange;kotlin.String?){}[0]
 
@@ -167,12 +210,14 @@ final class com.aardarch.aardink.web/WebEditorOptions { // com.aardarch.aardink.
 }
 
 final class com.aardarch.aardink.web/WebLanguageProviders { // com.aardarch.aardink.web/WebLanguageProviders|null[0]
-    constructor <init>(kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? = ..., kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? = ..., kotlin.coroutines/SuspendFunction1<kotlin/String, kotlin/String?>? = ...) // com.aardarch.aardink.web/WebLanguageProviders.<init>|<init>(kotlin.coroutines.SuspendFunction3<kotlin.String,kotlin.Int,kotlin.Int,kotlin.String?>?;kotlin.coroutines.SuspendFunction3<kotlin.String,kotlin.Int,kotlin.Int,kotlin.String?>?;kotlin.coroutines.SuspendFunction1<kotlin.String,kotlin.String?>?){}[0]
+    constructor <init>(kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? = ..., kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? = ..., kotlin.coroutines/SuspendFunction1<kotlin/String, kotlin/String?>? = ..., kotlin.coroutines/SuspendFunction1<kotlin/String, kotlin/String?>? = ...) // com.aardarch.aardink.web/WebLanguageProviders.<init>|<init>(kotlin.coroutines.SuspendFunction3<kotlin.String,kotlin.Int,kotlin.Int,kotlin.String?>?;kotlin.coroutines.SuspendFunction3<kotlin.String,kotlin.Int,kotlin.Int,kotlin.String?>?;kotlin.coroutines.SuspendFunction1<kotlin.String,kotlin.String?>?;kotlin.coroutines.SuspendFunction1<kotlin.String,kotlin.String?>?){}[0]
 
     final val completions // com.aardarch.aardink.web/WebLanguageProviders.completions|{}completions[0]
         final fun <get-completions>(): kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? // com.aardarch.aardink.web/WebLanguageProviders.completions.<get-completions>|<get-completions>(){}[0]
     final val diagnostics // com.aardarch.aardink.web/WebLanguageProviders.diagnostics|{}diagnostics[0]
         final fun <get-diagnostics>(): kotlin.coroutines/SuspendFunction1<kotlin/String, kotlin/String?>? // com.aardarch.aardink.web/WebLanguageProviders.diagnostics.<get-diagnostics>|<get-diagnostics>(){}[0]
+    final val documentSymbols // com.aardarch.aardink.web/WebLanguageProviders.documentSymbols|{}documentSymbols[0]
+        final fun <get-documentSymbols>(): kotlin.coroutines/SuspendFunction1<kotlin/String, kotlin/String?>? // com.aardarch.aardink.web/WebLanguageProviders.documentSymbols.<get-documentSymbols>|<get-documentSymbols>(){}[0]
     final val hover // com.aardarch.aardink.web/WebLanguageProviders.hover|{}hover[0]
         final fun <get-hover>(): kotlin.coroutines/SuspendFunction3<kotlin/String, kotlin/Int, kotlin/Int, kotlin/String?>? // com.aardarch.aardink.web/WebLanguageProviders.hover.<get-hover>|<get-hover>(){}[0]
 }
@@ -337,10 +382,12 @@ final object com.aardarch.aardink.web/AardinkWeb { // com.aardarch.aardink.web/A
     final fun focus(com.aardarch.aardink.web/AardinkEditorHandle) // com.aardarch.aardink.web/AardinkWeb.focus|focus(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun format(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/Function1<kotlin/Boolean, kotlin/Unit> = ...) // com.aardarch.aardink.web/AardinkWeb.format|format(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.Function1<kotlin.Boolean,kotlin.Unit>){}[0]
     final fun getAlternativeVersionId(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/Long // com.aardarch.aardink.web/AardinkWeb.getAlternativeVersionId|getAlternativeVersionId(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
+    final fun getDocumentSymbolsJson(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/String // com.aardarch.aardink.web/AardinkWeb.getDocumentSymbolsJson|getDocumentSymbolsJson(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun getPosition(com.aardarch.aardink.web/AardinkEditorHandle): com.aardarch.aardink.web/WebPosition // com.aardarch.aardink.web/AardinkWeb.getPosition|getPosition(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun getPositionJson(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/String // com.aardarch.aardink.web/AardinkWeb.getPositionJson|getPositionJson(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun getSelections(com.aardarch.aardink.web/AardinkEditorHandle): kotlin.collections/List<com.aardarch.aardink.web/WebSelection> // com.aardarch.aardink.web/AardinkWeb.getSelections|getSelections(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun getSelectionsJson(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/String // com.aardarch.aardink.web/AardinkWeb.getSelectionsJson|getSelectionsJson(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
+    final fun getSymbolPathAtJson(com.aardarch.aardink.web/AardinkEditorHandle, kotlin/Int, kotlin/Int): kotlin/String // com.aardarch.aardink.web/AardinkWeb.getSymbolPathAtJson|getSymbolPathAtJson(com.aardarch.aardink.web.AardinkEditorHandle;kotlin.Int;kotlin.Int){}[0]
     final fun getValue(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/String // com.aardarch.aardink.web/AardinkWeb.getValue|getValue(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun isDisposed(com.aardarch.aardink.web/AardinkEditorHandle): kotlin/Boolean // com.aardarch.aardink.web/AardinkWeb.isDisposed|isDisposed(com.aardarch.aardink.web.AardinkEditorHandle){}[0]
     final fun mount(kotlin/String, kotlin/String, com.aardarch.aardink.web/WebEditorOptions = ..., com.aardarch.aardink.languages/LanguageRegistry = ..., kotlin.collections/Map<kotlin/String, com.aardarch.aardink.core/EditorTheme> = ...): com.aardarch.aardink.web/AardinkEditorHandle // com.aardarch.aardink.web/AardinkWeb.mount|mount(kotlin.String;kotlin.String;com.aardarch.aardink.web.WebEditorOptions;com.aardarch.aardink.languages.LanguageRegistry;kotlin.collections.Map<kotlin.String,com.aardarch.aardink.core.EditorTheme>){}[0]
@@ -387,6 +434,8 @@ final val com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkEditorHandle$
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkWeb$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkWeb$stableprop|#static{}com_aardarch_aardink_web_AardinkWeb$stableprop[0]
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic$stableprop|#static{}com_aardarch_aardink_web_WebDiagnostic$stableprop[0]
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop|#static{}com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop[0]
+final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol$stableprop|#static{}com_aardarch_aardink_web_WebDocumentSymbol$stableprop[0]
+final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop|#static{}com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop[0]
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit$stableprop|#static{}com_aardarch_aardink_web_WebEdit$stableprop[0]
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit_$serializer$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit_$serializer$stableprop|#static{}com_aardarch_aardink_web_WebEdit_$serializer$stableprop[0]
 final val com.aardarch.aardink.web/com_aardarch_aardink_web_WebEditorOptions$stableprop // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEditorOptions$stableprop|#static{}com_aardarch_aardink_web_WebEditorOptions$stableprop[0]
@@ -410,6 +459,8 @@ final fun com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkEditorHandle$
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkWeb$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_AardinkWeb$stableprop_getter|com_aardarch_aardink_web_AardinkWeb$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic$stableprop_getter|com_aardarch_aardink_web_WebDiagnostic$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop_getter|com_aardarch_aardink_web_WebDiagnostic_$serializer$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol$stableprop_getter|com_aardarch_aardink_web_WebDocumentSymbol$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop_getter|com_aardarch_aardink_web_WebDocumentSymbol_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit$stableprop_getter|com_aardarch_aardink_web_WebEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit_$serializer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEdit_$serializer$stableprop_getter|com_aardarch_aardink_web_WebEdit_$serializer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.web/com_aardarch_aardink_web_WebEditorOptions$stableprop_getter(): kotlin/Int // com.aardarch.aardink.web/com_aardarch_aardink_web_WebEditorOptions$stableprop_getter|com_aardarch_aardink_web_WebEditorOptions$stableprop_getter(){}[0]

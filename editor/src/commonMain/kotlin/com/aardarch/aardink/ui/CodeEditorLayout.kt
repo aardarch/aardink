@@ -50,6 +50,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeAction
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
@@ -57,6 +58,7 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindEngine
@@ -78,6 +80,7 @@ import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.core.completionReplaceRange
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.TextNavigator
+import com.aardarch.aardink.core.flattenSymbols
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
@@ -210,6 +213,34 @@ fun CodeEditorLayout(
         SideEffect { if (diagnosticsTracker.given !== diagnostics) diagnosticsTracker.replace(diagnostics) }
     }
     val currentShownDiagnostics = rememberUpdatedState(shownDiagnostics)
+
+    // ── Document symbols: asked after each pause in typing, moved with edits between ─
+    LaunchedEffect(state, languageService) {
+        val service = languageService
+        if (service == null) {
+            state.publishSymbols(emptyList())
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(SYMBOLS_DEBOUNCE_MS)
+            val document = state.document.snapshot()
+            val list = if (state.exceedsAnalysisLimit) {
+                emptyList()
+            } else {
+                withContext(state.computeDispatcher) { service.documentSymbols(document) }
+            }
+            if (state.document.version != document.version) return@collectLatest
+            state.publishSymbols(list)
+        }
+    }
+    var showSymbolPicker by remember { mutableStateOf(false) }
+    val goToSymbol: (DocumentSymbol) -> Unit = { symbol ->
+        showSymbolPicker = false
+        val name = symbol.selectionRange
+        val end = if (name.isEmpty()) name.first else name.last + 1
+        state.navigateTo(name.first, TextRange(name.first, end))
+        controller.requestFocus()
+    }
 
     // Completion state. With a hardware keyboard the list sits at the caret and the arrows move
     // its selection; on a touch device it is a strip above the keyboard.
@@ -469,7 +500,19 @@ fun CodeEditorLayout(
             }
         }
     }
-    val stickySource = if (options.stickyScroll) foldState?.foldableRanges ?: ownStickyRanges else emptyList()
+    // Symbols that span lines, when the language service has any, as VS Code's sticky scroll
+    // prefers its outline; the fold ranges otherwise.
+    val symbolStickyRanges = if (options.stickyScroll) {
+        val symbols = state.symbols
+        remember(symbols) { symbolStickyRanges(symbols, state.document) }
+    } else {
+        emptyList()
+    }
+    val stickySource = when {
+        !options.stickyScroll -> emptyList()
+        symbolStickyRanges.isNotEmpty() -> symbolStickyRanges
+        else -> foldState?.foldableRanges ?: ownStickyRanges
+    }
     val stickyRanges = remember(stickySource) { stickySource.sortedWith(compareBy<FoldRange>({ it.startLine }, { -it.endLine })) }
 
     // ── Hover: the documentation of the symbol under a resting mouse ─────────
@@ -900,6 +943,8 @@ fun CodeEditorLayout(
 
             is EditorCommand.FoldLevel -> foldLevel(command.level)
 
+            EditorCommand.GoToSymbol -> true.also { showSymbolPicker = true }
+
             is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
 
             else -> false
@@ -914,6 +959,7 @@ fun CodeEditorLayout(
             }
             addAll(listOf(EditorCommand.ShowHover, EditorCommand.GoToDefinition, EditorCommand.FindReferences))
             if (editable && languageService.supportsRename) add(EditorCommand.Rename)
+            add(EditorCommand.GoToSymbol)
         }
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
@@ -1154,6 +1200,14 @@ fun CodeEditorLayout(
             toolbar()
         }
 
+        if (options.breadcrumbs) {
+            EditorBreadcrumbs(
+                path = state.symbolPathAt(state.selection.end),
+                onPick = goToSymbol,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         // ── Editor body: gutter + text area ──────────────────────────────────
         VirtualizedEditorBody(
             state = state,
@@ -1229,6 +1283,25 @@ fun CodeEditorLayout(
                                 }
                             } else {
                                 null
+                            },
+                        )
+                    }
+                }
+                if (showSymbolPicker) {
+                    EditorAnchoredPopup(
+                        anchor = Rect(0f, 0f, 0f, 0f),
+                        focusable = true,
+                        onDismiss = {
+                            showSymbolPicker = false
+                            controller.requestFocus()
+                        },
+                    ) {
+                        SymbolPickerCard(
+                            symbols = state.symbols,
+                            onPick = goToSymbol,
+                            onDismiss = {
+                                showSymbolPicker = false
+                                controller.requestFocus()
                             },
                         )
                     }
@@ -1355,6 +1428,9 @@ private fun shiftRangeForInsert(range: IntRange, at: Int, length: Int, absorbing
 /** The longest selection Ctrl+F takes as its query, as VS Code's. */
 private const val FIND_SEED_LIMIT = 200
 
+/** How long after the last edit the editor asks the language service for the document's symbols. */
+private const val SYMBOLS_DEBOUNCE_MS = 300L
+
 /** Delay before the language service is asked for diagnostics, after the editor appears or an edit. */
 private const val DIAGNOSTICS_DEBOUNCE_MS = 500L
 
@@ -1422,4 +1498,21 @@ private fun endOfLiteral(text: CharSequence, start: Int, limit: Int): Int {
         }
     }
     return limit
+}
+
+/**
+ * The symbols in [symbols] that span more than one line, as fold ranges for sticky scroll: each
+ * from the line it starts on to the line it ends on.
+ */
+internal fun symbolStickyRanges(symbols: List<DocumentSymbol>, document: CodeDocument): List<FoldRange> {
+    if (symbols.isEmpty()) return emptyList()
+    val out = ArrayList<FoldRange>()
+    val length = document.length
+    for ((symbol, _) in flattenSymbols(symbols)) {
+        if (symbol.range.isEmpty()) continue
+        val start = document.offsetToLineCol(symbol.range.first.coerceIn(0, length)).first
+        val end = document.offsetToLineCol(symbol.range.last.coerceIn(0, length)).first
+        if (end > start) out += FoldRange(start, end)
+    }
+    return out
 }

@@ -348,6 +348,8 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             KeyCommand.FindPrevious -> actions.onFindNext(false)
 
             KeyCommand.SelectAllMatches -> actions.onSelectAllMatches()
+
+            KeyCommand.Command -> binding.run?.let(state::execute) ?: false
         }
         return handled
     }

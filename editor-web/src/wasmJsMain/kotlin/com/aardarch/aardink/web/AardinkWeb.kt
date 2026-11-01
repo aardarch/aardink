@@ -49,6 +49,7 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
@@ -57,6 +58,7 @@ import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.LanguageDefinition
@@ -679,6 +681,75 @@ object AardinkWeb {
     fun revalidate(handle: AardinkEditorHandle) {
         handle.state.value.revalidate()
     }
+
+    // ── Document symbols ─────────────────────────────────────────────────────
+
+    /**
+     * The document's symbols as the language's service last described them (its built-in one, or a
+     * registered language's `provideDocumentSymbols`), as a JSON array of [WebDocumentSymbol]: a
+     * tree in document order, its ranges moved along with the edits since. Empty until the first
+     * answer, about 300 ms after the editor appears and after each pause in typing.
+     */
+    fun getDocumentSymbolsJson(handle: AardinkEditorHandle): String {
+        val state = handle.state.value
+        return json.encodeToString(symbolsJsonSerializer, toWebSymbols(state.document, state.symbols))
+    }
+
+    /**
+     * The symbols that hold the 1-based [line] and [column], outermost first, as a JSON array of
+     * [WebDocumentSymbol] (each with its children): the element the caret is in, its parent and up.
+     * How a host maps the caret to what the text describes.
+     */
+    fun getSymbolPathAtJson(handle: AardinkEditorHandle, line: Int, column: Int): String {
+        val state = handle.state.value
+        val path = state.symbolPathAt(offsetOf(state.document, line, column))
+        return json.encodeToString(symbolsJsonSerializer, toWebSymbols(state.document, path))
+    }
+
+    /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
+    internal fun parseSymbols(document: CodeDocument, symbolsJson: String): List<DocumentSymbol> = runCatching {
+        json.decodeFromString(symbolsJsonSerializer, symbolsJson)
+    }.getOrDefault(emptyList()).let { toDocumentSymbols(document, it) }
+
+    internal fun toDocumentSymbols(document: CodeDocument, symbols: List<WebDocumentSymbol>): List<DocumentSymbol> = symbols.map { web ->
+        val range = rangeOf(document, web.range)
+        DocumentSymbol(
+            name = web.name,
+            kind = SymbolKind.entries.getOrElse(web.kind) { SymbolKind.Object },
+            range = range,
+            selectionRange = web.selectionRange?.let { rangeOf(document, it) } ?: range,
+            detail = web.detail,
+            children = toDocumentSymbols(document, web.children.orEmpty()),
+        )
+    }
+
+    internal fun toWebSymbols(document: CodeDocument, symbols: List<DocumentSymbol>): List<WebDocumentSymbol> = symbols.map { symbol ->
+        WebDocumentSymbol(
+            name = symbol.name,
+            kind = symbol.kind.ordinal,
+            range = webRange(document, symbol.range),
+            selectionRange = webRange(document, symbol.selectionRange),
+            detail = symbol.detail,
+            children = toWebSymbols(document, symbol.children),
+        )
+    }
+
+    /** [range] (end-exclusive, 1-based) as an inclusive range of [document]; empty for an empty one. */
+    internal fun rangeOf(document: CodeDocument, range: WebRange): IntRange {
+        val start = offsetOf(document, range.startLineNumber, range.startColumn)
+        val end = offsetOf(document, range.endLineNumber, range.endColumn)
+        return minOf(start, end) until maxOf(start, end)
+    }
+
+    /** An inclusive (possibly empty) [range] of [document] as an end-exclusive [WebRange]. */
+    internal fun webRange(document: CodeDocument, range: IntRange): WebRange {
+        val length = document.length
+        val (startLine, startColumn) = document.offsetToLineCol(range.first.coerceIn(0, length))
+        val (endLine, endColumn) = document.offsetToLineCol((range.last + 1).coerceIn(range.first.coerceIn(0, length), length))
+        return WebRange(startLine + 1, startColumn + 1, endLine + 1, endColumn + 1)
+    }
+
+    private val symbolsJsonSerializer = kotlinx.serialization.builtins.ListSerializer(WebDocumentSymbol.serializer())
 
     /** [diagnostics] in the host's shape, over as many lines as they run. */
     internal fun toWebDiagnostics(document: CodeDocument, diagnostics: List<Diagnostic>): List<WebDiagnostic> =

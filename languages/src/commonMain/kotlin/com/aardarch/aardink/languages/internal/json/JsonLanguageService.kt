@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.CooperativePacer
@@ -40,6 +41,8 @@ object JsonLanguageService : BaseLanguageService() {
         val diag = parser.parse() ?: return emptyList()
         return listOf(diag.toDiagnostic(document))
     }
+
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = JsonSymbols.of(document.text, diagnosticsPacer())
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = when (charTyped) {
         '{' -> "}"

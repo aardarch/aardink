@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.XmlSchema
 import com.aardarch.aardink.languages.internal.BaseLanguageService
@@ -40,6 +41,9 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
 abstract class TagValidator(private val htmlMode: Boolean, private val sourceLabel: String) : BaseLanguageService() {
 
     override val triggerCharacters: Set<Char> = setOf('<', '/', ' ', ':', '"', '=')
+
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> =
+        XmlSymbols.of(document.text, htmlMode, HTML_VOID_ELEMENTS, diagnosticsPacer())
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val text = document.text

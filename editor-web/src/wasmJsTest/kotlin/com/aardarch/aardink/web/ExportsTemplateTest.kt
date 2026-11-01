@@ -125,9 +125,9 @@ class ExportsTemplateTest {
         val nothing: (String, Int, Int) -> Promise<JsString?> = { _, _, _ -> Promise.resolve<JsString?>(null) }
         val noDiagnostics: (String) -> Promise<JsString?> = { Promise.resolve<JsString?>(null) }
         val good = """{ "id": "exported", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
-        assertEquals("", aardinkRegisterLanguage(good, nothing, nothing, noDiagnostics))
+        assertEquals("", aardinkRegisterLanguage(good, nothing, nothing, noDiagnostics, noDiagnostics))
         val bad = """{ "id": "exported2", "grammar": { "tokenizer": { "root": [ ["(?<=a)b", "x"] ] } } }"""
-        assertTrue(aardinkRegisterLanguage(bad, nothing, nothing, noDiagnostics).contains("lookbehind"))
+        assertTrue(aardinkRegisterLanguage(bad, nothing, nothing, noDiagnostics, noDiagnostics).contains("lookbehind"))
         assertEquals("", aardinkRegisterTheme("exported-theme", """{ "tokenColors": [] }"""))
         assertTrue(aardinkRegisterTheme("broken", "not json").isNotEmpty())
     }

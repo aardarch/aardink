@@ -20,7 +20,9 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -54,6 +56,68 @@ object TomlLanguageService : BaseLanguageService() {
         "id" to "Plugin ID",
         "version.ref" to "Reference to [versions] entry",
     )
+
+    /**
+     * Tables (`[a.b]`, `[[array]]`) as symbols spanning to the next header, with their keys as
+     * children; keys before the first header are top-level symbols. A key's range covers its
+     * value, multiline ones included.
+     */
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> {
+        val lineCount = document.lineCount
+        if (lineCount == 0 || document.length == 0) return emptyList()
+        val states = lineStates(document)
+        val top = ArrayList<DocumentSymbol>()
+        var table: DocumentSymbol? = null
+        var tableKeys = ArrayList<DocumentSymbol>()
+        var lastLine = -1
+
+        fun endTable(last: Int) {
+            val open = table ?: return
+            top += open.copy(range = open.range.first..maxOf(open.range.first, last), children = tableKeys)
+            table = null
+            tableKeys = ArrayList()
+        }
+
+        var i = 0
+        while (i < lineCount) {
+            val line = document.lineText(i)
+            val trimmed = line.trimStart()
+            val start = document.lineStart(i) + (line.length - trimmed.length)
+            if (states[i].isContinuation || trimmed.isEmpty() || trimmed.startsWith("#")) {
+                i++
+                continue
+            }
+            // The declaration runs on through the lines that continue its value.
+            var end = i
+            while (end + 1 < lineCount && states[end + 1].isContinuation) end++
+            val last = document.lineEnd(end) - 1
+            if (trimmed.startsWith("[")) {
+                endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
+                val array = trimmed.startsWith("[[")
+                val open = if (array) 2 else 1
+                val close = trimmed.indexOf(if (array) "]]" else "]", open).let { if (it < 0) trimmed.length else it }
+                val name = trimmed.substring(open, close).trim()
+                val nameStart = start + open + (trimmed.substring(open, close).length - trimmed.substring(open, close).trimStart().length)
+                table = DocumentSymbol(
+                    name = name,
+                    kind = if (array) SymbolKind.Array else SymbolKind.Object,
+                    range = start..maxOf(start, last),
+                    selectionRange = nameStart until nameStart + name.length,
+                )
+            } else {
+                val eq = trimmed.indexOf('=')
+                if (eq > 0) {
+                    val key = trimmed.substring(0, eq).trim()
+                    val symbol = DocumentSymbol(key, SymbolKind.Property, start..maxOf(start, last), start until start + key.length)
+                    if (table != null) tableKeys += symbol else top += symbol
+                }
+            }
+            lastLine = end
+            i = end + 1
+        }
+        endTable(document.lineEnd(lastLine.coerceAtLeast(0)) - 1)
+        return top
+    }
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
         val lineCount = document.lineCount

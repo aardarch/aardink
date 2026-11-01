@@ -131,3 +131,19 @@ data class WebRange(val startLineNumber: Int, val startColumn: Int, val endLineN
  */
 @Serializable
 data class WebEdit(val range: WebRange, val text: String? = null)
+
+/**
+ * A document symbol as a web host describes it: Monaco's `DocumentSymbol`. [kind] is Monaco's
+ * `SymbolKind` number (0 `File`, 4 `Class`, 11 `Function`, 17 `Array`, 18 `Object`, 19 `Key`...);
+ * [selectionRange], the part that names it, is [range] when absent. The shape of a
+ * `provideDocumentSymbols` answer and of `getDocumentSymbols`.
+ */
+@Serializable
+data class WebDocumentSymbol(
+    val name: String,
+    val kind: Int = 0,
+    val range: WebRange,
+    val selectionRange: WebRange? = null,
+    val detail: String? = null,
+    val children: List<WebDocumentSymbol>? = null,
+)

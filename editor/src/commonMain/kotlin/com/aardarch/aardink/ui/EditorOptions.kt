@@ -50,6 +50,9 @@ import com.aardarch.aardink.core.LineEnding
  * @property eol The line ending Enter, typing and pasting insert. Null, the default, keeps the
  *   document's own ([com.aardarch.aardink.core.CodeDocument.eol], from its first line break), so a
  *   CR LF file stays CR LF. The text already in the document is never converted.
+ * @property breadcrumbs A row above the text with the path of document symbols the caret is in
+ *   (`html › body › div`), from the language service's `documentSymbols`; a tap on one selects
+ *   it. Off by default.
  */
 @Immutable
 data class EditorOptions(
@@ -70,6 +73,7 @@ data class EditorOptions(
     val renderWhitespace: RenderWhitespace = RenderWhitespace.Selection,
     val eol: LineEnding? = null,
     val quickSuggestions: Boolean = false,
+    val breadcrumbs: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

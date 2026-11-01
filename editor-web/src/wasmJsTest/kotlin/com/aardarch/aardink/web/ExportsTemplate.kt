@@ -100,12 +100,19 @@ fun aardinkExecuteEdits(id: Int, editsJson: String, endSelectionsJson: String): 
 @JsExport
 fun aardinkOnDiagnosticsChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onDiagnosticsChange(handle(id), callback)
 
+/** The document's symbols as a JSON array of Monaco-shaped `DocumentSymbol`s, a tree. */
+@JsExport fun aardinkGetDocumentSymbols(id: Int): String = AardinkWeb.getDocumentSymbolsJson(handle(id))
+
+/** The symbols holding a 1-based position, outermost first, as the same JSON. */
+@JsExport
+fun aardinkGetSymbolPathAt(id: Int, line: Int, column: Int): String = AardinkWeb.getSymbolPathAtJson(handle(id), line, column)
+
 /** Collects the language's own diagnostics again at once, without an edit; they reach [aardinkOnDiagnosticsChange]. */
 @JsExport fun aardinkRevalidate(id: Int) = AardinkWeb.revalidate(handle(id))
 
 /**
  * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
- * [hover] and [diagnostics] answer with JSON through a Promise, or null for nothing (pass one that
+ * [hover], [diagnostics] and [documentSymbols] answer with JSON through a Promise, or null for nothing (pass one that
  * resolves to null for what the language does not have). Returns "" when it worked, else what was
  * wrong with the definition.
  */
@@ -115,6 +122,7 @@ fun aardinkRegisterLanguage(
     completions: (String, Int, Int) -> Promise<JsString?>,
     hover: (String, Int, Int) -> Promise<JsString?>,
     diagnostics: (String) -> Promise<JsString?>,
+    documentSymbols: (String) -> Promise<JsString?>,
 ): String = try {
     AardinkWeb.registerLanguage(
         definitionJson,
@@ -122,6 +130,7 @@ fun aardinkRegisterLanguage(
             completions = { text, line, column -> completions(text, line, column).await<JsString?>()?.toString() },
             hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
             diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
+            documentSymbols = { text -> documentSymbols(text).await<JsString?>()?.toString() },
         ),
     )
     ""

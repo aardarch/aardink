@@ -19,9 +19,11 @@ import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.ui.EditorThemes
@@ -361,5 +363,56 @@ class WebLanguagesTest {
         assertEquals(HoverDoc("upper", "Upper-cases the value.", example = "{dt:day | upper}"), withExample.hoverDoc(document, 0))
         val without = register("toy-hover-plain", hover = """{ "contents": "Plain." }""")
         assertEquals(HoverDoc("", "Plain."), without.hoverDoc(document, 0))
+    }
+
+    @Test
+    fun `a host's document symbols, or those of the language it extends`() = runTest {
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-symbols", "extends": "xml", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                documentSymbols = { text ->
+                    if (text.startsWith("<own")) {
+                        """[{ "name": "own", "kind": 18, "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 7 },
+                            "selectionRange": { "startLineNumber": 1, "startColumn": 2, "endLineNumber": 1, "endColumn": 5 },
+                            "children": [] }]"""
+                    } else {
+                        null
+                    }
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-symbols")!!.languageService!!
+        val own = service.documentSymbols(CodeDocument("<own/>"))
+        assertEquals(listOf("own"), own.map { it.name })
+        assertEquals(SymbolKind.Object, own.single().kind)
+        assertEquals(0..5, own.single().range)
+        assertEquals(1..3, own.single().selectionRange)
+        // No answer: the XML service's structure.
+        assertEquals(listOf("a"), service.documentSymbols(CodeDocument("<a><b/></a>")).map { it.name })
+    }
+
+    @Test
+    fun `symbols go to the host in Monaco's shape and come back the same`() {
+        val document = CodeDocument("<a>\n  <b/>\n</a>")
+        val symbols = listOf(
+            DocumentSymbol(
+                "a",
+                SymbolKind.Object,
+                0..14,
+                1..1,
+                children = listOf(
+                    DocumentSymbol(
+                        "b",
+                        SymbolKind.Field,
+                        6..9,
+                        7..7,
+                    ),
+                ),
+            ),
+        )
+        val web = AardinkWeb.toWebSymbols(document, symbols)
+        assertEquals(WebRange(1, 1, 3, 5), web.single().range)
+        assertEquals(WebRange(2, 3, 2, 7), web.single().children!!.single().range)
+        assertEquals(symbols, AardinkWeb.toDocumentSymbols(document, web))
     }
 }

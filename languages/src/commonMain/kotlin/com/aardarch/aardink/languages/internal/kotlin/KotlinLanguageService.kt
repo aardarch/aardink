@@ -20,7 +20,9 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
 
@@ -89,6 +91,106 @@ object KotlinLanguageService : BaseLanguageService() {
             documentation = "When expression snippet",
             isSnippet = true,
         ),
+    )
+
+    /**
+     * Classes, interfaces, objects, functions and properties, from the declarations at the start
+     * of a line, nested by the braces that follow them. Local declarations inside a function body
+     * are left out, as VS Code's outline leaves them out.
+     */
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> {
+        val lineCount = document.lineCount
+        if (lineCount == 0 || document.length == 0) return emptyList()
+        val lines = (0 until lineCount).map(document::lineText)
+        val states = lineStates(lines)
+        val pacer = diagnosticsPacer()
+
+        class Open(val name: String, val kind: SymbolKind, val start: Int, val nameRange: IntRange, val depth: Int, val detail: String?) {
+            val children = ArrayList<DocumentSymbol>()
+
+            fun build(last: Int) = DocumentSymbol(name, kind, start..maxOf(start, last), nameRange, detail, children)
+        }
+        val top = ArrayList<DocumentSymbol>()
+        val stack = ArrayList<Open>()
+        var depth = 0
+
+        fun add(symbol: DocumentSymbol) {
+            (stack.lastOrNull()?.children ?: top) += symbol
+        }
+
+        for (i in 0 until lineCount) {
+            pacer?.onProgress(i)
+            val state = states[i]
+            val code = state.code
+            val line = lines[i]
+            val lineStart = document.lineStart(i)
+            val parent = stack.lastOrNull()
+            val atDeclarationLevel = depth == (parent?.depth?.plus(1) ?: 0) &&
+                parent?.kind != SymbolKind.Function && parent?.kind != SymbolKind.Method
+            var declared: Open? = null
+            if (atDeclarationLevel && code.isNotEmpty()) {
+                val match = DECLARATION.find(code)
+                if (match != null) {
+                    val keyword = match.groupValues[2]
+                    val name = match.groupValues[3].trim('`').ifEmpty { if (keyword == "object") "Companion" else "" }
+                    if (name.isNotEmpty()) {
+                        val modifiers = match.groupValues[1]
+                        val inType = parent?.kind in TYPE_KINDS
+                        val kind = when {
+                            keyword == "fun" -> if (inType) SymbolKind.Method else SymbolKind.Function
+                            keyword == "val" && "const" in modifiers -> SymbolKind.Constant
+                            keyword == "val" || keyword == "var" -> if (inType) SymbolKind.Property else SymbolKind.Variable
+                            keyword == "interface" -> SymbolKind.Interface
+                            keyword == "object" -> SymbolKind.Object
+                            "enum" in modifiers -> SymbolKind.Enum
+                            else -> SymbolKind.Class
+                        }
+                        val indent = line.length - line.trimStart().length
+                        val nameAt = line.indexOf(match.groupValues[3].ifEmpty { keyword }, indent).let { if (it < 0) indent else it }
+                        val nameLength = if (match.groupValues[3].isEmpty()) keyword.length else match.groupValues[3].length
+                        declared =
+                            Open(name, kind, lineStart + indent, (lineStart + nameAt) until (lineStart + nameAt + nameLength), depth, null)
+                    }
+                }
+            }
+            // The braces on the line, after its comments and strings are gone: a block opened by the
+            // declaration makes it a container until the block closes.
+            for (c in code) {
+                when (c) {
+                    '{' -> depth++
+
+                    '}' -> {
+                        depth = (depth - 1).coerceAtLeast(0)
+                        while (stack.isNotEmpty() && stack.last().depth >= depth) {
+                            val closed = stack.removeAt(stack.size - 1)
+                            add(closed.build(document.lineEnd(i) - 1))
+                        }
+                    }
+                }
+            }
+            if (declared != null) {
+                if (depth > declared.depth) {
+                    stack += declared
+                } else {
+                    add(declared.build(document.lineEnd(i) - 1))
+                }
+            }
+        }
+        while (stack.isNotEmpty()) add(stack.removeAt(stack.size - 1).build(document.length - 1))
+        return top
+    }
+
+    private val TYPE_KINDS = setOf(SymbolKind.Class, SymbolKind.Interface, SymbolKind.Object, SymbolKind.Enum)
+
+    /**
+     * A declaration at the start of a line: its modifiers and annotations, its keyword, and its name
+     * (after any type parameters and receiver). A `companion object` may have no name.
+     */
+    private val DECLARATION = Regex(
+        """^((?:(?:@[\w.]+(?:\([^)]*\))?|public|private|protected|internal|open|abstract|sealed|data|enum|annotation|inner|""" +
+            """override|suspend|inline|operator|infix|tailrec|external|const|lateinit|value|companion|actual|expect|""" +
+            """fun(?=\s+interface))\s+)*)""" +
+            """(class|interface|object|fun|val|var|typealias)\b\s*(?:<[^>]*>\s*)?(?:[\w<>?, ]+\.)?(`[^`]+`|\w*)""",
     )
 
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {

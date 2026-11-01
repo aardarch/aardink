@@ -24,6 +24,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import com.aardarch.aardink.core.EditorCommand
 
 /** Everything a key can make the editor do. */
 internal enum class KeyCommand {
@@ -84,10 +85,18 @@ internal enum class KeyCommand {
     FindNext,
     FindPrevious,
     SelectAllMatches,
+
+    /** Runs [KeyBinding.run], a public command, through [com.aardarch.aardink.core.CodeEditorState.execute]. */
+    Command,
 }
 
-/** A [command], and for the movement commands whether Shift extends the selection ([select]). */
-internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false)
+/**
+ * A [command], and for the movement commands whether Shift extends the selection ([select]). For
+ * [KeyCommand.Command], [run] is the public command the key runs.
+ */
+internal data class KeyBinding(val command: KeyCommand, val select: Boolean = false, val run: EditorCommand? = null) {
+    constructor(run: EditorCommand) : this(KeyCommand.Command, run = run)
+}
 
 /**
  * The editor's keyboard, as a table: VS Code's default bindings, with Cmd for Ctrl on macOS and
@@ -254,6 +263,7 @@ internal object EditorKeyBindings {
         Key.D -> if (shift) null else KeyBinding(KeyCommand.AddNextOccurrence)
         Key.L -> if (shift) KeyBinding(KeyCommand.SelectAllOccurrences) else null
         Key.Period -> if (shift) null else KeyBinding(KeyCommand.QuickFix)
+        Key.O -> if (shift) KeyBinding(EditorCommand.GoToSymbol) else null
         else -> null
     }
 }

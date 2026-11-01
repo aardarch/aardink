@@ -403,6 +403,34 @@ class CodeEditorState(
         for (listener in selectionListeners) listener(ranges, reason)
     }
 
+    // ── Document symbols ──────────────────────────────────────────────────────
+
+    private val symbolTracker = SymbolTracker()
+
+    /**
+     * The document's structure, as the language service of the
+     * [CodeEditorLayout][com.aardarch.aardink.ui.CodeEditorLayout] showing this state last described
+     * it ([LanguageService.documentSymbols]): a tree in document order. The layout asks again after
+     * each pause in typing; between answers each symbol's range moves along with the edits. Empty
+     * while no layout with a language service shows the state. Snapshot state: reading it in
+     * composition, or in `snapshotFlow`, follows each new answer and each edit.
+     */
+    val symbols: List<DocumentSymbol>
+        get() = symbolTracker.items
+
+    /**
+     * The symbols whose range holds [offset], outermost first: the element the caret is in, its
+     * parent and so on up. This is how a host maps the caret to what it describes (an element of a
+     * preview, say): `snapshotFlow { state.symbolPathAt(state.selection.end) }`. Empty when no
+     * symbol holds it.
+     */
+    fun symbolPathAt(offset: Int): List<DocumentSymbol> = symbolPath(symbols, offset)
+
+    /** The layout's newest answer from the language service, for the document as it is now. */
+    internal fun publishSymbols(list: List<DocumentSymbol>) {
+        symbolTracker.replace(list)
+    }
+
     // ── Commands ──────────────────────────────────────────────────────────────
 
     /** Read-only, as the layout's options say: the editing commands do nothing then, as their keys do. */
@@ -1115,6 +1143,7 @@ class CodeEditorState(
 
     init {
         document.addChangeListener(contentRecorder)
+        document.addChangeListener(symbolTracker)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)

@@ -22,6 +22,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
@@ -78,6 +79,7 @@ import kotlinx.serialization.json.jsonObject
  *     without one), as Monaco does; otherwise they keep the order given.
  * - [hover]: `{ title?, contents, example? }`, where `example` is shown as code below the text;
  * - [diagnostics]: an array of [WebDiagnostic].
+ * - [documentSymbols]: an array of [WebDocumentSymbol], the document's structure as a tree.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -89,6 +91,7 @@ class WebLanguageProviders(
     val completions: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
     val hover: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
     val diagnostics: (suspend (text: String) -> String?)? = null,
+    val documentSymbols: (suspend (text: String) -> String?)? = null,
 )
 
 /**
@@ -175,6 +178,10 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = asked {
         providers.diagnostics?.invoke(document.text)
     }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
+
+    override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = asked {
+        providers.documentSymbols?.invoke(document.text)
+    }?.let { AardinkWeb.parseSymbols(document, it) }.orEmpty()
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 

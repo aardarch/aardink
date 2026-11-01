@@ -175,6 +175,7 @@ export async function registerLanguage(definition, providers = {}) {
           ((t) => Promise.resolve(providers.provideDiagnostics(t)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic)))),
         text,
       ),
+    (text) => answer(providers.provideDocumentSymbols, text),
   );
   if (error) throw new Error(`Aardink: ${error}`);
 }
@@ -356,6 +357,8 @@ export async function createEditor(container, onChange, options = {}) {
       return () => diagnosticsListeners.delete(listener);
     },
     revalidate: () => k.aardinkRevalidate(id),
+    getDocumentSymbols: () => JSON.parse(k.aardinkGetDocumentSymbols(id)),
+    getSymbolPathAt: (position) => JSON.parse(k.aardinkGetSymbolPathAt(id, position.lineNumber, position.column)),
     revealPosition: (line, column) => k.aardinkRevealPosition(id, line, column),
     setBaseline: (text) => k.aardinkSetBaseline(id, text ?? ''),
     format: () => new Promise((resolve) => k.aardinkFormat(id, resolve)),

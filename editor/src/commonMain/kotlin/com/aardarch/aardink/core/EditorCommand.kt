@@ -92,6 +92,9 @@ sealed class EditorCommand {
     /** Folds the ranges nested [level] deep, 1 being the outermost, as VS Code's "Fold Level". */
     data class FoldLevel(val level: Int) : EditorCommand()
 
+    /** Ctrl/Cmd+Shift+O: a list of the document's symbols to filter and jump to, as VS Code's "Go to Symbol". */
+    data object GoToSymbol : EditorCommand()
+
     /** Scrolls [offset] into view, to the middle when [center], without moving the caret. */
     data class Reveal(val offset: Int, val center: Boolean = false) : EditorCommand()
 }

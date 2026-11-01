@@ -27,6 +27,7 @@ import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinLanguageService
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
+import com.aardarch.aardink.languages.internal.markdown.MarkdownLanguageService
 import com.aardarch.aardink.languages.internal.markdown.MarkdownTokenizer
 import com.aardarch.aardink.languages.internal.toml.TomlLanguageService
 import com.aardarch.aardink.languages.internal.toml.TomlTokenizer
@@ -117,6 +118,7 @@ object BuiltInLanguages {
         fileExtensions = listOf("md", "markdown"),
         tokenizer = MarkdownTokenizer,
         foldingProvider = MarkdownFoldingProvider,
+        languageService = MarkdownLanguageService,
     )
 
     val PlainText: LanguageDefinition = LanguageDefinition(

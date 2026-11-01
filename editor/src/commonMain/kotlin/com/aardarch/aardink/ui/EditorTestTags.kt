@@ -46,4 +46,11 @@ internal object EditorTestTags {
 
     /** The references list at the caret (Shift+F12). */
     const val REFERENCES = "aardink.references"
+
+    /** The Go to Symbol picker (Ctrl+Shift+O), and its filter field. */
+    const val SYMBOL_PICKER = "aardink.symbolPicker"
+    const val SYMBOL_PICKER_FIELD = "aardink.symbolPicker.query"
+
+    /** The breadcrumbs row. */
+    const val BREADCRUMBS = "aardink.breadcrumbs"
 }

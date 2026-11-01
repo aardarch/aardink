@@ -138,6 +138,15 @@ interface LanguageService {
         get() = true
 
     /**
+     * The structure of [document] as a tree of [DocumentSymbol]s in document order: its elements,
+     * its properties, its classes and functions. The editor asks after a pause in typing, as it asks
+     * for [diagnostics], and uses them for Go to Symbol (Ctrl+Shift+O), the breadcrumbs row and
+     * sticky scroll; [CodeEditorState.symbols] and [CodeEditorState.symbolPathAt] hand them to the
+     * host. The default is none.
+     */
+    suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */

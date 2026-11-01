@@ -66,16 +66,21 @@ internal open class TrackedRanges<T>(
         }
         var moved = false
         val next = current.map { item ->
-            val range = rangeOf(item)
-            val mapped = mapRange(range, change, keepsOneCharacter)
-            if (mapped == range) {
-                item
-            } else {
-                moved = true
-                withRange(item, mapped)
-            }
+            val after = moved(item, change)
+            if (after !== item) moved = true
+            after
         }
         if (moved) items = next
+    }
+
+    /**
+     * [item] after [change], or [item] itself when its range did not move. An item with ranges of
+     * its own inside it (a symbol's children, its name) overrides this to move them all.
+     */
+    protected open fun moved(item: T, change: DocumentChange): T {
+        val range = rangeOf(item)
+        val mapped = mapRange(range, change, keepsOneCharacter)
+        return if (mapped == range) item else withRange(item, mapped)
     }
 
     companion object {
