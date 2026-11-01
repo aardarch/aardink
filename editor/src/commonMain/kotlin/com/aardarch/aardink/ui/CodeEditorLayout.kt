@@ -159,7 +159,7 @@ fun CodeEditorLayout(
 
     // ── Diagnostics: the host's list, or the language service's ──────────────
     // Either way the tracker moves their ranges along with each edit until the next list.
-    val diagnosticsTracker = remember(state) { DiagnosticsTracker(state.document) }
+    val diagnosticsTracker = remember(state) { DiagnosticsTracker() }
     DisposableEffect(diagnosticsTracker) {
         state.document.addChangeListener(diagnosticsTracker)
         onDispose { state.document.removeChangeListener(diagnosticsTracker) }
