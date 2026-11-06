@@ -196,7 +196,9 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
             val doc = value?.documentation ?: return null
             return HoverDoc(title = "${attr.name}=\"${value.value}\"", content = doc, range = attr.valueStart until attr.valueEnd)
         }
-        val values = info.values.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "\n\nValues: ") { it.value }.orEmpty()
+        val values = info.values.takeIf {
+            it.isNotEmpty()
+        }?.joinToString(", ", prefix = "\n\nValues: ") { markdownLiteral(it.value) }.orEmpty()
         val content = (info.documentation.orEmpty() + values).trim()
         if (content.isEmpty()) return null
         return HoverDoc(title = info.name, content = content, range = attr.nameStart until attr.nameEnd)
@@ -253,6 +255,9 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
         return problems
     }
 
+    /** [text] as Markdown shows it to the letter: a value is a name, not formatting. */
+    private fun markdownLiteral(text: String) = MARKDOWN_MARKS.replace(text) { "\\" + it.value }
+
     private fun problem(range: IntRange, message: String) = Diagnostic(range, message, DiagnosticSeverity.Warning, source = "schema")
 
     // What the base answers.
@@ -262,3 +267,6 @@ private class SchemaService(private val schema: XmlSchema, baseTriggers: Set<Cha
 
     override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 }
+
+/** What Markdown could read as markup in the middle of a line of text. */
+private val MARKDOWN_MARKS = Regex("""[\\`*_\[\]<&]""")
