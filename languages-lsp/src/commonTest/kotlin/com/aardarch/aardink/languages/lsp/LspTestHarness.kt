@@ -16,10 +16,14 @@
 package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeEditorState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -37,6 +41,31 @@ internal fun range(startLine: Int, startChar: Int, endLine: Int, endChar: Int): 
     """{"start":{"line":$startLine,"character":$startChar},"end":{"line":$endLine,"character":$endChar}}"""
 
 /**
+ * A [ChannelLspTransport] that can stall chosen writes, as a server that is slow to read stalls them,
+ * so that a test can look at what happens while a write is still in flight.
+ */
+internal class HoldableLspTransport(private val inner: ChannelLspTransport) : LspTransport by inner {
+    private var held: String? = null
+    private var released = CompletableDeferred<Unit>()
+
+    /** Writes containing [fragment] wait for [release]; anything else still goes straight out. */
+    fun hold(fragment: String) {
+        held = fragment
+        released = CompletableDeferred()
+    }
+
+    fun release() {
+        held = null
+        released.complete(Unit)
+    }
+
+    override suspend fun sendPayload(jsonPayload: String) {
+        if (held?.let { it in jsonPayload } == true) released.await()
+        inner.sendPayload(jsonPayload)
+    }
+}
+
+/**
  * A fake language server on the other end of a [ChannelLspTransport].
  *
  * [clientScope] backs [client]'s receive loop and must be a [TestScope]'s `backgroundScope` (see
@@ -48,7 +77,8 @@ internal fun range(startLine: Int, startChar: Int, endLine: Int, endChar: Int): 
 internal class Harness(val doc: CodeDocument, private val test: TestScope, clientScope: CoroutineScope, host: LspClientHost) :
     CoroutineScope by test {
     val transport = ChannelLspTransport()
-    val client = LspClient(transport, clientScope, host)
+    val wire = HoldableLspTransport(transport)
+    val client = LspClient(wire, clientScope, host)
     val service = LspLanguageService(client, URI, "kotlin")
 
     /** A second adapter over the same connection, configured with what the server declared about rename. */
@@ -63,6 +93,32 @@ internal class Harness(val doc: CodeDocument, private val test: TestScope, clien
     /** Runs everything already scheduled, so what the client was going to do has been done. */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun settle() = test.runCurrent()
+
+    /** Moves the virtual clock on by [millis] and runs what became due. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun advanceBy(millis: Long) {
+        test.advanceTimeBy(millis)
+        settle()
+    }
+
+    /** An editor state whose own background work runs in place, so only the client's is scheduled. */
+    fun editorState(text: String) = CodeEditorState(text, tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
+        computeDispatcher = Dispatchers.Unconfined
+    }
+
+    /** Runs the handshake, with the server declaring [capabilitiesJson]. */
+    suspend fun serverDeclares(capabilitiesJson: String) {
+        val server = async { respond("initialize", """{"capabilities":$capabilitiesJson}""") }
+        client.initialize(rootUri = null)
+        server.await()
+        assertEquals("initialized", nextSent().method)
+    }
+
+    /** The next message, which must already be on the wire, with no time having passed. */
+    fun sentNow(): JsonObject {
+        settle()
+        return LspJson.parseToJsonElement(transport.sendChannel.tryReceive().getOrThrow()).jsonObject
+    }
 
     /** Asserts the client has written nothing. */
     fun assertNothingSent(message: String) {

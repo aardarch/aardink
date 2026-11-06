@@ -19,6 +19,7 @@ import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeActionKind
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
@@ -60,6 +61,18 @@ enum class LspRenameSupport {
     RenameWithPrepare,
 }
 
+/** Why a document is being saved, for [LspLanguageService.willSave]: LSP's `TextDocumentSaveReason`. */
+enum class LspSaveReason(internal val code: Int) {
+    /** The user asked for it. */
+    Manual(1),
+
+    /** A timer saved it, after a delay. */
+    AfterDelay(2),
+
+    /** The editor lost the focus. */
+    FocusOut(3),
+}
+
 /**
  * [LanguageService] adapter that bridges Aardink editor documents to an external Language Server
  * via [LspClient].
@@ -71,10 +84,21 @@ enum class LspRenameSupport {
  * Many services can share one [LspClient]; each registers its own diagnostics listener and keeps
  * only the diagnostics published for its [documentUri].
  *
- * The `ServerCapabilities` returned by [LspClient.initialize] are otherwise not consulted — every
- * request is sent and an unsupported one degrades to the empty result. Two capabilities are the
- * exception, and a host reads both from the capabilities object and passes them in: the completion
- * trigger characters ([triggerCharactersFrom]) and rename support ([renameSupportFrom]).
+ * The usual way to keep the server's copy of the document current is [attach], which opens it and
+ * sends each edit as it happens. Whatever goes to the server for this document, requests included,
+ * goes in the order it happened: a completion asked for after a keystroke is written after the
+ * `didChange` for that keystroke. A host that manages the text itself calls [didOpen] and
+ * [didChange] instead.
+ *
+ * The server's `textDocumentSync` capability, read from [LspClient.serverCapabilities], decides what
+ * of [didOpen], [didChange], [didClose], [attach], [willSave] and [didSave] reaches it. A server that
+ * declared no sync hears none of them; capabilities not known, because [LspClient.initialize] was
+ * not called, count as whole-text sync with everything else supported.
+ *
+ * Other `ServerCapabilities` are not consulted — every request is sent and an unsupported one
+ * degrades to the empty result. Two capabilities are the exception, and a host reads both from the
+ * capabilities object and passes them in: the completion trigger characters
+ * ([triggerCharactersFrom]) and rename support ([renameSupportFrom]).
  *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
@@ -128,9 +152,8 @@ class LspLanguageService(
     override val completionsAreIncomplete: Boolean
         get() = lastCompletionsIncomplete
 
-    /** Version last sent to the server; diagnostics computed against an older one are stale. */
-    @Volatile
-    private var sentVersion: Int = 0
+    /** Holds the version last sent to the server; diagnostics computed against an older one are stale. */
+    private val sync = LspDocumentSync(client, documentUri, languageId)
 
     @Volatile
     private var diagnosticsVersion: Int? = null
@@ -149,7 +172,7 @@ class LspLanguageService(
      */
     private fun isStale(version: Int?): Boolean {
         if (version == null) return false
-        return version < sentVersion || version < (diagnosticsVersion ?: Int.MIN_VALUE)
+        return version < sync.sentVersion || version < (diagnosticsVersion ?: Int.MIN_VALUE)
     }
 
     private val textDocument: LspTextDocumentIdentifier
@@ -162,43 +185,82 @@ class LspLanguageService(
     // ── Document lifecycle ───────────────────────────────────────────────────
 
     /**
+     * Keeps the server's copy of the document in step with [state] from now until [detach]: sends
+     * `textDocument/didOpen` unless the document is already open, and then each edit as it happens.
+     *
+     * Each edit is one `didChange` with its own version, sent as ranges when the server takes them
+     * and otherwise as the whole text once typing pauses. Any request made through this service
+     * waits for what was typed before it, so it never overtakes the edit it is about.
+     *
+     * Call this after [LspClient.initialize], since what the server declared decides how edits are
+     * sent, and on the thread that edits [state], as the listeners of [CodeEditorState] are. A
+     * document opened with [didOpen] and edited since is brought up to date. Attaching the state
+     * already attached does nothing; another one needs [detach] first.
+     *
+     * @throws IllegalStateException if a different state is attached.
+     */
+    fun attach(state: CodeEditorState) {
+        client.addDiagnosticsListener(diagnosticsListener)
+        sync.attach(state)
+    }
+
+    /**
+     * Stops following the state given to [attach], on the same thread, and does nothing if there is
+     * none. The document stays open on the server, and edits already made still reach it; [didClose]
+     * closes it, and [attach] catches up on anything missed meanwhile.
+     */
+    fun detach() = sync.detach()
+
+    /**
      * Sends `textDocument/didOpen` notification to the server and (re-)registers this service's
      * diagnostics listener.
+     *
+     * @throws IllegalStateException while attached: [attach] has opened the document already.
      */
     suspend fun didOpen(document: CodeDocument) {
+        check(!sync.isAttached) { "$documentUri is attached to an editor state, which opened it" }
         client.addDiagnosticsListener(diagnosticsListener)
-        sentVersion = 1
         diagnosticsVersion = null
-        val params = LspDidOpenTextDocumentParams(
-            LspTextDocumentItem(uri = documentUri, languageId = languageId, version = 1, text = document.text),
-        )
-        client.sendNotification("textDocument/didOpen", encode(LspDidOpenTextDocumentParams.serializer(), params))
+        sync.open(document.text)
     }
 
     /**
      * Sends a full-content `textDocument/didChange` notification to the server.
+     *
+     * @throws IllegalStateException while attached: the attached state owns the version, and a second
+     *   sender would put the server's copy out of step.
      */
     suspend fun didChange(document: CodeDocument, version: Int) {
-        sentVersion = version
-        val params = LspDidChangeTextDocumentParams(
-            textDocument = LspVersionedTextDocumentIdentifier(documentUri, version),
-            contentChanges = listOf(LspTextDocumentContentChangeEvent(text = document.text)),
-        )
-        client.sendNotification("textDocument/didChange", encode(LspDidChangeTextDocumentParams.serializer(), params))
+        check(!sync.isAttached) { "$documentUri is attached to an editor state, which sends its changes" }
+        sync.sendWholeText(document.text, version)
     }
 
     /**
-     * Sends `textDocument/didClose` notification to the server, unregisters the diagnostics
-     * listener and clears cached diagnostics.
+     * Sends `textDocument/didClose` notification to the server, after any edits still on their way,
+     * unregisters the diagnostics listener and clears cached diagnostics. Detaches first if attached.
+     *
+     * The notification goes even if the caller is cancelled while waiting for it, so this is safe in
+     * a `finally`.
      */
     suspend fun didClose() {
+        sync.detach()
         client.removeDiagnosticsListener(diagnosticsListener)
         lspDiagnostics = emptyList()
-        sentVersion = 0
         diagnosticsVersion = null
-        val params = LspDidCloseTextDocumentParams(textDocument)
-        client.sendNotification("textDocument/didClose", encode(LspDidCloseTextDocumentParams.serializer(), params))
+        sync.close()
     }
+
+    /**
+     * Sends `textDocument/willSave`, if the server asked for it with `textDocumentSync.willSave`.
+     * It does not wait for the server: `willSaveWaitUntil` is not supported.
+     */
+    suspend fun willSave(reason: LspSaveReason) = sync.willSave(reason)
+
+    /**
+     * Sends `textDocument/didSave`, if the server's `textDocumentSync.save` asked for it, with the
+     * text of [document] when it set `includeText`.
+     */
+    suspend fun didSave(document: CodeDocument) = sync.didSave(document)
 
     // ── LanguageService ──────────────────────────────────────────────────────
 
@@ -432,7 +494,7 @@ class LspLanguageService(
      * "the server does not implement this method" apart from "the server had no answer".
      */
     private suspend fun requestOrFailure(method: String, params: JsonElement): LspResult = try {
-        LspResult.Value(client.sendRequest(method, params))
+        LspResult.Value(sync.inOrder { written -> client.sendRequest(method, params, written) })
     } catch (e: LspRequestException) {
         if (e.code == LspRequestException.METHOD_NOT_FOUND) LspResult.Unsupported else LspResult.Failed
     } catch (_: SerializationException) {

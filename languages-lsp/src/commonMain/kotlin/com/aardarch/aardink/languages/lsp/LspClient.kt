@@ -365,7 +365,13 @@ class LspClient(
      *   is already closed or shutting down, or closes before a response is received, or with the
      *   server's code when it answers with an `error`.
      */
-    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? {
+    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? = sendRequest(method, params, onWritten = {})
+
+    /**
+     * [sendRequest], calling [onWritten] as soon as the request is on the wire rather than when it
+     * is answered: what a document's sync queue waits for before it lets a later edit out.
+     */
+    internal suspend fun sendRequest(method: String, params: JsonElement?, onWritten: () -> Unit): JsonElement? {
         start()
         val deferred = CompletableDeferred<LspMessage.Response>()
         // Checking `closed` and registering the deferred must happen together: between a bare check
@@ -380,6 +386,7 @@ class LspClient(
             sendOrLoseConnection(LspJson.encodeToString(LspMessage.Request.serializer(), request))?.let { failure ->
                 throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed: ${failure.message}")
             }
+            onWritten()
             val response = deferred.await()
             response.error?.let { throw LspRequestException(it.code, it.message) }
             return response.result?.takeUnless { it is JsonNull }
@@ -405,6 +412,12 @@ class LspClient(
     private fun cancelOnServer(id: Long) {
         scope.launch { sendNotification("\$/cancelRequest", buildJsonObject { put("id", id) }) }
     }
+
+    /**
+     * Runs [block] on the client's scope, so that it ends with the connection's owner. A scope
+     * already cancelled gives back a job that has finished without running [block].
+     */
+    internal fun launch(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
 
     /**
      * Allocates a request id and registers [deferred] against it, unless the client is already

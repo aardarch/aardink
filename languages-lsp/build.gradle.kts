@@ -61,8 +61,8 @@ kotlin {
 
         commonMain.dependencies {
             // JsonElement is part of LspClient's public API, hence `api` rather than
-            // `implementation`. This module needs no Compose of its own: every editor `core`
-            // type it bridges to is plain Kotlin.
+            // `implementation`. This module needs no Compose of its own: it only uses the editor's
+            // `core` types, and those that hold Compose state (CodeEditorState) come through here.
             api(project(":editor"))
             api(libs.kotlinx.serialization.json)
             // CoroutineScope is in LspClient's constructor signature — likewise `api`.

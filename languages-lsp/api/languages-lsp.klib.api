@@ -18,6 +18,18 @@ final enum class com.aardarch.aardink.languages.lsp/LspRenameSupport : kotlin/En
     final fun values(): kotlin/Array<com.aardarch.aardink.languages.lsp/LspRenameSupport> // com.aardarch.aardink.languages.lsp/LspRenameSupport.values|values#static(){}[0]
 }
 
+final enum class com.aardarch.aardink.languages.lsp/LspSaveReason : kotlin/Enum<com.aardarch.aardink.languages.lsp/LspSaveReason> { // com.aardarch.aardink.languages.lsp/LspSaveReason|null[0]
+    enum entry AfterDelay // com.aardarch.aardink.languages.lsp/LspSaveReason.AfterDelay|null[0]
+    enum entry FocusOut // com.aardarch.aardink.languages.lsp/LspSaveReason.FocusOut|null[0]
+    enum entry Manual // com.aardarch.aardink.languages.lsp/LspSaveReason.Manual|null[0]
+
+    final val entries // com.aardarch.aardink.languages.lsp/LspSaveReason.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.aardarch.aardink.languages.lsp/LspSaveReason> // com.aardarch.aardink.languages.lsp/LspSaveReason.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.aardarch.aardink.languages.lsp/LspSaveReason // com.aardarch.aardink.languages.lsp/LspSaveReason.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.aardarch.aardink.languages.lsp/LspSaveReason> // com.aardarch.aardink.languages.lsp/LspSaveReason.values|values#static(){}[0]
+}
+
 abstract interface com.aardarch.aardink.languages.lsp/LspClientHost { // com.aardarch.aardink.languages.lsp/LspClientHost|null[0]
     open fun logMessage(kotlin/Int, kotlin/String) // com.aardarch.aardink.languages.lsp/LspClientHost.logMessage|logMessage(kotlin.Int;kotlin.String){}[0]
     open fun progress(kotlinx.serialization.json/JsonElement, kotlinx.serialization.json/JsonElement) // com.aardarch.aardink.languages.lsp/LspClientHost.progress|progress(kotlinx.serialization.json.JsonElement;kotlinx.serialization.json.JsonElement){}[0]
@@ -653,7 +665,9 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
     final val triggerCharacters // com.aardarch.aardink.languages.lsp/LspLanguageService.triggerCharacters|{}triggerCharacters[0]
         final fun <get-triggerCharacters>(): kotlin.collections/Set<kotlin/Char> // com.aardarch.aardink.languages.lsp/LspLanguageService.triggerCharacters.<get-triggerCharacters>|<get-triggerCharacters>(){}[0]
 
+    final fun attach(com.aardarch.aardink.core/CodeEditorState) // com.aardarch.aardink.languages.lsp/LspLanguageService.attach|attach(com.aardarch.aardink.core.CodeEditorState){}[0]
     final fun autoClose(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/Char): kotlin/String? // com.aardarch.aardink.languages.lsp/LspLanguageService.autoClose|autoClose(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.Char){}[0]
+    final fun detach() // com.aardarch.aardink.languages.lsp/LspLanguageService.detach|detach(){}[0]
     final fun smartIndent(com.aardarch.aardink.core/CodeDocument, kotlin/Int, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.smartIndent|smartIndent(com.aardarch.aardink.core.CodeDocument;kotlin.Int;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun codeActions(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/CodeAction> // com.aardarch.aardink.languages.lsp/LspLanguageService.codeActions|codeActions(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
     final suspend fun completions(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/CompletionItem> // com.aardarch.aardink.languages.lsp/LspLanguageService.completions|completions(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
@@ -662,6 +676,7 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
     final suspend fun didChange(com.aardarch.aardink.core/CodeDocument, kotlin/Int) // com.aardarch.aardink.languages.lsp/LspLanguageService.didChange|didChange(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun didClose() // com.aardarch.aardink.languages.lsp/LspLanguageService.didClose|didClose(){}[0]
     final suspend fun didOpen(com.aardarch.aardink.core/CodeDocument) // com.aardarch.aardink.languages.lsp/LspLanguageService.didOpen|didOpen(com.aardarch.aardink.core.CodeDocument){}[0]
+    final suspend fun didSave(com.aardarch.aardink.core/CodeDocument) // com.aardarch.aardink.languages.lsp/LspLanguageService.didSave|didSave(com.aardarch.aardink.core.CodeDocument){}[0]
     final suspend fun format(com.aardarch.aardink.core/CodeDocument, com.aardarch.aardink.core/FormattingOptions): kotlin/String // com.aardarch.aardink.languages.lsp/LspLanguageService.format|format(com.aardarch.aardink.core.CodeDocument;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun formatRange(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange, com.aardarch.aardink.core/FormattingOptions): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.languages.lsp/LspLanguageService.formatRange|formatRange(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange;com.aardarch.aardink.core.FormattingOptions){}[0]
     final suspend fun hoverDoc(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/HoverDoc? // com.aardarch.aardink.languages.lsp/LspLanguageService.hoverDoc|hoverDoc(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
@@ -669,6 +684,7 @@ final class com.aardarch.aardink.languages.lsp/LspLanguageService : com.aardarch
     final suspend fun references(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Location> // com.aardarch.aardink.languages.lsp/LspLanguageService.references|references(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     final suspend fun rename(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.languages.lsp/LspLanguageService.rename|rename(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.String){}[0]
     final suspend fun signatureHelp(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/SignatureHelp? // com.aardarch.aardink.languages.lsp/LspLanguageService.signatureHelp|signatureHelp(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
+    final suspend fun willSave(com.aardarch.aardink.languages.lsp/LspSaveReason) // com.aardarch.aardink.languages.lsp/LspLanguageService.willSave|willSave(com.aardarch.aardink.languages.lsp.LspSaveReason){}[0]
 
     final object Companion { // com.aardarch.aardink.languages.lsp/LspLanguageService.Companion|null[0]
         final fun renameSupportFrom(kotlinx.serialization.json/JsonElement?): com.aardarch.aardink.languages.lsp/LspRenameSupport? // com.aardarch.aardink.languages.lsp/LspLanguageService.Companion.renameSupportFrom|renameSupportFrom(kotlinx.serialization.json.JsonElement?){}[0]
