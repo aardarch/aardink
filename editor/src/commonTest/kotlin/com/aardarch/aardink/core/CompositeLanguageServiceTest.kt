@@ -30,6 +30,7 @@ class CompositeLanguageServiceTest {
         val hover: HoverDoc? = null,
         val indent: String = "",
         val closing: String? = null,
+        val surrounding: String? = null,
         val formatted: String? = null,
         override val triggerCharacters: Set<Char> = emptySet(),
         override val supportsRename: Boolean = false,
@@ -43,6 +44,8 @@ class CompositeLanguageServiceTest {
         override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions) = indent
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char) = closing
+
+        override fun surroundingClose(typed: Char) = surrounding
 
         override suspend fun hoverDoc(document: CodeDocument, offset: Int) = hover
 
@@ -112,6 +115,13 @@ class CompositeLanguageServiceTest {
         assertEquals(listOf(mine, theirs), composite.diagnostics(doc))
         assertEquals("t", composite.hoverDoc(doc, 1)?.title)
         assertEquals("</a>", composite.autoClose(doc, 2, '>'))
+    }
+
+    @Test
+    fun `surrounding a selection comes from the primary, or else the fallback`() {
+        assertEquals("]", CompositeLanguageService(Fake(surrounding = "]"), Fake(surrounding = ")")).surroundingClose('['))
+        assertEquals(")", CompositeLanguageService(Fake(), Fake(surrounding = ")")).surroundingClose('('))
+        assertNull(CompositeLanguageService(Fake(), Fake()).surroundingClose('('))
     }
 
     @Test

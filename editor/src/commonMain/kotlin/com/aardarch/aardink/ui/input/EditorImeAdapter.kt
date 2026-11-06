@@ -38,6 +38,7 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.core.edit.TextChange
 import kotlin.math.max
 import kotlin.math.min
 
@@ -297,12 +298,14 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
         val wasComposing = composition != null
         val expectedLength = buffer.length
         if (change != null) {
+            val composing = wasComposing || newComposition != null
+            val input = if (composing) change else overSelection(change, selection)
             val typed = state.applyInput(
-                start = change.start,
-                end = change.end,
-                text = change.text,
+                start = input.start,
+                end = input.end,
+                text = input.text,
                 selectionAfter = selection,
-                composing = wasComposing || newComposition != null,
+                composing = composing,
                 service = service(),
             )
             onInput(typed)
@@ -325,6 +328,18 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
         } else {
             listener?.updateSelection(imeSelection, imeComposition)
         }
+    }
+
+    /**
+     * [change] as one character typed over the whole selection, when it is that: the buffer leaves
+     * out what the old and new text share, so `(` over `(a)` comes as `a)` deleted, and a surround
+     * would not see it. [after] is the selection the input method left.
+     */
+    private fun overSelection(change: TextChange, after: TextRange): TextChange {
+        val selected = state.selection
+        val replaced = after == TextRange(selected.min + 1) && buffer.length == state.document.length - selected.length + 1
+        if (selected.collapsed || !replaced || change.start < selected.min || change.end > selected.max) return change
+        return TextChange(selected.min, selected.max, buffer[selected.min].toString())
     }
 
     /**

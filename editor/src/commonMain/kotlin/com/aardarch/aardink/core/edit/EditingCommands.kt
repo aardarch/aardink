@@ -53,6 +53,43 @@ internal object EditingCommands {
         },
     )
 
+    /**
+     * [open] before and [close] after each of [selections], which stay selected, as VS Code
+     * surrounds them. Null when this is not a surround but plain typing over them: when one is a
+     * caret or holds only blanks, or [open] is a quote and one is a single quote, which changes
+     * the quote instead.
+     */
+    fun surround(document: CharSequence, selections: SelectionSet, open: Char, close: String): CommandEdit? {
+        val ranges = selections.inDocumentOrder
+        if (ranges.any { it.collapsed || isBlank(document, it) }) return null
+        if (open in QUOTES && ranges.any { it.length == 1 && document[it.min] in QUOTES }) return null
+        val opening = open.toString()
+        val changes = ArrayList<TextChange>(ranges.size * 2)
+        for (range in ranges) {
+            changes.add(TextChange(range.min, range.min, opening))
+            changes.add(TextChange(range.max, range.max, close))
+        }
+        // Each range moves by what the ones before it gained, and by its own opening.
+        val added = opening.length + close.length
+        val shifts = ranges.withIndex().associate { (index, range) -> range to index * added + opening.length }
+        val after = selections.ranges.map { range ->
+            val shift = shifts.getValue(range)
+            TextRange(range.start + shift, range.end + shift)
+        }
+        return CommandEdit(changes, SelectionSet.of(after))
+    }
+
+    private fun isBlank(document: CharSequence, range: TextRange): Boolean {
+        for (i in range.min until range.max) {
+            val c = document[i]
+            if (c != ' ' && c != '\t' && c != '\n' && c != '\r') return false
+        }
+        return true
+    }
+
+    /** What [surround] treats as a quote, as VS Code does. */
+    private const val QUOTES = "'\"`"
+
     private fun deletion(selections: SelectionSet, changes: List<TextChange>): CommandEdit? {
         val merged = mergeOverlapping(changes.filterNot { it.isNoOp })
         if (merged.isEmpty()) return null

@@ -26,7 +26,8 @@ import androidx.compose.ui.graphics.Color
  *   and label as one of the primary's. Only the fallback's when the primary has none. Without
  *   [inheritCompletions], only the primary's.
  * - **Diagnostics, code actions and references:** both, the primary's first.
- * - **Hover, definition, signature help, auto-close:** the primary's, or else the fallback's.
+ * - **Hover, definition, signature help, auto-close, surrounding a selection:** the primary's, or
+ *   else the fallback's.
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
  * - **Formatting:** the primary's when it changes anything, else the fallback's.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
@@ -80,6 +81,8 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? =
         primary.autoClose(document, offset, charTyped) ?: fallback.autoClose(document, offset, charTyped)
+
+    override fun surroundingClose(typed: Char): String? = primary.surroundingClose(typed) ?: fallback.surroundingClose(typed)
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? =
         primary.hoverDoc(document, offset) ?: fallback.hoverDoc(document, offset)
