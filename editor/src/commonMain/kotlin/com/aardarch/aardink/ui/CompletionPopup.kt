@@ -74,8 +74,9 @@ internal fun CompletionPopup(
         CompletionList(items, selected, onAccept, Modifier.onSizeChanged { listSize = it })
     }
     val item = items.getOrNull(selected)
-    // After the list, so its layer is above: a press on the pane then does not count as one outside
-    // the list, which would close them both.
+    // Waiting for the list to measure is also what puts the pane's layer above the list's, wherever
+    // this call sits: a press on the pane then does not count as one outside the list, which would
+    // close them both.
     if (item != null && listSize != IntSize.Zero) CompletionDetailPopup(item, anchor, listSize, resolve, onOpenLink)
 }
 
