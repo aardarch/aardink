@@ -555,7 +555,7 @@ export interface AardinkCompletionList {
 
 export interface AardinkHover {
   title?: string;
-  /** Plain text. */
+  /** Markdown. Raw HTML shows as written. */
   contents: string;
   /** Shown as code below `contents`. */
   example?: string;

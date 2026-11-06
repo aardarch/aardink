@@ -237,7 +237,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   diagnostics, folding and hover; answering `{ suggestions, exclusive: true }` leaves them out for
   one request. `triggerCharacters` on the providers open the list when typed, besides the extended
   language's, or in place of them with `inheritCompletions: false`.
-- **Hover** is `{ title?, contents, example? }`: plain text, and `example` shown as code below it.
+- **Hover** is `{ title?, contents, example? }`: `contents` is Markdown (raw HTML shows as written),
+  and `example` is shown as code below it.
 - **`revalidate()`** collects the language's diagnostics again at once, for when what your
   `provideDiagnostics` depends on outside the text has changed (another file, a setting).
 

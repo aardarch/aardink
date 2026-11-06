@@ -46,7 +46,7 @@ import com.aardarch.aardink.core.HoverDoc
  * it, then the [diagnostics] under it, most severe
  * first, each with its source and code, and a Quick Fix button when [onQuickFix] is given; then the
  * symbol's documentation when there is [doc]. Monaco's hover shows markers above documentation the
- * same way.
+ * same way. A link in the documentation goes to [onOpenLink].
  */
 @Composable
 internal fun EditorHoverCard(
@@ -56,9 +56,10 @@ internal fun EditorHoverCard(
     modifier: Modifier = Modifier,
     messages: List<String> = emptyList(),
     onPickColor: (() -> Unit)? = null,
+    onOpenLink: ((String) -> Unit)? = null,
 ) {
     if (diagnostics.isEmpty() && messages.isEmpty() && onPickColor == null) {
-        if (doc != null) HoverDocCard(doc, modifier)
+        if (doc != null) HoverDocCard(doc, modifier, onOpenLink)
         return
     }
     val theme = LocalEditorTheme.current
@@ -117,9 +118,7 @@ internal fun EditorHoverCard(
                 }
                 if (doc != null) {
                     HorizontalDivider(thickness = 0.5.dp)
-                    Text(text = doc.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = doc.content, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (doc.example != null) HoverDocExample(doc.example)
+                    HoverDocBody(doc, dividedTitle = false, onOpenLink)
                 }
             }
         }

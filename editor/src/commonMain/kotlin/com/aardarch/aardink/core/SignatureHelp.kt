@@ -24,6 +24,13 @@ package com.aardarch.aardink.core
  */
 data class SignatureHelp(val signatures: List<SignatureInformation>, val activeSignature: Int = 0, val activeParameter: Int = 0)
 
+/**
+ * One signature of a function or method.
+ *
+ * @param label The whole signature, e.g. `"foo(count: Int)"`.
+ * @param documentation Optional Markdown, shown when the active parameter has none of its own.
+ * @param parameters Its parameters, in order.
+ */
 data class SignatureInformation(
     val label: String,
     val documentation: String? = null,
@@ -34,7 +41,7 @@ data class SignatureInformation(
  * One parameter within a [SignatureInformation].
  *
  * @param label The parameter as it reads in the signature, e.g. `"count: Int"`.
- * @param documentation Optional prose describing the parameter.
+ * @param documentation Optional Markdown describing the parameter.
  * @param labelRange Where [label] sits inside [SignatureInformation.label], when the provider knows.
  *   A signature like `foo(Int, Int)` repeats its parameter text, so searching the label for a match
  *   highlights the first occurrence whichever parameter is active; a provider that can name the

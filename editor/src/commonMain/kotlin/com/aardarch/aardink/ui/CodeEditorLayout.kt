@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -47,6 +48,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -801,14 +804,22 @@ private fun CodeEditorLayoutContent(
             listOfNotNull(word.first.takeUnless { word.isEmpty() })
         val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } + listOfNotNull(colorHere?.range?.last?.plus(1)) +
             listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })
-        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages)
+        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages, restedAt = controller.hoverAt)
     }
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
-            hover = null
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
-            showHover(view.offsetAt(at).offset)
+            if (hover?.holding != true) showHover(view.offsetAt(at).offset)
+        }
+    }
+    // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
+    // the card, for a link or Quick Fix. Over the card it stays, and goes when the mouse leaves.
+    LaunchedEffect(controller) {
+        snapshotFlow { hover?.takeIf { !it.holding && controller.hoverAt != it.restedAt } }.collectLatest { leaving ->
+            if (leaving == null) return@collectLatest
+            delay(HOVER_HIDE_DELAY_MS)
+            hover = null
         }
     }
     // Typing or scrolling takes it down: it describes where the mouse was.
@@ -1607,7 +1618,7 @@ private fun CodeEditorLayoutContent(
                         anchor = view.caretRect(state.selection.end),
                         preferAbove = true,
                         onDismiss = { showSignatureHelp = false },
-                    ) { SignatureHelpCard(signatureHelp) }
+                    ) { SignatureHelpCard(signatureHelp, onOpenLink = { target -> currentOnOpenLink.value(target) }) }
                 }
                 hover?.let { shown ->
                     val start = view.caretRect(shown.start)
@@ -1618,6 +1629,7 @@ private fun CodeEditorLayoutContent(
                     ) {
                         val hoveredColor = if (options.readOnly) null else colorAt(shown.start)
                         EditorHoverCard(
+                            modifier = Modifier.holdingHover(shown),
                             onPickColor = hoveredColor?.let { color ->
                                 {
                                     hover = null
@@ -1627,6 +1639,10 @@ private fun CodeEditorLayoutContent(
                             messages = shown.messages,
                             diagnostics = shown.diagnostics,
                             doc = shown.doc,
+                            onOpenLink = { target ->
+                                hover = null
+                                currentOnOpenLink.value(target)
+                            },
                             onQuickFix = if (shown.actions.isNotEmpty()) {
                                 {
                                     hover = null
@@ -1729,7 +1745,10 @@ private fun CodeEditorLayoutContent(
     }
 }
 
-/** Hover on screen: the [diagnostics] and the documentation of what is from [start] to [end], and quick fixes. */
+/**
+ * Hover on screen: the [diagnostics] and the documentation of what is from [start] to [end], and
+ * quick fixes. [restedAt] is where the mouse was when it came up, null when it was not a mouse.
+ */
 private class HoverShown(
     val doc: HoverDoc?,
     val start: Int,
@@ -1737,13 +1756,33 @@ private class HoverShown(
     val diagnostics: List<Diagnostic> = emptyList(),
     val actions: List<CodeAction> = emptyList(),
     val messages: List<String> = emptyList(),
-)
+    val restedAt: Offset? = null,
+) {
+    /** The mouse is over the card, which stays until it leaves. */
+    var holding by mutableStateOf(false)
+}
+
+/** Keeps [HoverShown.holding] for this card. Only looks: clicks and scrolling go on untouched. */
+private fun Modifier.holdingHover(shown: HoverShown): Modifier = pointerInput(shown) {
+    awaitPointerEventScope {
+        while (true) {
+            when (awaitPointerEvent().type) {
+                PointerEventType.Enter, PointerEventType.Move -> shown.holding = true
+                PointerEventType.Exit -> shown.holding = false
+                else -> Unit
+            }
+        }
+    }
+}
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
 private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
 
 /** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
 private const val HOVER_DELAY_MS = 500L
+
+/** How long the card outlasts a mouse that moved off the symbol, as Monaco's `hover.hidingDelay`. */
+private const val HOVER_HIDE_DELAY_MS = 300L
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
