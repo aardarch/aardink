@@ -391,12 +391,52 @@ class LspLanguageServiceTest {
         val arrayServer = async {
             respond("textDocument/hover", """{"contents":["first",{"language":"kotlin","value":"val x: Int"}]}""")
         }
-        assertEquals("first\n\nval x: Int", service.hoverDoc(doc, 4)?.content)
+        assertEquals("first\n\n```kotlin\nval x: Int\n```", service.hoverDoc(doc, 4)?.content)
         arrayServer.await()
 
         val nullServer = async { respond("textDocument/hover", "null") }
         assertNull(service.hoverDoc(doc, 4))
         nullServer.await()
+    }
+
+    @Test
+    fun `hoverDoc fences a MarkedString's code past any backticks in it`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"language":"md","value":"```\nx\n```"}}""")
+        }
+        assertEquals("````md\n```\nx\n```\n````", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc keeps a plain string as the Markdown LSP says it is`() = withServer("val x = 1") {
+        val server = async { respond("textDocument/hover", """{"contents":"**x**: Int"}""") }
+        assertEquals("**x**: Int", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc escapes plaintext so that it shows to the letter, line for line`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/hover",
+                """{"contents":{"kind":"plaintext","value":"# a_b *c*\n- `d` <e> & [f]\n1. g\n\n  --- h\n"}}""",
+            )
+        }
+        assertEquals(
+            "\\# a\\_b \\*c\\*\\\n\\- \\`d\\` \\<e> \\& \\[f\\]\\\n1\\. g\n\n\\--- h",
+            service.hoverDoc(doc, 4)?.content,
+        )
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc leaves a URL in plaintext whole, for the renderer to link`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"kind":"plaintext","value":"See https://a.dev/x_y?a=1&b=2 and a_b"}}""")
+        }
+        assertEquals("See https://a.dev/x_y?a=1&b=2 and a\\_b", service.hoverDoc(doc, 4)?.content)
+        server.await()
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────
@@ -699,6 +739,23 @@ class LspLanguageServiceTest {
         assertEquals("B doc", signature.parameters[1].documentation)
         assertEquals(0, help.activeSignature)
         assertEquals(1, help.activeParameter)
+    }
+
+    @Test
+    fun `signatureHelp reads a bare string as plain text and markdown MarkupContent as it is`() = withServer("foo(1, ") {
+        val server = async {
+            respond(
+                "textDocument/signatureHelp",
+                """{"signatures":[{"label":"foo(a)","documentation":"Takes *args",
+                   "parameters":[{"label":"a","documentation":{"kind":"markdown","value":"*a* value"}}]}]}""",
+            )
+        }
+
+        val signature = service.signatureHelp(doc, 7)?.signatures?.single()
+        server.await()
+
+        assertEquals("Takes \\*args", signature?.documentation)
+        assertEquals("*a* value", signature?.parameters?.single()?.documentation)
     }
 
     @Test

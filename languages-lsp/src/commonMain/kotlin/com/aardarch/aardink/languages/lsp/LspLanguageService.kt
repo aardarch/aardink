@@ -264,7 +264,7 @@ class LspLanguageService(
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
         val result = request("textDocument/hover", positionParams(document, offset)) ?: return null
         val hover = decodeOrNull(LspHover.serializer(), result) ?: return null
-        val content = markupText(hover.contents)?.takeIf { it.isNotBlank() } ?: return null
+        val content = hoverMarkdown(hover.contents)?.takeIf { it.isNotBlank() } ?: return null
         return HoverDoc(
             title = languageId,
             content = content,
@@ -349,7 +349,7 @@ class LspLanguageService(
             signatures = help.signatures.map { sig ->
                 SignatureInformation(
                     label = sig.label,
-                    documentation = markupText(sig.documentation),
+                    documentation = documentationMarkdown(sig.documentation),
                     parameters = sig.parameters.orEmpty().map { param ->
                         val labelRange = parameterLabelRange(sig.label, param.label)
                         ParameterInformation(
@@ -357,7 +357,7 @@ class LspLanguageService(
                             // matters for a signature that repeats a parameter type.
                             label = labelRange?.let { sig.label.substring(it.first, it.last + 1) }
                                 ?: (param.label as? JsonPrimitive)?.contentOrNull.orEmpty(),
-                            documentation = markupText(param.documentation),
+                            documentation = documentationMarkdown(param.documentation),
                             labelRange = labelRange,
                         )
                     },
