@@ -750,7 +750,7 @@ class DeclarativeGrammarTest {
         assertRejected("""{ "tokenizer": { "root": [ ["(a)(b)", ["x", "y%#"]] ] } }""", "tokenizer.root[0][1][1]: $message")
         assertRejected("""{ "defaultToken": "%S2", "tokenizer": { "root": [ ["a", "x"] ] } }""", "defaultToken: $message")
         assertRejected("""{ "tokenPostfix": ".%S2", "tokenizer": { "root": [ ["a", "x"] ] } }""", "tokenPostfix: $message")
-        assertRejected("""{ "brackets": [["(", ")", "p%#"]], "tokenizer": { "root": [ ["a", "x"] ] } }""", "brackets[0]: $message")
+        assertRejected("""{ "brackets": [["(", ")", "p%#"]], "tokenizer": { "root": [ ["a", "@brackets"] ] } }""", "brackets[0]: $message")
     }
 
     @Test
@@ -841,12 +841,39 @@ class DeclarativeGrammarTest {
 
     @Test
     fun `brackets that cannot be used are errors with where they are`() {
-        val rules = """"tokenizer": { "root": [ ["a", "x"] ] }"""
+        val rules = """"tokenizer": { "root": [ ["a", "@brackets"] ] }"""
         assertRejected("""{ "brackets": [["(", "(", "p"]], $rules }""", "brackets[0]: a bracket's open and close have to differ: (")
         assertRejected("""{ "brackets": [["(", ")"]], $rules }""", "brackets[0]: a bracket is")
         assertRejected("""{ "brackets": [{ "open": "(" }], $rules }""", "brackets[0]: a bracket is")
         assertRejected("""{ "brackets": ["()"], $rules }""", "brackets[0]: a bracket is")
         assertRejected("""{ "brackets": "()", $rules }""", "brackets: brackets is an array")
+    }
+
+    @Test
+    fun `a grammar with no @brackets action can keep brackets as an ordinary array or string`() {
+        // Both loaded before @brackets existed, so nothing else may start refusing them.
+        val array = monarch(
+            """
+            {
+              "brackets": ["(", ")"],
+              "tokenizer": { "root": [ ["[()x]", { "cases": { "@brackets": "delimiter", "@default": "" } }] ] }
+            }
+            """,
+        )
+        assertEquals(listOf("(" to NamedTokenType("delimiter"), ")" to NamedTokenType("delimiter")), tokens(array, "(x)"))
+        assertEquals(setOf("delimiter"), array.tokenNames)
+
+        val string = monarch("""{ "brackets": "[()]", "tokenizer": { "root": [ ["@brackets", "delimiter"] ] } }""")
+        assertEquals(listOf("(" to NamedTokenType("delimiter")), tokens(string, "("))
+    }
+
+    @Test
+    fun `brackets are only checked by a grammar that uses them, wherever the action is`() {
+        val entries = """"brackets": ["(", ")"]"""
+        val message = "brackets[0]: a bracket is"
+        assertRejected("""{ $entries, "tokenizer": { "root": [ ["a", { "cases": { "@default": "@brackets" } }] ] } }""", message)
+        assertRejected("""{ $entries, "tokenizer": { "root": [ ["(a)", ["@brackets.inner"]] ] } }""", message)
+        assertRejected("""{ $entries, "tokenizer": { "root": [ ["a", { "token": "@brackets" }] ] } }""", message)
     }
 
     @Test

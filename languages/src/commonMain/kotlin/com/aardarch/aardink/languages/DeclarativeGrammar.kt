@@ -102,10 +102,11 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  * - **Top level:** `defaultToken` for text no rule matches, `ignoreCase`, `tokenPostfix` added to
  *   every token name, `brackets` for `@brackets` (`{ "open", "close", "token" }` or
  *   `[open, close, token]` each; without it, `{}`, `[]`, `()` and `<>` as `delimiter.curly`,
- *   `delimiter.square`, `delimiter.parenthesis` and `delimiter.angle`), `comments` as in Monaco's
- *   language configuration (`{ "lineComment": "#", "blockComment": ["<!--", "-->"] }`, for toggling
- *   comments), and any other string, which `@name` in a regex stands for, or string array, for the
- *   `@name` guards.
+ *   `delimiter.square`, `delimiter.parenthesis` and `delimiter.angle`; unlike Monarch, it is read
+ *   only for a `@brackets` action, so a grammar with none can use the name for anything),
+ *   `comments` as in Monaco's language configuration
+ *   (`{ "lineComment": "#", "blockComment": ["<!--", "-->"] }`, for toggling comments), and any
+ *   other string, which `@name` in a regex stands for, or string array, for the `@name` guards.
  *
  * **Rejected by [parse]:** lookbehind (`(?<=`, `(?<!`), which Kotlin/wasm's regex engine makes very
  * slow, and `$` in a token name: names are resolved once, here, and [tokenNames] promises every
@@ -267,8 +268,12 @@ private class GrammarReader(private val json: JsonObject) {
     private val regexes = HashMap<String, Regex>()
     private val defaultToken = type(tokenName(json.string("defaultToken") ?: "", "defaultToken"))
 
-    /** Each bracket's text to its token name, with the postfix. The first to claim a text keeps it. */
-    private val brackets: Map<String, String> = bracketNames()
+    /**
+     * Each bracket's text to its token name, with the postfix. The first to claim a text keeps it.
+     * Read only for a `@brackets` action: until then `brackets` is a top-level key like any other,
+     * and a grammar that keeps a string or a string array under that name goes on loading.
+     */
+    private val brackets: Map<String, String> by lazy(LazyThreadSafetyMode.NONE) { bracketNames() }
 
     fun read(): DeclarativeGrammar {
         if (tokenizer.isEmpty()) fail("tokenizer", "a grammar needs at least one state")

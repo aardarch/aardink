@@ -211,7 +211,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   `$S1` and so on (the state's name and its dotted parts), then `@array`, `~regex`, `==text` or
   their opposites `!@`, `!~` and `!=`, so `$#==$S2` closes on the text that opened. `next` and
   `switchTo` can use `$#` and `$Sn` as well, as in `@string.$#`; if the grammar has no state of
-  that name the stack stays as it is. `log` is accepted and ignored.
+  that name the stack stays as it is. `log` is accepted and ignored. A top-level `brackets` is
+  checked only when an action uses `@brackets`; otherwise it is an ordinary string or array.
   Refused when the language is registered: lookbehind, because Kotlin/wasm's regex engine runs it
   at every position, and `$` in a token name, because names are fixed when the grammar is read.
   Choose between fixed names with `cases` where a Monaco grammar has `string.$S2`. `goBack` is
