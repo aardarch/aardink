@@ -39,7 +39,7 @@ import kotlinx.serialization.json.intOrNull
  *   closing one at the opener's indentation. Matching and colouring brackets stay `()[]{}`.
  * @property autoClosingPairs Pairs whose closing text is inserted when the opening one is typed.
  * @property surroundingPairs Pairs that wrap a selection when the opening one, a single character,
- *   is typed over it.
+ *   is typed over it. One with an empty [CharacterPair.close], as in VS Code's `["$", ""]`, wraps nothing.
  * @property onEnterRules What Enter does, tried in order before anything else here.
  * @property indentationRules What Enter does when no rule and no bracket decides.
  * @property foldingMarkers Lines that open and close a fold region.
@@ -148,8 +148,10 @@ data class LanguageConfiguration(
          *
          * Every key is optional. As in VS Code, without `autoClosingPairs` the brackets close
          * themselves, and without `surroundingPairs` those pairs surround. A pair is `[open, close]`
-         * or `{ "open", "close" }`; a regex is a string or `{ "pattern", "flags" }`, of whose flags
-         * only `i` matters on one line; `indent` is `none`, `indent`, `outdent` or `indentOutdent`.
+         * or `{ "open", "close" }`, and only a surrounding pair's close may be empty; a regex is a
+         * JavaScript regex as a string or `{ "pattern", "flags" }`, of whose flags only `i` matters
+         * on one line; `indent` is `none`, `indent`, `outdent` or `indentOutdent`. An empty
+         * `lineComment` is none.
          *
          * `wordPattern`, `autoCloseBefore` and `folding.offSide` are not read, and neither is
          * anything else VS Code knows that is not above. `notIn` knows `string` and `comment`.
@@ -170,7 +172,7 @@ data class LanguageConfiguration(
                 comments = root.given("comments")?.let { comments(it, "comments") },
                 brackets = brackets,
                 autoClosingPairs = autoClosing,
-                surroundingPairs = root.given("surroundingPairs")?.let { pairs(it, "surroundingPairs") }
+                surroundingPairs = root.given("surroundingPairs")?.let { pairs(it, "surroundingPairs", closeMayBeEmpty = true) }
                     ?: autoClosing.map { CharacterPair(it.open, it.close) },
                 onEnterRules = root.given("onEnterRules")?.let { onEnterRules(it, "onEnterRules") }.orEmpty(),
                 indentationRules = root.given("indentationRules")?.let { indentationRules(it, "indentationRules") },
@@ -185,13 +187,13 @@ data class LanguageConfiguration(
                 null -> null
                 is JsonObject -> given.requiredText("comment", "$path.lineComment")
                 else -> text(given, "$path.lineComment")
-            }
+            }?.takeIf { it.isNotEmpty() } // VS Code's XSL says `""` for a language with block comments only.
             val block = obj.given("blockComment")?.let { pair(it, "$path.blockComment") }
             return CommentSyntax(line = line, blockStart = block?.open, blockEnd = block?.close).takeIf { line != null || block != null }
         }
 
-        private fun pairs(value: JsonElement, path: String): List<CharacterPair> =
-            value.array(path).mapIndexed { index, pair -> pair(pair, "$path[$index]") }
+        private fun pairs(value: JsonElement, path: String, closeMayBeEmpty: Boolean = false): List<CharacterPair> =
+            value.array(path).mapIndexed { index, pair -> pair(pair, "$path[$index]", closeMayBeEmpty) }
 
         private fun autoClosingPairs(value: JsonElement, path: String): List<AutoClosingPair> =
             value.array(path).mapIndexed { index, element ->
@@ -201,7 +203,7 @@ data class LanguageConfiguration(
                 AutoClosingPair(pair.open, pair.close, notInString = "string" in notIn, notInComment = "comment" in notIn)
             }
 
-        private fun pair(value: JsonElement, path: String): CharacterPair {
+        private fun pair(value: JsonElement, path: String, closeMayBeEmpty: Boolean = false): CharacterPair {
             val (open, close) = when (value) {
                 is JsonArray -> {
                     if (value.size != 2) throw IllegalArgumentException("$path: a pair is [open, close]")
@@ -212,7 +214,9 @@ data class LanguageConfiguration(
 
                 else -> throw IllegalArgumentException("$path: a pair is [open, close] or { open, close }")
             }
-            if (open.isEmpty() || close.isEmpty()) throw IllegalArgumentException("$path: a pair's open and close are not empty")
+            if (open.isEmpty() || (close.isEmpty() && !closeMayBeEmpty)) {
+                throw IllegalArgumentException("$path: a pair's open and close are not empty")
+            }
             return CharacterPair(open, close)
         }
 
@@ -285,10 +289,58 @@ data class LanguageConfiguration(
             }
             if ("(?<=" in source || "(?<!" in source) throw IllegalArgumentException("$path: lookbehind is not supported: $source")
             return try {
-                if ('i' in flags) Regex(source, RegexOption.IGNORE_CASE) else Regex(source)
+                val pattern = fromJavaScript(source)
+                if ('i' in flags) Regex(pattern, RegexOption.IGNORE_CASE) else Regex(pattern)
             } catch (e: IllegalArgumentException) {
                 throw IllegalArgumentException("$path: not a regex: ${e.message}", e)
             }
+        }
+
+        /**
+         * JavaScript regex [source] for [Regex], whose engines refuse two things JavaScript reads as
+         * themselves, and VS Code's own files lean on: a `{` that starts no quantifier, and a `[` in
+         * a character class. The brace of a `\p{...}` is left as it is.
+         */
+        private fun fromJavaScript(source: String): String {
+            val pattern = StringBuilder(source.length + 8)
+            var inClass = false
+            var i = 0
+            while (i < source.length) {
+                val c = source[i]
+                when {
+                    c == '\\' -> {
+                        val end = escapeEnd(source, i)
+                        pattern.append(source, i, end)
+                        i = end - 1
+                    }
+
+                    inClass && c == '[' -> pattern.append("\\[")
+
+                    inClass -> {
+                        pattern.append(c)
+                        inClass = c != ']'
+                    }
+
+                    c == '[' -> {
+                        pattern.append(c)
+                        inClass = true
+                    }
+
+                    c == '{' && Quantifier.matchAt(source, i) == null -> pattern.append("\\{")
+
+                    else -> pattern.append(c)
+                }
+                i++
+            }
+            return pattern.toString()
+        }
+
+        /** Where the escape at [start] of [source] ends: after the character it escapes, or a `\p{...}`'s brace. */
+        private fun escapeEnd(source: String, start: Int): Int {
+            val end = (start + 2).coerceAtMost(source.length)
+            val property = source.getOrNull(start + 1).let { it == 'p' || it == 'P' } && source.getOrNull(end) == '{'
+            val brace = if (property) source.indexOf('}', end) else -1
+            return if (brace < 0) end else brace + 1
         }
 
         private fun text(value: JsonElement, path: String): String =
@@ -306,6 +358,9 @@ data class LanguageConfiguration(
         private fun JsonObject.given(key: String): JsonElement? = this[key]?.takeIf { it !is JsonNull }
     }
 }
+
+/** What a `{` in a regex must start to be more than itself. */
+private val Quantifier = Regex("""\{\d+(,\d*)?}""")
 
 /** JSON as `language-configuration.json` files write it, with comments and trailing commas. */
 private val Jsonc = Json {
