@@ -379,7 +379,10 @@ export interface AardinkLanguageDefinition {
    * `@default`, `@eos`, or a subject of `$#` or `$S0`, `$S1`... then `@array`, `~regex`, `==text`
    * or `!@`, `!~`, `!=`, as in `$#==$S2`; `next` and `switchTo` take `$#` and `$Sn` too. `log` is
    * accepted and ignored. RegExp literals are fine. Lookbehind and `$` in a token name are
-   * refused, as is `goBack` in a capture group's action.
+   * refused, as is `goBack` in a capture group's action. `nextEmbedded` hands the text to the
+   * grammar of the language registered with that id, before or after this one, and
+   * `nextEmbedded: '@pop'` takes it back; with no such language, the text stays on this grammar.
+   * A built-in language has no grammar, so it cannot be embedded.
    */
   grammar: object;
   /** A built-in or registered language whose completions, diagnostics, hover and folding this one takes too, e.g. `'xml'`. */

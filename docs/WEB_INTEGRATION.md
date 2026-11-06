@@ -216,9 +216,13 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   Refused when the language is registered: lookbehind, because Kotlin/wasm's regex engine runs it
   at every position, and `$` in a token name, because names are fixed when the grammar is read.
   Choose between fixed names with `cases` where a Monaco grammar has `string.$S2`. `goBack` is
-  refused in a capture group's action, and never goes back further than the match began. Not
-  supported: `nextEmbedded`, and `$1`-style capture groups in guards and `next` and `$Sn` in a
-  rule's regex, which stay literal text. The grammar highlights a line at a time, so an edit
+  refused in a capture group's action, and never goes back further than the match began.
+  `nextEmbedded` hands the text to the grammar of the language registered with that id, before or
+  after this one, until a rule of the state with `nextEmbedded: '@pop'` matches. With no such
+  language the text stays on this grammar's rules, and a built-in language, having no grammar,
+  cannot be embedded. Each grammar's tokens carry its own `tokenPostfix`. Not supported:
+  `$1`-style capture groups in guards, `next` and `nextEmbedded`, and `$Sn` in a rule's regex,
+  which stay literal text. The grammar highlights a line at a time, so an edit
   rescans only until the lines below are back in the state they were in.
   [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco language over this
   way.

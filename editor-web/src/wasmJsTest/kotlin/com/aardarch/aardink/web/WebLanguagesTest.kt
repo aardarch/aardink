@@ -114,6 +114,72 @@ class WebLanguagesTest {
         assertEquals(EditorThemes.VsCodeDark.errorColor, theme.errorColor)
     }
 
+    /** `[[` hands the text to the language [embedded] names, until `]]`. */
+    private fun embedding(id: String, embedded: String) = """
+        {
+          "id": "$id",
+          "grammar": {
+            "tokenizer": {
+              "root": [ ["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "$embedded" }], ["\\w+", "outer"] ],
+              "inner": [ ["\\]\\]", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }], ["\\w+", "own"] ]
+            }
+          }
+        }
+    """.trimIndent()
+
+    private fun words(id: String, name: String) = """{ "id": "$id", "grammar": { "tokenizer": { "root": [ ["\\w+", "$name"] ] } } }"""
+
+    private fun tokenNames(id: String, text: String) =
+        AardinkWeb.registry.byId(id)!!.tokenizer.tokenizeFull(text).filter { it.end > it.start }.map { (it.type as NamedTokenType).name }
+
+    @Test
+    fun `nextEmbedded finds a language registered before`() {
+        AardinkWeb.registerLanguage(words("embed-before-inner", "inner"))
+        AardinkWeb.registerLanguage(embedding("embed-before", "embed-before-inner"))
+        assertEquals(listOf("outer", "open", "inner", "close", "outer"), tokenNames("embed-before", "a [[b]] c"))
+    }
+
+    @Test
+    fun `nextEmbedded finds a language registered after, and stays on its own rules until then`() {
+        AardinkWeb.registerLanguage(embedding("embed-after", "embed-after-inner"))
+        assertEquals(listOf("open", "own", "close"), tokenNames("embed-after", "[[b]]"))
+        AardinkWeb.registerLanguage(words("embed-after-inner", "inner"))
+        assertEquals(listOf("open", "inner", "close"), tokenNames("embed-after", "[[b]]"))
+    }
+
+    @Test
+    fun `nextEmbedded follows a language registered again`() {
+        AardinkWeb.registerLanguage(words("embed-again-inner", "first"))
+        AardinkWeb.registerLanguage(embedding("embed-again", "embed-again-inner"))
+        AardinkWeb.registerLanguage(words("embed-again-inner", "second"))
+        assertEquals(listOf("open", "second", "close"), tokenNames("embed-again", "[[b]]"))
+    }
+
+    @Test
+    fun `a definition that fails leaves the grammar it replaces in place`() {
+        AardinkWeb.registerLanguage(words("embed-kept-inner", "kept"))
+        AardinkWeb.registerLanguage(embedding("embed-kept", "embed-kept-inner"))
+        assertFailsWith<IllegalArgumentException> {
+            AardinkWeb.registerLanguage(
+                """{ "id": "embed-kept-inner", "triggerCharacters": ["ab"], "grammar": { "tokenizer": { "root": [ ["\\w+", "lost"] ] } } }""",
+            )
+        }
+        assertEquals(listOf("open", "kept", "close"), tokenNames("embed-kept", "[[b]]"))
+    }
+
+    @Test
+    fun `a built-in language has no grammar to embed, so its id stays on the grammar's rules`() {
+        AardinkWeb.registerLanguage(embedding("embed-builtin", "json"))
+        assertEquals(listOf("open", "own", "close"), tokenNames("embed-builtin", "[[b]]"))
+    }
+
+    @Test
+    fun `tokenize sees through nextEmbedded`() {
+        AardinkWeb.registerLanguage(words("embed-tokenize-inner", "inner"))
+        AardinkWeb.registerLanguage(embedding("embed-tokenize", "embed-tokenize-inner"))
+        assertTrue("inner" in AardinkWeb.tokenize("embed-tokenize", "[[b]]"))
+    }
+
     @Test
     fun `the host's answers come first, then those of the language it extends`() = runTest {
         AardinkWeb.registerLanguage(

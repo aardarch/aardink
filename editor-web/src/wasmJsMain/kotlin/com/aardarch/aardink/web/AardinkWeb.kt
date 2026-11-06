@@ -70,6 +70,7 @@ import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeEditorLayout
@@ -229,6 +230,12 @@ object AardinkWeb {
     /** The built-in languages and every one [registerLanguage] added. */
     internal val registry: LanguageRegistry = LanguageRegistry.withBuiltIns()
 
+    /**
+     * The grammar of every language [registerLanguage] added, by id, for `nextEmbedded`. The built-in
+     * languages are code, not grammars, so they are not here.
+     */
+    internal val registeredGrammars: MutableMap<String, DeclarativeGrammar> = HashMap()
+
     /** The built-in themes and every one [registerTheme] added. */
     internal val registeredThemes: MutableMap<String, EditorTheme> = builtInThemes.toMutableMap()
 
@@ -250,9 +257,14 @@ object AardinkWeb {
      * `inheritCompletions: false`; without them, the extended language's apply. Registering an id
      * again replaces it. Returns the id; throws [IllegalArgumentException] for a definition it
      * cannot use, saying where, such as a grammar with a lookbehind.
+     *
+     * A grammar's `nextEmbedded` names another language registered here, by its id, in either order:
+     * the id is looked up when text is tokenized, not now. Until there is such a language, the text
+     * stays on the grammar's own rules. A built-in language has no grammar, so it cannot be embedded.
+     * An editor already showing the text recolours it as it next reads it, on an edit or `setValue`.
      */
     fun registerLanguage(definitionJson: String, providers: WebLanguageProviders = WebLanguageProviders()): String {
-        val definition = languageFrom(definitionJson, providers, registry)
+        val definition = languageFrom(definitionJson, providers, registry, registeredGrammars)
         registry.register(definition)
         registrations.intValue++
         return definition.id
