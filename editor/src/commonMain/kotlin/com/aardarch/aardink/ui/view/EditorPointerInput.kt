@@ -101,6 +101,12 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
             }
         }
         val hit = view.offsetAt(position)
+        val injection = hit.injection
+        if (injection?.id != null && clicks == 1 && !shift) {
+            view.onInjectionClick?.invoke(hit.line, injection)
+            origin = null
+            return
+        }
         if (hit.onFoldPlaceholder && clicks == 1 && !shift) {
             foldState?.toggle(hit.line)
             origin = null

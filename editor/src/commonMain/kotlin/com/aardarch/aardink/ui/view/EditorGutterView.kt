@@ -154,8 +154,9 @@ internal fun EditorGutterView(
                 val marks = shown.decorationMarks.filter { it.lastLine >= firstShown && it.firstLine <= lastShown }
                 val markWidth = GUTTER_MARK_WIDTH.toPx()
                 for (line in frame.lines) {
-                    val top = line.top - frame.scrollY
-                    val rowsHeight = line.layout.lineCount * lineHeight
+                    // The line's own rows: its number and marks stay off rows injected above it.
+                    val top = line.top - frame.scrollY + line.layout.textRow * lineHeight
+                    val rowsHeight = line.layout.textRows * lineHeight
                     val diff = shown.diffAnnotations[line.line]
                     if (diff != null && diffLane > 0f) {
                         drawRect(

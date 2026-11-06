@@ -28,7 +28,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
@@ -40,7 +39,6 @@ import com.aardarch.aardink.core.TokenStore
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.core.text.DocumentChange
 import com.aardarch.aardink.core.text.DocumentChangeListener
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -110,7 +108,7 @@ internal class VisibleLine(
     val shownLength: Int,
     /** Content y of the line's first row. */
     val top: Float,
-    val layout: TextLayoutResult,
+    val layout: LineLayout,
     /** The fold that starts on this line and is closed, drawn as a placeholder after the text. */
     val fold: FoldRange?,
     /** The [shownLength] characters as the document has them; the layout's text may stand in for some. */
@@ -158,7 +156,13 @@ internal class ViewFrame(
 }
 
 /** Where a point in the viewport falls in the document. */
-internal class ViewHit(val offset: Int, val line: Int, val onFoldPlaceholder: Boolean)
+internal class ViewHit(
+    val offset: Int,
+    val line: Int,
+    val onFoldPlaceholder: Boolean,
+    /** The injected text under the point; [offset] is then the column it is at. */
+    val injection: Injection? = null,
+)
 
 /**
  * The closed folds, ready for the questions the view asks per line: is it hidden, and does a fold
@@ -237,7 +241,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     internal val lineMap = VisualLineMap()
 
-    private val layouts = LineLayoutCache<TextLayoutResult>()
+    private val layouts = LineLayoutCache<LineLayout>()
 
     private val document get() = state.document
 
@@ -255,6 +259,26 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     /** The host's fold state; its closed folds hide lines. */
     var foldState: FoldState? = null
+
+    /** Counts changes to what [injections] answers, for what is kept by row. */
+    var injectionVersion by mutableIntStateOf(0)
+        private set
+
+    /**
+     * What a line shows besides its text, asked for per line and on demand, so it must answer
+     * from a lookup; null when nothing is ever injected. Setting it rebuilds the row map; when
+     * only some lines change, say which with [injectionsChanged].
+     */
+    var injections: ((Int) -> LineInjections?)? = null
+        set(value) {
+            if (value === field) return
+            field = value
+            structureDirty = true
+            injectionVersion++
+        }
+
+    /** A click on injected text with an [Injection.id], on a line. */
+    var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = null
 
     private var folds = FoldLayout.None
     private var wrapWidth = 0
@@ -304,7 +328,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         }
         if (change.lineDelta == 0) {
             // A line on screen gets its measured row count in the next layout pass.
-            if (style?.softWrap == true && frame.find(change.startLine) == null) {
+            if ((style?.softWrap == true || injections != null) && frame.find(change.startLine) == null) {
                 lineMap.setRows(change.startLine, estimateRows(change.startLine))
             }
         } else {
@@ -312,6 +336,21 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         }
         for (line in change.startLine..(change.startLine + change.addedLines).coerceAtMost(document.lineCount - 1)) {
             maxLineChars = max(maxLineChars, lineLength(line))
+        }
+    }
+
+    /**
+     * What [injections] answers for lines [firstLine] to [lastLine] changed. Their rows are
+     * estimated without laying them out, and what is on screen stays where it is. A line on
+     * screen is left to the next layout pass, which measures it: an estimate there would move
+     * the text for a frame.
+     */
+    fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) {
+        injectionVersion++
+        if (structureDirty || lineMap.lineCount == 0) return
+        restoreAnchor = true
+        for (line in firstLine.coerceAtLeast(0)..lastLine.coerceAtMost(lineMap.lineCount - 1)) {
+            if (frame.find(line) == null) lineMap.setRows(line, estimateRows(line))
         }
     }
 
@@ -345,6 +384,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         state.textVersion
         state.tokenVersion
         revealRequests
+        injectionVersion
         val folded = foldState?.foldedRanges().orEmpty()
         var scrollY = scroll.scrollY
         var scrollX = scroll.scrollX
@@ -431,14 +471,13 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 if (top > scrollY + height) break
                 val text = lineText(line)
                 val layout = layoutFor(line, text)
-                if (style.softWrap) {
+                if (style.softWrap || injections != null) {
                     val delta = lineMap.setRows(line, layout.lineCount)
                     // A line starting above the view that turned out taller or shorter: keep the
                     // rows below it where they were.
                     if (delta != 0 && top < scrollY) scrollY += delta * lineHeight
-                } else {
-                    widestMeasured = max(widestMeasured, layout.size.width.toFloat())
                 }
+                if (!style.softWrap) widestMeasured = max(widestMeasured, layout.size.width.toFloat())
                 val start = document.lineStart(line)
                 val length = lineLength(line)
                 visible.add(
@@ -487,6 +526,15 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     fun contentTop(line: Int, metrics: EditorMetrics = style?.metrics ?: EditorMetrics.Zero): Float =
         metrics.paddingTop + lineMap.firstRowOf(line) * metrics.lineHeight
 
+    /** Content y of the first row of [line]'s text: below the rows injected above it. */
+    fun textTop(line: Int, metrics: EditorMetrics = style?.metrics ?: EditorMetrics.Zero): Float {
+        val rows = if (injections == null) 0 else layoutFor(line).textRow
+        return contentTop(line, metrics) + rows * metrics.lineHeight
+    }
+
+    /** The rows injected above [line]'s text, known without laying it out; a row that wraps counts once. */
+    fun rowsAbove(line: Int): Int = injections?.invoke(line)?.rowsAbove ?: 0
+
     private fun lineLength(line: Int): Int = document.lineEnd(line) - document.lineStart(line)
 
     private fun longestLine(): Int {
@@ -498,10 +546,12 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     private fun estimateRows(line: Int): Int {
         if (folds.isHidden(line)) return 0
         val style = style
-        if (style == null || !style.softWrap || wrapWidth <= 0) return 1
+        val injected = injections?.invoke(line)
+        val added = injected?.addedRows ?: 0
+        if (style == null || !style.softWrap || wrapWidth <= 0) return 1 + added
         val placeholder = folds.startingAt(line)?.let { it.placeholder.length + 1 } ?: 0
-        val chars = min(lineLength(line), MAX_RENDERED_LINE_CHARS) + placeholder
-        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt())
+        val chars = min(lineLength(line), MAX_RENDERED_LINE_CHARS) + placeholder + (injected?.inlineChars ?: 0)
+        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added
     }
 
     /** The characters of [line] that are laid out: its text, cut at [MAX_RENDERED_LINE_CHARS]. */
@@ -512,22 +562,23 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     }
 
     /** [line] laid out, from the cache when nothing it shows has changed. */
-    fun layoutFor(line: Int): TextLayoutResult = layoutFor(line, lineText(line))
+    fun layoutFor(line: Int): LineLayout = layoutFor(line, lineText(line))
 
-    private fun layoutFor(line: Int, text: String): TextLayoutResult {
+    private fun layoutFor(line: Int, text: String): LineLayout {
         val style = checkNotNull(style) { "layoutFor before the view has a style" }
         val tokens = if (state.exceedsAnalysisLimit) null else state.tokenStore.lineTokens(line)
         val fold = folds.startingAt(line)
         // Bracket colours depend on the depth the line starts at: part of what the layout shows.
         val bracketStyles = style.bracketStyles?.takeIf { tokens != null && it.isNotEmpty() }
         val depth = if (bracketStyles != null) state.brackets.depthAtLineStart(line) % bracketStyles.size else -1
-        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth))) {
-            measureLine(style, line, text, tokens, fold, bracketStyles, depth)
+        val injected = injections?.invoke(line)
+        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth, injected))) {
+            measureLine(style, line, text, tokens, fold, bracketStyles, depth, injected)
         }
     }
 
     /** What a line's layout shows besides its text and tokens. */
-    private data class LineDecoration(val placeholder: String?, val bracketDepth: Int)
+    private data class LineDecoration(val placeholder: String?, val bracketDepth: Int, val injections: LineInjections?)
 
     private fun measureLine(
         style: ViewStyle,
@@ -537,21 +588,28 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         fold: FoldRange?,
         bracketStyles: List<SpanStyle>?,
         startDepth: Int,
-    ): TextLayoutResult {
+        injected: LineInjections?,
+    ): LineLayout {
         val builder = AnnotatedString.Builder(text.length + 4)
         val indent = if (style.softWrap && style.joinIndentation) indentationLength(text) else 0
-        if (indent > 0) {
-            for (i in 0 until indent) builder.append(INDENT_GLYPH)
-            builder.append(text, indent, text.length)
-        } else {
-            builder.append(text)
+        val shownInjections = injected?.fitted(text, indent, MAX_RENDERED_LINE_CHARS)
+        val map = if (shownInjections == null) OffsetMap.Identity else OffsetMap.of(shownInjections, text.length)
+        var appended = 0
+        shownInjections?.items?.forEach { injection ->
+            appendText(builder, text, appended, injection.column, indent)
+            appended = injection.column
+            val injectedStyle = injection.style
+            if (injectedStyle != null) builder.pushStyle(injectedStyle)
+            builder.append(injection.text)
+            if (injectedStyle != null) builder.pop()
         }
+        appendText(builder, text, appended, text.length, indent)
         if (tokens != null) {
             for (i in 0 until tokens.size) {
                 val spanStyle = style.tokenStyle(tokens.types[i]) ?: continue
                 val from = tokens.start(i).coerceIn(0, text.length)
                 val to = tokens.end(i).coerceIn(from, text.length)
-                if (to > from) builder.addStyle(spanStyle, from, to)
+                if (to > from) builder.addColumnStyle(map, spanStyle, from, to)
             }
         }
         if (bracketStyles != null) {
@@ -563,11 +621,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             state.brackets.forEachBracket(line) { column, open ->
                 if (column >= text.length) return@forEachBracket
                 if (open) {
-                    builder.addStyle(bracketStyles[depth], column, column + 1)
+                    builder.addColumnStyle(map, bracketStyles[depth], column, column + 1)
                     depth = (depth + 1) % colours
                 } else {
                     depth = (depth - 1).mod(colours)
-                    builder.addStyle(bracketStyles[depth], column, column + 1)
+                    builder.addColumnStyle(map, bracketStyles[depth], column, column + 1)
                 }
             }
         }
@@ -578,15 +636,29 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             builder.pop()
         }
         // Last, over any token that covers the indentation: the glyphs must not be seen.
-        val column = if (indent > 0) hideIndentation(builder, text, indent, style) else 0
-        return style.measurer.measure(
+        val column = if (indent > 0) hideIndentation(builder, text, indent, style, map.charIndex(0)) else 0
+        val result = style.measurer.measure(
             text = builder.toAnnotatedString(),
             style = style.textStyle,
             softWrap = style.softWrap,
             constraints = if (style.softWrap) Constraints(maxWidth = wrapWidth) else Constraints(),
-            placeholders = tabStops(text, style, indent, column),
+            placeholders = tabStops(text, style, indent, column, map),
             skipCache = true,
         )
+        return LineLayout(result, map)
+    }
+
+    /** Characters [from, to) of [text], the first [indent] of which are laid out as hidden glyphs. */
+    private fun appendText(builder: AnnotatedString.Builder, text: String, from: Int, to: Int, indent: Int) {
+        val glyphs = min(indent, to)
+        for (i in from until glyphs) builder.append(INDENT_GLYPH)
+        val start = max(from, glyphs)
+        if (to > start) builder.append(text, start, to)
+    }
+
+    /** [spanStyle] over columns [from, to), leaving injected text between them its own style. */
+    private fun AnnotatedString.Builder.addColumnStyle(map: OffsetMap, spanStyle: SpanStyle, from: Int, to: Int) {
+        if (map.isIdentity) addStyle(spanStyle, from, to) else map.forEachRun(from, to) { start, end -> addStyle(spanStyle, start, end) }
     }
 
     /** How many spaces and tabs [text] starts with. */
@@ -599,22 +671,23 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     /**
      * Makes the first [indent] glyphs of [builder] invisible and as wide as the spaces and tabs
      * of [text] they stand for: a run of spaces is one transparent span, a tab one with letter
-     * spacing for the columns to its stop. Returns the column after the indentation.
+     * spacing for the columns to its stop. The glyphs start [base] characters into [builder], after
+     * any rows above the line. Returns the column after the indentation.
      */
-    private fun hideIndentation(builder: AnnotatedString.Builder, text: String, indent: Int, style: ViewStyle): Int {
+    private fun hideIndentation(builder: AnnotatedString.Builder, text: String, indent: Int, style: ViewStyle, base: Int): Int {
         var column = 0
         var i = 0
         while (i < indent) {
             if (text[i] == '\t') {
                 val columns = style.tabSize - column % style.tabSize
                 val spacing = ((columns - 1) * style.columnWidthEm).em
-                builder.addStyle(SpanStyle(color = Color.Transparent, letterSpacing = spacing), i, i + 1)
+                builder.addStyle(SpanStyle(color = Color.Transparent, letterSpacing = spacing), base + i, base + i + 1)
                 column += columns
                 i++
             } else {
                 var end = i + 1
                 while (end < indent && text[end] == ' ') end++
-                builder.addStyle(HIDDEN, i, end)
+                builder.addStyle(HIDDEN, base + i, base + end)
                 column += end - i
                 i = end
             }
@@ -626,17 +699,27 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
      * Every tab of [text] after its first [from] characters as a blank as wide as the columns to
      * the next tab stop, as code editors draw tabs; the font alone would draw one about a
      * character wide. A placeholder covers its own character, so offsets, carets and hit-testing
-     * stay as they are. [startColumn] is the column the character at [from] is in.
+     * stay as they are. [startColumn] is the column the character at [from] is in, before anything
+     * injected there; what [map] injects takes up columns too, and the placeholders are at its
+     * positions, not the document's.
      */
-    private fun tabStops(text: String, style: ViewStyle, from: Int = 0, startColumn: Int = 0): List<AnnotatedString.Range<Placeholder>> {
+    private fun tabStops(
+        text: String,
+        style: ViewStyle,
+        from: Int,
+        startColumn: Int,
+        map: OffsetMap,
+    ): List<AnnotatedString.Range<Placeholder>> {
         if (style.columnWidthEm <= 0f || text.indexOf('\t', from) < 0) return emptyList()
         val stops = ArrayList<AnnotatedString.Range<Placeholder>>()
         var column = startColumn
         for (i in from until text.length) {
+            column = map.visualColumnAfter(i, column)
             if (text[i] == '\t') {
                 val columns = style.tabSize - column % style.tabSize
                 val placeholder = Placeholder((columns * style.columnWidthEm).em, 1.em, PlaceholderVerticalAlign.TextCenter)
-                stops += AnnotatedString.Range(placeholder, i, i + 1)
+                val index = map.charIndex(i)
+                stops += AnnotatedString.Range(placeholder, index, index + 1)
                 column += columns
             } else {
                 column++
@@ -658,10 +741,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val rowInLine = (row - lineMap.firstRowOf(line)).coerceIn(0, layout.lineCount - 1)
         val x = position.x + scroll.scrollX - metrics.paddingStart
         val y = (layout.getLineTop(rowInLine) + layout.getLineBottom(rowInLine)) / 2f
-        val column = layout.getOffsetForPosition(Offset(x, y))
+        val column = layout.columnAt(Offset(x, y))
         val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
+        // Past the text of the line, in columns: the map keeps a placeholder past it.
         val onPlaceholder = folds.startingAt(line) != null && column > shown
-        return ViewHit(document.lineStart(line) + column.coerceAtMost(shown), line, onPlaceholder)
+        return ViewHit(document.lineStart(line) + column.coerceAtMost(shown), line, onPlaceholder, layout.injectionAt(x, rowInLine))
     }
 
     /** The caret at [offset], in content coordinates. */
@@ -672,7 +756,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val shown = min(lineLength(shownLine), MAX_RENDERED_LINE_CHARS)
         // A caret inside a closed fold is drawn at the end of the fold's first line.
         val col = if (shownLine == line) column.coerceAtMost(shown) else shown
-        val rect = layout.getCursorRect(col)
+        val rect = layout.cursorRect(col)
         val shift = layout.rowShift(layout.rowFor(col), metrics.lineHeight)
         return rect.translate(metrics.paddingStart, contentTop(shownLine, metrics) + shift)
     }
@@ -692,8 +776,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     /**
      * The offset [rows] rows above (negative) or below [offset], as close as possible to [x] (text
      * coordinates; the caret's own x when null). Rows are what is on screen: wrapped rows count,
-     * folded lines do not. Past the first row it goes to the start of the document, past the last
-     * to its end.
+     * folded lines do not, and a row of only injected text is passed over, as a caret cannot be on
+     * it. Past the first row it goes to the start of the document, past the last to its end.
      */
     fun verticalMove(offset: Int, rows: Int, x: Float? = null): Int {
         if (style == null || lineMap.totalRows == 0) return offset
@@ -703,17 +787,24 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val shown = min(lineLength(shownLine), MAX_RENDERED_LINE_CHARS)
         val col = if (shownLine == line) column.coerceAtMost(shown) else shown
         val rowInLine = layout.rowFor(col)
-        val targetX = x ?: layout.getHorizontalPosition(col, usePrimaryDirection = true)
-        val targetRow = lineMap.firstRowOf(shownLine) + rowInLine + rows
-        if (targetRow < 0) return 0
-        if (targetRow >= lineMap.totalRows) return document.length
-        val targetLine = lineMap.lineAtRow(targetRow)
-        val targetLayout = layoutFor(targetLine)
-        val row = (targetRow - lineMap.firstRowOf(targetLine)).coerceIn(0, targetLayout.lineCount - 1)
-        val y = (targetLayout.getLineTop(row) + targetLayout.getLineBottom(row)) / 2f
-        val targetShown = min(lineLength(targetLine), MAX_RENDERED_LINE_CHARS)
-        val targetColumn = targetLayout.getOffsetForPosition(Offset(targetX, y)).coerceAtMost(targetShown)
-        return document.lineStart(targetLine) + targetColumn
+        val targetX = x ?: layout.caretX(col)
+        val step = if (rows < 0) -1 else 1
+        var targetRow = lineMap.firstRowOf(shownLine) + rowInLine + rows
+        while (true) {
+            if (targetRow < 0) return 0
+            if (targetRow >= lineMap.totalRows) return document.length
+            val targetLine = lineMap.lineAtRow(targetRow)
+            val targetLayout = layoutFor(targetLine)
+            val row = (targetRow - lineMap.firstRowOf(targetLine)).coerceIn(0, targetLayout.lineCount - 1)
+            if (targetLayout.isInjectedRow(row)) {
+                targetRow += step
+                continue
+            }
+            val y = (targetLayout.getLineTop(row) + targetLayout.getLineBottom(row)) / 2f
+            val targetShown = min(lineLength(targetLine), MAX_RENDERED_LINE_CHARS)
+            val targetColumn = targetLayout.columnAt(Offset(targetX, y)).coerceAtMost(targetShown)
+            return document.lineStart(targetLine) + targetColumn
+        }
     }
 
     // ── Rows, for column selections ──────────────────────────────────────────
@@ -732,6 +823,29 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val a = firstLine.coerceIn(0, count - 1)
         val b = lastLine.coerceIn(a, count - 1)
         return lineMap.firstRowOf(a) to lineMap.firstRowOf(b + 1)
+    }
+
+    /** Whether [row] on screen holds only injected text, so no caret or selection can be on it. */
+    fun isInjectedRow(row: Int): Boolean {
+        if (injections == null || style == null || lineMap.totalRows == 0) return false
+        val (_, layout, rowInLine) = rowLayout(row)
+        return layout.isInjectedRow(rowInLine)
+    }
+
+    /** [row], or the nearest row a caret can be on, looking in the direction of [step] first. */
+    fun textRowFrom(row: Int, step: Int): Int {
+        if (step == 0 || !isInjectedRow(row)) return row
+        var next = row + step
+        while (next in 0 until lineMap.totalRows) {
+            if (!isInjectedRow(next)) return next
+            next += step
+        }
+        next = row - step
+        while (next in 0 until lineMap.totalRows) {
+            if (!isInjectedRow(next)) return next
+            next -= step
+        }
+        return row
     }
 
     /** The row on screen the caret at [offset] is on. */
@@ -761,19 +875,17 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val (line, layout, rowInLine) = rowLayout(row)
         val y = (layout.getLineTop(rowInLine) + layout.getLineBottom(rowInLine)) / 2f
         val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
-        return document.lineStart(line) + layout.getOffsetForPosition(Offset(x, y)).coerceAtMost(shown)
+        return document.lineStart(line) + layout.columnAt(Offset(x, y)).coerceAtMost(shown)
     }
 
     /** Where the text on [row] ends, in text coordinates (a closed fold's placeholder not included). */
     fun rowEndX(row: Int): Float {
         if (style == null || lineMap.totalRows == 0) return 0f
         val (line, layout, rowInLine) = rowLayout(row)
-        val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
-        val end = min(layout.getLineEnd(rowInLine), shown)
-        return layout.getHorizontalPosition(end, usePrimaryDirection = true)
+        return layout.rowEndX(rowInLine, min(lineLength(line), MAX_RENDERED_LINE_CHARS))
     }
 
-    private data class RowLayout(val line: Int, val layout: TextLayoutResult, val rowInLine: Int)
+    private data class RowLayout(val line: Int, val layout: LineLayout, val rowInLine: Int)
 
     private fun rowLayout(row: Int): RowLayout {
         val target = row.coerceIn(0, lineMap.totalRows - 1)
@@ -793,23 +905,3 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         private val HIDDEN = SpanStyle(color = Color.Transparent)
     }
 }
-
-/**
- * The row of this layout that [offset] is on, one of the rows [TextLayoutResult.lineCount] counts.
- * On skiko, `getLineForOffset` reads Skia's line metrics and `lineCount` its line number, and the
- * two can disagree (CI's Linux Chrome, during an input method's composition), so a row taken
- * straight from `getLineForOffset` can be one the layout's line getters reject.
- */
-internal fun TextLayoutResult.rowFor(offset: Int): Int = getLineForOffset(offset).coerceIn(0, lineCount - 1)
-
-/**
- * How far row [row] of this layout moves to sit at `row * lineHeight`: the view's row pitch,
- * not the platform's. The row map, the gutter, scrolling and hit-testing all step rows by
- * [lineHeight], but a wrapped line's paragraph puts its rows wherever the platform's text
- * engine does, and on some Android devices that is further apart. Row 0 never moves, so a
- * single-row line is drawn as it always was.
- */
-internal fun TextLayoutResult.rowShift(row: Int, lineHeight: Float): Float = if (row <= 0) 0f else row * lineHeight - getLineTop(row)
-
-/** Whether this layout's rows already sit at the view's pitch: then it is drawn in one go. */
-internal fun TextLayoutResult.rowsAtPitch(lineHeight: Float): Boolean = lineCount <= 1 || abs(getLineTop(1) - lineHeight) < 0.5f

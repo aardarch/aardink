@@ -31,8 +31,8 @@ internal data class ColumnBox(val anchorRow: Int, val anchorX: Float, val active
 /**
  * The selections [box] makes: on every row from the anchor's to the active one's, the part between
  * the two x's. A row whose text ends before the box starts gets nothing, as in VS Code, unless
- * every row would get nothing; then each gets a caret at its end. The active row's selection is
- * the primary one, so the view follows it.
+ * every row would get nothing; then each gets a caret at its end. A row of only injected text is
+ * passed over. The active row's selection is the primary one, so the view follows it.
  */
 internal fun EditorView.columnSelection(box: ColumnBox): SelectionSet {
     val left = min(box.anchorX, box.activeX)
@@ -41,9 +41,12 @@ internal fun EditorView.columnSelection(box: ColumnBox): SelectionSet {
     val step = if (box.activeRow >= box.anchorRow) 1 else -1
     val ranges = ArrayList<TextRange>()
     forRows(box, step) { row ->
+        if (isInjectedRow(row)) return@forRows
         if (rowEndX(row) + slack >= left) ranges += TextRange(offsetOnRow(row, box.anchorX), offsetOnRow(row, box.activeX))
     }
-    if (ranges.isEmpty()) forRows(box, step) { row -> ranges += TextRange(offsetOnRow(row, Float.MAX_VALUE)) }
+    if (ranges.isEmpty()) {
+        forRows(box, step) { row -> if (!isInjectedRow(row)) ranges += TextRange(offsetOnRow(row, Float.MAX_VALUE)) }
+    }
     return SelectionSet.of(ranges.asReversed())
 }
 

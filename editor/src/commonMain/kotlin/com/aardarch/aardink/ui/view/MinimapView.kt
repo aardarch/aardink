@@ -119,6 +119,7 @@ internal class MinimapTiles(private val view: EditorView) {
         var documentVersion: Long,
         var tokenVersion: Int,
         var totalRows: Int,
+        var injectionVersion: Int,
     )
 
     private val tiles = LinkedHashMap<Int, Tile>()
@@ -135,13 +136,16 @@ internal class MinimapTiles(private val view: EditorView) {
         val documentVersion = state.document.version
         val tokenVersion = state.tokenVersion
         val totalRows = view.totalRows
+        val injectionVersion = view.injectionVersion
         val cached = tiles.remove(index)
         if (cached != null && cached.rowUnits == rowUnits) {
-            val current = cached.documentVersion == documentVersion && cached.tokenVersion == tokenVersion && cached.totalRows == totalRows
+            val current = cached.documentVersion == documentVersion && cached.tokenVersion == tokenVersion &&
+                cached.totalRows == totalRows && cached.injectionVersion == injectionVersion
             if (current || matches(cached, index)) {
                 cached.documentVersion = documentVersion
                 cached.tokenVersion = tokenVersion
                 cached.totalRows = totalRows
+                cached.injectionVersion = injectionVersion
                 // Back in as the most recently used.
                 tiles[index] = cached
                 return cached.image
@@ -165,11 +169,14 @@ internal class MinimapTiles(private val view: EditorView) {
         return true
     }
 
-    /** The line whose first row is [row], or -1 when [row] continues a wrapped line or is past the end. */
+    /**
+     * The line whose text starts on [row], or -1 when [row] continues a wrapped line, is a row
+     * injected above a line's text, or is past the end.
+     */
     private fun lineOnRow(row: Int): Int {
         if (row >= view.totalRows) return -1
         val line = view.lineMap.lineAtRow(row)
-        return if (view.lineMap.firstRowOf(line) == row) line else -1
+        return if (view.lineMap.firstRowOf(line) + view.rowsAbove(line) == row) line else -1
     }
 
     /** A hash of the part of [line] the minimap shows. */
@@ -233,7 +240,17 @@ internal class MinimapTiles(private val view: EditorView) {
             flush()
         }
         val state = view.state
-        return Tile(image, rowUnits, lines, tokens, hashes, state.document.version, state.tokenVersion, view.totalRows)
+        return Tile(
+            image,
+            rowUnits,
+            lines,
+            tokens,
+            hashes,
+            state.document.version,
+            state.tokenVersion,
+            view.totalRows,
+            view.injectionVersion,
+        )
     }
 
     /**
