@@ -206,7 +206,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
   `cases`, capture groups (each with a token name, `{ token, next }` or `cases` of its own),
   `include`, `@rematch`, `switchTo`, `goBack`, `@brackets` with a top-level `brackets`,
-  `defaultToken`, `ignoreCase`, `tokenPostfix` and `@name` regex attributes. A `cases` guard is
+  `defaultToken`, `ignoreCase`, `tokenPostfix` and `@name` regex attributes, each a group of its
+  own as in Monarch, in rules and in `~` guards. A `cases` guard is
   `@default`, `@eos`, or a test as in Monarch: a subject of `$#` (the match, the default) or `$S0`,
   `$S1` and so on (the state's name and its dotted parts), then `@array`, `~regex`, `==text` or
   their opposites `!@`, `!~` and `!=`, so `$#==$S2` closes on the text that opened. `next` and

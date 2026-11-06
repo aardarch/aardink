@@ -375,7 +375,8 @@ export interface AardinkLanguageDefinition {
    * A subset of Monaco's Monarch: states in `tokenizer` (`root` first), rules of
    * `[regex, action, next?]`, `cases`, capture groups (each with a token name, `{ token, next }`
    * or `cases` of its own), `include`, `@rematch`, `switchTo`, `goBack`, `@brackets` with a
-   * top-level `brackets`, `defaultToken`, `ignoreCase`, `tokenPostfix`. A guard is
+   * top-level `brackets`, `defaultToken`, `ignoreCase`, `tokenPostfix`, and `@name` in a regex
+   * for the top-level string `name`, as a group of its own. A guard is
    * `@default`, `@eos`, or a subject of `$#` or `$S0`, `$S1`... then `@array`, `~regex`, `==text`
    * or `!@`, `!~`, `!=`, as in `$#==$S2`; `next` and `switchTo` take `$#` and `$Sn` too. `log` is
    * accepted and ignored. RegExp literals are fine. Lookbehind and `$` in a token name are

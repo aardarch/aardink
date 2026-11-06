@@ -438,6 +438,79 @@ class DeclarativeGrammarTest {
     }
 
     @Test
+    fun `a key that starts with an operator is that operator, even with nothing after it`() {
+        // At 0.8 these were the regexes ^(?:==)$ and ^(?:!=)$. In Monarch, as here, they compare with "".
+        assertFalse(holds("=="))
+        assertTrue(holds("!="))
+    }
+
+    /** The grammar [attributes] and [rules] make, whose first state is `probe.alpha`. */
+    private fun withAttributes(attributes: String, rules: String) = monarch(
+        """
+        {
+          $attributes,
+          "tokenizer": {
+            "root": [ ["\\(", { "token": "", "switchTo": "@probe.alpha" }] ],
+            "probe": [ $rules ]
+          }
+        }
+        """.trimIndent(),
+    )
+
+    private fun probed(grammar: DeclarativeGrammar, text: String) = tokens(grammar, "($text").filter { it.first != "(" }
+
+    @Test
+    fun `a regex attribute is the regex it says, backslashes and all`() {
+        val g = withAttributes(""""digits": "\\d+"""", """["@digits", "number"]""")
+        assertEquals(listOf("12" to name("number")), probed(g, "12"))
+    }
+
+    @Test
+    fun `a dollar in a regex attribute is an end anchor`() {
+        val g = withAttributes(""""last": "x%"""", """["@last", "end"], ["[a-z]", "letter"]""")
+        assertEquals(listOf("a" to name("letter"), "x" to name("end")), probed(g, "ax"))
+        assertEquals(listOf("xa" to name("letter")), probed(g, "xa"))
+    }
+
+    @Test
+    fun `a regex attribute can use another, with its backslashes`() {
+        val g = withAttributes(""""digit": "\\d", "pair": "@digit@digit"""", """["@pair", "pair"], ["\\d", "single"]""")
+        assertEquals(listOf("12" to name("pair"), "3" to name("single")), probed(g, "123"))
+    }
+
+    @Test
+    fun `a regex attribute works in a guard too`() {
+        val g = withAttributes(
+            """"digits": "\\d+", "ends": "\\w*x%"""",
+            """["\\w+", { "cases": { "~@digits": "number", "!~@ends": "other", "@default": "ending" } }]""",
+        )
+        assertEquals(listOf("12" to name("number")), probed(g, "12"))
+        assertEquals(listOf("ab" to name("other")), probed(g, "ab"))
+        assertEquals(listOf("ax" to name("ending")), probed(g, "ax"))
+    }
+
+    @Test
+    fun `a regex attribute works in a guard that depends on the match`() {
+        val g = withAttributes(
+            """"digits": "\\d+"""",
+            """["\\w+", { "cases": { "~@digits|%S2": "yes", "@default": "no" } }]""",
+        )
+        assertEquals(listOf("12" to name("yes")), probed(g, "12"))
+        assertEquals(listOf("alpha" to name("yes")), probed(g, "alpha"))
+        assertEquals(listOf("beta" to name("no")), probed(g, "beta"))
+    }
+
+    @Test
+    fun `a regex attribute is a group of its own, as in Monarch`() {
+        val g = withAttributes(
+            """"either": "a|b", "pair": "cd"""",
+            """["x@either", "joined"], ["@pair+", "repeated"], ["\\w", "letter"]""",
+        )
+        assertEquals(listOf("xb" to name("joined")), probed(g, "xb"), "not x, then a, or else b")
+        assertEquals(listOf("cdcd" to name("repeated")), probed(g, "cdcd"), "the + repeats all of it")
+    }
+
+    @Test
     fun `a guard's pattern can use the match and the state`() {
         assertTrue(holds("%#==%S2", "alpha"))
         assertFalse(holds("%#==%S2", "beta"))

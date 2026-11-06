@@ -127,7 +127,8 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  *   only for a `@brackets` action, so a grammar with none can use the name for anything),
  *   `comments` as in Monaco's language configuration
  *   (`{ "lineComment": "#", "blockComment": ["<!--", "-->"] }`, for toggling comments), and any
- *   other string, which `@name` in a regex stands for, or string array, for the `@name` guards.
+ *   other string, which `@name` in a regex stands for, as a group of its own, or string array, for
+ *   the `@name` guards.
  *
  * **Rejected by [parse]:** lookbehind (`(?<=`, `(?<!`), which Kotlin/wasm's regex engine makes very
  * slow, and `$` in a token name: names are resolved once, here, and [tokenNames] promises every
@@ -613,11 +614,12 @@ private class GrammarReader(private val json: JsonObject) {
         }
     }
 
+    /** [source] with its `@name`s filled in, each a group of its own, so that `a|b` stays whole in `x@name`. */
     private fun expand(source: String, path: String, depth: Int): String {
         if (depth > 8) fail(path, "the @names in this regex refer to each other in a loop")
         return ATTRIBUTE.replace(source) { match ->
-            val value = attributes[match.groupValues[1]] ?: return@replace Regex.escapeReplacement(match.value)
-            Regex.escapeReplacement(expand(value, path, depth + 1))
+            val value = attributes[match.groupValues[1]] ?: return@replace match.value
+            "(?:${expand(value, path, depth + 1)})"
         }
     }
 
