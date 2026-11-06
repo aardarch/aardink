@@ -315,7 +315,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         val channel = Channel<Item>(Channel.UNLIMITED, onUndeliveredElement = { it.dropped() })
         val previous = worker
         queue = channel
-        worker = client.launch {
+        worker = client.launchOnScope {
             previous?.join()
             drain(channel)
         }.also {

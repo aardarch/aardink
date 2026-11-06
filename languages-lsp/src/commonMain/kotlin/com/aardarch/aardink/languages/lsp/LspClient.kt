@@ -417,7 +417,7 @@ class LspClient(
      * Runs [block] on the client's scope, so that it ends with the connection's owner. A scope
      * already cancelled gives back a job that has finished without running [block].
      */
-    internal fun launch(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
+    internal fun launchOnScope(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
 
     /**
      * Allocates a request id and registers [deferred] against it, unless the client is already
