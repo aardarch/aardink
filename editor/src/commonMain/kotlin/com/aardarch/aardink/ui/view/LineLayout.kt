@@ -38,8 +38,12 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
 
     val size: IntSize get() = result.size
 
-    /** Rows that hold no column of the document, or null when there are none. */
-    private val injectedRows: BooleanArray? = if (map.hasBreaks) findInjectedRows() else null
+    /**
+     * Rows that hold no column of the document, or null when there cannot be any: nothing is
+     * injected, or there is only one row. A row can be left without a column by a break in injected
+     * text, or by soft wrap when injected text fills it, so only the laid-out rows can tell.
+     */
+    private val injectedRows: BooleanArray? = if (!map.isIdentity && result.lineCount > 1) findInjectedRows() else null
 
     /** The first row with a column of the document on it: where the line's number goes. */
     val textRow: Int = injectedRows?.indexOf(false)?.coerceAtLeast(0) ?: 0
@@ -51,10 +55,21 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
     val textRows: Int get() = lastTextRow - textRow + 1
 
     /** Where row 0 sits: rows added by a hard break keep its place in their own band. */
-    private val rowBase: Float = if (injectedRows != null) result.getLineTop(0) else 0f
+    private val rowBase: Float = if (map.hasBreaks) result.getLineTop(0) else 0f
 
-    /** Whether row [row] holds only injected text, so a caret cannot be on it. */
+    /** Whether row [row] holds only injected text. */
     fun isInjectedRow(row: Int): Boolean = injectedRows?.getOrNull(row) ?: false
+
+    /**
+     * Whether a caret can be on row [row]. Not on a row of only injected text, nor on one whose only
+     * character follows ghost text and is followed by a wrap: that character's caret is before the
+     * ghost, on another row, and the next column's is on the next row.
+     */
+    fun hasCaret(row: Int): Boolean {
+        if (injectedRows == null) return true
+        val first = firstColumnFrom(row)
+        return first <= map.length && rowFor(first) == row
+    }
 
     /** The row a caret at [column] is on. */
     fun rowFor(column: Int): Int = rowAt(map.toLayout(column))
@@ -93,12 +108,41 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
     fun rangePath(from: Int, to: Int): Path {
         if (injectedRows == null) return result.getPathForRange(map.charIndex(from), map.rangeEnd(to))
         val path = Path()
-        map.forEachRun(from, to, breaksOnly = true) { start, end -> path.addPath(result.getPathForRange(start, end)) }
+        map.forEachRun(from, to, cut = ::splitsRows) { start, end -> path.addPath(result.getPathForRange(start, end)) }
         return path
     }
 
+    /** Whether what is injected at [column] leaves the characters either side of it on different rows. */
+    private fun splitsRows(column: Int): Boolean = rowAt(map.rangeEnd(column) - 1) != rowAt(map.charIndex(column))
+
     /** The column at [position]: on injected text, the column it is at; past the text, past it. */
     fun columnAt(position: Offset): Int = map.toDocument(result.getOffsetForPosition(position))
+
+    /**
+     * The column on row [row] nearest text x [x], whose caret is on that row if any caret can be
+     * ([hasCaret]). [columnAt] is not enough for moving to a row: over injected text it gives the
+     * injection's column, whose caret can be on another row, often the row the move started from.
+     */
+    fun columnOnRow(x: Float, row: Int): Int {
+        val column = columnAt(Offset(x, (getLineTop(row) + getLineBottom(row)) / 2f))
+        if (injectedRows == null || !hasCaret(row)) return column
+        val shown = column.coerceAtMost(map.length)
+        if (rowFor(shown) == row) return shown
+        val first = firstColumnFrom(row)
+        val last = firstColumnFrom(row + 1) - 1
+        return if (abs(x - caretX(first)) <= abs(x - caretX(last))) first else last
+    }
+
+    /** The first column whose caret is on row [row] or below it; past the last column when there is none. */
+    private fun firstColumnFrom(row: Int): Int {
+        var lo = 0
+        var hi = map.length + 1
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (rowFor(mid) < row) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
 
     /** The injected text on row [row] under text x [x], or null. */
     fun injectionAt(x: Float, row: Int): Injection? {

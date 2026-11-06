@@ -303,6 +303,28 @@ class InlineGeometryTest {
     }
 
     @Test
+    fun `a selection across a hint that fills rows leaves those rows clear`() {
+        val hint = Injection(3, "h".repeat(120))
+        val scene = Scene("a hint filling rows", "abcdefgh", listOf(hint), softWrap = true, viewWidth = 300)
+        val raw = scene.raw
+        val firstRow = raw.getLineForOffset(scene.charAt(2))
+        val lastRow = raw.getLineForOffset(scene.charAt(3))
+        assertTrue(lastRow - firstRow > 1, "the hint fills whole rows: $firstRow to $lastRow")
+        val pixels = scene.draw(decorations(selections = listOf(TextRange(1, 5))))
+        val box = pixels.boxOf(colors.selection, scene.name)
+        assertEquals(PADDING + firstRow * LINE_HEIGHT, box.top, 1f, "from the first text row")
+        assertEquals(PADDING + (lastRow + 1) * LINE_HEIGHT, box.bottom, 1f, "to the last")
+        val rowPx = LINE_HEIGHT.toInt() * PAINT_SCALE
+        val top = PADDING.toInt() * PAINT_SCALE
+        for (row in firstRow + 1 until lastRow) {
+            val band = (top + row * rowPx + 8 until top + (row + 1) * rowPx - 8).flatMap { y ->
+                (0 until pixels.width).map { x -> pixels[x, y] }
+            }
+            assertTrue(band.none { it == colors.selection }, "row $row of only injected text is not selected")
+        }
+    }
+
+    @Test
     fun `a whole-line highlight and a selected line's end stay on the text rows`() {
         val scene = Scene("a lens", line, listOf(Injection.rowAbove("lens")))
         val highlighted = EditorDecorations(listOf(TextRange(2)), emptyList(), -1, emptyList(), null, highlightCaretLines = true)

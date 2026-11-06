@@ -344,13 +344,25 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
      * estimated without laying them out, and what is on screen stays where it is. A line on
      * screen is left to the next layout pass, which measures it: an estimate there would move
      * the text for a frame.
+     *
+     * The scroll position moves with the rows here and now, from where it is now: an answer often
+     * lands between a scroll and its layout pass, or just before the next tick of a fling, and
+     * neither should be undone by what the last pass saw.
      */
     fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) {
         injectionVersion++
         if (structureDirty || lineMap.lineCount == 0) return
-        restoreAnchor = true
+        val metrics = style?.metrics ?: return
+        val keepInPlace = !restoreAnchor
+        if (keepInPlace) captureAnchor(scroll.scrollY, metrics)
+        // A scroll since the last pass has left its frame: what that showed will not be measured.
+        val measured = if (frame.scrollY == scroll.scrollY) frame else ViewFrame.Empty
         for (line in firstLine.coerceAtLeast(0)..lastLine.coerceAtMost(lineMap.lineCount - 1)) {
-            if (frame.find(line) == null) lineMap.setRows(line, estimateRows(line))
+            if (measured.find(line) == null) lineMap.setRows(line, estimateRows(line))
+        }
+        if (keepInPlace) {
+            scroll.contentHeight = rowsHeight(metrics)
+            scroll.placeY(anchorY(metrics))
         }
     }
 
@@ -419,11 +431,10 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             restoreAnchor = true
         }
         if (restoreAnchor) {
-            val line = lineMap.visibleLineAtOrBefore(anchorLine.coerceIn(0, lineCount - 1))
-            scrollY = contentTop(line, metrics) + (if (line == anchorLine) anchorOffset else 0f)
+            scrollY = anchorY(metrics)
             restoreAnchor = false
         }
-        var contentHeight = metrics.paddingTop + lineMap.totalRows * lineHeight + metrics.paddingBottom
+        var contentHeight = rowsHeight(metrics)
         scroll.contentHeight = contentHeight
 
         if (revealTarget >= 0) {
@@ -485,7 +496,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 )
                 line++
             }
-            contentHeight = metrics.paddingTop + lineMap.totalRows * lineHeight + metrics.paddingBottom
+            contentHeight = rowsHeight(metrics)
             scroll.contentHeight = contentHeight
         }
 
@@ -521,6 +532,16 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         anchorLine = lineMap.lineAtRow(row)
         anchorOffset = scrollY - contentTop(anchorLine, metrics)
     }
+
+    /** The scroll position that puts the anchor back where it was. */
+    private fun anchorY(metrics: EditorMetrics): Float {
+        val line = lineMap.visibleLineAtOrBefore(anchorLine.coerceIn(0, lineMap.lineCount - 1))
+        return contentTop(line, metrics) + (if (line == anchorLine) anchorOffset else 0f)
+    }
+
+    /** The height of every row, with the padding around them. */
+    private fun rowsHeight(metrics: EditorMetrics): Float =
+        metrics.paddingTop + lineMap.totalRows * metrics.lineHeight + metrics.paddingBottom
 
     /** Content y of [line]'s first row. */
     fun contentTop(line: Int, metrics: EditorMetrics = style?.metrics ?: EditorMetrics.Zero): Float =
@@ -776,8 +797,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     /**
      * The offset [rows] rows above (negative) or below [offset], as close as possible to [x] (text
      * coordinates; the caret's own x when null). Rows are what is on screen: wrapped rows count,
-     * folded lines do not, and a row of only injected text is passed over, as a caret cannot be on
-     * it. Past the first row it goes to the start of the document, past the last to its end.
+     * folded lines do not, and a row no caret can be on is passed over. It lands on the row it
+     * reaches, whatever is injected under [x]. Past the first row it goes to the start of the
+     * document, past the last to its end.
      */
     fun verticalMove(offset: Int, rows: Int, x: Float? = null): Int {
         if (style == null || lineMap.totalRows == 0) return offset
@@ -796,14 +818,12 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             val targetLine = lineMap.lineAtRow(targetRow)
             val targetLayout = layoutFor(targetLine)
             val row = (targetRow - lineMap.firstRowOf(targetLine)).coerceIn(0, targetLayout.lineCount - 1)
-            if (targetLayout.isInjectedRow(row)) {
+            if (!targetLayout.hasCaret(row)) {
                 targetRow += step
                 continue
             }
-            val y = (targetLayout.getLineTop(row) + targetLayout.getLineBottom(row)) / 2f
             val targetShown = min(lineLength(targetLine), MAX_RENDERED_LINE_CHARS)
-            val targetColumn = targetLayout.columnAt(Offset(targetX, y)).coerceAtMost(targetShown)
-            return document.lineStart(targetLine) + targetColumn
+            return document.lineStart(targetLine) + targetLayout.columnOnRow(targetX, row).coerceAtMost(targetShown)
         }
     }
 
@@ -825,24 +845,24 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         return lineMap.firstRowOf(a) to lineMap.firstRowOf(b + 1)
     }
 
-    /** Whether [row] on screen holds only injected text, so no caret or selection can be on it. */
-    fun isInjectedRow(row: Int): Boolean {
-        if (injections == null || style == null || lineMap.totalRows == 0) return false
+    /** Whether a caret or a selection can be on [row] on screen, as none can on injected text. */
+    fun isCaretRow(row: Int): Boolean {
+        if (injections == null || style == null || lineMap.totalRows == 0) return true
         val (_, layout, rowInLine) = rowLayout(row)
-        return layout.isInjectedRow(rowInLine)
+        return layout.hasCaret(rowInLine)
     }
 
     /** [row], or the nearest row a caret can be on, looking in the direction of [step] first. */
     fun textRowFrom(row: Int, step: Int): Int {
-        if (step == 0 || !isInjectedRow(row)) return row
+        if (step == 0 || isCaretRow(row)) return row
         var next = row + step
         while (next in 0 until lineMap.totalRows) {
-            if (!isInjectedRow(next)) return next
+            if (isCaretRow(next)) return next
             next += step
         }
         next = row - step
         while (next in 0 until lineMap.totalRows) {
-            if (!isInjectedRow(next)) return next
+            if (isCaretRow(next)) return next
             next -= step
         }
         return row
@@ -873,9 +893,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     fun offsetOnRow(row: Int, x: Float): Int {
         if (style == null || lineMap.totalRows == 0) return 0
         val (line, layout, rowInLine) = rowLayout(row)
-        val y = (layout.getLineTop(rowInLine) + layout.getLineBottom(rowInLine)) / 2f
         val shown = min(lineLength(line), MAX_RENDERED_LINE_CHARS)
-        return document.lineStart(line) + layout.columnAt(Offset(x, y)).coerceAtMost(shown)
+        return document.lineStart(line) + layout.columnOnRow(x, rowInLine).coerceAtMost(shown)
     }
 
     /** Where the text on [row] ends, in text coordinates (a closed fold's placeholder not included). */

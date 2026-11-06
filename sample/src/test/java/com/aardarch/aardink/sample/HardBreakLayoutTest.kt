@@ -82,11 +82,12 @@ class HardBreakLayoutTest {
         text: AnnotatedString,
         wrap: Boolean,
         placeholders: List<AnnotatedString.Range<Placeholder>> = emptyList(),
+        maxWidth: Int = 2_000,
     ): TextLayoutResult = measurer.measure(
         text = text,
         style = textStyle,
         softWrap = wrap,
-        constraints = if (wrap) Constraints(maxWidth = 2_000) else Constraints(),
+        constraints = if (wrap) Constraints(maxWidth = maxWidth) else Constraints(),
         placeholders = placeholders,
         skipCache = true,
     )
@@ -172,6 +173,27 @@ class HardBreakLayoutTest {
             assertEquals("softWrap = $wrap", first.top, layout.cursorRect(0).top, 0.5f)
             assertEquals("softWrap = $wrap", first.height, layout.cursorRect(0).height, 0.5f)
         }
+    }
+
+    @Test
+    fun `a hint filling rows under soft wrap, through LineLayout`() {
+        val hint = "h".repeat(120)
+        val text = "abcdefgh"
+        val injections = LineInjections.of(Injection(3, hint))
+        val spliced = text.substring(0, 3) + hint + text.substring(3)
+        val layout = LineLayout(
+            measure(AnnotatedString(spliced), wrap = true, maxWidth = 300),
+            OffsetMap.of(injections, text.length),
+        )
+        val last = layout.lineCount - 1
+        assertTrue("the hint fills whole rows: ${layout.lineCount}", last >= 2)
+        assertEquals(0, layout.rowFor(3))
+        assertEquals(last, layout.charRow(3))
+        assertEquals((0..last).map { it in 1 until last }, (0..last).map { layout.isInjectedRow(it) })
+        assertEquals((0..last).map { it !in 1 until last }, (0..last).map { layout.hasCaret(it) })
+        // Over the hint on the last row its own column's caret is on row 0: not the row asked for.
+        val column = layout.columnOnRow(0f, last)
+        assertEquals(last, layout.rowFor(column))
     }
 
     @Test

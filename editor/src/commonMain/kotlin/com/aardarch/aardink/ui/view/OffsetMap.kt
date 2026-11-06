@@ -152,7 +152,10 @@ internal class OffsetMap private constructor(private val items: List<Injection>,
 
     val isIdentity: Boolean get() = size == 0
 
-    /** Whether any injected text has a line break, so that some rows may hold no document text. */
+    /**
+     * Whether any injected text has a line break, so that it adds rows of its own. This does not say
+     * whether every row holds document text: under soft wrap, text with no break can fill a row.
+     */
     val hasBreaks: Boolean = items.any { '\n' in it.text }
 
     /** Where a caret at [column] is in the layout. */
@@ -201,15 +204,15 @@ internal class OffsetMap private constructor(private val items: List<Injection>,
     /**
      * Calls [action] with the layout range of every run of document characters in columns
      * [from, to): the range cut at each injection, so that a span over the runs leaves injected
-     * text its own style. With [breaksOnly] it is cut only where injected text has a line break.
+     * text its own style. With [cut] it is cut only at the columns [cut] accepts.
      */
-    fun forEachRun(from: Int, to: Int, breaksOnly: Boolean = false, action: (start: Int, end: Int) -> Unit) {
+    fun forEachRun(from: Int, to: Int, cut: (column: Int) -> Boolean = { true }, action: (start: Int, end: Int) -> Unit) {
         var start = from
         var i = upperBound(from)
         while (i < size && columns[i] < to) {
             val column = columns[i]
             val next = upperBound(column)
-            if (!breaksOnly || (i until next).any { '\n' in items[it].text }) {
+            if (cut(column)) {
                 action(charIndex(start), rangeEnd(column))
                 start = column
             }

@@ -178,7 +178,7 @@ class InlineInputConnectionTest {
             val shown: EditorView = view
             assertEquals("a lens, its line, the next line", 3, shown.totalRows)
             assertEquals("the caret is on the text row", 1, shown.rowOf(5))
-            assertTrue("the lens row is injected", shown.isInjectedRow(0))
+            assertFalse("no caret can be on the lens row", shown.isCaretRow(0))
             assertEquals("down reaches the next line", second, shown.verticalMove(0, 1, 0f))
             assertEquals("up passes the lens and stops at the document's start", 0, shown.verticalMove(second, -1, 0f))
             assertEquals("from the first text row, up goes to the start", 0, shown.verticalMove(5, -1))

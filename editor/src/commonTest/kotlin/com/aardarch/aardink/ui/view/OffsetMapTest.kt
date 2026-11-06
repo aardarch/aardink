@@ -102,8 +102,8 @@ class OffsetMapTest {
         map.forEachRun(1, 5) { start, end -> runs += start to end }
         assertEquals(listOf(1 to 2, 4 to 6, 9 to 10), runs)
         runs.clear()
-        map.forEachRun(1, 5, breaksOnly = true) { start, end -> runs += start to end }
-        assertEquals(listOf(1 to 6, 9 to 10), runs, "cut only at the line break")
+        map.forEachRun(1, 5, cut = { it == 4 }) { start, end -> runs += start to end }
+        assertEquals(listOf(1 to 6, 9 to 10), runs, "cut only where it was asked to be")
     }
 
     @Test

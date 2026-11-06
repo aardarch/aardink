@@ -24,6 +24,7 @@ import com.aardarch.aardink.ui.view.InlineFixture.PADDING
 import com.aardarch.aardink.ui.view.InlineFixture.lines
 import com.aardarch.aardink.ui.view.InlineFixture.shown
 import com.aardarch.aardink.ui.view.InlineFixture.viewOf
+import kotlin.math.sign
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -245,12 +246,30 @@ class InlineRowsTest {
     }
 
     @Test
-    fun `a page of rows lands on a text row`() {
-        val view = viewOf((0 until 60).joinToString("\n") { "line $it" }, injections = { if (it % 2 == 1) lens else null })
-        var offset = 0
-        repeat(10) {
-            offset = view.verticalMove(offset, 7, 0f)
-            assertFalse(view.isInjectedRow(view.rowOf(offset)))
+    fun `a page of rows lands on the row asked for, or the next a caret can be on`() {
+        val view = viewOf((0 until 60).joinToString("\n") { "line $it" }, injections = { if (it % 2 == 1) lens else null }, height = 2_000)
+        val document = view.state.document
+        val caretRows = (0..document.length).map { view.rowOf(it) }.distinct()
+        val page = 7
+        val column = 3
+        val x = view.caretX(column)
+        for (direction in listOf(1, -1)) {
+            var offset = if (direction > 0) column else document.lineStart(document.lineCount - 1) + column
+            var onLens = 0
+            var moves = 0
+            while (true) {
+                val asked = view.rowOf(offset) + page * direction
+                val expected = (if (direction > 0) caretRows.firstOrNull { it >= asked } else caretRows.lastOrNull { it <= asked }) ?: break
+                if (expected != asked) onLens++
+                val next = view.verticalMove(offset, page * direction, x)
+                assertEquals(direction, (next - offset).sign, "a page down moves down and a page up up, from $offset")
+                assertEquals(expected, view.rowOf(next), "from $offset")
+                assertEquals(column, next - document.lineStart(document.offsetToLineCol(next).first), "keeping x, from $offset")
+                offset = next
+                moves++
+            }
+            assertTrue(moves > 5, "$moves moves")
+            assertTrue(onLens > 0, "some pages asked for a lens row")
         }
     }
 
@@ -328,12 +347,109 @@ class InlineRowsTest {
     }
 
     @Test
-    fun `a column selection that is all on a lens row gets carets on the text rows only`() {
+    fun `a column selection past the end of every row gets carets on the text rows only`() {
         val view = viewOf("ab\nab\nab", injections = lines(1 to lens))
         val far = view.shown(0).layout.caretX(2) + 300f
         view.state.replaceSelections(view.columnSelection(ColumnBox(0, far, view.lineMap.totalRows - 1, far)))
         assertEquals(3, view.state.selections.size)
         assertTrue(view.state.selections.all { it.collapsed })
+    }
+
+    @Test
+    fun `a column box on one row of a lens or a ghost goes to the nearest text row`() {
+        val ghost = LineInjections.of(Injection(2, "ghost\nrow"))
+        val view = viewOf("ab\nab\nab", injections = lines(1 to lens, 2 to ghost))
+        val x = view.shown(0).layout.caretX(1)
+        val lensRow = view.lineMap.firstRowOf(1)
+        val lastRow = view.lineMap.totalRows - 1
+        val onLens = view.columnSelection(ColumnBox(lensRow, x, lensRow, x))
+        assertEquals(1, onLens.ranges.size)
+        assertEquals(view.state.document.lineStart(1) + 1, onLens.primary.end, "the lens's own line")
+        val onGhost = view.columnSelection(ColumnBox(lastRow, x, lastRow, x))
+        assertEquals(1, onGhost.ranges.size)
+        assertEquals(view.state.document.lineStart(2) + 1, onGhost.primary.end, "nothing is below: back to the ghost's line")
+    }
+
+    @Test
+    fun `a column box between rows of a ghost goes to a text row`() {
+        val ghost = LineInjections.of(Injection(2, "a\nb\nc"))
+        val view = viewOf("ab\nab", injections = lines(0 to ghost))
+        val x = view.shown(0).layout.caretX(1)
+        val selection = view.columnSelection(ColumnBox(1, x, 2, x))
+        assertEquals(1, selection.ranges.size)
+        assertFalse(view.shown(0).layout.isInjectedRow(view.rowOf(selection.primary.end)))
+    }
+
+    @Test
+    fun `a middle press on a lens starts the box on its line's text`() {
+        val view = viewOf("ab\nab\nab", injections = lines(1 to lens))
+        val pointer = EditorPointerHandler(view)
+        val lensRow = view.lineMap.firstRowOf(1)
+        pointer.columnPress(Offset(PADDING + 1f, PADDING + lensRow * LINE_HEIGHT + 10f))
+        assertEquals(1, view.state.selections.size)
+        assertEquals(lensRow + 1, view.rowOf(view.state.selection.end))
+        pointer.release()
+    }
+
+    @Test
+    fun `a box pressed on a lens and dragged up keeps the lens's line`() {
+        val view = viewOf("ab\nab\nab", injections = lines(1 to lens))
+        val pointer = EditorPointerHandler(view)
+        val lensRow = view.lineMap.firstRowOf(1)
+        pointer.columnPress(Offset(PADDING + 1f, PADDING + lensRow * LINE_HEIGHT + 10f))
+        pointer.drag(Offset(PADDING + 1f, PADDING + 10f))
+        assertEquals(2, view.state.selections.size, "the line under the lens, and the line it was dragged to")
+        assertEquals(0, view.rowOf(view.state.selection.end))
+        pointer.release()
+    }
+
+    @Test
+    fun `a middle press on a ghost row below a line starts on a text row`() {
+        val ghost = LineInjections.of(Injection(2, "ghost\nrow"))
+        val view = viewOf("ab\nab", injections = lines(0 to ghost, 1 to ghost))
+        val pointer = EditorPointerHandler(view)
+        for (row in listOf(1, 3)) {
+            pointer.columnPress(Offset(PADDING + 1f, PADDING + row * LINE_HEIGHT + 10f))
+            assertEquals(1, view.state.selections.size, "row $row")
+            pointer.release()
+        }
+        assertEquals(view.state.document.lineStart(1), view.state.selection.end, "the last row turns back to the line above it")
+    }
+
+    @Test
+    fun `dragging a column box onto a lens row keeps it on text rows, each way`() {
+        val view = viewOf("abcdef\nabcdef\nabcdef", injections = lines(1 to lens))
+        val pointer = EditorPointerHandler(view)
+        val lensRow = view.lineMap.firstRowOf(1)
+        val xAt = PADDING + view.shown(0).layout.caretX(1)
+        val y = { row: Int -> PADDING + row * LINE_HEIGHT + 10f }
+        pointer.columnPress(Offset(xAt, y(0)))
+        pointer.drag(Offset(xAt, y(lensRow)))
+        assertEquals(2, view.state.selections.size, "going down, the lens leads to its line")
+        assertEquals(lensRow + 1, view.rowOf(view.state.selection.end))
+        pointer.release()
+        pointer.columnPress(Offset(xAt, y(lensRow + 2)))
+        pointer.drag(Offset(xAt, y(lensRow)))
+        assertEquals(3, view.state.selections.size, "going up, the lens leads past its line")
+        assertEquals(0, view.rowOf(view.state.selection.end))
+        pointer.release()
+    }
+
+    @Test
+    fun `a shift and alt click on a lens row carries the box to a text row`() {
+        val view = viewOf("abcdef\nabcdef\nabcdef", injections = lines(1 to lens))
+        val pointer = EditorPointerHandler(view)
+        view.state.selection = TextRange(1)
+        val lensRow = view.lineMap.firstRowOf(1)
+        pointer.press(
+            Offset(PADDING + view.shown(0).layout.caretX(1), PADDING + lensRow * LINE_HEIGHT + 10f),
+            clicks = 1,
+            shift = true,
+            alt = true,
+        )
+        pointer.release()
+        assertEquals(2, view.state.selections.size)
+        assertEquals(lensRow + 1, view.rowOf(view.state.selection.end))
     }
 
     @Test
@@ -386,6 +502,72 @@ class InlineRowsTest {
         val view = viewOf("open {\n  body\n}\nafter", foldState = foldState, injections = { lens })
         // Rows: the fold's lens and text, the next line's lens and text.
         assertEquals(4, view.lineMap.totalRows)
+    }
+
+    // ── Injections arriving around a scroll ──────────────────────────────────
+
+    private val longText = (0 until 500).joinToString("\n") { "line $it" }
+
+    @Test
+    fun `injections arriving before a scroll is laid out leave the scroll where it went`() {
+        var injected = false
+        val view = viewOf(longText, injections = { if (injected && it == 499) lens else null }, height = 200)
+        view.scroll.scrollToY(3_000f)
+        injected = true
+        view.injectionsChanged(499, 499)
+        view.prepare(600, 200)
+        assertEquals(3_000f, view.scroll.scrollY)
+    }
+
+    @Test
+    fun `a scroll after injections arrive and before the layout pass is kept`() {
+        var injected = false
+        val view = viewOf(longText, injections = { if (injected && it == 499) lens else null }, height = 200)
+        injected = true
+        view.injectionsChanged(499, 499)
+        view.scroll.scrollToY(3_000f)
+        view.prepare(600, 200)
+        assertEquals(3_000f, view.scroll.scrollY)
+    }
+
+    @Test
+    fun `rows arriving above a scroll that is not laid out yet move it with what it went to`() {
+        var injected = false
+        val view = viewOf(longText, injections = { if (injected && it in 100..109) lens else null }, height = 200)
+        view.scroll.scrollToY(PADDING + 300 * LINE_HEIGHT)
+        injected = true
+        view.injectionsChanged(100, 109)
+        view.prepare(600, 200)
+        assertEquals(300, view.frame.lines.first().line, "the line the scroll went to")
+        assertEquals(view.contentTop(300), view.scroll.scrollY, "at the top of the view")
+    }
+
+    @Test
+    fun `a scroll near the end still reaches the end once injections have added rows`() {
+        var injected = false
+        val view = viewOf(longText, injections = { if (injected && it in 100..109) lens else null }, height = 200)
+        view.scroll.scrollToY(view.scroll.maxScrollY)
+        view.prepare(600, 200)
+        val before = view.scroll.scrollY
+        injected = true
+        view.injectionsChanged(100, 109)
+        val scrolled = view.scroll.scrollY
+        assertEquals(before + 10 * LINE_HEIGHT, scrolled, "the view moved with the rows above it")
+        assertEquals(view.scroll.maxScrollY, scrolled, "the rows are in the height before the layout pass")
+        view.scroll.vertical.dispatchRawDelta(-5f)
+        assertEquals(scrolled - 5f, view.scroll.scrollY, "a wheel tick is not clamped by the old height")
+    }
+
+    @Test
+    fun `lines the last frame showed are counted once a scroll has left them`() {
+        var injected = false
+        val view = viewOf(longText, injections = { if (injected && it < 3) lens else null }, height = 200)
+        val rows = view.lineMap.totalRows
+        view.scroll.scrollToY(3_000f)
+        injected = true
+        view.injectionsChanged(0, 2)
+        view.prepare(600, 200)
+        assertEquals(rows + 3, view.lineMap.totalRows)
     }
 
     // ── S10: scroll ──────────────────────────────────────────────────────────

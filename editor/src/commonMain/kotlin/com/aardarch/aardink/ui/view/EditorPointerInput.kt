@@ -119,7 +119,8 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
             clicks == 1 && shift && alt -> {
                 unit = SelectionUnit.Column
                 origin = null
-                val next = columns.current().copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+                val current = columns.current()
+                val next = current.copy(activeRow = columns.activeRow(current.anchorRow, position.y), activeX = columns.columnX(position.x))
                 box = next
                 columns.select(next)
             }
@@ -176,7 +177,8 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
         unit = SelectionUnit.Column
         origin = null
         kept = null
-        val row = view.rowAt(position.y)
+        // A box starts on a row a caret can be on: a lens's own line is below it.
+        val row = view.textRowFrom(view.rowAt(position.y), 1)
         val x = columns.columnX(position.x)
         val next = ColumnBox(row, x, row, x)
         box = next
@@ -186,7 +188,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** The pointer moved to [position] with the button held (or the finger down after a long press). */
     fun drag(position: Offset) {
         box?.let { current ->
-            val next = current.copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+            val next = current.copy(activeRow = columns.activeRow(current.anchorRow, position.y), activeX = columns.columnX(position.x))
             if (next != current) {
                 box = next
                 columns.select(next)
