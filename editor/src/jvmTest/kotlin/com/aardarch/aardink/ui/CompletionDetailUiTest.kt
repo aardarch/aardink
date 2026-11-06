@@ -155,6 +155,21 @@ class CompletionDetailUiTest {
     }
 
     @Test
+    fun `each item's documentation starts at its top, however far the last was scrolled`() = runComposeUiTest {
+        val long = (1..40).joinToString("\n\n") { "Paragraph $it." }
+        show(listOf(word("first", documentation = "First. $long"), word("second", documentation = "Second. $long")))
+        val top = inPane("First. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top
+        onNodeWithTag(EditorTestTags.COMPLETION_DETAIL).performMouseInput {
+            moveTo(center)
+            scroll(10f)
+        }
+        waitForIdle()
+        assertTrue(inPane("First. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top < top, "the pane scrolled")
+        keys { pressKey(Key.DirectionDown) }
+        assertEquals(top, inPane("Second. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top)
+    }
+
+    @Test
     fun `the pane goes with the list`() = runComposeUiTest {
         show(listOf(alpha))
         keys { pressKey(Key.Escape) }

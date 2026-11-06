@@ -25,7 +25,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
@@ -50,6 +52,7 @@ import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.ui.fromColorScheme
@@ -429,6 +432,7 @@ class EditorSceneScreenshotTest {
     fun markdownHover() {
         // Hover on Greeter, through the editor's own command: a heading, emphasis, inline code, a
         // nested list, a fence and a link. The card is a popup, so the capture is of the screen.
+        val fence = """Greeter(listOf("Ada")).greetAll()"""
         val documented = object : LanguageService by kotlin.languageService!! {
             override suspend fun hoverDoc(document: CodeDocument, offset: Int) = HoverDoc(
                 title = "class Greeter",
@@ -445,7 +449,7 @@ class EditorSceneScreenshotTest {
                     |2. Call `greetAll`
                     |
                     |```kotlin
-                    |Greeter(listOf("Ada")).greetAll()
+                    |$fence
                     |```
                     |
                     |Raw <b>HTML</b> stays as written.
@@ -456,7 +460,10 @@ class EditorSceneScreenshotTest {
         state.selection = TextRange(state.document.text.indexOf("Greeter") + 2)
         composeTestRule.setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                CompositionLocalProvider(
+                    LocalEditorTheme provides EditorThemes.VsCodeDark,
+                    LocalCodeFenceTokenizers provides { if (it == "kotlin") kotlin.tokenizer else null },
+                ) {
                     CodeEditorLayout(
                         state = state,
                         languageService = documented,
@@ -472,6 +479,12 @@ class EditorSceneScreenshotTest {
         composeTestRule.waitForIdle()
         composeTestRule.runOnUiThread { state.execute(EditorCommand.ShowHover) }
         composeTestRule.mainClock.advanceTimeBy(1_000)
+        // The fence is coloured off the main thread, which the test clock does not wait for.
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            composeTestRule.onAllNodes(hasText(fence)).fetchSemanticsNodes().any { node ->
+                node.config[SemanticsProperties.Text].single().spanStyles.isNotEmpty()
+            }
+        }
         composeTestRule.waitForIdle()
         captureScreenRoboImage("../screenshots/scene-markdown-hover.png", roborazziOptions = options)
     }

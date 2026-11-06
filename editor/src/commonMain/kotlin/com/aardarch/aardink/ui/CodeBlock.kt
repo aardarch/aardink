@@ -71,10 +71,7 @@ fun CodeBlock(text: String, tokenizer: IncrementalTokenizer, modifier: Modifier 
     val typography = LocalEditorTypography.current
     var tokens by remember(text, tokenizer) { mutableStateOf<List<Token>?>(null) }
     LaunchedEffect(text, tokenizer) {
-        tokens = withContext(EditorDispatchers.compute) {
-            // Documentation shows one of these per selected completion: keep the web's one thread free.
-            if (EditorDispatchers.computeIsMainThread) tokenizer.tokenizeFullCooperative(text) else tokenizer.tokenizeFull(text)
-        }
+        tokens = withContext(EditorDispatchers.compute) { tokensOf(text, tokenizer) }
     }
     val resolver = remember(theme) { TokenStyleResolver(theme) }
     val styled = remember(text, tokens, resolver) { highlighted(text, tokens.orEmpty(), resolver) }
@@ -97,6 +94,13 @@ fun CodeBlock(text: String, tokenizer: IncrementalTokenizer, modifier: Modifier 
         )
     }
 }
+
+/** [text]'s tokens, in slices where [cooperative]: documentation shows a block per selected completion, on the web's one thread. */
+internal suspend fun tokensOf(
+    text: String,
+    tokenizer: IncrementalTokenizer,
+    cooperative: Boolean = EditorDispatchers.computeIsMainThread,
+): List<Token> = if (cooperative) tokenizer.tokenizeFullCooperative(text) else tokenizer.tokenizeFull(text)
 
 /** [text] with each token's colour and font style, as the editor draws them. */
 internal fun highlighted(text: String, tokens: List<Token>, resolver: TokenStyleResolver): AnnotatedString = buildAnnotatedString {

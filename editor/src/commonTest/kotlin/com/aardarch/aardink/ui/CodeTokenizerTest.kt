@@ -18,6 +18,7 @@ package com.aardarch.aardink.ui
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.Token
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -64,6 +65,38 @@ class CodeTokenizerTest {
     @Test
     fun `no tag and no document is plain`() {
         assertSame(PlainTextTokenizer, codeTokenizer(null, { tagged }, null))
+    }
+
+    private class Paced : IncrementalTokenizer {
+        val calls = ArrayList<String>()
+
+        override fun tokenizeFull(text: String): List<Token> {
+            calls += "full"
+            return emptyList()
+        }
+
+        override suspend fun tokenizeFullCooperative(text: String): List<Token> {
+            calls += "cooperative"
+            return emptyList()
+        }
+
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> = emptyList()
+
+        override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
+    }
+
+    @Test
+    fun `code is tokenized in slices where compute shares the main thread`() = runTest {
+        val tokenizer = Paced()
+        tokensOf("x", tokenizer, cooperative = true)
+        assertEquals(listOf("cooperative"), tokenizer.calls)
+    }
+
+    @Test
+    fun `code is tokenized at once where compute has its own thread`() = runTest {
+        val tokenizer = Paced()
+        tokensOf("x", tokenizer, cooperative = false)
+        assertEquals(listOf("full"), tokenizer.calls)
     }
 
     private fun codeTokenizer(language: String?, byLanguage: (String) -> IncrementalTokenizer?) =
