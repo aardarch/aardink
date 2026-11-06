@@ -20,8 +20,10 @@ package com.aardarch.aardink.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,6 +42,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.runComposeUiTest
@@ -53,8 +56,12 @@ import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.Token
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -62,7 +69,7 @@ import kotlin.test.assertTrue
 /** The pane beside the completion list: what it shows, where it goes, and what ends it. */
 class CompletionDetailUiTest {
 
-    private class Words(val items: List<CompletionItem>) : LanguageService {
+    private class Words(val items: List<CompletionItem>, override val completionsAreIncomplete: Boolean) : LanguageService {
         override val triggerCharacters: Set<Char> = emptySet()
 
         override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> = items
@@ -78,6 +85,23 @@ class CompletionDetailUiTest {
         override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 
+    /** Counts how often a fence is coloured, whichever pass it asks for. */
+    private class CountingFence : IncrementalTokenizer {
+        val passes = AtomicInteger()
+
+        override fun tokenizeFull(text: String): List<Token> {
+            passes.incrementAndGet()
+            return emptyList()
+        }
+
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
+            passes.incrementAndGet()
+            return emptyList()
+        }
+
+        override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
+    }
+
     private fun word(label: String, detail: String? = null, documentation: String? = null) =
         CompletionItem(label, CompletionKind.Variable, label, detail = detail, documentation = documentation)
 
@@ -89,17 +113,21 @@ class CompletionDetailUiTest {
         items: List<CompletionItem>,
         text: String = "",
         onOpenLink: ((String) -> Unit)? = null,
+        fences: (String) -> IncrementalTokenizer? = { null },
+        askedOncePerWord: Boolean = false,
     ): CodeEditorState {
         val state = CodeEditorState(text)
         state.selection = TextRange(text.length)
         setContent {
-            val service = Words(items)
+            val service = Words(items, completionsAreIncomplete = !askedOncePerWord)
             val modifier = Modifier.size(900.dp, 600.dp)
             MaterialTheme {
-                if (onOpenLink == null) {
-                    CodeEditorLayout(state = state, languageService = service, modifier = modifier)
-                } else {
-                    CodeEditorLayout(state = state, languageService = service, onOpenLink = onOpenLink, modifier = modifier)
+                CompositionLocalProvider(LocalCodeFenceTokenizers provides fences) {
+                    if (onOpenLink == null) {
+                        CodeEditorLayout(state = state, languageService = service, modifier = modifier)
+                    } else {
+                        CodeEditorLayout(state = state, languageService = service, onOpenLink = onOpenLink, modifier = modifier)
+                    }
                 }
             }
         }
@@ -167,6 +195,68 @@ class CompletionDetailUiTest {
         assertTrue(inPane("First. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top < top, "the pane scrolled")
         keys { pressKey(Key.DirectionDown) }
         assertEquals(top, inPane("Second. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top)
+    }
+
+    @Test
+    fun `typing on keeps the pane as it is, for an item that says what it replaces`() = runComposeUiTest {
+        val fence = CountingFence()
+        val long = (1..40).joinToString("\n\n") { "Paragraph $it." }
+        val ranged = word("alpha", documentation = "Top. $long\n\n```kotlin\nval x = 1\n```").copy(replaceRange = 0..1)
+        // Asked once per word, a keystroke re-addresses the items the list already has.
+        val state = show(listOf(ranged), text = "al", fences = { fence }, askedOncePerWord = true)
+        waitUntil(timeoutMillis = 5_000) { fence.passes.get() > 0 }
+        onNodeWithTag(EditorTestTags.COMPLETION_DETAIL).performMouseInput {
+            moveTo(center)
+            scroll(10f)
+        }
+        waitForIdle()
+        val scrolled = inPane("Top. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top
+        onNodeWithTag(EditorTestTags.EDITOR).performTextInput("p")
+        waitForIdle()
+        assertEquals("alp", state.document.text)
+        assertEquals(scrolled, inPane("Top. Paragraph 1.").fetchSemanticsNode().boundsInWindow.top, "the pane kept its place")
+        assertEquals(1, fence.passes.get(), "the fence kept its colours")
+    }
+
+    @Test
+    fun `a keystroke neither resolves the item again nor loses what resolving said`() = runComposeUiTest {
+        val asked = ArrayList<CompletionItem>()
+        var item by mutableStateOf(gamma.copy(replaceRange = 0..1))
+        setContent {
+            MaterialTheme {
+                Box(Modifier.size(900.dp, 600.dp)) {
+                    CompletionPopup(
+                        anchor = Rect(10f, 10f, 12f, 30f),
+                        items = listOf(item),
+                        selected = 0,
+                        onAccept = {},
+                        onDismiss = {},
+                        resolve = {
+                            asked += it
+                            // A second answer would take a round trip, with the pane gone meanwhile.
+                            if (asked.size > 1) awaitCancellation()
+                            it.copy(documentation = "Now it says.")
+                        },
+                        onOpenLink = null,
+                    )
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithText("Now it says.").assertExists()
+        item = item.shiftedForInsert(2, 1, absorbing = true)
+        waitForIdle()
+        assertEquals(1, asked.size)
+        onNodeWithText("Now it says.").assertExists()
+    }
+
+    @Test
+    fun `overloads of one name are different items to the pane`() = runComposeUiTest {
+        fun overload(detail: String) = word("alpha", detail = detail).copy(replaceRange = 0..1)
+        show(listOf(overload("fun alpha(a: Int)"), overload("fun alpha(b: String)")), text = "al")
+        inPane("fun alpha(a: Int)").assertExists()
+        keys { pressKey(Key.DirectionDown) }
+        inPane("fun alpha(b: String)").assertExists()
     }
 
     @Test

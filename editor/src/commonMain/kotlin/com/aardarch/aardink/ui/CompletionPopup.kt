@@ -89,15 +89,18 @@ private fun CompletionDetailPopup(
     onOpenLink: ((String) -> Unit)?,
 ) {
     val currentResolve by rememberUpdatedState(resolve)
-    var shown by remember(item) { mutableStateOf(item) }
-    LaunchedEffect(item) { shown = currentResolve(item) }
+    // A keystroke re-addresses the item (shiftedForInsert), which makes it a new value but the same
+    // completion: the pane keeps its place and its resolved answer through that.
+    val identity = item.copy(replaceRange = null, additionalEdits = emptyList())
+    var shown by remember(identity) { mutableStateOf(item) }
+    LaunchedEffect(identity) { shown = currentResolve(item) }
     if (shown.detail.isNullOrBlank() && shown.documentation.isNullOrBlank()) return
     val gap = with(LocalDensity.current) { POPUP_GAP.roundToPx() }
     val provider = remember(anchor, listSize, gap) { BesidePopupPositionProvider(anchor, listSize, gap) }
     // No dismissal of its own: it goes when the list does.
     Popup(popupPositionProvider = provider, properties = PopupProperties(focusable = false)) {
         // Each item's documentation starts at its top, however far the last one was scrolled.
-        key(item) { CompletionDetailCard(shown, onOpenLink) }
+        key(identity) { CompletionDetailCard(shown, onOpenLink) }
     }
 }
 
