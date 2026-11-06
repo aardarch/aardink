@@ -32,7 +32,9 @@ import kotlinx.serialization.json.intOrNull
  * all of that as data.
  *
  * Its regexes run on one line at a time, on the main thread at each keystroke, so write none with a
- * lookbehind: Kotlin/wasm's regex engine makes one very slow, and [parse] refuses them.
+ * lookbehind: Kotlin/wasm's regex engine makes one very slow, and [parse] refuses them. A line of
+ * more than 256 characters, such as minified code, matches none of [onEnterRules] and
+ * [indentationRules], so Enter keeps its indentation unless a bracket decides.
  *
  * @property comments What toggling a comment writes; null keeps the tokenizer's own.
  * @property brackets Pairs the language nests. Enter indents after an opening one, and leaves a

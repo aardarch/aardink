@@ -123,6 +123,52 @@ class VsCodeConfigurationTest {
         assertNull(service.closing("<!-- a |", '('))
     }
 
+    // ── Long lines ────────────────────────────────────────────────────────────
+
+    /** Long enough that matching it overflows the JVM's stack, or takes Julia's rule for ever. */
+    private val long = "a ".repeat(50_000)
+
+    @Test
+    fun `Enter on a long JSDoc line keeps its indentation`() {
+        val service = service(TypeScript)
+        assertEquals("    ", service.enter("    /** $long|"))
+        assertEquals("     ", service.enter("     * $long|"))
+    }
+
+    @Test
+    fun `Enter on minified JSON keeps its indentation`() {
+        val minified = """{"a":[1,2],"b":"c"},""".repeat(5_000)
+        assertEquals("", service(JsonFile).enter("[$minified|"))
+        assertEquals("  ", service(JsonFile).enter("  $minified|"))
+    }
+
+    @Test
+    fun `Enter on minified HTML keeps its indentation`() {
+        assertEquals("", service(Html).enter("<div $long|"))
+        assertEquals("", service(Html).enter("<div>$long|"))
+    }
+
+    @Test
+    fun `Enter on a long line of words does not hang on Julia's rule`() {
+        assertEquals("  ", service(Julia).enter("  $long|"))
+        assertEquals("", service(Julia).enter(" ".repeat(100_000).let { "x$it|" }))
+    }
+
+    @Test
+    fun `a rule looks only at the text it has a regex for, and a bracket at no regex`() {
+        val service = service(TypeScript)
+        assertEquals(" * ", service.enter("/**|$long"), "the second rule has no afterText")
+        assertEquals("    ", service.enter("$long{|"), "an opening bracket ends the line")
+    }
+
+    @Test
+    fun `a line of a sensible length still reaches the rules`() {
+        val words = "word ".repeat(40)
+        val service = service(TypeScript)
+        assertEquals(" * ", service.enter("/** $words|"))
+        assertEquals(" * ", service.enter("/**\n * $words|"))
+    }
+
     // ── JavaScript's regexes ──────────────────────────────────────────────────
 
     @Test

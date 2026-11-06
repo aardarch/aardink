@@ -209,10 +209,26 @@ internal class ConfigurationLanguageService(private val configuration: LanguageC
     private fun Char.isWordCharacter(): Boolean = isLetterOrDigit() || this == '_'
 
     /** No regex means no condition. */
-    private fun Regex?.finds(text: String): Boolean = this == null || containsMatchIn(text)
+    private fun Regex?.finds(text: String): Boolean = this == null || foundIn(text)
 
     /** No regex means no match. */
-    private fun Regex?.matches(text: String): Boolean = this != null && containsMatchIn(text)
+    private fun Regex?.matches(text: String): Boolean = this != null && foundIn(text)
+
+    /**
+     * Whether this regex of a rule's finds a match in [text], on the main thread: a line over
+     * [MAX_RULE_LINE] matches nothing, and neither does one the engine gives up on. A regex nested
+     * deeply enough still overflows the stack on a line within the limit, which on the JVM and
+     * Android is an error that common code can only name as a [Throwable]. On wasm it cannot be
+     * caught at all, so the limit is all there is.
+     */
+    private fun Regex.foundIn(text: String): Boolean {
+        if (text.length > MAX_RULE_LINE) return false
+        return try {
+            containsMatchIn(text)
+        } catch (_: Throwable) {
+            false
+        }
+    }
 
     /** Line [line], without the carriage return a CR LF document keeps on it. */
     private fun lineOf(document: CodeDocument, line: Int): String = document.lineText(line).removeSuffix("\r")
@@ -220,6 +236,14 @@ internal class ConfigurationLanguageService(private val configuration: LanguageC
     private companion object {
         /** How many lines [indentByRules] reads above the new one, at most. */
         const val LOOK_BACK = 32
+
+        /**
+         * The longest line a rule's regex is run on. VS Code's own regexes overflow the JVM's stack
+         * from about 2,000 characters, as a looping alternation recurses once per character, and
+         * Julia's `increaseIndentPattern` is cubic: 56 ms on the JVM and 194 ms on wasm at 256
+         * characters, 450 ms and 1.4 s at 512.
+         */
+        const val MAX_RULE_LINE = 256
 
         const val QUOTES = "'\"`"
 
