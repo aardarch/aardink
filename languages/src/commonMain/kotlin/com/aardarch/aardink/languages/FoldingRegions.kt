@@ -47,7 +47,14 @@ data class FoldingRegionMarkers(val start: Regex, val end: Regex) {
  */
 fun FoldingProvider.withRegionMarkers(markers: FoldingRegionMarkers): FoldingProvider {
     val base = this
-    return FoldingProvider { document -> (base.foldableRanges(document) + regionRanges(document, markers)).sortedBy { it.startLine } }
+    return object : FoldingProvider {
+        override fun foldableRanges(document: CodeDocument) = withRegions(base.foldableRanges(document), document)
+
+        override suspend fun requestFoldableRanges(document: CodeDocument) = withRegions(base.requestFoldableRanges(document), document)
+
+        private fun withRegions(ranges: List<FoldRange>, document: CodeDocument) =
+            (ranges + regionRanges(document, markers)).sortedBy { it.startLine }
+    }
 }
 
 /** The regions between [markers] in [document]. */

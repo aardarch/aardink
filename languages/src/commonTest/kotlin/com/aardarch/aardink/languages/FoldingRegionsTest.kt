@@ -17,6 +17,9 @@ package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.FoldKind
+import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.FoldingProvider
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -37,6 +40,20 @@ class FoldingRegionsTest {
         val regions = ranges.filter { it.kind == FoldKind.Region }.map { it.startLine to it.endLine }
         assertEquals(listOf(0 to 6, 2 to 4), regions)
         assertEquals(listOf(1 to 5), ranges.filter { it.kind == null }.map { it.startLine to it.endLine })
+    }
+
+    @Test
+    fun `region markers keep to a provider whose ranges have to be waited for`() = runTest {
+        val waitedFor = object : FoldingProvider {
+            override fun foldableRanges(document: CodeDocument) = emptyList<FoldRange>()
+
+            override suspend fun requestFoldableRanges(document: CodeDocument) = listOf(FoldRange(1, 2))
+        }
+        val provider = waitedFor.withRegionMarkers(FoldingRegionMarkers.LineComment)
+
+        val ranges = provider.requestFoldableRanges(CodeDocument("// #region\nfun a() {\n}\n// #endregion"))
+
+        assertEquals(listOf(0 to 3, 1 to 2), ranges.map { it.startLine to it.endLine })
     }
 
     @Test

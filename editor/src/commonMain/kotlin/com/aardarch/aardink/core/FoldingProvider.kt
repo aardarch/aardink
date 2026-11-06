@@ -24,6 +24,15 @@ package com.aardarch.aardink.core
  */
 fun interface FoldingProvider {
     fun foldableRanges(document: CodeDocument): List<FoldRange>
+
+    /**
+     * What the editor asks, on the same dispatcher: [foldableRanges], unless the ranges have to be
+     * waited for, as a language server's answer has. The editor cancels this when the text changes.
+     *
+     * Throwing says there is no answer this time, and the editor keeps the ranges it has. An empty
+     * list says there is nothing to fold, and opens whatever is folded.
+     */
+    suspend fun requestFoldableRanges(document: CodeDocument): List<FoldRange> = foldableRanges(document)
 }
 
 /**
