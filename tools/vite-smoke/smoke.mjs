@@ -216,6 +216,48 @@ async function grammarCheck(page) {
   return { 'registered grammar and theme colour the text': magenta > 50 };
 }
 
+/**
+ * A language configuration from JavaScript, RegExp literals included: typing over a selection
+ * surrounds it, and Enter follows a rule whose regex has a flag.
+ */
+async function configurationCheck(page) {
+  setPhase('language configuration');
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const select = (line, startColumn, endColumn) => page.evaluate((line, startColumn, endColumn) => {
+    window.__smokeEditor.setSelections([{
+      selectionStartLineNumber: line, selectionStartColumn: startColumn, positionLineNumber: line, positionColumn: endColumn,
+    }]);
+  }, line, startColumn, endColumn);
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    await registerLanguage({
+      id: 'toy-configuration',
+      grammar: { tokenizer: { root: [] } },
+      configuration: {
+        autoClosingPairs: [['(', ')']],
+        onEnterRules: [{ beforeText: /^NOTE/i, action: { indent: 'none', appendText: '> ' } }],
+      },
+    });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'note\nword', language: 'toy-configuration' });
+  }, MOUNT);
+  await new Promise((r) => setTimeout(r, 500));
+  await page.mouse.click(300, 20);
+  await select(2, 1, 5);
+  await page.keyboard.type('(');
+  await new Promise((r) => setTimeout(r, 300));
+  const surrounded = await value();
+  await select(1, 5, 5);
+  await page.keyboard.press('Enter');
+  await new Promise((r) => setTimeout(r, 300));
+  const entered = await value();
+  return {
+    'a configuration surrounds a selection': surrounded === 'note\n(word)',
+    'a configuration\'s RegExp rule decides Enter': entered === 'note\n> \n(word)',
+  };
+}
+
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
@@ -244,7 +286,7 @@ try {
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
   const interactions = await interactionChecks(page);
   for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
-  const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)) };
+  const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)), ...(await configurationCheck(page)) };
   Object.assign(interactions, grammar);
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);

@@ -37,6 +37,7 @@ import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
 import com.aardarch.aardink.languages.IndentationFoldingProvider
+import com.aardarch.aardink.languages.LanguageConfiguration
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.XmlSchema
@@ -436,9 +437,21 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         // A language with no folding of its own folds by indentation, as VS Code does.
         foldingProvider =
         base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
-        languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
+        languageService = baseService,
     )
-    return definition
+    // Under the providers, which answer nothing a configuration does: a language with nothing else
+    // then gets the configuration's own service, which keeps a line's indentation on Enter.
+    val configured = root.given("configuration")?.let { definition.withConfiguration(configurationFrom(it)) } ?: definition
+    return configured.copy(
+        languageService = WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions),
+    )
+}
+
+/** A definition's `configuration`: the object, or the text of a `language-configuration.json`. */
+private fun configurationFrom(value: JsonElement): LanguageConfiguration = try {
+    LanguageConfiguration.parse((value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: value.toString())
+} catch (e: IllegalArgumentException) {
+    throw IllegalArgumentException("configuration.${e.message}", e)
 }
 
 /**
