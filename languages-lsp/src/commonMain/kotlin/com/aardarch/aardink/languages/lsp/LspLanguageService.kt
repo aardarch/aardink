@@ -600,14 +600,6 @@ class LspLanguageService(
         }
     }
 
-    /** `string | MarkedString | MarkupContent | (string | MarkedString)[]` → plain text, or null. */
-    private fun markupText(element: JsonElement?): String? = when (element) {
-        null -> null
-        is JsonPrimitive -> element.contentOrNull
-        is JsonObject -> (element["value"] as? JsonPrimitive)?.contentOrNull
-        is JsonArray -> element.mapNotNull { markupText(it) }.filter { it.isNotBlank() }.joinToString("\n\n").takeIf { it.isNotEmpty() }
-    }
-
     /**
      * The `[start, end]` form of an LSP parameter label as an inclusive offset range into
      * [signatureLabel], or null when the server gave the parameter as a bare string instead.
@@ -634,7 +626,7 @@ class LspLanguageService(
             label = label,
             kind = mapCompletionKind(kind),
             insertText = edit?.newText ?: insertText ?: label,
-            documentation = markupText(documentation),
+            documentation = documentationMarkdown(documentation),
             detail = detail,
             commitCharacters = commitCharacters.orEmpty().mapNotNullTo(mutableSetOf()) { it.singleOrNull() },
             filterText = filterText ?: label,

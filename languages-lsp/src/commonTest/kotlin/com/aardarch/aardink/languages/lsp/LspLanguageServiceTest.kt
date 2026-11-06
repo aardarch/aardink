@@ -271,6 +271,23 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `completion documentation is Markdown, with plain text escaped to show to the letter`() = withServer("x") {
+        val server = async {
+            respond(
+                "textDocument/completion",
+                """[
+                  {"label":"a","documentation":"snake_case"},
+                  {"label":"b","documentation":{"kind":"plaintext","value":"*a*"}},
+                  {"label":"c","documentation":{"kind":"markdown","value":"*a*"}}
+                ]""",
+            )
+        }
+        val items = service.completions(doc, 1)
+        server.await()
+        assertEquals(listOf("snake\\_case", "\\*a\\*", "*a*"), items.map { it.documentation })
+    }
+
+    @Test
     fun `diagnostics carry the code, its description, tags and related information`() = withServer("val a = 1\nval b = 2") {
         publish(
             URI,
@@ -436,6 +453,37 @@ class LspLanguageServiceTest {
             respond("textDocument/hover", """{"contents":{"kind":"plaintext","value":"See https://a.dev/x_y?a=1&b=2 and a_b"}}""")
         }
         assertEquals("See https://a.dev/x_y?a=1&b=2 and a\\_b", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc escapes a backslash after a URL in plaintext, so that it shows and the URL ends`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"kind":"plaintext","value":"https://a.dev/x\\_y"}}""")
+        }
+        assertEquals("https://a.dev/x\\\\\\_y", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc returns null for a MarkedString with no code`() = withServer("val x = 1") {
+        for (contents in listOf(
+            """{"language":"kotlin","value":""}""",
+            """{"language":"kotlin","value":"  \n "}""",
+            """[{"language":"kotlin","value":""}]""",
+        )) {
+            val server = async { respond("textDocument/hover", """{"contents":$contents}""") }
+            assertNull(service.hoverDoc(doc, 4), contents)
+            server.await()
+        }
+    }
+
+    @Test
+    fun `hoverDoc leaves out an empty MarkedString beside others`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":[{"language":"kotlin","value":""},"Docs"]}""")
+        }
+        assertEquals("Docs", service.hoverDoc(doc, 4)?.content)
         server.await()
     }
 

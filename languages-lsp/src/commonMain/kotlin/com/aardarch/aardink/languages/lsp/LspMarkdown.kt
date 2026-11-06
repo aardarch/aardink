@@ -22,7 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /** A URL, kept whole, or what Markdown could read as markup in the middle of a line of text. */
-private val INLINE_MARKS = Regex("""https?://[^\s"'<>()\[\]{}`]+|[\\`*_\[\]<&]""")
+private val INLINE_MARKS = Regex("""https?://[^\s"'<>()\[\]{}`\\]+|[\\`*_\[\]<&]""")
 
 /** What Markdown could read as a heading, a list, a fence or an underline at the start of a line. */
 private const val BLOCK_MARKS = "#=+-~"
@@ -32,7 +32,7 @@ private val ORDERED_MARKER = Regex("""^(\d+)([.)])""")
 /** A hover's `MarkedString | MarkedString[] | MarkupContent` as Markdown: a bare string already is. */
 internal fun hoverMarkdown(element: JsonElement?): String? = markdownOf(element, plainStrings = false)
 
-/** A signature's or parameter's `string | MarkupContent` as Markdown: a bare string here is plain text. */
+/** A signature's, parameter's or completion's `string | MarkupContent` as Markdown: a bare string here is plain text. */
 internal fun documentationMarkdown(element: JsonElement?): String? = markdownOf(element, plainStrings = true)
 
 private fun markdownOf(element: JsonElement?, plainStrings: Boolean): String? = when (element) {
@@ -48,13 +48,13 @@ private fun markdownOf(element: JsonElement?, plainStrings: Boolean): String? = 
         .takeIf { it.isNotEmpty() }
 }
 
-/** A `MarkupContent`, or a `MarkedString`'s `{ language, value }`, which is code. */
+/** A `MarkupContent`, or a `MarkedString`'s `{ language, value }`, which is code: none at all is no answer. */
 private fun objectMarkdown(element: JsonObject): String? {
     val value = (element["value"] as? JsonPrimitive)?.contentOrNull ?: return null
     val language = (element["language"] as? JsonPrimitive)?.contentOrNull
     val kind = (element["kind"] as? JsonPrimitive)?.contentOrNull
     return when {
-        language != null -> fenced(language, value)
+        language != null -> value.takeIf { it.isNotBlank() }?.let { fenced(language, it) }
         kind == "plaintext" -> plainAsMarkdown(value)
         else -> value
     }
