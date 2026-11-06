@@ -119,7 +119,8 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  *     without what it embeds, and `@pop` outside an embedded grammar does nothing.
  *   - A grammar can embed another that embeds a third, up to 16 deep. Past that, an id counts as
  *     not found: a grammar that embeds itself has to stop somewhere.
- *   - In a capture group's action, `nextEmbedded` takes effect after the whole match.
+ *   - In a capture group's action, `nextEmbedded` takes effect after the whole match, whichever
+ *     group it is in, on the state the groups' `next`s arrive at.
  * - **Top level:** `defaultToken` for text no rule matches, `ignoreCase`, `tokenPostfix` added to
  *   every token name, `brackets` for `@brackets` (`{ "open", "close", "token" }` or
  *   `[open, close, token]` each; without it, `{}`, `[]`, `()` and `<>` as `delimiter.curly`,

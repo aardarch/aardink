@@ -261,7 +261,8 @@ object AardinkWeb {
      * A grammar's `nextEmbedded` names another language registered here, by its id, in either order:
      * the id is looked up when text is tokenized, not now. Until there is such a language, the text
      * stays on the grammar's own rules. A built-in language has no grammar, so it cannot be embedded.
-     * An editor already showing the text recolours it as it next reads it, on an edit or `setValue`.
+     * An editor already showing the text keeps its colours until it next reads those lines: `setValue`
+     * reads them all, and an edit only as far as it changes the state.
      */
     fun registerLanguage(definitionJson: String, providers: WebLanguageProviders = WebLanguageProviders()): String {
         val definition = languageFrom(definitionJson, providers, registry, registeredGrammars)

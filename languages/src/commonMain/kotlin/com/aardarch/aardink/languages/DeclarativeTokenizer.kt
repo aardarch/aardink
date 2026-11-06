@@ -252,13 +252,21 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
                 val rules = language.states[stateOf(current.state, language.states.keys) ?: language.start].orEmpty()
                 var matched: DeclarativeGrammar.Rule? = null
                 var match: MatchResult? = null
-                if (current.embedded != null) {
+                val inner = current.embedded
+                if (inner != null) {
+                    val found = inner.grammar?.let(embedded)
+                    if (found == null) {
+                        // Known when it was entered and not now: the parent's rules take over, from here.
+                        current = current.embedding(null)
+                        continue
+                    }
                     val exit = exitFrom(pos, rules, current.state)
                     val until = exit?.match?.range?.first ?: content.length
                     // A line that is empty still goes in, as a line is what a language's rules read.
                     // The end of a line it was entered at does not: that is no line of its own.
                     if (until > pos || (exit == null && content.isEmpty())) {
-                        current = readEmbedded(current, pos, until)
+                        val reader = Reader(found, content.substring(pos, until), offset + pos, builder, depth + 1)
+                        current = current.embedding(reader.read(inner))
                         pos = until
                         emptySteps = 0
                     }
@@ -297,8 +305,8 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
                     }
 
                     is DeclarativeGrammar.Action.Groups -> {
-                        current = addGroups(match, pos, action.actions, current)
-                        next = action.next
+                        current = addGroups(match, pos, action, current)
+                        next = null
                     }
 
                     is DeclarativeGrammar.Action.Cases -> {
@@ -364,21 +372,18 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
                 is DeclarativeGrammar.Action.Cases -> false
             }
 
-        /** [stack] after its embedded language read columns [from, until) of this text. */
-        private fun readEmbedded(stack: Stack, from: Int, until: Int): Stack {
-            val inner = stack.embedded ?: return stack
-            // Known when it was entered and not now: the parent's rules take over again.
-            val found = inner.grammar?.let(embedded) ?: return stack.embedding(null)
-            return stack.embedding(Reader(found, content.substring(from, until), offset + from, builder, depth + 1).read(inner))
-        }
-
         /**
          * Each capture group of [match] its own token, by its own action (whose cases test the group's
-         * text); text between groups the default token. Returns [stack] after the groups' `next`s.
+         * text); text between groups the default token. Returns [stack] after the groups' `next`s,
+         * then [groups]' own, with the language the groups leave it to on the state those arrive at.
+         * It is carried across them, as a language sits on the innermost state and any group can move
+         * that: `nextEmbedded` means the text after the whole match, whichever group it is in.
          */
-        private fun addGroups(match: MatchResult, pos: Int, actions: List<DeclarativeGrammar.Action>, stack: Stack): Stack {
+        private fun addGroups(match: MatchResult, pos: Int, groups: DeclarativeGrammar.Action.Groups, stack: Stack): Stack {
             var at = pos
-            var current = stack
+            var current = stack.embedding(null)
+            var inner = stack.embedded
+            val actions = groups.actions
             val end = pos + match.value.length
             for (group in 1..minOf(actions.size, match.groups.size - 1)) {
                 val value = match.groups[group]?.value ?: continue
@@ -389,14 +394,19 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
                 // A group's case that does not apply leaves it the default token, as for a whole match.
                 val endOfLine = groupStart + value.length == content.length
                 val action = resolve(actions[group - 1], value, endOfLine, current.state) as? DeclarativeGrammar.Action.Token
-                current = move(current, action?.next, action?.embedding, value)
+                when (val embedding = action?.embedding) {
+                    null -> Unit
+                    DeclarativeGrammar.Embedding.Pop -> inner = null
+                    is DeclarativeGrammar.Embedding.Enter -> inner = entered(embedding, value, current.state) ?: inner
+                }
+                current = step(current, action?.next, value)
                 if (value.isEmpty()) continue
                 if (groupStart > at) add(at, groupStart, language.defaultToken)
                 add(groupStart, groupStart + value.length, action?.typeOf(value) ?: language.defaultToken)
                 at = groupStart + value.length
             }
             if (at < end) add(at, end, language.defaultToken)
-            return current
+            return step(current, groups.next, match.value).embedding(inner)
         }
 
         /**
@@ -407,9 +417,14 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
             val left = if (embedding == DeclarativeGrammar.Embedding.Pop) stack.embedding(null) else stack
             val moved = step(left, next, matched)
             if (embedding !is DeclarativeGrammar.Embedding.Enter) return moved
-            val id = embedding.id.fill(matched, stack.state)
+            return entered(embedding, matched, stack.state)?.let(moved::embedding) ?: moved
+        }
+
+        /** The start of the language [embedding] names for [matched] in [state], or null if there is none to enter. */
+        private fun entered(embedding: DeclarativeGrammar.Embedding.Enter, matched: String, state: String): Stack? {
+            val id = embedding.id.fill(matched, state)
             val found = if (depth < MAX_EMBEDDING_DEPTH) embedded(id) else null
-            return if (found == null) moved else moved.embedding(Stack(found.start, null, id))
+            return found?.let { Stack(it.start, null, id) }
         }
 
         private fun step(stack: Stack, next: DeclarativeGrammar.Next?, matched: String): Stack = when (next) {

@@ -1267,6 +1267,85 @@ class DeclarativeGrammarTest {
     }
 
     @Test
+    fun `a group's nextEmbedded goes in on the state the whole match arrives at`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["(\\[)(\\[)", ["open", { "token": "open", "nextEmbedded": "low" }], "@inner"],
+                  ["(<)(<)", [{ "token": "open", "nextEmbedded": "low" }, { "token": "open", "next": "@inner" }]],
+                  ["[a-z]+", "after"]
+                ],
+                "inner": [["\\]\\]", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        val expected = { open: String ->
+            listOf(open to name("open"), "a" to name("word.low"), "]]" to name("close"), "b" to name("after"))
+        }
+        assertEquals(expected("[["), embedded("[[a]]b", g), "the rule's next")
+        assertEquals(expected("<<"), embedded("<<a]]b", g), "a later group's next")
+    }
+
+    @Test
+    fun `a group's nextEmbedded leaves even after an earlier group's next has moved on`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "low" }]],
+                "inner": [["(\\])(!)", [{ "token": "mark", "next": "@tail" }, { "token": "close", "nextEmbedded": "@pop" }]], ["[a-z]+", "raw"]],
+                "tail": [["[a-z]+", "tail", "@pop"]]
+              }
+            }
+            """,
+        )
+        assertEquals(
+            listOf(
+                "[[" to name("open"),
+                "a" to name("word.low"),
+                "]" to name("mark"),
+                "!" to name("close"),
+                "b" to name("tail"),
+                "c" to name("raw"),
+            ),
+            embedded("[[a]!b c", g),
+        )
+    }
+
+    @Test
+    fun `groups that turn out not to leave are the parent's, and the language reads on after them`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "low" }], ["[a-z]+", "after"]],
+                "inner": [["(\\])(!|\\?)", ["mark", { "cases": {
+                  "!": { "token": "close", "next": "@pop", "nextEmbedded": "@pop" },
+                  "@default": "skip"
+                } }]]]
+              }
+            }
+            """,
+        )
+        assertEquals(
+            listOf(
+                "[[" to name("open"),
+                "a" to name("word.low"),
+                "]" to name("mark"),
+                "?" to name("skip"),
+                "b" to name("word.low"),
+                "]" to name("mark"),
+                "!" to name("close"),
+                "c" to name("after"),
+            ),
+            embedded("[[a]?b]!c", g),
+        )
+    }
+
+    @Test
     fun `an empty line goes to the embedded grammar, the end of the line it was entered on does not`() {
         val g =
             monarch("""{ "tokenizer": { "root": [ ["!", { "token": "open", "next": "@rest", "nextEmbedded": "lines" }] ], "rest": [] } }""")
@@ -1467,7 +1546,20 @@ class DeclarativeGrammarTest {
         known = emptyMap()
         val edited = "[[ a\nbb\nc ]] d"
         val partial = tokenizer.tokenizeLines(edited, 1..1, full).named(edited)
-        assertEquals(listOf("c" to name("raw"), "]]" to name("close"), "d" to name("word")), partial)
+        assertEquals(listOf("bb" to name("raw"), "c" to name("raw"), "]]" to name("close"), "d" to name("word")), partial)
+    }
+
+    @Test
+    fun `the line a forgotten grammar was reading goes to the parent's rules, up to where it leaves too`() {
+        var known = languages
+        val tokenizer = DeclarativeTokenizer(outer) { known[it] }
+        val full = tokenizer.tokenizeFull("[[ a\nb ]] c")
+        known = emptyMap()
+        val edited = "[[ a\nbb ]] c"
+        assertEquals(
+            listOf("bb" to name("raw"), "]]" to name("close"), "c" to name("word")),
+            tokenizer.tokenizeLines(edited, 1..1, full).named(edited),
+        )
     }
 
     @Test
