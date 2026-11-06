@@ -30,8 +30,19 @@ import com.aardarch.aardink.languages.internal.diffTexts
  */
 class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : IncrementalTokenizer {
 
-    /** The state stack at the start of a line, innermost state first. Shared, never changed. */
+    /**
+     * The state stack at the start of a line, innermost state first. Shared, never changed.
+     * [state] is the name as entered, dotted parts and all, not the state its rules come from:
+     * `$S2` reads those parts, so `string.a` and `string.b` are different states to a rescan.
+     */
     private class Stack(val state: String, val parent: Stack?) {
+        /** Where `@popall` goes. Not always the start state: `switchTo` can replace the bottom one too. */
+        val bottom: Stack
+            get() {
+                var stack = this
+                while (true) stack = stack.parent ?: return stack
+            }
+
         override fun equals(other: Any?): Boolean = this === other || (other is Stack && state == other.state && parent == other.parent)
 
         override fun hashCode(): Int = state.hashCode() * 31 + (parent?.hashCode() ?: 0)
@@ -185,14 +196,16 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
                 continue
             }
             val length = match.value.length
-            val action = resolve(matched.action, match.value, pos + length == content.length)
+            val action = resolve(matched.action, match.value, pos + length == content.length, current.state)
             val before = current
             val next: DeclarativeGrammar.Next?
-            var rematch = false
+            var consumed = length
             when (action) {
                 is DeclarativeGrammar.Action.Token -> {
-                    rematch = action.rematch
-                    if (!rematch) builder.add(pos, pos + length, action.type)
+                    // Never back past where the match began: the line only moves forward, so
+                    // this loop ends, and a line's tokens stay in order.
+                    consumed = if (action.rematch) 0 else (length - action.goBack).coerceAtLeast(0)
+                    if (!action.rematch) builder.add(pos, pos + consumed, action.typeOf(match.value))
                     next = action.next
                 }
 
@@ -207,8 +220,7 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
                     next = null
                 }
             }
-            current = step(current, next)
-            val consumed = if (rematch) 0 else length
+            current = step(current, next, match.value)
             if (consumed == 0) {
                 // A match that takes no text only counts if it changes the state; and never forever.
                 if (current == before || ++emptySteps > MAX_EMPTY_STEPS) {
@@ -225,19 +237,28 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
         return builder.build() to current
     }
 
-    /** The action a `cases` resolves to for [matched], or [action] itself. */
-    private fun resolve(action: DeclarativeGrammar.Action, matched: String, endOfLine: Boolean): DeclarativeGrammar.Action {
+    /** The action a `cases` resolves to for [matched] in [state], or [action] itself. */
+    private fun resolve(action: DeclarativeGrammar.Action, matched: String, endOfLine: Boolean, state: String): DeclarativeGrammar.Action {
         if (action !is DeclarativeGrammar.Action.Cases) return action
         for ((guard, candidate) in action.cases) {
             val applies = when (guard) {
-                is DeclarativeGrammar.Guard.InArray -> (if (guard.ignoreCase) matched.lowercase() else matched) in guard.words
                 DeclarativeGrammar.Guard.Default -> true
                 DeclarativeGrammar.Guard.EndOfLine -> endOfLine
-                is DeclarativeGrammar.Guard.Matches -> guard.regex.matches(matched)
+                is DeclarativeGrammar.Guard.Test -> guard.negated != holds(guard, matched, state)
             }
-            if (applies) return resolve(candidate, matched, endOfLine)
+            if (applies) return resolve(candidate, matched, endOfLine, state)
         }
         return action
+    }
+
+    private fun holds(test: DeclarativeGrammar.Guard.Test, matched: String, state: String): Boolean {
+        val subject = test.subject.textIn(matched, state)
+        return when (val condition = test.condition) {
+            is DeclarativeGrammar.Condition.InArray -> (if (condition.ignoreCase) subject.lowercase() else subject) in condition.words
+            is DeclarativeGrammar.Condition.Equal -> subject.equals(condition.text.fill(matched, state), condition.ignoreCase)
+            is DeclarativeGrammar.Condition.Matches -> condition.regex.matches(subject)
+            is DeclarativeGrammar.Condition.MatchesTemplate -> condition.regex(matched, state)?.matches(subject) ?: false
+        }
     }
 
     /**
@@ -262,24 +283,33 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar) : Incrementa
             if (index < 0) continue
             val groupStart = pos + index
             // A group's case that does not apply leaves it the default token, as for a whole match.
-            val action = resolve(actions[group - 1], value, groupStart + value.length == lineLength) as? DeclarativeGrammar.Action.Token
-            current = step(current, action?.next)
+            val endOfLine = groupStart + value.length == lineLength
+            val action = resolve(actions[group - 1], value, endOfLine, current.state) as? DeclarativeGrammar.Action.Token
+            current = step(current, action?.next, value)
             if (value.isEmpty()) continue
             if (groupStart > at) builder.add(at, groupStart, grammar.defaultToken)
-            builder.add(groupStart, groupStart + value.length, action?.type ?: grammar.defaultToken)
+            builder.add(groupStart, groupStart + value.length, action?.typeOf(value) ?: grammar.defaultToken)
             at = groupStart + value.length
         }
         if (at < end) builder.add(at, end, grammar.defaultToken)
         return current
     }
 
-    private fun step(stack: Stack, next: DeclarativeGrammar.Next?): Stack = when (next) {
+    private fun step(stack: Stack, next: DeclarativeGrammar.Next?, matched: String): Stack = when (next) {
         null -> stack
-        is DeclarativeGrammar.Next.Enter -> Stack(stateOf(next.state, grammar.states.keys) ?: grammar.start, stack)
+        is DeclarativeGrammar.Next.Enter -> target(next.state, matched, stack)?.let { Stack(it, stack) } ?: stack
+        is DeclarativeGrammar.Next.Switch -> target(next.state, matched, stack)?.let { Stack(it, stack.parent) } ?: stack
         DeclarativeGrammar.Next.Push -> Stack(stack.state, stack)
         DeclarativeGrammar.Next.Pop -> stack.parent ?: stack
-        DeclarativeGrammar.Next.PopAll -> root
+        DeclarativeGrammar.Next.PopAll -> stack.bottom
     }
+
+    /**
+     * The state [name] comes to for [matched] on [stack], or null if the grammar has none. The
+     * text being typed can make a name anything, so where Monarch throws, the stack stays put.
+     */
+    private fun target(name: DeclarativeGrammar.Template, matched: String, stack: Stack): String? =
+        name.fill(matched, stack.state).removePrefix("@").takeIf { stateOf(it, grammar.states.keys) != null }
 
     /** Collects a line's tokens, merging neighbours of one type and leaving out default ones. */
     private class LineBuilder {
