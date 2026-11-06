@@ -784,6 +784,7 @@ New wire types stay internal unless a public signature needs them.
 | `before`, `after` (Monaco's `{ content }`) and `inlineColor` (a CSS hex colour, in place of Monaco's `inlineClassName`) in `AardinkDecorationOptions`, for `deltaDecorations` and `createDecorationsCollection` | §7.3 |
 | `WebEditorOptions.inlayHints`, `codeLens`, `semanticHighlighting` | §7.3 |
 | `configuration` in `registerLanguage`'s definition; `nextEmbedded` resolved from registered grammars | §7.4 |
+| `editor.onOpenLink(listener)`, returning a disposable; `AardinkWeb.onOpenLink`; `aardinkOnOpenLink` in the template. A listener gets every target; with none, `http` and `https` links open in a new tab with `noopener`, and other schemes do nothing | §7.2: added and approved 2026-11-07. Markdown links in hover and signature cards need somewhere to go, and hover text can come from a server, so the default never opens a `javascript:` URL |
 
 ### Breaking
 
