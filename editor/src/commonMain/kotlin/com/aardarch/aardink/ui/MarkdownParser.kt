@@ -317,8 +317,11 @@ private class LinkTail(val target: String, val end: Int)
 
 private const val ASCII_PUNCTUATION = "!\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
-/** What a bare URL does not end on in Markdown. `_` stays: `https://a.dev/_x_` is a real path. */
-private const val URL_TRAILING_MARKS = "*.,;:!?"
+/**
+ * What a bare URL does not end on in Markdown. `_` stays: `https://a.dev/_x_` is a real path. A `\`
+ * is what is left of an escape when the mark it escaped goes.
+ */
+private const val URL_TRAILING_MARKS = "*.,;:!?\\"
 
 private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
 
@@ -375,6 +378,19 @@ private fun unescaped(raw: String): String {
 }
 
 internal fun parseInlines(text: String): List<MarkdownInline> = InlineParser(text).parse()
+
+/** [text] as one line of plain text, for where Markdown cannot be drawn: the first thing in it that has words. */
+internal fun markdownLine(text: String): String = firstLine(parseMarkdown(text)).orEmpty()
+
+private fun firstLine(blocks: List<MarkdownBlock>): String? = blocks.firstNotNullOfOrNull { block ->
+    when (block) {
+        is MarkdownBlock.Heading -> plainText(block.text)
+        is MarkdownBlock.Paragraph -> plainText(block.text)
+        is MarkdownBlock.Code -> block.code.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+        is MarkdownBlock.Items -> block.items.firstNotNullOfOrNull(::firstLine)
+        MarkdownBlock.Rule -> null
+    }?.takeIf { it.isNotBlank() }
+}
 
 /**
  * CommonMark's inline algorithm: one pass that finishes code spans, escapes and links as it meets
@@ -458,12 +474,32 @@ private class InlineParser(private val text: String) {
 
     private fun bareUrl() {
         val boundary = at == 0 || !text[at - 1].isLetterOrDigit()
-        var end = (if (boundary && text.startsWith("http", at)) UrlDetector.urlEnd(text, at) else null) ?: return literal()
+        val found = (if (boundary && text.startsWith("http", at)) UrlDetector.urlEnd(text, at) else null) ?: return literal()
+        var end = urlEndAtBackslash(found)
         // A closing `**` is the emphasis around the URL, and may have punctuation inside it.
         while (text[end - 1] in URL_TRAILING_MARKS) end--
-        val url = text.substring(at, end)
+        val url = unescaped(text.substring(at, end))
         finish(MarkdownInline.Link(url, listOf(MarkdownInline.Plain(url))))
         at = end
+    }
+
+    /**
+     * Where the URL at [at] ends, given [found], the end [UrlDetector] sees. It takes a backslash as
+     * any other character, but here one is Markdown's: `x\_y` is the URL `x_y`, while the first
+     * backslash that does not escape a character of the URL ends it, as a hard break's does.
+     */
+    private fun urlEndAtBackslash(found: Int): Int {
+        var position = at
+        while (position < found) {
+            if (text[position] != '\\') {
+                position++
+            } else if (position + 1 < found && text[position + 1] != '\\' && text[position + 1] in ASCII_PUNCTUATION) {
+                position += 2
+            } else {
+                return position
+            }
+        }
+        return found
     }
 
     private fun codeSpan() {

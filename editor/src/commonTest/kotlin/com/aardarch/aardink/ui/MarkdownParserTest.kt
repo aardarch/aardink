@@ -347,6 +347,35 @@ class MarkdownParserTest {
         assertEquals(listOf(Emphasis(listOf(link, Plain(".")))), inlines("*https://a.dev/x.*"))
     }
 
+    private fun url(target: String) = Link(target, listOf(Plain(target)))
+
+    @Test
+    fun `a hard break after a bare URL is not part of it`() {
+        assertEquals(
+            listOf(Plain("See "), url("https://a.dev/docs"), Break, Plain("for more")),
+            inlines("See https://a.dev/docs\\\nfor more"),
+        )
+    }
+
+    @Test
+    fun `an escaped mark after a bare URL is the text after it`() {
+        assertEquals(listOf(Plain("["), url("https://a.dev/x"), Plain("]")), inlines("\\[https://a.dev/x\\]"))
+        assertEquals(listOf(Plain("`"), url("https://a.dev/x"), Plain("`")), inlines("\\`https://a.dev/x\\`"))
+        assertEquals(listOf(url("https://a.dev/x"), Plain("*")), inlines("https://a.dev/x\\*"))
+        assertEquals(listOf(url("https://a.dev/x"), Plain(".")), inlines("https://a.dev/x\\."))
+    }
+
+    @Test
+    fun `an escape inside a bare URL is resolved in its text and its target`() {
+        assertEquals(listOf(Plain("Values: "), url("https://a.dev/x_y?a=1&b=2")), inlines("Values: https://a.dev/x\\_y?a=1\\&b=2"))
+    }
+
+    @Test
+    fun `a backslash that escapes nothing of a bare URL ends it`() {
+        assertEquals(listOf(url("https://a.dev/x"), Plain("\\y")), inlines("https://a.dev/x\\\\y"))
+        assertEquals(listOf(url("https://a.dev/x"), Plain("\\y")), inlines("https://a.dev/x\\y"))
+    }
+
     @Test
     fun `a word that only starts like a URL is text`() {
         literal("http is a protocol, shttp://x is not one")
@@ -470,6 +499,46 @@ class MarkdownParserTest {
         val shown = listOf("# not a heading", "- not a list", "1. not a list", "=== not a rule", "*a* _b_ `c` <d> &amp;")
         val expected = shown.flatMapIndexed { index, line -> if (index == 0) listOf(Plain(line)) else listOf(Break, Plain(line)) }
         assertEquals(listOf(Paragraph(expected)), parseMarkdown(escaped))
+    }
+
+    @Test
+    fun `plain text with a URL at a line's end keeps the line and the URL`() {
+        val blocks = parseMarkdown("See https://a.dev/docs\\\nfor more\\\n\\[https://a.dev/x\\]")
+        val expected =
+            listOf(
+                Plain("See "),
+                url("https://a.dev/docs"),
+                Break,
+                Plain("for more"),
+                Break,
+                Plain("["),
+                url("https://a.dev/x"),
+                Plain("]"),
+            )
+        assertEquals(listOf(Paragraph(expected)), blocks)
+    }
+
+    // ── One line ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `one line of Markdown drops its marks and resolves its escapes`() {
+        assertEquals("Uses a_b only here", markdownLine("Uses a\\_b *only* here"))
+        assertEquals("See the docs and code", markdownLine("See [the docs](https://a.dev) and `code`"))
+    }
+
+    @Test
+    fun `one line of Markdown is its first block that has words`() {
+        assertEquals("Title", markdownLine("# Title\n\nBody"))
+        assertEquals("first words", markdownLine("first\nwords\n\nsecond paragraph"))
+        assertEquals("after", markdownLine("---\n\nafter"))
+        assertEquals("first", markdownLine("- first\n- second"))
+        assertEquals("val x = 1", markdownLine("```kotlin\n\n  val x = 1\nval y = 2\n```"))
+    }
+
+    @Test
+    fun `one line of nothing is empty`() {
+        assertEquals("", markdownLine(""))
+        assertEquals("", markdownLine("---"))
     }
 
     // ── Bounds ───────────────────────────────────────────────────────────────

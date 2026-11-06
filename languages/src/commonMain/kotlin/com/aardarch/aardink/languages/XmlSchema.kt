@@ -47,8 +47,8 @@ data class XmlSchema(
     /**
      * An element.
      *
-     * @property documentation Markdown, shown on hover and with its completion. A `*` or `_` that
-     *   is not emphasis is written `\*` or `\_`.
+     * @property documentation Markdown, shown on hover and, as one line of plain text, with its
+     *   completion. A `*` or `_` that is not emphasis is written `\*` or `\_`.
      * @property attributes Its attributes, by name.
      * @property children The elements it may hold; null for any, empty for none (a completion then
      *   inserts it self-closing).

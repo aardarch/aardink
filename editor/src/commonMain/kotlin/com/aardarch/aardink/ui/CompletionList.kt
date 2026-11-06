@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -90,7 +91,7 @@ internal fun CompletionList(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                         )
-                        (item.detail ?: item.documentation)?.let {
+                        remember(item.detail, item.documentation) { item.detail ?: item.documentation?.let(::markdownLine) }?.let {
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.labelSmall,

@@ -522,7 +522,7 @@ export interface AardinkCompletionItem {
   detail?: string;
   /** Characters that, typed while this item is selected, accept it and are then typed after it. Not for snippets. */
   commitCharacters?: string[];
-  /** Shown beside the label; Monaco's `{ value }` is shown as plain text. */
+  /** Markdown, either way. Shown beside the label as one line of plain text. */
   documentation?: string | { value: string };
   /**
    * What the text typed so far is matched against, as in Monaco: its characters in order, ignoring
@@ -555,7 +555,7 @@ export interface AardinkCompletionList {
 
 export interface AardinkHover {
   title?: string;
-  /** Markdown. Raw HTML shows as written. */
+  /** Markdown. Raw HTML shows as written, and a link as its text: the web opens no links. */
   contents: string;
   /** Shown as code below `contents`. */
   example?: string;

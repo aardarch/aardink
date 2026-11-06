@@ -22,7 +22,8 @@ package com.aardarch.aardink.core
  * @param kind Visual classification controlling the icon shown beside the label.
  * @param insertText Text inserted into the document when the item is accepted. May differ from
  *   [label]; with [isSnippet] it is a snippet, such as `<text>$0</text>` for the label `text`.
- * @param documentation Optional secondary text shown below the label in the dropdown.
+ * @param documentation Optional Markdown about the item. The list at the caret shows it beside the
+ *   label as one line of plain text, when there is no [detail].
  * @param filterText What the text typed so far is matched against when the editor filters the list
  *   itself (a service with [LanguageService.completionsAreIncomplete] false): its characters in
  *   order, ignoring case, the first at the start of [filterText] or of a word in it. Defaults to

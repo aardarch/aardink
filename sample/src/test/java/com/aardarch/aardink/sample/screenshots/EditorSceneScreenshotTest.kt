@@ -460,6 +460,8 @@ class EditorSceneScreenshotTest {
                     CodeEditorLayout(
                         state = state,
                         languageService = documented,
+                        // A link only looks like one with somewhere to go.
+                        onOpenLink = {},
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
                         modifier = Modifier.fillMaxSize(),
                     )

@@ -19,11 +19,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
@@ -35,22 +42,29 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.ParameterInformation
 import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SignatureInformation
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+private const val TEXT = "hello world\nsecond line\nthird line\nfourth line\nfifth line"
 
 /** Markdown as the hover and signature cards draw it, and where their links go. */
 @OptIn(ExperimentalTestApi::class)
@@ -172,13 +186,16 @@ class MarkdownDocUiTest {
         onNodeWithText("<a_b_c> *x*").assertExists()
     }
 
-    private object Linked : LanguageService {
+    /** A service whose hover is [answer], and whose signature help is [signature] inside any call. */
+    private class HoverService(private val signature: SignatureHelp? = null, private val answer: suspend () -> HoverDoc?) :
+        LanguageService {
         override suspend fun completions(document: CodeDocument, offset: Int): List<CompletionItem> = emptyList()
 
         override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = emptyList()
 
-        override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc =
-            HoverDoc(title = "Docs for a word", content = "[the docs](https://a.dev/x)")
+        override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = answer()
+
+        override suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? = signature
 
         override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
@@ -187,16 +204,27 @@ class MarkdownDocUiTest {
         override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }
 
+    private val linkedDoc = HoverDoc(title = "Docs for a word", content = "[the docs](https://a.dev/x)")
+
+    private val linked = HoverService { linkedDoc }
+
+    private val silent = HoverService { null }
+
     private fun ComposeUiTest.showEditor(uris: UriHandler, onOpenLink: (String) -> Unit) {
-        val state = CodeEditorState("hello world\nsecond line\nthird line\nfourth line\nfifth line")
+        val state = CodeEditorState(TEXT)
         show(uris) {
             CodeEditorLayout(
                 state = state,
-                languageService = Linked,
+                languageService = linked,
                 onOpenLink = onOpenLink,
                 modifier = Modifier.size(600.dp, 400.dp),
             )
         }
+    }
+
+    private fun ComposeUiTest.assertNoLinkIn(text: String) {
+        val shown = onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        assertTrue(shown.getLinkAnnotations(0, shown.length).isEmpty(), "$text is drawn as a link")
     }
 
     /** A mouse resting on the first word, long enough for the card. */
@@ -206,6 +234,15 @@ class MarkdownDocUiTest {
         mainClock.advanceTimeBy(1_000)
         waitForIdle()
         onNodeWithText("Docs for a word").assertExists()
+    }
+
+    /** A mouse resting where nothing answers: the service has no hover to give, however long it stays. */
+    private fun ComposeUiTest.restBeside() {
+        mainClock.autoAdvance = false
+        onNodeWithTag(EditorTestTags.EDITOR).performMouseInput { moveTo(Offset(8.dp.toPx() + 10f, 8.dp.toPx() + 10.dp.toPx())) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertDoesNotExist()
     }
 
     /** The mouse leaves the word for the card below it: it crosses the text between them first. */
@@ -236,6 +273,125 @@ class MarkdownDocUiTest {
         assertTrue(uris.opened.isEmpty())
         onNodeWithText("Docs for a word").assertDoesNotExist()
         mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `with no host handler a link in a hover card is its text, and a click leaves the card up`() = runComposeUiTest {
+        val state = CodeEditorState(TEXT)
+        show { CodeEditorLayout(state, languageService = linked, modifier = Modifier.size(600.dp, 400.dp)) }
+        restOnWord()
+        assertNoLinkIn("the docs")
+        onNodeWithText("the docs").performMouseInput {
+            moveTo(center)
+            click()
+        }
+        mainClock.advanceTimeBy(100)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `with no host handler a link in signature help is its text`() = runComposeUiTest {
+        val help = SignatureHelp(listOf(SignatureInformation("foo(a: Int)", documentation = "See [the docs](u)")))
+        val state = CodeEditorState("foo(")
+        state.setSelections(listOf(TextRange(4)))
+        show { CodeEditorLayout(state, languageService = HoverService(help) { null }, modifier = Modifier.size(600.dp, 400.dp)) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        assertNoLinkIn("See the docs")
+    }
+
+    @Test
+    fun `an answer that lands as the mouse moves on still takes the card down`() = runComposeUiTest {
+        val answer = CompletableDeferred<HoverDoc?>()
+        var asked = 0
+        val service = HoverService {
+            asked++
+            if (asked == 1) answer.await() else null
+        }
+        // The fetch resumes on the UI's own queue, so the order of what follows is the test's.
+        val state = CodeEditorState(TEXT).apply { computeDispatcher = Dispatchers.Unconfined }
+        // After the editor has seen this move and before anything could react to it, the answer
+        // comes: the window before the fetch is cancelled for the mouse having moved.
+        val answerOnMove = Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Final)
+                    if (event.type == PointerEventType.Move && asked == 1) answer.complete(linkedDoc)
+                }
+            }
+        }
+        show { CodeEditorLayout(state, languageService = service, modifier = Modifier.size(600.dp, 400.dp).then(answerOnMove)) }
+        mainClock.autoAdvance = false
+        onNodeWithTag(EditorTestTags.EDITOR).performMouseInput { moveTo(Offset(8.dp.toPx() + 10f, 8.dp.toPx() + 10.dp.toPx())) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        assertEquals(1, asked)
+        crossTowardsCard()
+        onNodeWithText("Docs for a word").assertExists()
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertDoesNotExist()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `a card asked for from the keyboard stays under a parked mouse`() = runComposeUiTest {
+        var keyboard = false
+        val service = HoverService { linkedDoc.takeIf { keyboard } }
+        val state = CodeEditorState(TEXT).apply { computeDispatcher = Dispatchers.Unconfined }
+        show { CodeEditorLayout(state, languageService = service, modifier = Modifier.size(600.dp, 400.dp)) }
+        restBeside()
+        keyboard = true
+        state.execute(EditorCommand.ShowHover)
+        mainClock.advanceTimeBy(100)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertExists()
+        mainClock.advanceTimeBy(2_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `a new language service takes the old one's card down`() = runComposeUiTest {
+        var service by mutableStateOf<LanguageService>(linked)
+        val state = CodeEditorState(TEXT)
+        show { CodeEditorLayout(state, languageService = service, modifier = Modifier.size(600.dp, 400.dp)) }
+        restOnWord()
+        service = silent
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertDoesNotExist()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `an answer from the old language service does not bring a card up`() = runComposeUiTest {
+        val answer = CompletableDeferred<HoverDoc?>()
+        var service by mutableStateOf<LanguageService>(HoverService { answer.await() })
+        val state = CodeEditorState(TEXT).apply { computeDispatcher = Dispatchers.Unconfined }
+        show { CodeEditorLayout(state, languageService = service, modifier = Modifier.size(600.dp, 400.dp)) }
+        mainClock.autoAdvance = false
+        state.execute(EditorCommand.ShowHover)
+        mainClock.advanceTimeBy(100)
+        waitForIdle()
+        service = silent
+        mainClock.advanceTimeBy(100)
+        waitForIdle()
+        answer.complete(linkedDoc)
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertDoesNotExist()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `the completion row shows documentation as one line of plain text`() = runComposeUiTest {
+        val item = CompletionItem("wrap", CompletionKind.Property, "wrap", documentation = "Uses a\\_b *only* here\n\nand [more](u)")
+        show { CompletionList(listOf(item), selected = -1, onAccept = {}) }
+        onNodeWithText("Uses a_b only here").assertExists()
     }
 
     @Test
