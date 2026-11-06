@@ -135,6 +135,41 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `a tab after a list marker or a heading's hashes is a space`() {
+        val items = listOf(listOf(paragraph("first")), listOf(paragraph("second")))
+        assertEquals(listOf(Items(false, 1, items)), parseMarkdown("-\tfirst\n-\tsecond"))
+        assertEquals(listOf(Items(true, 1, items)), parseMarkdown("1.\tfirst\n2.\tsecond"))
+        assertEquals(listOf(Heading(1, listOf(Plain("Title")))), parseMarkdown("#\tTitle"))
+        assertEquals(listOf(Heading(2, listOf(Plain("Title")))), parseMarkdown("##\tTitle\t##"))
+        assertEquals(listOf(Rule), parseMarkdown("-\t-\t-"))
+    }
+
+    @Test
+    fun `a tab after a marker runs to the next stop of four`() {
+        val two = listOf(paragraph("a"), paragraph("b"))
+        assertEquals(listOf(Items(false, 1, listOf(two))), parseMarkdown("-\ta\n\n    b"))
+        assertEquals(listOf(Items(true, 1, listOf(two))), parseMarkdown("1.\ta\n\n    b"))
+        val short = Items(false, 1, listOf(listOf(paragraph("a"))))
+        assertEquals(listOf(short, paragraph("b")), parseMarkdown("-\ta\n\n  b"))
+    }
+
+    @Test
+    fun `the stop after a marker counts from the line's start, not the item's`() {
+        val inner = Items(false, 1, listOf(listOf(paragraph("a"), paragraph("b"))))
+        assertEquals(listOf(Items(false, 1, listOf(listOf(inner)))), parseMarkdown("- -\ta\n\n    b"))
+    }
+
+    @Test
+    fun `two tabs after a marker start code in the item`() {
+        assertEquals(listOf(Items(false, 1, listOf(listOf(Code(null, "  code"))))), parseMarkdown("-\t\tcode"))
+    }
+
+    @Test
+    fun `a tab in code is not touched`() {
+        assertEquals(listOf(Code(null, "-\ta\n#\tb")), parseMarkdown("```\n-\ta\n#\tb\n```"))
+    }
+
+    @Test
     fun `a rule sets text apart, as language servers do`() {
         assertEquals(listOf(Code("rust", "fn a()"), Rule, paragraph("Docs.")), parseMarkdown("```rust\nfn a()\n```\n\n---\n\nDocs."))
         assertEquals(listOf(Rule), parseMarkdown("***"))
@@ -173,6 +208,52 @@ class MarkdownParserTest {
     fun `an item carries on over an indented line and a lazy one`() {
         assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a b"))))), parseMarkdown("- a\n  b"))
         assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a b"))))), parseMarkdown("- a\nb"))
+    }
+
+    @Test
+    fun `a lazy line carries on a paragraph and nothing else`() {
+        val fence = Items(false, 1, listOf(listOf(Code(null, "code"))))
+        assertEquals(listOf(fence, paragraph("prose")), parseMarkdown("- ```\n  code\nprose"))
+        val closed = Items(false, 1, listOf(listOf(paragraph("a"), Code(null, "b"))))
+        assertEquals(listOf(closed, paragraph("After the list.")), parseMarkdown("- a\n  ```\n  b\n  ```\nAfter the list."))
+        val heading = Items(false, 1, listOf(listOf(Heading(1, listOf(Plain("a"))))))
+        assertEquals(listOf(heading, paragraph("b")), parseMarkdown("- # a\nb"))
+        val code = Items(false, 1, listOf(listOf(Code(null, "a"))))
+        assertEquals(listOf(code, paragraph("b")), parseMarkdown("-     a\nb"))
+    }
+
+    @Test
+    fun `a lazy line is never a setext underline`() {
+        assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a ==="))))), parseMarkdown("- a\n==="))
+    }
+
+    @Test
+    fun `an indented underline still makes a heading in the item`() {
+        assertEquals(listOf(Items(false, 1, listOf(listOf(Heading(1, listOf(Plain("a"))))))), parseMarkdown("- a\n  ==="))
+    }
+
+    @Test
+    fun `a lazy line reaches the paragraph of a nested item`() {
+        val inner = Items(false, 1, listOf(listOf(paragraph("b c"))))
+        assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a"), inner)))), parseMarkdown("- a\n  - b\nc"))
+        assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a"), inner)))), parseMarkdown("- a\n  - b\n  c"))
+    }
+
+    @Test
+    fun `an item goes on after a lazy line`() {
+        assertEquals(listOf(Items(false, 1, listOf(listOf(paragraph("a b c"))))), parseMarkdown("- a\nb\n  c"))
+        val two = listOf(paragraph("a b"), paragraph("c"))
+        assertEquals(listOf(Items(false, 1, listOf(two))), parseMarkdown("- a\nb\n\n  c"))
+        val items = listOf(listOf(paragraph("a b")), listOf(paragraph("c")))
+        assertEquals(listOf(Items(false, 1, items)), parseMarkdown("- a\nb\n- c"))
+    }
+
+    @Test
+    fun `a line that starts a block is not lazy`() {
+        val list = Items(false, 1, listOf(listOf(paragraph("a"))))
+        assertEquals(listOf(list, Rule), parseMarkdown("- a\n---"))
+        assertEquals(listOf(list, Code(null, "b")), parseMarkdown("- a\n```\nb\n```"))
+        assertEquals(listOf(list, Heading(1, listOf(Plain("b")))), parseMarkdown("- a\n# b"))
     }
 
     @Test
@@ -350,6 +431,24 @@ class MarkdownParserTest {
     private fun url(target: String) = Link(target, listOf(Plain(target)))
 
     @Test
+    fun `the underscores around a bare URL are not part of it`() {
+        val link = url("https://a.dev/x")
+        assertEquals(listOf(Emphasis(listOf(Plain("see "), link))), inlines("_see https://a.dev/x_"))
+        assertEquals(listOf(Strong(listOf(link))), inlines("__https://a.dev/x__"))
+        assertEquals(listOf(Emphasis(listOf(link, Plain(".")))), inlines("_https://a.dev/x._"))
+        assertEquals(listOf(Strong(listOf(Emphasis(listOf(link))))), inlines("**_https://a.dev/x_**"))
+    }
+
+    @Test
+    fun `a bare URL gives up only the underscores something opened`() {
+        assertEquals(listOf(Emphasis(listOf(Plain("a "), url("https://a.dev/x_")))), inlines("_a https://a.dev/x__"))
+        assertEquals(listOf(Emphasis(listOf(Plain("a"))), Plain(" "), url("https://a.dev/x_")), inlines("_a_ https://a.dev/x_"))
+        val linked = Link("u", listOf(Emphasis(listOf(Plain("a")))))
+        assertEquals(listOf(linked, Plain(" "), url("https://a.dev/x_")), inlines("[_a_](u) https://a.dev/x_"))
+        assertEquals(listOf(Plain("snake_case "), url("https://a.dev/x_")), inlines("snake_case https://a.dev/x_"))
+    }
+
+    @Test
     fun `a hard break after a bare URL is not part of it`() {
         assertEquals(
             listOf(Plain("See "), url("https://a.dev/docs"), Break, Plain("for more")),
@@ -438,6 +537,52 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `angle brackets around markup that are no tag leave the markup alone`() {
+        assertEquals(
+            listOf(Plain("Returns -1 if x<y, "), MarkdownInline.Code("0"), Plain(" if equal, 1 if x>y.")),
+            inlines("Returns -1 if x<y, `0` if equal, 1 if x>y."),
+        )
+        assertEquals(listOf(Plain("x<y, "), Emphasis(listOf(Plain("a"))), Plain(" x>y")), inlines("x<y, *a* x>y"))
+        assertEquals(listOf(Plain("<a "), Emphasis(listOf(Plain("b"))), Plain(">")), inlines("<a *b*>"))
+        assertEquals(listOf(Plain("</a "), Emphasis(listOf(Plain("b"))), Plain(">")), inlines("</a *b*>"))
+        assertEquals(listOf(Plain("<a b=\""), Emphasis(listOf(Plain("c"))), Plain(">")), inlines("<a b=\"*c*>"))
+    }
+
+    @Test
+    fun `a line end in angle brackets that are no tag is a space`() {
+        assertEquals(listOf(Plain("x<y, and z>1")), inlines("x<y,\nand z>1"))
+    }
+
+    @Test
+    fun `a line end inside a tag is a space too`() {
+        assertEquals(listOf(Plain("""<a href="b">""")), inlines("<a\nhref=\"b\">"))
+    }
+
+    @Test
+    fun `every shape of tag keeps what is inside it literal`() {
+        literal("""<a b = "*c*" d='_e_' f=g_h_i _j:k.l-m/>""")
+        literal("</b >")
+        literal("<?php *a* ?>")
+        literal("<!DOCTYPE *a*>")
+        literal("<![CDATA[ *a* ]]>")
+        literal("<!-- <b> *a* -->")
+        assertEquals(listOf(Plain("<!-->"), Emphasis(listOf(Plain("a"))), Plain("-->")), inlines("<!-->*a*-->"))
+    }
+
+    @Test
+    fun `a comment, instruction or declaration that never ends is no tag`() {
+        assertEquals(listOf(Plain("<!-- "), Emphasis(listOf(Plain("a")))), inlines("<!-- *a*"))
+        assertEquals(listOf(Plain("<? "), Emphasis(listOf(Plain("a")))), inlines("<? *a*"))
+        assertEquals(listOf(Plain("<!A "), Emphasis(listOf(Plain("a")))), inlines("<!A *a*"))
+        assertEquals(listOf(Plain("<![CDATA[ "), Emphasis(listOf(Plain("a")))), inlines("<![CDATA[ *a*"))
+    }
+
+    @Test
+    fun `an autolink takes the characters a tag would not`() {
+        assertEquals(listOf(url("https://a.dev/x?a=1&b=_c_")), inlines("<https://a.dev/x?a=1&b=_c_>"))
+    }
+
+    @Test
     fun `a backslash escapes punctuation and nothing else`() {
         assertEquals(listOf(Plain("*a*")), inlines("""\*a\*"""))
         assertEquals(listOf(Plain("[a](b)")), inlines("""\[a](b)"""))
@@ -450,6 +595,13 @@ class MarkdownParserTest {
         assertEquals(listOf(Plain("a < b & c > d")), inlines("a &lt; b &amp; c &gt; d"))
         assertEquals(listOf(Plain("AB")), inlines("&#65;&#x42;"))
         literal("&nope; and &#0; and AT&T;")
+    }
+
+    @Test
+    fun `an entity's semicolon is looked for only so far`() {
+        assertEquals(listOf(Plain("A")), inlines("&#00000065;"))
+        literal("&#000000065;")
+        literal("&#00000000000000000065;")
     }
 
     @Test
@@ -588,21 +740,40 @@ class MarkdownParserTest {
     @Test
     fun `input built to be slow or deep parses all the same`() {
         val hostile = listOf(
-            "*a ".repeat(3_000) + " a*".repeat(3_000),
+            "*a ".repeat(1_650) + " a*".repeat(1_650),
             "**a ".repeat(2_500),
             "_".repeat(10_000),
             "[".repeat(10_000),
             "[a](".repeat(2_500),
             "[a](b 'c ".repeat(1_000),
             "`".repeat(5_000) + " " + "`".repeat(4_999),
-            (1..140).joinToString(" ") { "`".repeat(it) },
+            (1..139).joinToString(" ") { "`".repeat(it) },
             "<a ".repeat(3_000),
-            "- ".repeat(5_000),
+            "<!--".repeat(2_500),
+            "<?".repeat(5_000),
+            "<!a ".repeat(2_500),
+            "<![CDATA[".repeat(1_100),
+            "<a b='".repeat(1_600),
             "> ".repeat(5_000),
             "&".repeat(10_000),
             "\\".repeat(10_000),
+            "_https://a.dev/x_ ".repeat(550),
+            "- a\n".repeat(2_500),
+            "- a\nb\n".repeat(1_600),
+            "- a\n  b\nc\n".repeat(900),
         )
-        for (text in hostile) assertTrue(parseMarkdown(text).isNotEmpty(), text.take(12))
+        for (text in hostile) {
+            assertTrue(text.length <= MARKDOWN_MAX_LENGTH, "${text.take(12)} would be cut before the parser sees it")
+            assertTrue(parseMarkdown(text).isNotEmpty(), text.take(12))
+        }
+    }
+
+    @Test
+    fun `a list nested past the limit, over and over, is one list`() {
+        val text = (0 until 400).joinToString("\n") { "  ".repeat(it % 20) + "- a" }
+        assertTrue(text.length <= MARKDOWN_MAX_LENGTH)
+        val list = assertIs<Items>(parseMarkdown(text).single())
+        assertEquals(20, list.items.size)
     }
 
     @Test

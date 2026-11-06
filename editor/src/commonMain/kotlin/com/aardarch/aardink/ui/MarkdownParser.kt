@@ -32,37 +32,41 @@ private const val MAX_TARGET_PARENS = 32
 /** How far past its `&` an entity's `;` may be, so a run of `&` does not search the text from each one. */
 private const val MAX_ENTITY_LENGTH = 10
 
-/** A block of documentation: what [parseMarkdown] finds, and [MarkdownDoc] draws. */
-internal sealed interface MarkdownBlock {
-    data class Heading(val level: Int, val text: List<MarkdownInline>) : MarkdownBlock
+/**
+ * A block of documentation: what [parseMarkdown] finds, and [MarkdownDoc] draws. The types nested
+ * here and in [MarkdownInline] say `internal` themselves: without it the compiler's `$stableprop`
+ * for each lands in the published klib ABI.
+ */
+internal sealed class MarkdownBlock {
+    internal data class Heading(val level: Int, val text: List<MarkdownInline>) : MarkdownBlock()
 
-    data class Paragraph(val text: List<MarkdownInline>) : MarkdownBlock
+    internal data class Paragraph(val text: List<MarkdownInline>) : MarkdownBlock()
 
     /** A fenced or indented code block; [language] is the first word of a fence's info string. */
-    data class Code(val language: String?, val code: String) : MarkdownBlock
+    internal data class Code(val language: String?, val code: String) : MarkdownBlock()
 
     /** A list. [start] is the first item's number; each item is its own blocks. */
-    data class Items(val ordered: Boolean, val start: Int, val items: List<List<MarkdownBlock>>) : MarkdownBlock
+    internal data class Items(val ordered: Boolean, val start: Int, val items: List<List<MarkdownBlock>>) : MarkdownBlock()
 
     /** A thematic break, which language servers use to set a signature off from its documentation. */
-    data object Rule : MarkdownBlock
+    internal data object Rule : MarkdownBlock()
 }
 
 /** A run of text inside a [MarkdownBlock]. */
-internal sealed interface MarkdownInline {
-    data class Plain(val text: String) : MarkdownInline
+internal sealed class MarkdownInline {
+    internal data class Plain(val text: String) : MarkdownInline()
 
-    data class Code(val text: String) : MarkdownInline
+    internal data class Code(val text: String) : MarkdownInline()
 
-    data class Emphasis(val children: List<MarkdownInline>) : MarkdownInline
+    internal data class Emphasis(val children: List<MarkdownInline>) : MarkdownInline()
 
-    data class Strong(val children: List<MarkdownInline>) : MarkdownInline
+    internal data class Strong(val children: List<MarkdownInline>) : MarkdownInline()
 
     /** A link, which only ever opens through the host's `onOpenLink`. */
-    data class Link(val target: String, val children: List<MarkdownInline>) : MarkdownInline
+    internal data class Link(val target: String, val children: List<MarkdownInline>) : MarkdownInline()
 
     /** A hard line break. A soft one (a plain newline) is a space, as in Monaco's hover. */
-    data object Break : MarkdownInline
+    internal data object Break : MarkdownInline()
 }
 
 /**
@@ -107,7 +111,15 @@ private fun indentOf(line: String): Int {
 
 private class Fence(val marker: Char, val length: Int, val indent: Int, val info: String)
 
-private class ListMarker(val ordered: Boolean, val delimiter: Char, val start: Int, val contentIndent: Int, val empty: Boolean) {
+/** A list item's start. [firstLine] is its first line without the marker, as [contentIndent] leaves it. */
+private class ListMarker(
+    val ordered: Boolean,
+    val delimiter: Char,
+    val start: Int,
+    val contentIndent: Int,
+    val firstLine: String,
+    val empty: Boolean,
+) {
     fun continues(other: ListMarker) = ordered == other.ordered && delimiter == other.delimiter
 }
 
@@ -122,22 +134,22 @@ private fun fenceAt(line: String): Fence? {
     return Fence(marker, end - indent, indent, info)
 }
 
-/** The level and text of an ATX heading, or null. `#define` is not one: the marks need a space after them. */
+/** The level and text of an ATX heading, or null. `#define` is not one: the marks need a space or tab after them. */
 private fun headingAt(line: String): Pair<Int, String>? {
     val indent = indentOf(line)
     if (indent > 3) return null
     var end = indent
     while (end < line.length && line[end] == '#') end++
     val level = end - indent
-    if (level !in 1..6 || (end < line.length && line[end] != ' ')) return null
+    if (level !in 1..6 || (end < line.length && line[end] != ' ' && line[end] != '\t')) return null
     val body = line.substring(end).trim()
     val closed = body.trimEnd('#')
-    return level to if (closed.isEmpty() || closed.last() == ' ') closed.trimEnd() else body
+    return level to if (closed.isEmpty() || closed.last().isWhitespace()) closed.trimEnd() else body
 }
 
 private fun isRule(line: String): Boolean {
     if (indentOf(line) > 3) return false
-    val marks = line.filterNot { it == ' ' }
+    val marks = line.filterNot { it == ' ' || it == '\t' }
     return marks.length >= 3 && marks[0] in "-*_" && marks.all { it == marks[0] }
 }
 
@@ -153,7 +165,8 @@ private fun setextLevel(line: String): Int {
     }
 }
 
-private fun markerAt(line: String): ListMarker? {
+/** The list marker [line] starts with, or null. [column] is where the line starts on the page, for its tab stops. */
+private fun markerAt(line: String, column: Int): ListMarker? {
     val indent = indentOf(line)
     val first = line.getOrNull(indent)
     if (indent > 3 || first == null) return null
@@ -168,13 +181,29 @@ private fun markerAt(line: String): ListMarker? {
     val delimiter = line.getOrNull(end) ?: return null
     if (ordered && delimiter != '.' && delimiter != ')') return null
     end++
-    if (line.substring(end).isBlank()) return ListMarker(ordered, delimiter, start, end + 1, empty = true)
-    if (line[end] != ' ') return null
-    val spaces = indentOf(line.substring(end))
-    return ListMarker(ordered, delimiter, start, end + if (spaces > 4) 1 else spaces, empty = false)
+    if (line.substring(end).isBlank()) return ListMarker(ordered, delimiter, start, end + 1, firstLine = "", empty = true)
+    if (line[end] != ' ' && line[end] != '\t') return null
+    var text = end
+    var width = 0
+    while (line[text] == ' ' || line[text] == '\t') {
+        width += if (line[text] == ' ') 1 else 4 - (column + end + width) % 4
+        text++
+    }
+    // Five columns or more is code in the item, indented by all of them but the one after the marker.
+    val code = if (width > 4) width - 1 else 0
+    return ListMarker(ordered, delimiter, start, end + width - code, " ".repeat(code) + line.substring(text), empty = false)
 }
 
-private class BlockReader(private val lines: List<String>, private val depth: Int) {
+/**
+ * Reads [lines] into blocks. [column] is where they start on the page. [lazyLine] gives a paragraph
+ * that reaches the end of [lines] its next line from outside the item they are, and may add to them.
+ */
+private class BlockReader(
+    private val lines: List<String>,
+    private val depth: Int,
+    private val column: Int = 0,
+    private val lazyLine: (() -> String?)? = null,
+) {
     private var at = 0
 
     fun read(): List<MarkdownBlock> {
@@ -209,7 +238,7 @@ private class BlockReader(private val lines: List<String>, private val depth: In
         return blocks
     }
 
-    private fun listMarkerAt(line: String): ListMarker? = if (depth >= MAX_LIST_DEPTH || isRule(line)) null else markerAt(line)
+    private fun listMarkerAt(line: String): ListMarker? = if (depth >= MAX_LIST_DEPTH || isRule(line)) null else markerAt(line, column)
 
     private fun indentedCode(): MarkdownBlock {
         val code = ArrayList<String>()
@@ -234,7 +263,7 @@ private class BlockReader(private val lines: List<String>, private val depth: In
         val items = ArrayList<List<MarkdownBlock>>()
         var marker: ListMarker? = first
         while (marker != null) {
-            items += BlockReader(itemLines(marker), depth + 1).read()
+            items += item(marker)
             var next = at
             while (next < lines.size && lines[next].isBlank()) next++
             marker = lines.getOrNull(next)?.let(::listMarkerAt)?.takeIf(first::continues)
@@ -243,31 +272,48 @@ private class BlockReader(private val lines: List<String>, private val depth: In
         return MarkdownBlock.Items(first.ordered, first.start, items)
     }
 
-    /** The current item's lines, its indentation taken off, leaving [at] on the line after them. */
-    private fun itemLines(marker: ListMarker): List<String> {
+    /** The blocks of the item at [at], leaving [at] on the line after it. */
+    private fun item(marker: ListMarker): List<MarkdownBlock> {
         val indent = marker.contentIndent
-        val body = arrayListOf(lines[at++].drop(indent))
+        val body = arrayListOf(marker.firstLine)
+        at++
+        takeItemLines(body, indent)
+        return BlockReader(body, depth + 1, column + indent) { lazyContinuation(body, indent) }.read()
+    }
+
+    /** Adds the lines from [at] that belong to an item, its [indent] taken off, to its [body]. */
+    private fun takeItemLines(body: MutableList<String>, indent: Int) {
         while (at < lines.size) {
             val line = lines[at]
             if (line.isBlank()) {
                 // A blank line belongs to the item only when an indented line comes after it.
                 var next = at
                 while (next < lines.size && lines[next].isBlank()) next++
-                if (next == lines.size || indentOf(lines[next]) < indent) break
+                if (next == lines.size || indentOf(lines[next]) < indent) return
                 repeat(next - at) { body += "" }
                 at = next
             } else if (indentOf(line) >= indent) {
                 body += line.drop(indent)
                 at++
-            } else if (body.last().isNotBlank() && !startsBlock(line)) {
-                // A lazy continuation: the paragraph carries on without its indentation.
-                body += line.trimStart()
-                at++
             } else {
-                break
+                return
             }
         }
-        return body
+    }
+
+    /**
+     * What carries on the paragraph ending an item's [body], which only its reader knows it has: the
+     * next line, short of the item's [indent] and starting no block, or null. After that line the
+     * item may go on, so what follows it joins [body].
+     */
+    private fun lazyContinuation(body: MutableList<String>, indent: Int): String? {
+        val line = when {
+            at == lines.size -> lazyLine?.invoke()
+            lines[at].isBlank() || startsBlock(lines[at]) -> null
+            else -> lines[at++].trimStart()
+        } ?: return null
+        takeItemLines(body, indent)
+        return line
     }
 
     private fun startsBlock(line: String) = fenceAt(line) != null || headingAt(line) != null || isRule(line) || listMarkerAt(line) != null
@@ -281,7 +327,13 @@ private class BlockReader(private val lines: List<String>, private val depth: In
 
     private fun paragraph(): MarkdownBlock {
         val text = StringBuilder(lines[at++].trimStart())
-        while (at < lines.size) {
+        while (true) {
+            if (at == lines.size) {
+                // Taken as it is: a lazy line is never an underline.
+                val lazy = lazyLine?.invoke() ?: break
+                text.append('\n').append(lazy)
+                continue
+            }
             val line = lines[at]
             if (line.isBlank()) break
             val level = setextLevel(line)
@@ -318,10 +370,13 @@ private class LinkTail(val target: String, val end: Int)
 private const val ASCII_PUNCTUATION = "!\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 /**
- * What a bare URL does not end on in Markdown. `_` stays: `https://a.dev/_x_` is a real path. A `\`
- * is what is left of an escape when the mark it escaped goes.
+ * What a bare URL does not end on in Markdown. `_` is not here: `https://a.dev/_x_` is a real path,
+ * and it only goes when it closes emphasis. A `\` is what is left of an escape when the mark it
+ * escaped goes.
  */
 private const val URL_TRAILING_MARKS = "*.,;:!?\\"
+
+private val AUTOLINK_SCHEMES = listOf("http://", "https://", "mailto:")
 
 private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
 
@@ -335,11 +390,13 @@ private fun isOpenable(target: String): Boolean {
 
 private fun Char.isMarkdownPunctuation() = !isLetterOrDigit() && !isWhitespace()
 
+private fun Char.isAsciiLetter() = this in 'a'..'z' || this in 'A'..'Z'
+
+private fun Char.isAsciiLetterOrDigit() = isAsciiLetter() || this in '0'..'9'
+
 /** The text of the entity at [start] and the index after it, or null. Only the common ones: others stay as written. */
 private fun entityAt(text: String, start: Int): Pair<String, Int>? {
-    var end = start + 1
-    while (end < text.length && end - start <= MAX_ENTITY_LENGTH && text[end] != ';') end++
-    if (text.getOrNull(end) != ';' || end - start > MAX_ENTITY_LENGTH) return null
+    val end = (start + 1..minOf(start + MAX_ENTITY_LENGTH, text.lastIndex)).firstOrNull { text[it] == ';' } ?: return null
     val name = text.substring(start + 1, end)
     val decoded = if (name.startsWith("#")) {
         val code = if (name.getOrNull(1)?.lowercaseChar() == 'x') name.drop(2).toIntOrNull(16) else name.drop(1).toIntOrNull()
@@ -405,6 +462,9 @@ private class InlineParser(private val text: String) {
 
     /** Lengths of backtick run with no closer ahead, so unmatched runs do not rescan the text each time. */
     private val noCloser = HashSet<Int>()
+
+    /** What ends a comment and the like with none ahead, for the same reason. */
+    private val noTagCloser = HashSet<String>()
 
     fun parse(): List<MarkdownInline> {
         while (at < text.length) {
@@ -475,12 +535,40 @@ private class InlineParser(private val text: String) {
     private fun bareUrl() {
         val boundary = at == 0 || !text[at - 1].isLetterOrDigit()
         val found = (if (boundary && text.startsWith("http", at)) UrlDetector.urlEnd(text, at) else null) ?: return literal()
-        var end = urlEndAtBackslash(found)
-        // A closing `**` is the emphasis around the URL, and may have punctuation inside it.
-        while (text[end - 1] in URL_TRAILING_MARKS) end--
+        val end = urlEndBeforeMarks(urlEndAtBackslash(found))
         val url = unescaped(text.substring(at, end))
         finish(MarkdownInline.Link(url, listOf(MarkdownInline.Plain(url))))
         at = end
+    }
+
+    /**
+     * [found] less the marks after the URL, which may be the emphasis around it, with punctuation
+     * inside that. A `_` goes only for an opener waiting for it, and one opener takes one `_`.
+     */
+    private fun urlEndBeforeMarks(found: Int): Int {
+        var end = found
+        var open = openUnderscores()
+        while (true) {
+            val last = text[end - 1]
+            if (last == '_' && open > 0) {
+                open--
+            } else if (last !in URL_TRAILING_MARKS) {
+                return end
+            }
+            end--
+        }
+    }
+
+    /** How many `_` read so far are waiting for a closer, as [resolve] would pair them. */
+    private fun openUnderscores(): Int {
+        var open = 0
+        for (piece in pieces) {
+            if (piece !is DelimiterRun || piece.char != '_') continue
+            val closed = if (piece.canClose) minOf(open, piece.count) else 0
+            open -= closed
+            if (piece.canOpen) open += piece.count - closed
+        }
+        return open
     }
 
     /**
@@ -649,32 +737,99 @@ private class InlineParser(private val text: String) {
 
     /** An autolink; else a tag or comment, kept whole so what is inside it stays literal; else a plain `<`. */
     private fun angle() {
-        val end = tagEnd() ?: return literal()
-        val body = text.substring(at + 1, end)
-        val lower = body.lowercase()
-        val autolink = (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) &&
-            body.none { it <= ' ' } &&
-            isOpenable(body)
-        if (autolink) {
+        val link = autolinkEnd()
+        if (link != null) {
+            val body = text.substring(at + 1, link)
             finish(MarkdownInline.Link(body, listOf(MarkdownInline.Plain(body.removePrefix("mailto:")))))
-        } else {
-            plain.append(text, at, end + 1)
+            at = link + 1
+            return
         }
+        val end = tagEnd() ?: return literal()
+        // A line end here is what it is in the text around the tag: a space.
+        plain.append(text.substring(at, end + 1).replace('\n', ' '))
         at = end + 1
     }
 
-    /** The `>` of the tag opening at [at], or null: `a < b` and `List<*` are not tags. */
-    private fun tagEnd(): Int? {
-        val first = text.getOrNull(at + 1) ?: return null
-        if (!first.isLetter() && first != '/' && first != '!' && first != '?') return null
+    /** The `>` of the autolink at [at], or null. */
+    private fun autolinkEnd(): Int? {
+        if (AUTOLINK_SCHEMES.none { text.startsWith(it, at + 1, ignoreCase = true) }) return null
         var position = at + 1
-        while (position < text.length) {
-            when (text[position]) {
-                '>' -> return position
-                '<' -> return null
-                else -> position++
-            }
+        while (position < text.length && text[position] > ' ' && text[position] != '<') {
+            if (text[position] == '>') return position
+            position++
         }
+        return null
+    }
+
+    /**
+     * The `>` of the HTML at [at] by CommonMark's grammar, or null: `a < b`, `List<*` and the `<y, z>`
+     * of `x<y, z>w` are no tags, so their `<` is text and the markup after it still counts. A tag's
+     * name takes `:` too, as XML's do.
+     */
+    private fun tagEnd(): Int? = when (text.getOrNull(at + 1)) {
+        '/' -> closingTagEnd(at + 2)
+        '?' -> tagCloserEnd("?>", at + 2)
+        '!' -> declarationEnd(at + 2)
+        else -> openingTagEnd(at + 1)
+    }
+
+    private fun tagNameEnd(start: Int): Int? {
+        if (text.getOrNull(start)?.isAsciiLetter() != true) return null
+        var position = start + 1
+        while (position < text.length && (text[position].isAsciiLetterOrDigit() || text[position] in "-:")) position++
+        return position
+    }
+
+    private fun closingTagEnd(start: Int): Int? {
+        val position = skipSpace(tagNameEnd(start) ?: return null)
+        return position.takeIf { text.getOrNull(it) == '>' }
+    }
+
+    private fun openingTagEnd(start: Int): Int? {
+        var position = tagNameEnd(start) ?: return null
+        while (true) {
+            val next = skipSpace(position)
+            when (text.getOrNull(next)) {
+                '>' -> return next
+                '/' -> return (next + 1).takeIf { text.getOrNull(it) == '>' }
+            }
+            if (next == position) return null
+            position = attributeEnd(next) ?: return null
+        }
+    }
+
+    /** The index after the attribute at [start], its value if it has one, or null when none is there. */
+    private fun attributeEnd(start: Int): Int? {
+        val first = text.getOrNull(start) ?: return null
+        if (!first.isAsciiLetter() && first != '_' && first != ':') return null
+        var position = start + 1
+        while (position < text.length && (text[position].isAsciiLetterOrDigit() || text[position] in "_.:-")) position++
+        val equals = skipSpace(position)
+        if (text.getOrNull(equals) != '=') return position
+        val value = skipSpace(equals + 1)
+        val quote = text.getOrNull(value)
+        if (quote == '"' || quote == '\'') return text.indexOf(quote, value + 1).takeIf { it >= 0 }?.plus(1)
+        var end = value
+        while (end < text.length && !text[end].isWhitespace() && text[end] !in "\"'=<>`") end++
+        return end.takeIf { it > value }
+    }
+
+    /** The `>` ending what starts `<!` before [start]: a comment, CDATA or a declaration. */
+    private fun declarationEnd(start: Int): Int? = when {
+        text.startsWith("-->", start) -> start + 2
+        text.startsWith("--->", start) -> start + 3
+        text.startsWith("--", start) -> tagCloserEnd("-->", start + 2)
+        text.startsWith("[CDATA[", start) -> tagCloserEnd("]]>", start + 7)
+        text.getOrNull(start)?.isAsciiLetter() == true -> tagCloserEnd(">", start + 1)
+        else -> null
+    }
+
+    /** The last character of the first [closer] from [start], or null. */
+    private fun tagCloserEnd(closer: String, start: Int): Int? {
+        if (closer in noTagCloser) return null
+        val found = text.indexOf(closer, start)
+        if (found >= 0) return found + closer.length - 1
+        noTagCloser += closer
         return null
     }
 }
