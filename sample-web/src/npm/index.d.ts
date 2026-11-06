@@ -518,11 +518,11 @@ export interface AardinkCompletionItem {
     | 'method' | 'constructor' | 'field' | 'variable' | 'class' | 'struct' | 'interface' | 'enum' | 'enumMember' | 'keyword'
     | 'text' | 'file' | 'folder' | 'reference' | 'constant' | 'event' | 'operator' | 'typeParameter' | 'unit' | 'user' | 'issue'
     | number;
-  /** A short line about the item, such as a type or a signature, shown beside the label. */
+  /** A short line about the item, such as a type or a signature, shown beside the label and above its `documentation`. */
   detail?: string;
   /** Characters that, typed while this item is selected, accept it and are then typed after it. Not for snippets. */
   commitCharacters?: string[];
-  /** Markdown, either way. Shown beside the label as one line of plain text. */
+  /** Markdown, either way. Shown beside the label as one line of plain text, and whole beside the list for the selected item. */
   documentation?: string | { value: string };
   /**
    * What the text typed so far is matched against, as in Monaco: its characters in order, ignoring

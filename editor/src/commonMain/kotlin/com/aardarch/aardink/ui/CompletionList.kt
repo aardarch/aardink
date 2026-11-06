@@ -45,7 +45,8 @@ import com.aardarch.aardink.core.CompletionItem
 /**
  * Completions as a list at the caret, where there is a hardware keyboard (desktop, the web): the
  * [selected] row is what Enter or Tab accepts, and Up and Down move it. A tap or click accepts a
- * row too. Touch devices keep [CompletionDropdown]'s strip above the keyboard instead.
+ * row too. Each row says what it can in one line; [CompletionPopup] has the pane with the rest.
+ * Touch devices keep [CompletionDropdown]'s strip above the keyboard instead.
  */
 @Composable
 internal fun CompletionList(

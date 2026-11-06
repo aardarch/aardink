@@ -145,8 +145,8 @@ import kotlin.math.roundToInt
  * @param onRequestGoToLine Invoked on Cmd/Ctrl+G. Hosts wire it to [GoToLineDialog]; the default
  *   does nothing, so the shortcut is inert until a host opts in.
  * @param onOpenLink Called with the target of a link opened by Ctrl/Cmd+click in the text, or by a
- *   click in hover or signature help. Nothing else opens one. Left out, a link in hover or
- *   signature help shows as its text.
+ *   click in hover, signature help or a completion's detail pane. Nothing else opens one. Left
+ *   out, a link in any of those shows as its text.
  */
 @Composable
 fun CodeEditorLayout(
@@ -1613,17 +1613,27 @@ private fun CodeEditorLayoutContent(
             // ── Popups at the caret (or the symbol, or the diagnostic) ───────
             popups = {
                 if (completionAtCaret && showCompletion && completionItems.isNotEmpty()) {
-                    EditorAnchoredPopup(anchor = view.caretRect(state.selection.end), onDismiss = { showCompletion = false }) {
-                        CompletionList(
-                            items = completionItems,
-                            selected = completionSelected,
-                            onAccept = { item ->
-                                applyCompletion(state, item)
+                    CompletionPopup(
+                        anchor = view.caretRect(state.selection.end),
+                        items = completionItems,
+                        selected = completionSelected,
+                        onAccept = { item ->
+                            applyCompletion(state, item)
+                            showCompletion = false
+                            completionItems = emptyList()
+                        },
+                        onDismiss = { showCompletion = false },
+                        // SEAM(resolveCompletion): the one place the pane's item comes from, for
+                        // wiring LanguageService.resolveCompletion when it lands:
+                        // `{ item -> languageService?.let { withContext(state.computeDispatcher) { it.resolveCompletion(item) } } ?: item }`
+                        resolve = { it },
+                        onOpenLink = openCardLink?.let { open ->
+                            { target: String ->
                                 showCompletion = false
-                                completionItems = emptyList()
-                            },
-                        )
-                    }
+                                open(target)
+                            }
+                        },
+                    )
                 }
                 val signatureHelp = currentSignatureHelp
                 if (showSignatureHelp && signatureHelp != null) {
