@@ -111,10 +111,15 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  *     its parent's wherever it comes, even inside the other grammar's string. Its state ends there
  *     too: entering again starts it afresh. A state with no such rule stays embedded to the end.
  *   - While embedded, a state's other rules do not run, and a rule that leaves but whose `cases`
- *     do not for that match is looked past.
+ *     do not for that match is looked past. That holds for an action on the whole match. Where a
+ *     rule's capture groups can leave, any match of it counts, as their `cases` test the groups'
+ *     own text: if they then do not leave, the parent reads the match, and the language carries on
+ *     after it in the state it was in.
  *   - `next` applies as usual: entering goes in on the state `next` arrives at, and leaving comes
  *     first, so one action can do both. With `@rematch`, the text is read again in the new place.
- *   - The id can use `$#` and `$Sn`, as `next` does; they read the state the match was in.
+ *   - The id can use `$#` and `$Sn`, as `next` does; they read the state the match was in. In a
+ *     capture group's action, also as its `next` does, `$#` is the group's text and `$Sn` reads the
+ *     state at that group, which an earlier group's `next` may have moved.
  *   - An id the tokenizer cannot find stays on the parent's rules, so a grammar still highlights
  *     without what it embeds, and `@pop` outside an embedded grammar does nothing.
  *   - A grammar can embed another that embeds a third, up to 16 deep. Past that, an id counts as

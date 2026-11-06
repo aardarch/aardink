@@ -1192,6 +1192,44 @@ class DeclarativeGrammarTest {
     }
 
     @Test
+    fun `a group's id reads the group's text and the state at that group`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["(#)(low|mid)", ["hash", { "token": "name", "next": "@body", "nextEmbedded": "%#" }]],
+                  ["(<)(>)", [{ "token": "open", "next": "@named.low" }, { "token": "shut", "nextEmbedded": "%S2" }]]
+                ],
+                "named": [["[a-z]+", "raw"], [";", { "token": "end", "next": "@pop", "nextEmbedded": "@pop" }]],
+                "body": [["[a-z]+", "raw"], [";", { "token": "end", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        // A set: the resolver is asked again each time the language reads on.
+        val asked = mutableSetOf<String>()
+        val tokenizer = DeclarativeTokenizer(g) {
+            asked += it
+            languages[it]
+        }
+        val ownText = "#low a;"
+        assertEquals(
+            listOf("#" to name("hash"), "low" to name("name"), "a" to name("word.low"), ";" to name("end")),
+            tokenizer.tokenizeFull(ownText).named(ownText),
+        )
+        assertEquals(setOf("low"), asked, "the group's text, not the whole match's")
+        asked.clear()
+        // root has no second part: only the state the first group moved to does.
+        val movedState = "<>a;"
+        assertEquals(
+            listOf("<" to name("open"), ">" to name("shut"), "a" to name("word.low"), ";" to name("end")),
+            tokenizer.tokenizeFull(movedState).named(movedState),
+        )
+        assertEquals(setOf("low"), asked, "the state at the group, not the one the match was in")
+    }
+
+    @Test
     fun `a rule that leaves only in some cases is looked past in the others`() {
         val g = monarch(
             """
@@ -1342,6 +1380,20 @@ class DeclarativeGrammarTest {
                 "c" to name("after"),
             ),
             embedded("[[a]?b]!c", g),
+        )
+        // The language was not left, so it picks up in the state it was in: still inside its quote.
+        assertEquals(
+            listOf(
+                "[[" to name("open"),
+                "'a" to name("quote.low"),
+                "]" to name("mark"),
+                "?" to name("skip"),
+                "b'" to name("quote.low"),
+                "]" to name("mark"),
+                "!" to name("close"),
+                "c" to name("after"),
+            ),
+            embedded("[['a]?b']!c", g),
         )
     }
 
