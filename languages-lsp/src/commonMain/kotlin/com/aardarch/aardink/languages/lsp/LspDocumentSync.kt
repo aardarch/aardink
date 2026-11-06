@@ -18,11 +18,13 @@ package com.aardarch.aardink.languages.lsp
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.ContentChange
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -38,7 +40,7 @@ import kotlin.concurrent.Volatile
 internal enum class LspChangeSync { None, Full, Incremental }
 
 /**
- * What a server's `textDocumentSync` capability asks of the client.
+ * What a server's `textDocumentSync` capability asks of the client, with what it registered since.
  *
  * The capability is a `TextDocumentSyncKind` number or a `TextDocumentSyncOptions` object, and left
  * out it means none. The number form reads as VS Code's client reads it: open and close, changes of
@@ -51,6 +53,30 @@ internal data class LspTextDocumentSync(
     val didSave: Boolean = false,
     val saveIncludesText: Boolean = false,
 ) {
+    /**
+     * [registration] counts as supported, as the ledger has it. Its `documentSelector` is not read,
+     * so when two disagree on the kind of change the narrower wins: a whole text is something any
+     * server that syncs can read, where a range would corrupt one that only takes whole documents.
+     */
+    private fun with(registration: LspRegistration): LspTextDocumentSync = when (registration.method) {
+        "textDocument/didOpen", "textDocument/didClose" -> copy(openClose = true)
+
+        "textDocument/didChange" -> {
+            val kind = registration.options?.get("syncKind")?.let(::changeSyncOf) ?: LspChangeSync.Full
+            copy(change = if (change == LspChangeSync.None || kind == LspChangeSync.None) maxOf(change, kind) else minOf(change, kind))
+        }
+
+        "textDocument/willSave" -> copy(willSave = true)
+
+        "textDocument/didSave" -> copy(
+            didSave = true,
+            saveIncludesText =
+            saveIncludesText || registration.options?.flag("includeText") == true,
+        )
+
+        else -> this
+    }
+
     companion object {
         /**
          * Capabilities not known count as supported, as everywhere in this module. Full is the one
@@ -59,13 +85,14 @@ internal data class LspTextDocumentSync(
          */
         private val Unknown = LspTextDocumentSync(openClose = true, change = LspChangeSync.Full, willSave = true, didSave = true)
 
-        fun from(capabilities: JsonElement?): LspTextDocumentSync {
+        fun from(capabilities: JsonElement?, registrations: List<LspRegistration> = emptyList()): LspTextDocumentSync {
             val declared = capabilities as? JsonObject ?: return Unknown
-            return when (val sync = declared["textDocumentSync"]) {
+            val initial = when (val sync = declared["textDocumentSync"]) {
                 is JsonObject -> fromOptions(sync)
                 is JsonPrimitive -> fromKind(changeSyncOf(sync))
                 else -> LspTextDocumentSync()
             }
+            return registrations.fold(initial) { sync, registration -> sync.with(registration) }
         }
 
         private fun fromKind(kind: LspChangeSync): LspTextDocumentSync =
@@ -93,6 +120,48 @@ internal data class LspTextDocumentSync(
 }
 
 /**
+ * The attached text as the batches so far left it. Private to the queue, so it is safe to read
+ * there, and built from the batches, so its text is exactly the one the next version number stands
+ * for. The live document offers neither.
+ *
+ * It also knows when a range would not mean the same to the server. [CodeDocument] breaks lines at
+ * `\n` alone, where the protocol also counts a `\r` of its own as a line ending, and a position
+ * between the two halves of a `\r\n` is one a server cannot express. Everywhere else the two agree,
+ * `\r\n` documents included.
+ */
+private class TextMirror(text: String) {
+    private val document = CodeDocument(text)
+    private var loneReturns = loneReturnsIn(0, document.length)
+
+    val text: String
+        get() = document.text
+
+    /** Whether [change], about to be applied, can go to the server as a range. */
+    fun canAddress(change: ContentChange): Boolean = change.isReset ||
+        (loneReturns == 0 && !splitsLineBreak(change.offset) && !splitsLineBreak(change.offset + change.deletedLength))
+
+    fun apply(change: ContentChange) {
+        if (change.isReset) {
+            document.replaceAll(change.insertedText)
+            loneReturns = loneReturnsIn(0, document.length)
+            return
+        }
+        // A `\r` just before the change is the only one outside it whose next character changes.
+        val from = (change.offset - 1).coerceAtLeast(0)
+        loneReturns -= loneReturnsIn(from, change.offset + change.deletedLength)
+        document.delete(change.offset, change.deletedLength)
+        document.insert(change.offset, change.insertedText)
+        loneReturns += loneReturnsIn(from, change.offset + change.insertedText.length)
+    }
+
+    private fun splitsLineBreak(offset: Int) = offset in 1 until document.length && document[offset - 1] == '\r' && document[offset] == '\n'
+
+    private fun loneReturnsIn(from: Int, until: Int) = (from until until).count {
+        document[it] == '\r' && (it + 1 == document.length || document[it + 1] != '\n')
+    }
+}
+
+/**
  * Keeps a server's copy of one document in step, for [LspLanguageService].
  *
  * Everything a document sends goes through one first-in, first-out queue, drained by one coroutine
@@ -104,10 +173,14 @@ internal data class LspTextDocumentSync(
  *
  * The queue's coroutine owns all the state below that is not marked otherwise, so none of it is
  * locked. It never reads the attached document, which is not safe to read off the thread that edits
- * it: a whole-text server is served from [mirror] instead.
+ * it: what the server should have comes from [mirror] instead.
  *
- * The queue lives from the first thing sent until [close]. A later session gets a new queue, which
- * starts once the last one has drained.
+ * What a server declared decides what following a state sends, and is read for each thing the queue
+ * takes up, since a registration can arrive at any time. A host's own [open] and [sendWholeText] are
+ * sent whatever it declared, as they always were: a host calling them has said what it wants.
+ *
+ * The queue lives from the first thing sent until [close] or the end of the client. A later session
+ * gets a new queue, which starts once the last one has drained.
  */
 internal class LspDocumentSync(private val client: LspClient, private val documentUri: String, private val languageId: String) {
 
@@ -147,6 +220,9 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     @Volatile
     private var attached: CodeEditorState? = null
 
+    /** The document's length at [attach] until the first batch since, on that thread too. */
+    private var lengthAtAttach = NOT_ATTACHING
+
     /** The document version last sent; 0 when the document is not open. Written by the queue only. */
     @Volatile
     var sentVersion: Int = 0
@@ -155,26 +231,42 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     val isAttached: Boolean
         get() = attached != null
 
+    /** Open as far as the host is concerned, whether or not the server was told. */
     private var opened = false
 
-    /** How [Batch]es are sent, read from the server's capabilities at [attach]. */
+    /** Following a state opened the document for a server that had not asked to hear of it. */
+    private var openWithheld = false
+
+    /** How [Batch]es are sent, from what the server has declared so far. */
     private var changeSync = LspChangeSync.None
 
     /** The text the server has while no listener is following it, to catch up from at [attach]. */
     private var lastText: String? = null
 
-    /**
-     * The attached text as the batches so far left it, kept only for a whole-text server. Being
-     * private to the queue it is safe to read here, and being built from the batches its text is
-     * exactly the one the next version number stands for. The live document offers neither.
-     */
-    private var mirror: CodeDocument? = null
+    /** What the server should have while a state is followed. */
+    private var mirror: TextMirror? = null
 
-    /** The mirror has edits the server has not been sent. */
+    /** The server may not have [mirror]'s text, and the next thing written must be all of it. */
     private var unsent = false
     private var debounce: Job? = null
 
-    private val contentListener: (List<ContentChange>) -> Unit = { changes -> queue?.trySend(Batch(changes)) }
+    private val contentListener: (List<ContentChange>) -> Unit = { changes -> queue?.trySend(Batch(sinceAttach(changes))) }
+
+    /**
+     * [changes] without what [attach] already sent. A change made straight on the document stays
+     * pending in the state until its next edit if something else is listening, so it can reach this
+     * listener with the first batch although it was in the text at [attach]. The versions that would
+     * tell it apart cannot be compared to the document's, which is not public, but the length gives
+     * it away, and then the whole text is told again rather than the change a second time.
+     */
+    private fun sinceAttach(changes: List<ContentChange>): List<ContentChange> {
+        val expected = lengthAtAttach
+        lengthAtAttach = NOT_ATTACHING
+        val document = attached?.document
+        if (expected == NOT_ATTACHING || document == null) return changes
+        if (expected + changes.sumOf { it.insertedText.length - it.deletedLength } == document.length) return changes
+        return listOf(changes.last().copy(insertedText = document.text, isReset = true))
+    }
 
     /**
      * Follows [state]. The text and the listener are taken together on the caller's thread, the one
@@ -186,6 +278,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         check(attached == null) { "$documentUri is already attached to an editor state; detach it first" }
         val text = state.document.text
         attached = state
+        lengthAtAttach = text.length
         enqueue(Send { follow(text) })
         state.addContentListener(contentListener)
     }
@@ -193,49 +286,85 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     private suspend fun follow(text: String) {
         val sync = syncOptions()
         changeSync = sync.change
-        mirror = if (sync.change == LspChangeSync.Full) CodeDocument(text) else null
+        mirror = TextMirror(text)
         when {
-            !opened -> sendOpen(text, sync)
-            text != lastText -> if (sync.change != LspChangeSync.None) sendChanges(listOf(LspTextDocumentContentChangeEvent(text = text)))
+            !opened -> if (sync.openClose) {
+                sendOpen(text)
+            } else {
+                opened = true
+                openWithheld = true
+                sentVersion = 1
+            }
+
+            text != lastText -> if (sync.change != LspChangeSync.None) sendChanges(wholeText(text))
         }
         lastText = null
     }
 
     /** Stops following. Edits already reported still reach the server, ahead of anything sent after. */
     fun detach() {
-        val state = attached ?: return
-        attached = null
-        state.removeContentListener(contentListener)
-        val text = state.document.text
+        if (!stopFollowing()) return
         enqueue(
             Send {
-                lastText = text
+                // What was sent and not what the document says: a change made straight on it can be
+                // in the live text with no report of it ever coming, and only [attach] can tell.
+                lastText = if (unsent) null else mirror?.text
                 mirror = null
             },
         )
     }
 
-    suspend fun open(text: String) = submit(Send { sendOpen(text, syncOptions()) })
+    private fun stopFollowing(): Boolean {
+        val state = attached ?: return false
+        attached = null
+        state.removeContentListener(contentListener)
+        return true
+    }
 
-    suspend fun sendWholeText(text: String, version: Int) = submit(
+    /**
+     * A document still open is not opened twice, which is a protocol error: its text goes as a
+     * change instead, if it is not what the server has.
+     */
+    suspend fun open(text: String) = submit(
         Send {
-            lastText = text
-            if (syncOptions().change != LspChangeSync.None) {
-                sentVersion = version
-                sendDidChange(version, listOf(LspTextDocumentContentChangeEvent(text = text)))
+            when {
+                !opened || openWithheld -> sendOpen(text)
+
+                text != lastText -> {
+                    lastText = text
+                    sendChanges(wholeText(text))
+                }
             }
         },
     )
 
-    /** Ends the session, and with it this queue. Reaches the server even if the caller is cancelled. */
+    suspend fun sendWholeText(text: String, version: Int) = submit(
+        Send {
+            lastText = text
+            sentVersion = version
+            sendDidChange(version, wholeText(text))
+        },
+    )
+
+    /**
+     * Ends the session, and with it this queue. Reaches the server even if the caller is cancelled.
+     * The server is told unless following a state is all that opened the document, for a server that
+     * did not ask to hear of it. Stops following on the caller's thread, without reading the text.
+     */
     suspend fun close() {
+        stopFollowing()
         val closing = queue ?: newQueue()
         queue = null
         val closed = Send {
+            val announced = !openWithheld
             opened = false
+            openWithheld = false
             lastText = null
             sentVersion = 0
-            if (syncOptions().openClose) {
+            mirror = null
+            unsent = false
+            debounce?.cancel()
+            if (announced) {
                 client.sendNotification(
                     "textDocument/didClose",
                     LspJson.encodeToJsonElement(
@@ -289,7 +418,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
      * for the write and not the answer.
      *
      * With no queue there is nothing to be ordered against, and a queue that has gone with the
-     * client's scope lets [block] find out for itself that the connection is closed.
+     * client lets [block] find out for itself that the connection is closed.
      */
     suspend fun <T> inOrder(block: suspend (written: () -> Unit) -> T): T {
         val turn = Turn()
@@ -303,7 +432,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         }
     }
 
-    private fun syncOptions() = LspTextDocumentSync.from(client.serverCapabilities)
+    private fun syncOptions() = LspTextDocumentSync.from(client.serverCapabilities, client.registrations)
 
     private suspend fun submit(item: Send) {
         if (enqueue(item)) item.done.await()
@@ -315,48 +444,90 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         val channel = Channel<Item>(Channel.UNLIMITED, onUndeliveredElement = { it.dropped() })
         val previous = worker
         queue = channel
-        worker = client.launchOnScope {
+        val job = client.launchOnScope {
             previous?.join()
             drain(channel)
-        }.also {
-            // Not a `finally` in the coroutine: one launched into a cancelled scope never starts.
-            it.invokeOnCompletion { channel.cancel() }
+        }
+        worker = job
+        // A worker waiting for more would outlive the client, and with it any scope a host gave it.
+        val watching = client.invokeOnClosed { job.cancel() }
+        // Not a `finally` in the coroutine: one launched into a cancelled scope never starts.
+        job.invokeOnCompletion {
+            watching.dispose()
+            channel.cancel()
         }
         return channel
     }
 
     private suspend fun CoroutineScope.drain(channel: Channel<Item>) {
         for (item in channel) {
+            attempt { followDeclared() }
             when (item) {
-                is Batch -> accept(item.changes, channel)
+                is Batch -> attempt { accept(item.changes, channel) }
 
-                DebounceElapsed -> flushWholeText()
+                DebounceElapsed -> attempt { flushWholeText() }
 
                 is Send -> try {
-                    flushWholeText()
-                    item.block()
+                    attempt { flushWholeText() }
+                    attempt { item.block() }
                 } finally {
                     item.done.complete(Unit)
                 }
 
                 is Turn -> {
-                    flushWholeText()
-                    item.reached.complete(Unit)
+                    try {
+                        attempt { flushWholeText() }
+                    } finally {
+                        item.reached.complete(Unit)
+                    }
                     item.written.await()
                 }
             }
         }
     }
 
+    /**
+     * Runs [write], which only this coroutine's own cancellation may end the queue from. Any other
+     * cancellation is the transport's, a `withTimeout` of its own say, and means this one write is
+     * lost while the connection lives on. What the server has is then not known, so the next thing
+     * written for the text is all of it.
+     */
+    private inline fun CoroutineScope.attempt(write: () -> Unit) {
+        try {
+            write()
+        } catch (_: CancellationException) {
+            ensureActive()
+            unsent = mirror != null
+        }
+    }
+
+    /** Takes in what the server registered or took back since the last thing the queue took up. */
+    private suspend fun followDeclared() {
+        val sync = syncOptions()
+        // Only when it is needed: this runs for every keystroke, and the text costs the whole document.
+        val withheld = if (openWithheld && sync.openClose) mirror?.text ?: lastText else null
+        if (withheld != null) {
+            sendOpen(withheld)
+            unsent = false
+        } else if (changeSync == LspChangeSync.None && sync.change != LspChangeSync.None) {
+            unsent = mirror != null
+        }
+        changeSync = sync.change
+    }
+
     private suspend fun CoroutineScope.accept(changes: List<ContentChange>, channel: Channel<Item>) {
-        when (changeSync) {
-            LspChangeSync.None -> Unit
+        val text = mirror ?: return
+        var addressable = changeSync == LspChangeSync.Incremental && !unsent
+        for (change in changes) {
+            addressable = text.canAddress(change) && addressable
+            text.apply(change)
+        }
+        when {
+            changeSync == LspChangeSync.None -> Unit
 
-            LspChangeSync.Incremental -> sendChanges(changes.map { it.toEvent() })
+            addressable -> sendChanges(changes.map { it.toEvent() })
 
-            LspChangeSync.Full -> {
-                val text = mirror ?: return
-                changes.forEach { text.apply(it) }
+            else -> {
                 unsent = true
                 debounce?.cancel()
                 debounce = launch {
@@ -371,20 +542,24 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         if (!unsent) return
         unsent = false
         debounce?.cancel()
+        if (changeSync == LspChangeSync.None) return
         val text = mirror?.text ?: return
-        sendChanges(listOf(LspTextDocumentContentChangeEvent(text = text)))
+        sendChanges(wholeText(text))
     }
 
-    private suspend fun sendOpen(text: String, sync: LspTextDocumentSync) {
+    /** At the version already reached if a server that took no open has had edits. */
+    private suspend fun sendOpen(text: String) {
         opened = true
+        openWithheld = false
         lastText = text
-        sentVersion = 1
-        if (!sync.openClose) return
+        sentVersion = sentVersion.coerceAtLeast(1)
         client.sendNotification(
             "textDocument/didOpen",
             LspJson.encodeToJsonElement(
                 LspDidOpenTextDocumentParams.serializer(),
-                LspDidOpenTextDocumentParams(LspTextDocumentItem(uri = documentUri, languageId = languageId, version = 1, text = text)),
+                LspDidOpenTextDocumentParams(
+                    LspTextDocumentItem(uri = documentUri, languageId = languageId, version = sentVersion, text = text),
+                ),
             ),
         )
     }
@@ -406,8 +581,12 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     }
 
     private companion object {
-        /** How long a whole-text server waits for typing to pause, unless a request needs it sooner. */
+        /** How long a whole-text sync waits for typing to pause, unless a request needs it sooner. */
         const val FULL_SYNC_DEBOUNCE_MILLIS = 400L
+
+        const val NOT_ATTACHING = -1
+
+        fun wholeText(text: String) = listOf(LspTextDocumentContentChangeEvent(text = text))
 
         /** Each change is relative to the ones before it, as the protocol's `contentChanges` are. */
         fun ContentChange.toEvent(): LspTextDocumentContentChangeEvent = if (isReset) {
@@ -417,15 +596,6 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
                 range = LspRange(LspPosition(startLine, startColumn), LspPosition(oldEndLine, oldEndColumn)),
                 text = insertedText,
             )
-        }
-
-        fun CodeDocument.apply(change: ContentChange) {
-            if (change.isReset) {
-                replaceAll(change.insertedText)
-            } else {
-                delete(change.offset, change.deletedLength)
-                insert(change.offset, change.insertedText)
-            }
         }
     }
 }

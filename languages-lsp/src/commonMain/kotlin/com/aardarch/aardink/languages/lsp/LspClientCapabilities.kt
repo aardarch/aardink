@@ -27,8 +27,8 @@ import kotlinx.serialization.json.putJsonObject
  * The `ClientCapabilities` [LspClient.initialize] declares unless told otherwise: what this module
  * and the editor can really handle, since servers shape their answers to it.
  *
- * Every feature says `dynamicRegistration: false`, because `client/registerCapability` is only
- * acknowledged. Positions are UTF-16, the one encoding `ContentChange` columns come in, and
+ * Every feature says `dynamicRegistration: false`, because of what `client/registerCapability`
+ * covers only text sync is acted on. Positions are UTF-16, the one encoding `ContentChange` columns come in, and
  * `workspaceEdit` declares no `resourceOperations`, so a server keeps to text edits.
  *
  * `completionItem.resolveSupport` leaves out `additionalTextEdits` on purpose: a server would then

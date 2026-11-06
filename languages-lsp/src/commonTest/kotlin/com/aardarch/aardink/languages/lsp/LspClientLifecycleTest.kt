@@ -619,7 +619,8 @@ class LspClientLifecycleTest {
         }
         val declared = mutableListOf<JsonElement>().also { visit(DefaultClientCapabilities, it) }
 
-        // client/registerCapability is only acknowledged, so a server relying on it would be lost.
+        // Of what client/registerCapability covers only text sync is acted on, so inviting it for
+        // anything else would lose a server relying on it.
         assertTrue(declared.size > 10, "every feature says so explicitly, found ${declared.size}")
         assertTrue(declared.all { !it.jsonPrimitive.boolean })
     }

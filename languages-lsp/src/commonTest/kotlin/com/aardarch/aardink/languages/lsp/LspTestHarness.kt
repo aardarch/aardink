@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,7 @@ internal fun range(startLine: Int, startChar: Int, endLine: Int, endChar: Int): 
 internal class HoldableLspTransport(private val inner: ChannelLspTransport) : LspTransport by inner {
     private var held: String? = null
     private var released = CompletableDeferred<Unit>()
+    private var failing: String? = null
 
     /** Writes containing [fragment] wait for [release]; anything else still goes straight out. */
     fun hold(fragment: String) {
@@ -59,8 +61,17 @@ internal class HoldableLspTransport(private val inner: ChannelLspTransport) : Ls
         released.complete(Unit)
     }
 
+    /** The next write containing [fragment] is lost to a cancellation of the transport's own, as a `withTimeout` in it would lose it. */
+    fun loseNext(fragment: String) {
+        failing = fragment
+    }
+
     override suspend fun sendPayload(jsonPayload: String) {
         if (held?.let { it in jsonPayload } == true) released.await()
+        if (failing?.let { it in jsonPayload } == true) {
+            failing = null
+            throw CancellationException("the transport gave up on this write")
+        }
         inner.sendPayload(jsonPayload)
     }
 }
@@ -101,10 +112,7 @@ internal class Harness(val doc: CodeDocument, private val test: TestScope, clien
         settle()
     }
 
-    /** An editor state whose own background work runs in place, so only the client's is scheduled. */
-    fun editorState(text: String) = CodeEditorState(text, tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
-        computeDispatcher = Dispatchers.Unconfined
-    }
+    fun editorState(text: String) = inPlaceEditorState(text)
 
     /** Runs the handshake, with the server declaring [capabilitiesJson]. */
     suspend fun serverDeclares(capabilitiesJson: String) {
@@ -175,6 +183,19 @@ internal class Harness(val doc: CodeDocument, private val test: TestScope, clien
         client.removeDiagnosticsListener(probe)
     }
 }
+
+/**
+ * An editor state whose own background work runs in place, so only the client's is scheduled.
+ *
+ * It starts empty because a state given text starts its first tokenization while it is constructed,
+ * before [CodeEditorState.computeDispatcher] can be set. That pass would run on the real pool, and
+ * with this scope go on to write the token store there while a test edits on its own thread.
+ */
+internal fun inPlaceEditorState(text: String) =
+    CodeEditorState(tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
+        computeDispatcher = Dispatchers.Unconfined
+        loadText(text)
+    }
 
 internal fun withServer(text: String, host: LspClientHost = NoLspClientHost, block: suspend Harness.() -> Unit) = runTest {
     val harness = Harness(CodeDocument(text), this, backgroundScope, host)

@@ -20,12 +20,12 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.TextEdit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -73,17 +73,53 @@ private fun JsonObject.expect(method: String, version: Int): JsonObject {
     return this
 }
 
-/** What a server does with `contentChanges`: applies them one after the other. */
+/** Where each line starts as the protocol counts lines, not as `CodeDocument` does: `\r` ends one too. */
+private fun protocolLineStarts(text: String): List<Int> = buildList {
+    add(0)
+    var index = 0
+    while (index < text.length) {
+        val char = text[index++]
+        if (char == '\n' || (char == '\r' && text.getOrNull(index) != '\n')) add(index)
+    }
+}
+
+/** What a server does with `contentChanges`: applies them one after the other, a column clamped to its line. */
 private fun applyChanges(text: String, changes: JsonArray): String = changes.fold(text) { current, element ->
     val change = element.jsonObject
     val newText = change["text"]!!.jsonPrimitive.content
     val range = change["range"]?.jsonObject ?: return@fold newText
-    val document = CodeDocument(current)
-    fun offset(name: String) = range[name]!!.jsonObject.let {
-        document.lineColToOffset(it["line"]!!.jsonPrimitive.int, it["character"]!!.jsonPrimitive.int)
+    val starts = protocolLineStarts(current)
+    fun offset(name: String): Int {
+        val position = range[name]!!.jsonObject
+        val line = position["line"]!!.jsonPrimitive.int
+        val character = position["character"]!!.jsonPrimitive.int
+        if (line >= starts.size) return current.length
+        var end = starts.getOrElse(line + 1) { current.length }
+        while (end > starts[line] && current[end - 1] in "\r\n") end--
+        return (starts[line] + character).coerceAtMost(end)
     }
     current.replaceRange(offset("start"), offset("end"), newText)
 }
+
+/** Waits out the debounce and plays everything written since onto [text], as a server would. */
+private fun Harness.replayed(text: String): String {
+    advanceBy(DEBOUNCE_MILLIS)
+    var replayed = text
+    while (true) {
+        val sent = transport.sendChannel.tryReceive().getOrNull() ?: return replayed
+        replayed = applyChanges(replayed, LspJson.parseToJsonElement(sent).jsonObject.changes)
+    }
+}
+
+/** Runs the handshake with no sync declared, and the server then registers [registrations], given as JSON. */
+private suspend fun Harness.serverRegisters(vararg registrations: String) {
+    serverAsks("1", "client/registerCapability", """{"registrations":[${registrations.joinToString()}]}""")
+    nextSent()
+}
+
+private fun registration(method: String, options: String = "{}") = """{"id":"$method","method":"$method","registerOptions":$options}"""
+
+private val JsonObject.openedText: String get() = params["textDocument"]!!.jsonObject["text"]!!.jsonPrimitive.content
 
 class LspDocumentSyncTest {
 
@@ -181,6 +217,78 @@ class LspDocumentSyncTest {
             serverText = applyChanges(serverText, sent.changes)
         }
         assertEquals(state.document.text, serverText)
+    }
+
+    // ── Line endings ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `a lone carriage return sends the text whole, since the server sees another line there`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("a\rb\nc")
+        service.attach(state)
+        nextSent()
+
+        state.insert(5, "X")
+        assertNothingSent("the whole text waits for typing to pause")
+
+        advanceBy(DEBOUNCE_MILLIS)
+        val change = sentNow().expect(DID_CHANGE, 2).changes.single().jsonObject
+        assertNull(change["range"])
+        assertEquals("a\rb\ncX", change["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `ranges come back once the lone carriage return has gone`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("a\rb")
+        service.attach(state)
+        nextSent()
+
+        state.applyTextEdits(listOf(TextEdit(1 until 2, "")))
+        advanceBy(DEBOUNCE_MILLIS)
+        assertNull(sentNow().expect(DID_CHANGE, 2).changes.single().jsonObject["range"])
+
+        state.insert(2, "c")
+        assertTrue("range" in sentNow().expect(DID_CHANGE, 3).changes.single().jsonObject)
+    }
+
+    @Test
+    fun `a CRLF document stays on ranges`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("one\r\ntwo\r\n")
+        service.attach(state)
+        var serverText = nextSent().openedText
+
+        state.insert(3, "!")
+        state.insert(6, "?")
+        state.insert(state.document.length, "\r\nend")
+
+        repeat(3) { index ->
+            val sent = sentNow().expect(DID_CHANGE, index + 2)
+            assertTrue("range" in sent.changes.single().jsonObject)
+            serverText = applyChanges(serverText, sent.changes)
+        }
+        assertEquals(state.document.text, serverText)
+    }
+
+    @Test
+    fun `a server counting lines as the protocol does keeps the document's text`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("one\r\ntwo\rthree\n")
+        service.attach(state)
+        var serverText = nextSent().openedText
+
+        fun edit(block: CodeEditorState.() -> Unit) {
+            state.block()
+            serverText = replayed(serverText)
+            assertEquals(state.document.text, serverText)
+        }
+        edit { insert(state.document.length, "tail") }
+        edit { applyTextEdits(listOf(TextEdit(8 until 9, ""))) }
+        edit { insert(4, "between") }
+        edit { undo() }
+        edit { applyTextEdits(listOf(TextEdit(4 until 5, ""))) }
+        edit { insert(2, "\r") }
+        edit { insert(3, "\n") }
+        edit { applyTextEdits(listOf(TextEdit(0 until 3, ""), TextEdit(0 until 0, "\r\n\r"))) }
+        edit { loadText("x\r\ny") }
+        edit { insert(1, "z") }
     }
 
     // ── Order on the wire ────────────────────────────────────────────────────
@@ -412,12 +520,26 @@ class LspDocumentSyncTest {
     }
 
     @Test
-    fun `a server that declared no sync is not sent a host's own notifications either`() = withSync(NO_SYNC) {
+    fun `a host's own notifications reach a server that declared no sync`() = withSync(NO_SYNC) {
         service.didOpen(doc)
         service.didChange(doc, 2)
         service.didClose()
 
-        assertNothingSent("the capability speaks for every path")
+        assertEquals(DID_OPEN, nextSent().method)
+        nextSent().expect(DID_CHANGE, 2)
+        assertEquals(DID_CLOSE, nextSent().method)
+    }
+
+    @Test
+    fun `didClose is left out only for a document attach did not open`() = withSync("""{"change":2}""") {
+        service.didOpen(doc)
+        assertEquals(DID_OPEN, nextSent().method)
+        service.didClose()
+        assertEquals(DID_CLOSE, nextSent().method)
+
+        service.attach(editorState("x"))
+        service.didClose()
+        assertNothingSent("the server was never told it was open")
     }
 
     @Test
@@ -470,6 +592,113 @@ class LspDocumentSyncTest {
         assertEquals(WILL_SAVE, nextSent().method)
         service.didSave(state.document)
         assertNull(nextSent().params["text"])
+    }
+
+    // ── client/registerCapability ────────────────────────────────────────────
+
+    @Test
+    fun `sync registered instead of declared is followed`() = withServer("") {
+        serverDeclares("{}")
+        serverRegisters(
+            registration(DID_OPEN),
+            registration(DID_CLOSE),
+            registration(DID_CHANGE, """{"syncKind":2}"""),
+            registration(WILL_SAVE),
+            registration(DID_SAVE, """{"includeText":true}"""),
+        )
+        val state = editorState("x")
+
+        service.attach(state)
+        assertEquals(DID_OPEN, nextSent().method)
+        state.insert(1, "y")
+        assertTrue("range" in nextSent().expect(DID_CHANGE, 2).changes.single().jsonObject)
+        service.willSave(LspSaveReason.Manual)
+        assertEquals(WILL_SAVE, nextSent().method)
+        service.didSave(state.document)
+        assertEquals("xy", nextSent().params["text"]!!.jsonPrimitive.content)
+        service.didClose()
+        assertEquals(DID_CLOSE, nextSent().method)
+    }
+
+    @Test
+    fun `a registered whole-text server is debounced, and one that gave no kind counts as that`() {
+        fun check(options: String) = withServer("") {
+            serverDeclares("{}")
+            serverRegisters(registration(DID_OPEN), registration(DID_CHANGE, options))
+            val state = editorState("x")
+            service.attach(state)
+            nextSent()
+
+            state.insert(1, "y")
+            assertNothingSent("for $options")
+            advanceBy(DEBOUNCE_MILLIS)
+            assertNull(sentNow().changes.single().jsonObject["range"])
+        }
+        check("""{"syncKind":1}""")
+        check("{}")
+    }
+
+    @Test
+    fun `when registrations disagree on the kind the whole text wins`() = withServer("") {
+        serverDeclares("""{"textDocumentSync":$INCREMENTAL_SYNC}""")
+        serverRegisters(registration(DID_CHANGE, """{"syncKind":1}"""))
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+
+        state.insert(1, "y")
+
+        assertNothingSent("a range could corrupt whichever document the registration was for")
+    }
+
+    @Test
+    fun `sync registered after attach opens the document and follows it from there`() = withServer("") {
+        serverDeclares("{}")
+        val state = editorState("x")
+        service.attach(state)
+        state.insert(1, "y")
+        assertNothingSent("the server has declared nothing yet")
+
+        serverRegisters(registration(DID_OPEN), registration(DID_CHANGE, """{"syncKind":2}"""))
+        state.insert(2, "z")
+
+        val opened = nextSent()
+        assertEquals(DID_OPEN, opened.method)
+        assertEquals("xy", opened.openedText)
+        assertEquals(1, opened.version)
+        val change = nextSent().expect(DID_CHANGE, 2).changes.single().jsonObject
+        assertEquals(range(0, 2, 0, 2), change["range"].toString())
+    }
+
+    @Test
+    fun `change registered late for an open document starts from the whole text`() = withSync("""{"openClose":true}""") {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        state.insert(1, "y")
+
+        serverRegisters(registration(DID_CHANGE, """{"syncKind":2}"""))
+        state.insert(2, "z")
+        advanceBy(DEBOUNCE_MILLIS)
+
+        val catchUp = sentNow().expect(DID_CHANGE, 2).changes.single().jsonObject
+        assertEquals("xyz", catchUp["text"]!!.jsonPrimitive.content)
+        state.insert(3, "!")
+        assertTrue("range" in sentNow().expect(DID_CHANGE, 3).changes.single().jsonObject)
+    }
+
+    @Test
+    fun `a registration taken back stops counting`() = withServer("") {
+        serverDeclares("{}")
+        serverRegisters(registration(WILL_SAVE))
+        service.willSave(LspSaveReason.Manual)
+        assertEquals(WILL_SAVE, nextSent().method)
+
+        serverAsks("2", "client/unregisterCapability", """{"unregisterations":[{"id":"$WILL_SAVE","method":"$WILL_SAVE"}]}""")
+        nextSent()
+        service.willSave(LspSaveReason.Manual)
+
+        assertNothingSent("the server took it back")
     }
 
     // ── willSave and didSave ─────────────────────────────────────────────────
@@ -553,6 +782,68 @@ class LspDocumentSyncTest {
         service.detach()
         service.didChange(state.document, 9)
         nextSent().expect(DID_CHANGE, 9)
+    }
+
+    @Test
+    fun `didOpen after detach does not open the document again`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        state.insert(1, "y")
+        nextSent().expect(DID_CHANGE, 2)
+        service.detach()
+
+        service.didOpen(state.document)
+        assertNothingSent("detach left it open, and the server has this text")
+
+        state.insert(2, "z")
+        service.didOpen(state.document)
+        val catchUp = nextSent().expect(DID_CHANGE, 3).changes.single().jsonObject
+        assertNull(catchUp["range"])
+        assertEquals("xyz", catchUp["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a second didOpen from a host is not a second open`() = withSync(INCREMENTAL_SYNC) {
+        service.didOpen(CodeDocument("a"))
+        nextSent()
+
+        service.didOpen(CodeDocument("a"))
+        assertNothingSent("the server has this text")
+
+        service.didOpen(CodeDocument("b"))
+        nextSent().expect(DID_CHANGE, 2)
+    }
+
+    @Test
+    fun `an edit made straight on the document before detach is caught up on`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+
+        state.document.insert(1, "y")
+        service.detach()
+        service.attach(state)
+
+        val catchUp = nextSent().expect(DID_CHANGE, 2).changes.single().jsonObject
+        assertNull(catchUp["range"])
+        assertEquals("xy", catchUp["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `an edit made straight on the document before attach is not applied twice`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("x")
+        state.addContentListener { }
+        state.document.insert(1, "y")
+
+        service.attach(state)
+        val serverText = nextSent().openedText
+        assertEquals("xy", serverText)
+        state.insert(2, "z")
+
+        assertEquals("xyz", applyChanges(serverText, nextSent().expect(DID_CHANGE, 2).changes))
+        state.insert(3, "!")
+        assertTrue("range" in nextSent().expect(DID_CHANGE, 3).changes.single().jsonObject, "and it is followed from there")
     }
 
     @Test
@@ -777,8 +1068,7 @@ class LspDocumentSyncTest {
         val scope = CoroutineScope(coroutineContext + Job())
         val wire = HoldableLspTransport(ChannelLspTransport())
         val service = LspLanguageService(LspClient(wire, scope), URI, "kotlin")
-        val state = CodeEditorState("x", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined))
-        state.computeDispatcher = Dispatchers.Unconfined
+        val state = inPlaceEditorState("x")
         service.attach(state)
         wire.hold(DID_OPEN)
         val request = async { service.completions(state.document.snapshot(), 1) }
@@ -791,12 +1081,144 @@ class LspDocumentSyncTest {
     }
 
     @Test
+    fun `a request in the worker's hands is released when the scope is cancelled during its flush`() = runTest {
+        val scope = CoroutineScope(coroutineContext + Job())
+        val wire = HoldableLspTransport(ChannelLspTransport())
+        val service = LspLanguageService(LspClient(wire, scope), URI, "kotlin")
+        val state = inPlaceEditorState("x")
+        service.attach(state)
+        testScheduler.runCurrent()
+        wire.hold(DID_CHANGE)
+        state.insert(1, "y")
+        val request = async { service.completions(state.document.snapshot(), 2) }
+        testScheduler.runCurrent()
+        assertFalse(request.isCompleted, "the flush for its turn is stuck in the transport")
+
+        scope.cancel()
+
+        assertTrue(withTimeout(5_000) { request.await() }.isEmpty())
+    }
+
+    @Test
+    fun `a request in the worker's hands is released when the client stops`() = withSync(FULL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        wire.hold(DID_CHANGE)
+        state.insert(1, "y")
+        val request = async { service.completions(state.document.snapshot(), 2) }
+        settle()
+        assertFalse(request.isCompleted, "the flush for its turn is stuck in the transport")
+
+        client.stop()
+
+        assertTrue(withTimeout(5_000) { request.await() }.isEmpty())
+    }
+
+    @Test
+    fun `a host's scope completes once the client has stopped or shut down`() {
+        fun check(end: suspend LspClient.() -> Unit, use: suspend LspLanguageService.(CodeEditorState) -> Unit) = runTest {
+            val state = inPlaceEditorState("x")
+            withTimeout(60_000) {
+                coroutineScope {
+                    val client = LspClient(ChannelLspTransport(), this)
+                    LspLanguageService(client, URI, "kotlin").use(state)
+                    client.end()
+                }
+            }
+        }
+        val stop: suspend LspClient.() -> Unit = { stop() }
+        val shutdown: suspend LspClient.() -> Unit = { shutdown() }
+        for (end in listOf(stop, shutdown)) {
+            check(end) { didOpen(it.document) }
+            check(end) { attach(it) }
+            check(end) {
+                attach(it)
+                it.insert(1, "y")
+            }
+            check(end) { willSave(LspSaveReason.Manual) }
+        }
+    }
+
+    @Test
+    fun `a document used after its client stopped leaves nothing running`() = runTest {
+        withTimeout(5_000) {
+            coroutineScope {
+                val client = LspClient(ChannelLspTransport(), this)
+                val service = LspLanguageService(client, URI, "kotlin")
+                service.didOpen(CodeDocument("x"))
+                client.stop()
+
+                service.didClose()
+                service.didOpen(CodeDocument("x"))
+            }
+        }
+    }
+
+    @Test
+    fun `a write lost to the transport's own cancellation does not end the queue`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        wire.loseNext(DID_CHANGE)
+
+        state.insert(1, "a")
+        assertNothingSent("that write was lost")
+        state.insert(2, "b")
+        assertNothingSent("the server is missing an edit, so a range would land in the wrong place")
+        advanceBy(DEBOUNCE_MILLIS)
+
+        val catchUp = sentNow().expect(DID_CHANGE, 3).changes.single().jsonObject
+        assertNull(catchUp["range"])
+        assertEquals("xab", catchUp["text"]!!.jsonPrimitive.content)
+        state.insert(3, "c")
+        assertTrue("range" in sentNow().expect(DID_CHANGE, 4).changes.single().jsonObject, "and it is back on ranges")
+        service.didClose()
+        assertEquals(DID_CLOSE, sentNow().method)
+    }
+
+    @Test
+    fun `a write still lost at detach is caught up on at the next attach`() = withSync(INCREMENTAL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        wire.loseNext(DID_CHANGE)
+        state.insert(1, "y")
+        settle()
+
+        wire.loseNext(DID_CHANGE)
+        service.detach()
+        settle()
+        service.attach(state)
+
+        val catchUp = sentNow().changes.single().jsonObject
+        assertNull(catchUp["range"])
+        assertEquals("xy", catchUp["text"]!!.jsonPrimitive.content, "the mirror has this text, and the server does not")
+    }
+
+    @Test
+    fun `a flush lost to the transport's own cancellation still gives a request its turn, in order`() = withSync(FULL_SYNC) {
+        val state = editorState("x")
+        service.attach(state)
+        nextSent()
+        wire.loseNext(DID_CHANGE)
+
+        state.insert(1, "a")
+        val completion = async(start = CoroutineStart.UNDISPATCHED) { service.completions(state.document.snapshot(), 2) }
+        state.insert(2, "b")
+
+        respond(COMPLETION, "[]")
+        completion.await()
+        advanceBy(DEBOUNCE_MILLIS)
+        assertEquals("xab", sentNow().changes.single().jsonObject["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `a client whose scope has ended does not hang anything`() = runTest {
         val scope = CoroutineScope(coroutineContext + Job())
         scope.cancel()
         val service = LspLanguageService(LspClient(ChannelLspTransport(), scope), URI, "kotlin")
-        val state = CodeEditorState("x", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined))
-        state.computeDispatcher = Dispatchers.Unconfined
+        val state = inPlaceEditorState("x")
 
         withTimeout(5_000) {
             service.attach(state)

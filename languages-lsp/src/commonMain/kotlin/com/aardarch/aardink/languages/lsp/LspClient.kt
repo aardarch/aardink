@@ -19,6 +19,7 @@ import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelChildren
@@ -64,6 +65,9 @@ class LspRequestException(val code: Int, message: String) : RuntimeException(mes
         const val CONNECTION_CLOSED: Int = -32001
     }
 }
+
+/** One entry of `client/registerCapability`: the [method] the server added support for. */
+internal class LspRegistration(val id: String, val method: String, val options: JsonObject?)
 
 /**
  * Asynchronous Coroutine JSON-RPC 2.0 client managing communication with a Language Server.
@@ -115,6 +119,9 @@ class LspClient(
     @Volatile
     private var closed = false
 
+    /** Completes once [closed] is set, after [lock] is released; see [invokeOnClosed]. */
+    private val connectionEnded = CompletableDeferred<Unit>()
+
     /** Guarded by [lock]; see [claimTransportClose]. */
     private var transportClosed = false
 
@@ -133,6 +140,11 @@ class LspClient(
      */
     @Volatile
     var serverCapabilities: JsonElement? = null
+        private set
+
+    /** What the server has registered through `client/registerCapability` and not taken back. Written under [lock]. */
+    @Volatile
+    internal var registrations: List<LspRegistration> = emptyList()
         private set
 
     /**
@@ -182,12 +194,21 @@ class LspClient(
             } finally {
                 lock.unlock()
             }
-            if (mustClose) transport.close()
+            afterLock(mustClose)
         } else if (scope.isActive) {
-            scope.launch { if (lock.withLock { block() }) transport.close() }
+            scope.launch { afterLock(lock.withLock { block() }) }
         } else {
-            if (block()) transport.close()
+            afterLock(block())
         }
+    }
+
+    /**
+     * What a teardown does once [lock] is released: the handlers of [invokeOnClosed] go first, as a
+     * close can block for as long as a hung server holds a write up.
+     */
+    private fun afterLock(mustClose: Boolean) {
+        if (closed) connectionEnded.complete(Unit)
+        if (mustClose) transport.close()
     }
 
     /**
@@ -262,7 +283,7 @@ class LspClient(
             failPendingRequestsLocked("Language server connection closed")
             claimTransportClose()
         }
-        if (mustClose) transport.close()
+        afterLock(mustClose)
     }
 
     /**
@@ -420,6 +441,13 @@ class LspClient(
     internal fun launchOnScope(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
 
     /**
+     * Calls [handler] when the connection ends, at once if it already has, so that what was started
+     * with [launchOnScope] can end with it and not keep a host's scope from completing. Not called
+     * for a scope cancelled before there was a connection: that ends the coroutines by itself.
+     */
+    internal fun invokeOnClosed(handler: () -> Unit): DisposableHandle = connectionEnded.invokeOnCompletion { handler() }
+
+    /**
      * Allocates a request id and registers [deferred] against it, unless the client is already
      * closed, or [shutdown] has begun: the protocol allows no request but `shutdown` from there on.
      *
@@ -451,7 +479,7 @@ class LspClient(
             failPendingRequestsLocked("Language server connection closed")
             claimTransportClose()
         }
-        if (mustClose) transport.close()
+        afterLock(mustClose)
     }
 
     /**
@@ -592,10 +620,9 @@ class LspClient(
      * The reply to a server→client request; anything without a safe generic reply gets a
      * `MethodNotFound` error so the server does not block waiting on us.
      *
-     * - `client/registerCapability` / `client/unregisterCapability`: acknowledged with a `null`
-     *   result. This bridge always sends its full capabilities up front, declares
-     *   `dynamicRegistration: false` and does not track registrations, so there is nothing further
-     *   to do.
+     * - `client/registerCapability` / `client/unregisterCapability`: kept in [registrations] and
+     *   acknowledged with a `null` result. [DefaultClientCapabilities] invites none, but a host may
+     *   pass its own, and a server that registers text sync must then be sent the document.
      * - `window/workDoneProgress/create`: acknowledged with a `null` result.
      * - `window/showMessageRequest`: [LspClientHost.showMessageRequest]'s choice, or a `null` result
      *   for none.
@@ -604,10 +631,17 @@ class LspClient(
      */
     private suspend fun answerServerRequest(id: JsonElement, method: String, params: JsonElement?): LspMessage.Response {
         val result: JsonElement = when (method) {
-            "client/registerCapability",
-            "client/unregisterCapability",
-            "window/workDoneProgress/create",
-            -> JsonNull
+            "client/registerCapability" -> {
+                addRegistrations(params)
+                JsonNull
+            }
+
+            "client/unregisterCapability" -> {
+                removeRegistrations(params)
+                JsonNull
+            }
+
+            "window/workDoneProgress/create" -> JsonNull
 
             "window/showMessageRequest" -> showMessageRequestResult(params)
 
@@ -619,6 +653,25 @@ class LspClient(
             )
         }
         return LspMessage.Response(id = id, result = result)
+    }
+
+    /** Read member by member, for the reason [showMessageRequestResult] gives. */
+    private suspend fun addRegistrations(params: JsonElement?) {
+        val added = ((params as? JsonObject)?.get("registrations") as? JsonArray).orEmpty().mapNotNull { entry ->
+            val registration = entry as? JsonObject ?: return@mapNotNull null
+            val id = (registration["id"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            val method = (registration["method"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            LspRegistration(id, method, registration["registerOptions"] as? JsonObject)
+        }
+        lock.withLock { registrations = registrations + added }
+    }
+
+    private suspend fun removeRegistrations(params: JsonElement?) {
+        // `unregisterations` is how the protocol spells it, and has to go on spelling it.
+        val removed = ((params as? JsonObject)?.get("unregisterations") as? JsonArray).orEmpty().mapNotNull { entry ->
+            ((entry as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull
+        }
+        lock.withLock { registrations = registrations.filterNot { it.id in removed } }
     }
 
     private fun internalErrorResponse(id: JsonElement, method: String, cause: Exception) = LspMessage.Response(

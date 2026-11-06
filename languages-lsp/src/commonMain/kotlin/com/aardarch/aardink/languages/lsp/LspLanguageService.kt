@@ -90,10 +90,11 @@ enum class LspSaveReason(internal val code: Int) {
  * `didChange` for that keystroke. A host that manages the text itself calls [didOpen] and
  * [didChange] instead.
  *
- * The server's `textDocumentSync` capability, read from [LspClient.serverCapabilities], decides what
- * of [didOpen], [didChange], [didClose], [attach], [willSave] and [didSave] reaches it. A server that
- * declared no sync hears none of them; capabilities not known, because [LspClient.initialize] was
- * not called, count as whole-text sync with everything else supported.
+ * The server's `textDocumentSync` capability, read from [LspClient.serverCapabilities], and what it
+ * registered through `client/registerCapability` decide what [attach], [willSave] and [didSave] send.
+ * A server that declared no sync hears none of them, and no [didClose] for a document only [attach]
+ * opened; capabilities not known, because [LspClient.initialize] was not called, count as whole-text
+ * sync with everything else supported. [didOpen] and [didChange] are a host's own word and always go.
  *
  * Other `ServerCapabilities` are not consulted — every request is sent and an unsupported one
  * degrades to the empty result. Two capabilities are the exception, and a host reads both from the
@@ -213,7 +214,8 @@ class LspLanguageService(
 
     /**
      * Sends `textDocument/didOpen` notification to the server and (re-)registers this service's
-     * diagnostics listener.
+     * diagnostics listener. A document still open, as [detach] leaves it, is not opened a second time:
+     * if the text is not what the server has, it goes as a whole-text `didChange` instead.
      *
      * @throws IllegalStateException while attached: [attach] has opened the document already.
      */
@@ -237,13 +239,13 @@ class LspLanguageService(
 
     /**
      * Sends `textDocument/didClose` notification to the server, after any edits still on their way,
-     * unregisters the diagnostics listener and clears cached diagnostics. Detaches first if attached.
+     * unregisters the diagnostics listener and clears cached diagnostics. Detaches first if attached,
+     * so while attached this must be called on the thread that edits the state, as [detach] must.
      *
      * The notification goes even if the caller is cancelled while waiting for it, so this is safe in
      * a `finally`.
      */
     suspend fun didClose() {
-        sync.detach()
         client.removeDiagnosticsListener(diagnosticsListener)
         lspDiagnostics = emptyList()
         diagnosticsVersion = null
