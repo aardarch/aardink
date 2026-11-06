@@ -43,7 +43,9 @@ interface LspTransport {
     suspend fun receivePayload(): String?
 
     /**
-     * Closes the transport. [LspClient] calls this exactly once per connection.
+     * Closes the transport. [LspClient] calls this exactly once per connection, never while holding
+     * its own lock, and on the thread that ended the connection: for `stop()`, the caller's. So it
+     * should not wait for long on a read or write that a hung server is holding up.
      */
     fun close()
 }

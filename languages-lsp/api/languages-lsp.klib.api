@@ -18,6 +18,14 @@ final enum class com.aardarch.aardink.languages.lsp/LspRenameSupport : kotlin/En
     final fun values(): kotlin/Array<com.aardarch.aardink.languages.lsp/LspRenameSupport> // com.aardarch.aardink.languages.lsp/LspRenameSupport.values|values#static(){}[0]
 }
 
+abstract interface com.aardarch.aardink.languages.lsp/LspClientHost { // com.aardarch.aardink.languages.lsp/LspClientHost|null[0]
+    open fun logMessage(kotlin/Int, kotlin/String) // com.aardarch.aardink.languages.lsp/LspClientHost.logMessage|logMessage(kotlin.Int;kotlin.String){}[0]
+    open fun progress(kotlinx.serialization.json/JsonElement, kotlinx.serialization.json/JsonElement) // com.aardarch.aardink.languages.lsp/LspClientHost.progress|progress(kotlinx.serialization.json.JsonElement;kotlinx.serialization.json.JsonElement){}[0]
+    open fun showMessage(kotlin/Int, kotlin/String) // com.aardarch.aardink.languages.lsp/LspClientHost.showMessage|showMessage(kotlin.Int;kotlin.String){}[0]
+    open suspend fun applyWorkspaceEdit(com.aardarch.aardink.languages.lsp/LspWorkspaceEdit, kotlin/String?): kotlin/Boolean // com.aardarch.aardink.languages.lsp/LspClientHost.applyWorkspaceEdit|applyWorkspaceEdit(com.aardarch.aardink.languages.lsp.LspWorkspaceEdit;kotlin.String?){}[0]
+    open suspend fun showMessageRequest(kotlin/Int, kotlin/String, kotlin.collections/List<kotlin/String>): kotlin/String? // com.aardarch.aardink.languages.lsp/LspClientHost.showMessageRequest|showMessageRequest(kotlin.Int;kotlin.String;kotlin.collections.List<kotlin.String>){}[0]
+}
+
 abstract interface com.aardarch.aardink.languages.lsp/LspTransport { // com.aardarch.aardink.languages.lsp/LspTransport|null[0]
     abstract fun close() // com.aardarch.aardink.languages.lsp/LspTransport.close|close(){}[0]
     abstract suspend fun receivePayload(): kotlin/String? // com.aardarch.aardink.languages.lsp/LspTransport.receivePayload|receivePayload(){}[0]
@@ -38,10 +46,13 @@ final class com.aardarch.aardink.languages.lsp/ChannelLspTransport : com.aardarc
 }
 
 final class com.aardarch.aardink.languages.lsp/LspClient { // com.aardarch.aardink.languages.lsp/LspClient|null[0]
-    constructor <init>(com.aardarch.aardink.languages.lsp/LspTransport, kotlinx.coroutines/CoroutineScope = ...) // com.aardarch.aardink.languages.lsp/LspClient.<init>|<init>(com.aardarch.aardink.languages.lsp.LspTransport;kotlinx.coroutines.CoroutineScope){}[0]
+    constructor <init>(com.aardarch.aardink.languages.lsp/LspTransport, kotlinx.coroutines/CoroutineScope = ..., com.aardarch.aardink.languages.lsp/LspClientHost = ...) // com.aardarch.aardink.languages.lsp/LspClient.<init>|<init>(com.aardarch.aardink.languages.lsp.LspTransport;kotlinx.coroutines.CoroutineScope;com.aardarch.aardink.languages.lsp.LspClientHost){}[0]
 
     final val transport // com.aardarch.aardink.languages.lsp/LspClient.transport|{}transport[0]
         final fun <get-transport>(): com.aardarch.aardink.languages.lsp/LspTransport // com.aardarch.aardink.languages.lsp/LspClient.transport.<get-transport>|<get-transport>(){}[0]
+
+    final var serverCapabilities // com.aardarch.aardink.languages.lsp/LspClient.serverCapabilities|{}serverCapabilities[0]
+        final fun <get-serverCapabilities>(): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspClient.serverCapabilities.<get-serverCapabilities>|<get-serverCapabilities>(){}[0]
 
     final fun addDiagnosticsListener(kotlin/Function3<kotlin/String, kotlin/Int?, kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnostic>, kotlin/Unit>) // com.aardarch.aardink.languages.lsp/LspClient.addDiagnosticsListener|addDiagnosticsListener(kotlin.Function3<kotlin.String,kotlin.Int?,kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspDiagnostic>,kotlin.Unit>){}[0]
     final fun removeDiagnosticsListener(kotlin/Function3<kotlin/String, kotlin/Int?, kotlin.collections/List<com.aardarch.aardink.languages.lsp/LspDiagnostic>, kotlin/Unit>) // com.aardarch.aardink.languages.lsp/LspClient.removeDiagnosticsListener|removeDiagnosticsListener(kotlin.Function3<kotlin.String,kotlin.Int?,kotlin.collections.List<com.aardarch.aardink.languages.lsp.LspDiagnostic>,kotlin.Unit>){}[0]
@@ -50,6 +61,7 @@ final class com.aardarch.aardink.languages.lsp/LspClient { // com.aardarch.aardi
     final suspend fun initialize(kotlin/String?, kotlinx.serialization.json/JsonElement = ...): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspClient.initialize|initialize(kotlin.String?;kotlinx.serialization.json.JsonElement){}[0]
     final suspend fun sendNotification(kotlin/String, kotlinx.serialization.json/JsonElement? = ...) // com.aardarch.aardink.languages.lsp/LspClient.sendNotification|sendNotification(kotlin.String;kotlinx.serialization.json.JsonElement?){}[0]
     final suspend fun sendRequest(kotlin/String, kotlinx.serialization.json/JsonElement? = ...): kotlinx.serialization.json/JsonElement? // com.aardarch.aardink.languages.lsp/LspClient.sendRequest|sendRequest(kotlin.String;kotlinx.serialization.json.JsonElement?){}[0]
+    final suspend fun shutdown() // com.aardarch.aardink.languages.lsp/LspClient.shutdown|shutdown(){}[0]
 }
 
 final class com.aardarch.aardink.languages.lsp/LspCodeAction { // com.aardarch.aardink.languages.lsp/LspCodeAction|null[0]
@@ -1384,6 +1396,8 @@ sealed class com.aardarch.aardink.languages.lsp/LspMessage { // com.aardarch.aar
     }
 }
 
+final val com.aardarch.aardink.languages.lsp/DefaultClientCapabilities // com.aardarch.aardink.languages.lsp/DefaultClientCapabilities|{}DefaultClientCapabilities[0]
+    final fun <get-DefaultClientCapabilities>(): kotlinx.serialization.json/JsonObject // com.aardarch.aardink.languages.lsp/DefaultClientCapabilities.<get-DefaultClientCapabilities>|<get-DefaultClientCapabilities>(){}[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop|#static{}com_aardarch_aardink_languages_lsp_ChannelLspTransport$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspClient$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspClient$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspClient$stableprop[0]
 final val com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction$stableprop // com.aardarch.aardink.languages.lsp/com_aardarch_aardink_languages_lsp_LspCodeAction$stableprop|#static{}com_aardarch_aardink_languages_lsp_LspCodeAction$stableprop[0]
