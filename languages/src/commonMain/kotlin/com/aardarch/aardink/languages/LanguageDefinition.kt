@@ -20,6 +20,8 @@ import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NoOpFoldingProvider
+import com.aardarch.aardink.languages.internal.CommentedTokenizer
+import com.aardarch.aardink.languages.internal.configuredService
 
 /**
  * Bundle of everything the editor needs to render a particular language.
@@ -47,6 +49,18 @@ data class LanguageDefinition(
     val languageService: LanguageService? = null,
     val keyboardToolbarChars: List<Char> = tokenizer.keyboardToolbarChars(),
 ) {
+    /**
+     * This language with [configuration] over it: what it says about closing pairs, surrounding a
+     * selection and Enter comes first, and the language's service, if it has one, answers the rest.
+     * Its `comments` replace the tokenizer's, and its fold markers add to the [foldingProvider].
+     * A language with no service gets one, and keeps a line's indentation on Enter.
+     */
+    fun withConfiguration(configuration: LanguageConfiguration): LanguageDefinition = copy(
+        tokenizer = configuration.comments?.let { CommentedTokenizer(tokenizer, it) } ?: tokenizer,
+        foldingProvider = configuration.foldingMarkers?.let { foldingProvider.withRegionMarkers(it) } ?: foldingProvider,
+        languageService = configuredService(configuration, configuration.comments ?: tokenizer.commentSyntax, languageService),
+    )
+
     companion object {
         /**
          * A language built on [base]: [overlay] answers first and [base]'s language service fills in
