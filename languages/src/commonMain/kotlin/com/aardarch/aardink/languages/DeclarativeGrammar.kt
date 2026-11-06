@@ -73,7 +73,7 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  * - **Rules:** `[regex, action]` or `[regex, action, next]`, or `{ "regex", "action", "next" }`,
  *   or `{ "include": "@state" }` for another state's rules. The first rule whose regex matches at
  *   the current position wins. Regexes see one line at a time.
- * - **Actions:** a token name; `{ "token", "next", "switchTo", "goBack" }`;
+ * - **Actions:** a token name; `{ "token", "next", "switchTo", "goBack", "nextEmbedded" }`;
  *   `{ "cases": { guard: action } }`; or an array with an action per capture group, any of those
  *   three, whose cases test the group's own text and whose `next`s apply in order.
  *   - `switchTo` replaces the current state instead of pushing one, and wins over `next`.
@@ -99,6 +99,27 @@ internal fun grammarTokenType(name: String): TokenType = when (name) {
  *   state again) or `@popall` (back to the bottom of the stack). A state name in `next` or
  *   `switchTo` can use `$#` and `$Sn`, as in `@string.$#`. [parse] cannot check a name made that
  *   way, so if the grammar has no such state the stack stays as it is.
+ * - **Embedding:** `nextEmbedded` hands the text after the match to another grammar, which
+ *   [DeclarativeTokenizer] finds by id, and `"nextEmbedded": "@pop"` hands it back:
+ *   ```json
+ *   ["<script>", { "token": "tag", "next": "@script", "nextEmbedded": "javascript" }],
+ *   "script": [["</script>", { "token": "tag", "next": "@pop", "nextEmbedded": "@pop" }]]
+ *   ```
+ *   - The other grammar reads from there up to the first place a rule of the state its parent is
+ *     in leaves it, line after line, in states of its own. It sees only that much of a line: `$`
+ *     and `@eos` hold at the end of that, `^` at the start of it. So the text a rule leaves on is
+ *     its parent's wherever it comes, even inside the other grammar's string. Its state ends there
+ *     too: entering again starts it afresh. A state with no such rule stays embedded to the end.
+ *   - While embedded, a state's other rules do not run, and a rule that leaves but whose `cases`
+ *     do not for that match is looked past.
+ *   - `next` applies as usual: entering goes in on the state `next` arrives at, and leaving comes
+ *     first, so one action can do both. With `@rematch`, the text is read again in the new place.
+ *   - The id can use `$#` and `$Sn`, as `next` does; they read the state the match was in.
+ *   - An id the tokenizer cannot find stays on the parent's rules, so a grammar still highlights
+ *     without what it embeds, and `@pop` outside an embedded grammar does nothing.
+ *   - A grammar can embed another that embeds a third, up to 16 deep. Past that, an id counts as
+ *     not found: a grammar that embeds itself has to stop somewhere.
+ *   - In a capture group's action, `nextEmbedded` takes effect after the whole match.
  * - **Top level:** `defaultToken` for text no rule matches, `ignoreCase`, `tokenPostfix` added to
  *   every token name, `brackets` for `@brackets` (`{ "open", "close", "token" }` or
  *   `[open, close, token]` each; without it, `{}`, `[]`, `()` and `<>` as `delimiter.curly`,
@@ -119,17 +140,35 @@ class DeclarativeGrammar internal constructor(
     internal val states: Map<String, List<Rule>>,
     internal val start: String,
     internal val defaultToken: TokenType,
-    /** Every token name the grammar can produce, with its postfix: for giving each a colour. */
+    /**
+     * Every token name the grammar can produce, with its postfix: for giving each a colour. Only
+     * its own: the grammars it embeds are known by id alone until it is tokenized, and each has
+     * [tokenNames] of its own.
+     */
     val tokenNames: Set<String>,
     internal val commentSyntax: CommentSyntax? = null,
 ) {
     internal sealed interface Action {
+        /** Whether any branch of this action leaves an embedded language. */
+        val leavesEmbedded: Boolean
+            get() = when (this) {
+                is Token -> embedding == Embedding.Pop
+                is Groups -> actions.any { it.leavesEmbedded }
+                is Cases -> cases.any { it.second.leavesEmbedded }
+            }
+
         /**
          * A token, of [type] unless [brackets] knows the text better. [goBack] characters of the
          * match are read again.
          */
-        data class Token(val type: TokenType, val next: Next?, val rematch: Boolean, val goBack: Int = 0, val brackets: Brackets? = null) :
-            Action {
+        data class Token(
+            val type: TokenType,
+            val next: Next?,
+            val rematch: Boolean,
+            val goBack: Int = 0,
+            val brackets: Brackets? = null,
+            val embedding: Embedding? = null,
+        ) : Action {
             /** The type of this token on [matched]. */
             fun typeOf(matched: String): TokenType = brackets?.typeOf(matched) ?: type
         }
@@ -230,7 +269,17 @@ class DeclarativeGrammar internal constructor(
         data object PopAll : Next
     }
 
-    internal class Rule(val regex: Regex, val action: Action)
+    /** What `nextEmbedded` asks for. */
+    internal sealed interface Embedding {
+        /** Hands the text that follows to the grammar [id] names. */
+        data class Enter(val id: Template) : Embedding
+        data object Pop : Embedding
+    }
+
+    internal class Rule(val regex: Regex, val action: Action) {
+        /** Whether this is a rule to look for while in an embedded language. */
+        val leavesEmbedded: Boolean = action.leavesEmbedded
+    }
 
     companion object {
         /**
@@ -388,25 +437,31 @@ private class GrammarReader(private val json: JsonObject) {
                     // and this path runs for every token. Refusing it would only make a working
                     // Monaco grammar fail to load.
                     val next = switchTo(json, path) ?: json["next"]?.let { next(it, "$path.next") } ?: ruleNext
-                    token(json.string("token") ?: "", next, goBack(json, path), path)
+                    token(json.string("token") ?: "", next, goBack(json, path), path, embedding(json, path))
                 }
             }
         }
 
     /** The action for the token [name]: `@rematch`, `@brackets` with any suffix, or a fixed name. */
-    private fun token(name: String, next: DeclarativeGrammar.Next?, goBack: Int, path: String): DeclarativeGrammar.Action.Token {
+    private fun token(
+        name: String,
+        next: DeclarativeGrammar.Next?,
+        goBack: Int,
+        path: String,
+        embedding: DeclarativeGrammar.Embedding? = null,
+    ): DeclarativeGrammar.Action.Token {
         tokenName(name, path)
         return when {
-            name == "@rematch" -> DeclarativeGrammar.Action.Token(TokenType.Default, next, rematch = true, goBack)
+            name == "@rematch" -> DeclarativeGrammar.Action.Token(TokenType.Default, next, rematch = true, goBack, embedding = embedding)
 
             name.startsWith(BRACKETS_TOKEN) -> {
                 val suffix = name.removePrefix(BRACKETS_TOKEN)
                 val types = brackets.mapValues { (_, bracket) -> typeNamed(bracket + suffix) }
                 val table = DeclarativeGrammar.Brackets(types, ignoreCase)
-                DeclarativeGrammar.Action.Token(defaultToken, next, rematch = false, goBack, table)
+                DeclarativeGrammar.Action.Token(defaultToken, next, rematch = false, goBack, table, embedding)
             }
 
-            else -> DeclarativeGrammar.Action.Token(type(name), next, rematch = false, goBack)
+            else -> DeclarativeGrammar.Action.Token(type(name), next, rematch = false, goBack, embedding = embedding)
         }
     }
 
@@ -421,13 +476,20 @@ private class GrammarReader(private val json: JsonObject) {
         DeclarativeGrammar.Next.Switch(template(state.removePrefix("@")))
     }
 
+    /** `nextEmbedded`: `@pop`, or a language's id, which can depend on the match as a state's name can. */
+    private fun embedding(json: JsonObject, path: String): DeclarativeGrammar.Embedding? = json["nextEmbedded"]?.let { value ->
+        val id = (value as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() }
+            ?: fail("$path.nextEmbedded", "nextEmbedded is a language's id or @pop")
+        if (id == "@pop") DeclarativeGrammar.Embedding.Pop else DeclarativeGrammar.Embedding.Enter(template(id))
+    }
+
     private fun goBack(json: JsonObject, path: String): Int = json["goBack"]?.let { value ->
         (value as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull?.takeIf { it >= 0 }
             ?: fail("$path.goBack", "goBack is a number of characters, 0 or more")
     } ?: 0
 
     /**
-     * A capture group's action: a token name, `{ "token", "next" }`, or `{ "cases" }` over the
+     * A capture group's action: a token name, `{ "token", "next", "nextEmbedded" }`, or `{ "cases" }` over the
      * group's own text. Not another array, not `@rematch` and no `goBack`, which would move the
      * groups after it (no language in Monaco uses one there).
      */

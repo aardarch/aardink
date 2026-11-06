@@ -1,0 +1,43 @@
+{
+  "defaultToken": "",
+  "tokenPostfix": ".xml",
+  "tokenizer": {
+    "root": [
+      [
+        "(\\{)([a-zA-Z_]\\w*)(:)([a-zA-Z_][\\w.]*)",
+        [
+          "delimiter.expression",
+          "variable.module",
+          "delimiter",
+          "variable.property"
+        ]
+      ],
+      [
+        "(\\{)(\\$?[a-zA-Z_]\\w*)",
+        [
+          "delimiter.expression",
+          "variable"
+        ]
+      ],
+      [
+        "(\\|)(\\s*)([a-zA-Z_]\\w*)",
+        [
+          "operator.pipe",
+          "",
+          "function.transform"
+        ]
+      ],
+      [
+        "(:)([^|}]*)",
+        [
+          "delimiter",
+          "string.format"
+        ]
+      ],
+      [
+        ".",
+        ""
+      ]
+    ]
+  }
+}

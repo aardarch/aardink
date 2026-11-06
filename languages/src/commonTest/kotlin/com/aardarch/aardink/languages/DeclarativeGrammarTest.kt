@@ -242,8 +242,13 @@ class DeclarativeGrammarTest {
     }
 
     /** Random edits made of [pieces] to text in [grammar]: after each, the merged tokens are a full pass's. */
-    private fun assertIncrementalMatchesFull(grammar: DeclarativeGrammar, pieces: List<String>, seed: Int) {
-        val tokenizer = DeclarativeTokenizer(grammar)
+    private fun assertIncrementalMatchesFull(
+        grammar: DeclarativeGrammar,
+        pieces: List<String>,
+        seed: Int,
+        embedded: Map<String, DeclarativeGrammar> = emptyMap(),
+    ) {
+        val tokenizer = DeclarativeTokenizer(grammar) { embedded[it] }
         val random = Random(seed)
         var text = List(80) { pieces.random(random) }.joinToString("")
         // What the tokenizer returned last (it knows its own result by identity), and what the
@@ -267,7 +272,7 @@ class DeclarativeGrammarTest {
             val firstLine = next.substring(0, at).count { it == '\n' }
             val lastLine = next.substring(0, (at + insert.length).coerceAtMost(next.length)).count { it == '\n' }
             val partial = tokenizer.tokenizeLines(next, firstLine..lastLine, returned)
-            val expected = DeclarativeTokenizer(grammar).tokenizeFull(next).filter { it.end > it.start }
+            val expected = DeclarativeTokenizer(grammar) { embedded[it] }.tokenizeFull(next).filter { it.end > it.start }
             val merged = merge(next, shifted, partial)
             assertEquals(expected, merged, "after editing <$text> into <$next>")
             text = next
@@ -880,5 +885,537 @@ class DeclarativeGrammarTest {
     fun `log is accepted, and changes nothing`() {
         val g = monarch("""{ "tokenizer": { "root": [ ["a", { "token": "x", "log": "found %0 in %S0" }] ] } }""")
         assertEquals(listOf("a" to NamedTokenType("x")), tokens(g, "a"))
+    }
+
+    // Embedding: `[[` hands the text to `mid` until `]]`, and `mid`'s `<<` to `low` until `>>`.
+    private val outer = monarch(
+        """
+        {
+          "tokenizer": {
+            "root": [
+              ["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "mid" }],
+              ["[a-z]+", "word"],
+              ["\\s+", ""]
+            ],
+            "inner": [
+              ["[a-z]+", "raw"],
+              ["\\]\\]", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }]
+            ]
+          }
+        }
+        """,
+    )
+
+    private val mid = monarch(
+        """
+        {
+          "tokenPostfix": ".mid",
+          "tokenizer": {
+            "root": [
+              ["<<", { "token": "open", "next": "@inner", "nextEmbedded": "low" }],
+              ["/\\*", "comment", "@comment"],
+              ["[a-z]+", { "cases": { "@eos": "last", "@default": "word" } }],
+              ["\\s+", ""]
+            ],
+            "inner": [[">>", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }]],
+            "comment": [["\\*/", "comment", "@pop"], ["[^*]+", "comment"], ["\\*", "comment"]]
+          }
+        }
+        """,
+    )
+
+    private val low = monarch(
+        """
+        {
+          "tokenPostfix": ".low",
+          "tokenizer": {
+            "root": [["[a-z]+", "word"], ["'", "quote", "@quote"], ["\\s+", ""]],
+            "quote": [["[^']+", "quote"], ["'", "quote", "@pop"]]
+          }
+        }
+        """,
+    )
+
+    private val languages = mapOf("mid" to mid, "low" to low)
+
+    private fun embedding(grammar: DeclarativeGrammar = outer, known: Map<String, DeclarativeGrammar> = languages) =
+        DeclarativeTokenizer(grammar) { known[it] }
+
+    private fun embedded(text: String, grammar: DeclarativeGrammar = outer, known: Map<String, DeclarativeGrammar> = languages) =
+        embedding(grammar, known).tokenizeFull(text).named(text)
+
+    private fun name(name: String) = NamedTokenType(name)
+
+    @Test
+    fun `an embedded grammar reads the text between the rules that enter and leave it`() {
+        assertEquals(
+            listOf(
+                "a" to name("word"),
+                "[[" to name("open"),
+                "b" to name("word.mid"),
+                "<<" to name("open.mid"),
+                "c" to name("word.low"),
+                ">>" to name("close.mid"),
+                "d" to name("word.mid"),
+                "]]" to name("close"),
+                "e" to name("word"),
+            ),
+            embedded("a [[b <<c>> d ]] e"),
+        )
+    }
+
+    @Test
+    fun `an embedded grammar's state carries over the lines, and its columns are the line's`() {
+        val text = "[[ /* still\nmore */ x\n]] y"
+        assertEquals(
+            listOf(
+                "[[" to name("open"),
+                "/* still" to name("comment.mid"),
+                "more */" to name("comment.mid"),
+                "x" to name("last.mid"),
+                "]]" to name("close"),
+                "y" to name("word"),
+            ),
+            embedded(text),
+        )
+    }
+
+    @Test
+    fun `the text a rule leaves on is the parent's, even inside the embedded grammar's own state`() {
+        assertEquals(
+            listOf("[[" to name("open"), "/* " to name("comment.mid"), "]]" to name("close"), "y" to name("word")),
+            embedded("[[ /* ]] y"),
+        )
+        // And what was open in it is gone: entering again starts it afresh.
+        assertEquals("x" to name("last.mid"), embedded("[[ /* ]] [[ x]]").first { it.first == "x" })
+    }
+
+    @Test
+    fun `an embedded grammar sees only its part of the line`() {
+        assertEquals("b" to name("last.mid"), embedded("[[a b]] c").first { it.first == "b" })
+    }
+
+    @Test
+    fun `an id nobody knows stays on the parent's rules, and its pop does nothing`() {
+        val expected = listOf("[[" to name("open"), "b" to name("raw"), "]]" to name("close"), "c" to name("word"))
+        assertEquals(expected, tokens(outer, "[[ b ]] c"), "no resolver at all")
+        assertEquals(expected, embedded("[[ b ]] c", known = emptyMap()), "a resolver that does not know it")
+    }
+
+    @Test
+    fun `a state with nothing that leaves stays embedded to the end`() {
+        val forever = monarch(
+            """{ "tokenizer": { "root": [ ["!", { "token": "open", "next": "@rest", "nextEmbedded": "low" }] ], "rest": [] } }""",
+        )
+        assertEquals(
+            listOf("!" to name("open"), "a" to name("word.low"), "b" to name("word.low")),
+            embedded("!a\nb", forever),
+        )
+    }
+
+    @Test
+    fun `entering and leaving can read the text again`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["(?=\\{)", { "token": "@rematch", "next": "@body", "nextEmbedded": "braces" }],
+                  ["\\}", "closed"],
+                  ["[a-z]+", "word"]
+                ],
+                "body": [["(?=\\})", { "token": "@rematch", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        val braces = monarch("""{ "tokenizer": { "root": [ ["\\{", "brace"], ["[a-z]+", "inner"] ] } }""")
+        assertEquals(
+            listOf("a" to name("word"), "{" to name("brace"), "b" to name("inner"), "}" to name("closed"), "c" to name("word")),
+            embedded("a{b}c", g, mapOf("braces" to braces)),
+        )
+    }
+
+    @Test
+    fun `leaving comes before next, entering after it`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["\\[\\[", { "token": "open", "switchTo": "@inner", "nextEmbedded": "low" }]],
+                "inner": [["\\]\\]", { "token": "close", "switchTo": "@after", "nextEmbedded": "@pop" }]],
+                "after": [["[a-z]+", "tail"], ["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "low" }]]
+              }
+            }
+            """,
+        )
+        assertEquals(
+            listOf(
+                "[[" to name("open"),
+                "a" to name("word.low"),
+                "]]" to name("close"),
+                "b" to name("tail"),
+                "[[" to name("open"),
+                "c" to name("word.low"),
+                "]]" to name("close"),
+                "d" to name("tail"),
+            ),
+            embedded("[[a]]b[[c]]d", g),
+        )
+    }
+
+    @Test
+    fun `a language can be entered and left with no next, staying in the one state`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["!", { "token": "open", "nextEmbedded": "low" }],
+                  [";", { "token": "end", "nextEmbedded": "@pop" }],
+                  ["[a-z]+", "own"]
+                ]
+              }
+            }
+            """,
+        )
+        assertEquals(
+            listOf("a" to name("own"), "!" to name("open"), "b" to name("word.low"), ";" to name("end"), "c" to name("own")),
+            embedded("a!b;c", g),
+        )
+    }
+
+    @Test
+    fun `the id can come from the match or the state`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["low|mid", { "token": "name", "next": "@body", "nextEmbedded": "%#" }],
+                  ["<([a-z]+)>", { "token": "tag", "next": "@named.low" }],
+                  ["#([a-z]+)", { "token": "number", "next": "@body", "nextEmbedded": "%1" }]
+                ],
+                "named": [["=", { "token": "is", "switchTo": "@body", "nextEmbedded": "%S2" }]],
+                "body": [["[a-z]+", "raw"], [";", { "token": "end", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        assertEquals(listOf("low" to name("name"), "a" to name("word.low"), ";" to name("end")), embedded("low a;", g))
+        assertEquals(listOf("mid" to name("name"), "a" to name("last.mid"), ";" to name("end")), embedded("mid a;", g))
+        assertEquals(listOf("<x>" to name("tag"), "=" to name("is"), "a" to name("word.low"), ";" to name("end")), embedded("<x>=a;", g))
+        // `$1` is not supported: it stays literal, so it names nothing, and the parent's rules read on.
+        val asked = mutableListOf<String>()
+        val text = "#x a;"
+        assertEquals(
+            listOf("#x" to name("number"), "a" to name("raw"), ";" to name("end")),
+            DeclarativeTokenizer(g) {
+                asked += it
+                null
+            }.tokenizeFull(text).named(text),
+        )
+        assertEquals(listOf("\$1"), asked)
+    }
+
+    @Test
+    fun `a rule that leaves only in some cases is looked past in the others`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "low" }], ["[a-z]+", "after"]],
+                "inner": [["[a-z]+", { "cases": {
+                  "end": { "token": "close", "next": "@pop", "nextEmbedded": "@pop" },
+                  "@default": "raw"
+                } }]]
+              }
+            }
+            """,
+        )
+        // `end` inside `bend` is not a match the rule would have made.
+        assertEquals(
+            listOf("[[" to name("open"), "bend" to name("word.low"), "x" to name("word.low"), "end" to name("close"), "y" to name("after")),
+            embedded("[[ bend x end y", g),
+        )
+    }
+
+    @Test
+    fun `the earliest rule to leave wins, and the first of those at one place`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["!", { "token": "open", "next": "@inner", "nextEmbedded": "low" }],
+                  ["[a-z]+", "after"]
+                ],
+                "inner": [
+                  ["\\.\\.", { "token": "two", "next": "@pop", "nextEmbedded": "@pop" }],
+                  ["\\.", { "token": "one", "next": "@pop", "nextEmbedded": "@pop" }],
+                  [";", { "token": "semi", "next": "@pop", "nextEmbedded": "@pop" }]
+                ]
+              }
+            }
+            """,
+        )
+        assertEquals(listOf("!" to name("open"), "a" to name("word.low"), ";" to name("semi"), "b" to name("after")), embedded("!a;b..", g))
+        assertEquals(name("two"), embedded("!a..b", g)[2].second)
+        assertEquals(name("one"), embedded("!a.b..", g)[2].second)
+    }
+
+    @Test
+    fun `nextEmbedded works in a group's action, after the whole match`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["(\\[)(x)(\\[)", ["open", { "token": "tag", "next": "@inner", "nextEmbedded": "low" }, "open"]],
+                  ["[a-z]+", "after"]
+                ],
+                "inner": [["(\\])(!)", [{ "token": "close", "next": "@pop", "nextEmbedded": "@pop" }, "bang"]]]
+              }
+            }
+            """,
+        )
+        assertEquals(
+            listOf(
+                "[" to name("open"),
+                "x" to name("tag"),
+                "[" to name("open"),
+                "a" to name("word.low"),
+                "]" to name("close"),
+                "!" to name("bang"),
+                "b" to name("after"),
+            ),
+            embedded("[x[a]!b", g),
+        )
+    }
+
+    @Test
+    fun `an empty line goes to the embedded grammar, the end of the line it was entered on does not`() {
+        val g =
+            monarch("""{ "tokenizer": { "root": [ ["!", { "token": "open", "next": "@rest", "nextEmbedded": "lines" }] ], "rest": [] } }""")
+        val lines = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["^$", { "token": "", "next": "@blank" }], ["[a-z]+", "word"]],
+                "blank": [["[a-z]+", "afterBlank"]]
+              }
+            }
+            """,
+        )
+        val known = mapOf("lines" to lines)
+        assertEquals(listOf("!" to name("open"), "x" to name("word")), embedded("!\nx", g, known))
+        assertEquals(listOf("!" to name("open"), "x" to name("afterBlank")), embedded("!\n\nx", g, known))
+    }
+
+    /** `(` enters the next of [count] grammars and `)` leaves it. Each has block comments, and `{` pushes. */
+    private fun chain(count: Int): Map<String, DeclarativeGrammar> = (0 until count).associate { level ->
+        "l$level" to monarch(
+            """
+            {
+              "tokenPostfix": ".l$level",
+              "tokenizer": {
+                "root": [
+                  ["\\(", { "token": "open", "next": "@inner", "nextEmbedded": "l${level + 1}" }],
+                  ["\\{", "brace", "@push"],
+                  ["\\}", "brace", "@pop"],
+                  ["/\\*", "comment", "@comment"],
+                  ["[a-z]+", "word"],
+                  ["\\s+", ""]
+                ],
+                "inner": [["\\)", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }]],
+                "comment": [["\\*/", "comment", "@pop"], ["[^*]+", "comment"], ["\\*", "comment"]]
+              }
+            }
+            """,
+        )
+    }
+
+    @Test
+    fun `languages nest as far as the limit, and an id past it counts as unknown`() {
+        val known = chain(20)
+        val top = known.getValue("l0")
+        assertEquals("x" to name("word.l16"), embedded("(".repeat(16) + "x", top, known).last())
+        // One more: l16 enters no l17, so it stays on its own rules, and `inner` has none for `x`.
+        assertTrue(embedded("(".repeat(17) + "x", top, known).none { it.first == "x" })
+    }
+
+    @Test
+    fun `a grammar that embeds itself stops, even on a match that takes no text`() {
+        val nesting = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["\\(", { "token": "open", "next": "@inner", "nextEmbedded": "self" }], ["[a-z]+", "word"]],
+                "inner": [["\\)", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        val text = "(".repeat(5000) + "x" + ")".repeat(5000)
+        assertEquals("(".repeat(17) to name("open"), embedded(text, nesting, mapOf("self" to nesting)).first())
+
+        val endless = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["(?=x)", { "token": "@rematch", "nextEmbedded": "self" }], ["[a-z]+", "word"]]
+              }
+            }
+            """,
+        )
+        // Each level enters the next without taking text. The last can only move on by a character.
+        assertEquals(listOf("y" to name("word")), embedded("xy", endless, mapOf("self" to endless)))
+
+        val bouncing = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [
+                  ["(?=x)", { "cases": {
+                    "%S2==in": { "token": "@rematch", "switchTo": "@root.out", "nextEmbedded": "@pop" },
+                    "@default": { "token": "@rematch", "switchTo": "@root.in", "nextEmbedded": "low" }
+                  } }],
+                  ["[a-z]", "word"]
+                ]
+              }
+            }
+            """,
+        )
+        // Entering and leaving on one spot, for ever, if nothing stopped it. It has to reach `y`.
+        assertEquals("y", embedded("xy", bouncing).last().first)
+    }
+
+    @Test
+    fun `a rescan stops at its line through deep stacks and sixteen languages`() {
+        val known = chain(17)
+        val top = known.getValue("l0")
+        val body = List(300) { "xy" }.joinToString("\n")
+        val text = "(".repeat(16) + "{".repeat(500) + "\n" + body + "\n" + "}".repeat(500) + ")".repeat(16) + "\nz"
+        val tokenizer = embedding(top, known)
+        val full = tokenizer.tokenizeFull(text)
+        assertEquals(name("word.l16"), full.first { text.substring(it.start, it.end) == "xy" }.type)
+
+        val line = 151
+        val lineStart = text.split('\n').take(line).sumOf { it.length + 1 }
+        val edited = text.substring(0, lineStart) + "new " + text.substring(lineStart)
+        val partial = tokenizer.tokenizeLines(edited, line..line, full)
+        val lineEnd = edited.indexOf('\n', lineStart)
+        assertTrue(partial.all { it.start >= lineStart && it.end <= lineEnd }, "only line $line: $partial")
+        assertEquals(name("word.l16"), partial.first { it.end > it.start }.type)
+
+        // A comment opened in the innermost language runs on, and one closed at once does not.
+        val opened = text.substring(0, lineStart) + "/*" + text.substring(lineStart)
+        val toEnd = tokenizer.tokenizeLines(opened, line..line, full)
+        assertTrue(toEnd.last().end > opened.lastIndexOf("xy"), "the comment reaches the lines below: ${toEnd.last()}")
+        val closed = text.substring(0, lineStart) + "/**/" + text.substring(lineStart)
+        assertEquals(closed.indexOf('\n', lineStart), tokenizer.tokenizeLines(closed, line..line, full).last().end)
+
+        // The outermost language looks first, so this leaves all sixteen at once, for every line below.
+        val left = text.substring(0, lineStart) + ")" + text.substring(lineStart)
+        val leftTokens = tokenizer.tokenizeLines(left, line..line, full)
+        assertTrue(leftTokens.last().end > left.indexOf('\n', lineStart), "the state changed, so the rescan goes on")
+        assertEquals("xy" to name("word.l0"), leftTokens.named(left).first { it.first == "xy" })
+    }
+
+    @Test
+    fun `an edit that only changes which language has the text still rescans what follows`() {
+        val g = monarch(
+            """
+            {
+              "tokenizer": {
+                "root": [["low|mid", { "token": "name", "next": "@body", "nextEmbedded": "%#" }], ["\\s+", ""]],
+                "body": [[";", { "token": "end", "next": "@pop", "nextEmbedded": "@pop" }]]
+              }
+            }
+            """,
+        )
+        // Both languages are in a state named `root` at the end of each line: only the grammar differs.
+        val tokenizer = embedding(g)
+        val full = tokenizer.tokenizeFull("low\nab c\nd ;")
+        val edited = "mid\nab c\nd ;"
+        assertEquals(
+            listOf("mid" to name("name"), "ab" to name("word.mid"), "c" to name("last.mid"), "d" to name("word.mid"), ";" to name("end")),
+            tokenizer.tokenizeLines(edited, 0..0, full).named(edited),
+        )
+    }
+
+    @Test
+    fun `a rescan compares stacks far too deep to walk by recursion`() {
+        val g = monarch("""{ "tokenizer": { "root": [ ["\\(", "open", "@push"], ["[a-z]", "word"] ] } }""")
+        val tokenizer = DeclarativeTokenizer(g)
+        val nested = "(".repeat(50_000)
+        val text = "a$nested\nb\nc"
+        val full = tokenizer.tokenizeFull(text)
+        // The same depth, every state made anew: only comparing all of them shows the stacks match.
+        val partial = tokenizer.tokenizeLines("x$nested\nb\nc", 0..0, full)
+        assertEquals(text.indexOf('\n'), partial.last().end)
+    }
+
+    @Test
+    fun `an incremental pass over embedded grammars ends where a full pass does`() {
+        val pieces = listOf("[[", "]]", "<<", ">>", "/*", "*/", "'", "\n", "\n", " ", "a", "bc")
+        for (seed in 1..4) assertIncrementalMatchesFull(outer, pieces, seed, languages)
+    }
+
+    @Test
+    fun `an incremental pass over nesting that reaches the limit ends where a full pass does`() {
+        val known = chain(20)
+        val pieces = listOf("(", "(", "(", ")", "{", "}", "/*", "*/", "\n", " ", "a")
+        for (seed in 1..4) assertIncrementalMatchesFull(known.getValue("l0"), pieces, seed, known)
+    }
+
+    @Test
+    fun `the cooperative pass reads embedded grammars the same`() = runTest {
+        val text = "a [[ b <<c\n/* d'\ne>> f ]] g"
+        assertEquals(embedding().tokenizeFull(text), embedding().tokenizeFullCooperative(text))
+    }
+
+    @Test
+    fun `a grammar the resolver comes to know is found the next time the text is read`() {
+        var known = emptyMap<String, DeclarativeGrammar>()
+        val tokenizer = DeclarativeTokenizer(outer) { known[it] }
+        val text = "[[ b ]]"
+        assertEquals(name("raw"), tokenizer.tokenizeFull(text).named(text)[1].second)
+        known = languages
+        assertEquals(name("word.mid"), tokenizer.tokenizeFull(text).named(text)[1].second)
+    }
+
+    @Test
+    fun `a rescan after the resolver forgets a grammar goes back to the parent's rules`() {
+        var known = languages
+        val tokenizer = DeclarativeTokenizer(outer) { known[it] }
+        val text = "[[ a\nb\nc ]] d"
+        val full = tokenizer.tokenizeFull(text)
+        known = emptyMap()
+        val edited = "[[ a\nbb\nc ]] d"
+        val partial = tokenizer.tokenizeLines(edited, 1..1, full).named(edited)
+        assertEquals(listOf("c" to name("raw"), "]]" to name("close"), "d" to name("word")), partial)
+    }
+
+    @Test
+    fun `a grammar's token names are its own, not those of what it embeds`() {
+        assertEquals(setOf("open", "word", "raw", "close"), outer.tokenNames)
+        assertEquals(setOf("open.mid", "close.mid", "comment.mid", "last.mid", "word.mid"), mid.tokenNames)
+    }
+
+    @Test
+    fun `a grammar that only names nextEmbedded parses without a resolver and keeps its old tokens`() {
+        val g =
+            monarch(
+                """{ "tokenizer": { "root": [ ["a", { "token": "x", "nextEmbedded": "text/javascript" }], ["b", { "token": "y", "nextEmbedded": "@pop" }] ] } }""",
+            )
+        assertEquals(listOf("a" to name("x"), "b" to name("y")), tokens(g, "ab"))
+    }
+
+    @Test
+    fun `a nextEmbedded that cannot be used is an error with where it is`() {
+        val message = "tokenizer.root[0][1].nextEmbedded: nextEmbedded is a language's id or @pop"
+        assertRejected("""{ "tokenizer": { "root": [ ["a", { "token": "x", "nextEmbedded": 1 }] ] } }""", message)
+        assertRejected("""{ "tokenizer": { "root": [ ["a", { "token": "x", "nextEmbedded": "" }] ] } }""", message)
     }
 }
