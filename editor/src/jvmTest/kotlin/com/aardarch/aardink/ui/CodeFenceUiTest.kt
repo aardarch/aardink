@@ -66,12 +66,13 @@ class CodeFenceUiTest {
     private class FirstWord : IncrementalTokenizer {
         val asked = ArrayList<String>()
 
-        override fun tokenizeFull(text: String): List<Token> {
+        /** A document's pass, not a fence's: a fence takes the one that keeps nothing. */
+        override fun tokenizeFull(text: String): List<Token> = emptyList()
+
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
             synchronized(asked) { asked += text }
             return listOf(Token(0, 3, TokenType.Keyword))
         }
-
-        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> = emptyList()
 
         override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
 

@@ -18,7 +18,7 @@ package com.aardarch.aardink.ui
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.Token
-import kotlinx.coroutines.test.runTest
+import com.aardarch.aardink.core.TokenType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -67,7 +67,7 @@ class CodeTokenizerTest {
         assertSame(PlainTextTokenizer, codeTokenizer(null, { tagged }, null))
     }
 
-    private class Paced : IncrementalTokenizer {
+    private class Passes : IncrementalTokenizer {
         val calls = ArrayList<String>()
 
         override fun tokenizeFull(text: String): List<Token> {
@@ -80,23 +80,26 @@ class CodeTokenizerTest {
             return emptyList()
         }
 
-        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> = emptyList()
+        override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
+            calls += "lines $dirtyRange after ${previousTokens.size}"
+            return listOf(Token(0, 3, TokenType.Keyword))
+        }
 
         override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
     }
 
     @Test
-    fun `code is tokenized in slices where compute shares the main thread`() = runTest {
-        val tokenizer = Paced()
-        tokensOf("x", tokenizer, cooperative = true)
-        assertEquals(listOf("cooperative"), tokenizer.calls)
+    fun `code takes only the pass that keeps nothing, over all its lines`() {
+        val tokenizer = Passes()
+        assertEquals(listOf(Token(0, 3, TokenType.Keyword)), tokensOf("val a\nval b\n", tokenizer))
+        assertEquals(listOf("lines 0..2 after 0"), tokenizer.calls)
     }
 
     @Test
-    fun `code is tokenized at once where compute has its own thread`() = runTest {
-        val tokenizer = Paced()
-        tokensOf("x", tokenizer, cooperative = false)
-        assertEquals(listOf("full"), tokenizer.calls)
+    fun `no text is one line`() {
+        val tokenizer = Passes()
+        tokensOf("", tokenizer)
+        assertEquals(listOf("lines 0..0 after 0"), tokenizer.calls)
     }
 
     private fun codeTokenizer(language: String?, byLanguage: (String) -> IncrementalTokenizer?) =

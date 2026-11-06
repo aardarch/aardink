@@ -47,6 +47,14 @@ marks and resolves the escapes, so `Uses a\_b *only* here` shows as `Uses a_b on
 
 An attribute's list of values on a schema hover is escaped for you, so `_top_` shows as `_top_`.
 
+## A tokenizer of your own
+
+`CodeBlock`, and the code fences in documentation, now colour text with `tokenizeLines(text,
+0..lastLine, emptyList())` rather than `tokenizeFull`, so a snippet leaves no trace in a tokenizer a
+document is also using. If you implement `IncrementalTokenizer`, an empty `previousTokens` must give
+tokens for every line of `dirtyRange` and keep nothing. A tokenizer that answers it with nothing
+shows these plain.
+
 ## Links in documentation
 
 A link in hover, signature help or a completion's detail pane goes to `CodeEditorLayout`'s

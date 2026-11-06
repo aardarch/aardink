@@ -61,9 +61,11 @@ val LocalCodeFenceTokenizers: ProvidableCompositionLocal<(languageId: String) ->
  * [text] highlighted by [tokenizer] in the colours of [LocalEditorTheme] and the font of
  * [LocalEditorTypography], with no input, no gutter and no caret: for showing code in a
  * reference screen or a help page. It scrolls sideways when a line is wide, and is as tall as the
- * text. Meant for short snippets: the whole text is laid out at once, unlike [CodeEditorLayout],
- * which lays out only the lines on screen. It shows the text plain until the tokenizer, run off
- * the main thread, has coloured it.
+ * text. Meant for short snippets: the whole text is tokenized and laid out at once, unlike
+ * [CodeEditorLayout], which lays out only the lines on screen. It shows the text plain until the
+ * tokenizer, run off the main thread, has coloured it. [tokenizer] can be one a document is using:
+ * it is asked with [IncrementalTokenizer.tokenizeLines] and no previous tokens, the pass that keeps
+ * nothing.
  */
 @Composable
 fun CodeBlock(text: String, tokenizer: IncrementalTokenizer, modifier: Modifier = Modifier) {
@@ -95,12 +97,17 @@ fun CodeBlock(text: String, tokenizer: IncrementalTokenizer, modifier: Modifier 
     }
 }
 
-/** [text]'s tokens, in slices where [cooperative]: documentation shows a block per selected completion, on the web's one thread. */
-internal suspend fun tokensOf(
-    text: String,
-    tokenizer: IncrementalTokenizer,
-    cooperative: Boolean = EditorDispatchers.computeIsMainThread,
-): List<Token> = if (cooperative) tokenizer.tokenizeFullCooperative(text) else tokenizer.tokenizeFull(text)
+/**
+ * [text]'s tokens, by the pass that keeps nothing. A full pass would take a place among the few
+ * scans a tokenizer keeps for incremental passes, and [tokenizer] is often the object a document
+ * is using: the built-in languages are singletons. A handful of snippets would then push out the
+ * document's scan, and its next edit would rescan the whole of it, on the web on the main thread.
+ *
+ * Not in slices: documentation is cut at [MARKDOWN_MAX_LENGTH], far under the size at which the
+ * editor starts slicing a document's own passes.
+ */
+internal fun tokensOf(text: String, tokenizer: IncrementalTokenizer): List<Token> =
+    tokenizer.tokenizeLines(text, 0..text.count { it == '\n' }, emptyList())
 
 /** [text] with each token's colour and font style, as the editor draws them. */
 internal fun highlighted(text: String, tokens: List<Token>, resolver: TokenStyleResolver): AnnotatedString = buildAnnotatedString {
