@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -1780,13 +1781,20 @@ private class HoverShown(
     var holding by mutableStateOf(false)
 }
 
-/** Keeps [HoverShown.holding] for this card. Only looks: clicks and scrolling go on untouched. */
+/**
+ * Keeps [HoverShown.holding] for this card. Only looks: clicks and scrolling go on untouched. Only
+ * a mouse holds it: a finger that lifts in the card sends no Exit, so it could never let go.
+ */
 private fun Modifier.holdingHover(shown: HoverShown): Modifier = pointerInput(shown) {
     awaitPointerEventScope {
         while (true) {
-            when (awaitPointerEvent().type) {
-                PointerEventType.Enter, PointerEventType.Move -> shown.holding = true
+            val event = awaitPointerEvent()
+            when (event.type) {
+                PointerEventType.Enter, PointerEventType.Move ->
+                    if (event.changes.firstOrNull()?.type == PointerType.Mouse) shown.holding = true
+
                 PointerEventType.Exit -> shown.holding = false
+
                 else -> Unit
             }
         }

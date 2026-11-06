@@ -41,6 +41,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
@@ -402,6 +403,26 @@ class MarkdownDocUiTest {
         mainClock.advanceTimeBy(400)
         waitForIdle()
         onNodeWithText("Docs for a word").assertDoesNotExist()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `a finger dragging in the card leaves it to the mouse`() = runComposeUiTest {
+        showEditor(RecordingUriHandler()) {}
+        restOnWord()
+        // On the title: a finger lifted over the link would be a tap on it, which closes the card.
+        onNodeWithText("Docs for a word").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 5f))
+            up()
+        }
+        mainClock.advanceTimeBy(100)
+        waitForIdle()
+        crossTowardsCard()
+        mainClock.advanceTimeBy(400)
+        waitForIdle()
+        onNodeWithText("Docs for a word").assertDoesNotExist()
+        restOnWord()
         mainClock.autoAdvance = true
     }
 
