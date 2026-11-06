@@ -39,8 +39,11 @@ class DemoCssLspServerTest {
         val service = LspLanguageService(client, DEMO_CSS_DOCUMENT_URI, "css")
         val published = Channel<Int>(Channel.UNLIMITED)
         client.addDiagnosticsListener { _, _, diagnostics -> published.trySend(diagnostics.size) }
-        val state = CodeEditorState("a { color: red }", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined))
+        // Empty until the dispatcher is set: text given here starts tokenizing on the real pool, and
+        // with this scope that pass would write the tokens there while this test edits.
+        val state = CodeEditorState(tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined))
         state.computeDispatcher = Dispatchers.Unconfined
+        state.loadText("a { color: red }")
 
         service.attach(state)
         assertEquals("nothing flagged in the text it opened with", 0, withTimeout(5_000) { published.receive() })
