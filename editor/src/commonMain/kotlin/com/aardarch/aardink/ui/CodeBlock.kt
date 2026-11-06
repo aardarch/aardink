@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +42,22 @@ import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * What highlights a code fence in documentation (hover, signature help, a completion's detail
+ * pane), by the language the fence is tagged with, such as the `kotlin` of ` ```kotlin `. Answer
+ * null for a language you do not know, and the fence shows plain; a fence with no tag takes the
+ * tokenizer of the [CodeEditorState][com.aardarch.aardink.core.CodeEditorState] it belongs to.
+ * Popups inherit it, so provide it around [CodeEditorLayout]:
+ * ```kotlin
+ * CompositionLocalProvider(LocalCodeFenceTokenizers provides { registry.byId(it)?.tokenizer }) {
+ *     CodeEditorLayout(state)
+ * }
+ * ```
+ * The default knows no language.
+ */
+val LocalCodeFenceTokenizers: ProvidableCompositionLocal<(languageId: String) -> IncrementalTokenizer?> =
+    compositionLocalOf { { null } }
+
+/**
  * [text] highlighted by [tokenizer] in the colours of [LocalEditorTheme] and the font of
  * [LocalEditorTypography], with no input, no gutter and no caret: for showing code in a
  * reference screen or a help page. It scrolls sideways when a line is wide, and is as tall as the
@@ -53,7 +71,10 @@ fun CodeBlock(text: String, tokenizer: IncrementalTokenizer, modifier: Modifier 
     val typography = LocalEditorTypography.current
     var tokens by remember(text, tokenizer) { mutableStateOf<List<Token>?>(null) }
     LaunchedEffect(text, tokenizer) {
-        tokens = withContext(EditorDispatchers.compute) { tokenizer.tokenizeFull(text) }
+        tokens = withContext(EditorDispatchers.compute) {
+            // Documentation shows one of these per selected completion: keep the web's one thread free.
+            if (EditorDispatchers.computeIsMainThread) tokenizer.tokenizeFullCooperative(text) else tokenizer.tokenizeFull(text)
+        }
     }
     val resolver = remember(theme) { TokenStyleResolver(theme) }
     val styled = remember(text, tokens, resolver) { highlighted(text, tokens.orEmpty(), resolver) }

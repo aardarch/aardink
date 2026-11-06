@@ -1673,6 +1673,7 @@ public final class com/aardarch/aardink/ui/CodeActionMenuKt {
 
 public final class com/aardarch/aardink/ui/CodeBlockKt {
 	public static final fun CodeBlock (Ljava/lang/String;Lcom/aardarch/aardink/core/IncrementalTokenizer;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+	public static final fun getLocalCodeFenceTokenizers ()Landroidx/compose/runtime/ProvidableCompositionLocal;
 }
 
 public final class com/aardarch/aardink/ui/CodeEditorLayoutKt {

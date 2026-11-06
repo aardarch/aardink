@@ -30,10 +30,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -47,6 +50,16 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.PlainTextTokenizer
+
+/**
+ * The editor these popups belong to, for the code in documentation that does not say its language.
+ * The state rather than its tokenizer: assigning [CodeEditorState.tokenizer] recomposes nothing, so
+ * a tokenizer provided here could be the language before last.
+ */
+internal val LocalDocumentState = compositionLocalOf<CodeEditorState?> { null }
 
 /** How tall documentation gets before it scrolls: a card has to stay inside the window. */
 private val DOC_MAX_HEIGHT = 240.dp
@@ -94,7 +107,7 @@ private fun MarkdownBlocks(
 
             is MarkdownBlock.Paragraph -> MarkdownText(block.text, style, color, spans, onOpenLink)
 
-            is MarkdownBlock.Code -> DocCodePanel(block.code)
+            is MarkdownBlock.Code -> MarkdownCode(block, style)
 
             is MarkdownBlock.Items -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 block.items.forEachIndexed { index, item ->
@@ -114,6 +127,29 @@ private fun MarkdownBlocks(
 
             MarkdownBlock.Rule -> HorizontalDivider(thickness = 0.5.dp)
         }
+    }
+}
+
+/**
+ * What highlights code tagged [language]: [byLanguage]'s answer for a tag, the document's own
+ * [documentTokenizer] with none, as code in a language's documentation is most likely in that
+ * language, and otherwise nothing, which shows it plain.
+ */
+internal fun codeTokenizer(
+    language: String?,
+    byLanguage: (String) -> IncrementalTokenizer?,
+    documentTokenizer: IncrementalTokenizer?,
+): IncrementalTokenizer = (if (language == null) documentTokenizer else byLanguage(language)) ?: PlainTextTokenizer
+
+/** A code block in documentation, in the size of the text around it: a card is smaller than the editor. */
+@Composable
+private fun MarkdownCode(block: MarkdownBlock.Code, style: TextStyle) {
+    val byLanguage = LocalCodeFenceTokenizers.current
+    val state = LocalDocumentState.current
+    val tokenizer = remember(block.language, byLanguage, state) { codeTokenizer(block.language, byLanguage, state?.tokenizer) }
+    val typography = LocalEditorTypography.current
+    CompositionLocalProvider(LocalEditorTypography provides typography.copy(fontSize = style.fontSize, lineHeight = style.lineHeight)) {
+        CodeBlock(block.code, tokenizer, Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)))
     }
 }
 
@@ -170,7 +206,7 @@ private fun AnnotatedString.Builder.appendInlines(inlines: List<MarkdownInline>,
     }
 }
 
-/** Code as hover cards show it, a code block or a [com.aardarch.aardink.core.HoverDoc.example]: code-font text on an inset panel. */
+/** A [com.aardarch.aardink.core.HoverDoc.example] as hover cards show it: code-font text on an inset panel. */
 @Composable
 internal fun DocCodePanel(code: String) {
     Surface(

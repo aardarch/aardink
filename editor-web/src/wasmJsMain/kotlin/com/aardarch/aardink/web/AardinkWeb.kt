@@ -64,6 +64,7 @@ import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
@@ -80,6 +81,7 @@ import com.aardarch.aardink.ui.EditorTypography
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyChord
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
 import com.aardarch.aardink.ui.RenderWhitespace
@@ -1255,6 +1257,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         CompositionLocalProvider(
             LocalEditorTheme provides theme,
             LocalEditorTypography provides typography,
+            LocalCodeFenceTokenizers provides remember(handle.registry) { codeFenceTokenizers(handle.registry) },
         ) {
             CodeEditorLayout(
                 state = state,
@@ -1318,6 +1321,9 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         }
     }
 }
+
+/** A code fence's tokenizer from [registry], as it stands when the fence shows: a language registered later counts. */
+internal fun codeFenceTokenizers(registry: LanguageRegistry): (String) -> IncrementalTokenizer? = { registry.byId(it)?.tokenizer }
 
 /**
  * Compose sizes its canvas from its element on the window's `resize` event only, so an editor

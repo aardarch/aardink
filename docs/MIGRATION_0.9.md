@@ -27,7 +27,7 @@ No signature changes, but what these strings mean does:
 | --- | --- | --- |
 | `HoverDoc.content`, the npm package's `AardinkHover.contents` | Plain text | Markdown |
 | `SignatureInformation.documentation`, `ParameterInformation.documentation` | Plain text | Markdown |
-| `CompletionItem.documentation`, the npm package's `documentation` | Plain text | Markdown, shown as one line of plain text |
+| `CompletionItem.documentation`, the npm package's `documentation` | Plain text | Markdown: one line of plain text in the list, and in full in the pane beside it for the selected item |
 | `XmlSchema.Element`, `Attribute` and `Value` `documentation`, and `doc` in schema JSON | Plain text | Markdown |
 
 `HoverDoc.title` and `HoverDoc.example` stay plain. Raw HTML stays literal text, an image shows its
@@ -49,10 +49,27 @@ An attribute's list of values on a schema hover is escaped for you, so `_top_` s
 
 ## Links in documentation
 
-A link in hover or signature help goes to `CodeEditorLayout`'s `onOpenLink`, and nowhere else. A host
-that leaves `onOpenLink` out gets a link as its plain text, since nothing would open it.
+A link in hover, signature help or a completion's detail pane goes to `CodeEditorLayout`'s
+`onOpenLink`, and nowhere else. A host that leaves `onOpenLink` out gets a link as its plain text,
+since nothing would open it.
 
 The npm package has no way to set a handler yet, so on the web every link shows as its text.
+
+## Code in documentation
+
+Code blocks in documentation are now drawn as `CodeBlock` draws them, in the editor's own colours,
+scrolling sideways rather than wrapping. A fence tagged with a language is highlighted by what
+`LocalCodeFenceTokenizers` answers for that tag, and shows plain when it answers null, as it does by
+default. Provide it around `CodeEditorLayout` to get tagged fences highlighted:
+
+```kotlin
+CompositionLocalProvider(LocalCodeFenceTokenizers provides { registry.byId(it)?.tokenizer }) {
+    CodeEditorLayout(state)
+}
+```
+
+An untagged fence, and indented code, takes the tokenizer of the `CodeEditorState`. The web already
+provides this from the language registry the editor was mounted with.
 
 ## Language servers
 

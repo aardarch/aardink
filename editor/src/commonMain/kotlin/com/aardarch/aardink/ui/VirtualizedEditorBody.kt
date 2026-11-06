@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -371,7 +372,7 @@ internal fun VirtualizedEditorBody(
                     EditorSelectionHandles(controller, theme.cursorColor)
                     EditorContextMenu(controller)
                     EditorTouchMenu(controller)
-                    popups()
+                    CompositionLocalProvider(LocalDocumentState provides state, content = popups)
                 },
             )
         },
