@@ -292,13 +292,13 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     private fun flush() = state.withSelectionReason(SelectionChangeReason.Keyboard) { flushInput() }
 
     private fun flushInput() {
-        val change = buffer.change()
         val selection = buffer.selection
         val newComposition = buffer.composition
         val wasComposing = composition != null
+        val composing = wasComposing || newComposition != null
         val expectedLength = buffer.length
+        val change = buffer.change() ?: if (composing) null else overItself(selection)
         if (change != null) {
-            val composing = wasComposing || newComposition != null
             val input = if (composing) change else overSelection(change, selection)
             val typed = state.applyInput(
                 start = input.start,
@@ -339,6 +339,17 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
         val selected = state.selection
         val replaced = after == TextRange(selected.min + 1) && buffer.length == state.document.length - selected.length + 1
         if (selected.collapsed || !replaced || change.start < selected.min || change.end > selected.max) return change
+        return TextChange(selected.min, selected.max, buffer[selected.min].toString())
+    }
+
+    /**
+     * The one selected character typed over with itself, which leaves the text as it was and so
+     * is no change to the buffer, yet is still typing: a surround wraps it, and the other
+     * selections take it too. [after] is the selection the input method left.
+     */
+    private fun overItself(after: TextRange): TextChange? {
+        val selected = state.selection
+        if (!buffer.edited || selected.length != 1 || after != TextRange(selected.min + 1)) return null
         return TextChange(selected.min, selected.max, buffer[selected.min].toString())
     }
 
