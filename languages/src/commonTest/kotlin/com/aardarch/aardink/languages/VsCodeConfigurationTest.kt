@@ -123,6 +123,34 @@ class VsCodeConfigurationTest {
         assertNull(service.closing("<!-- a |", '('))
     }
 
+    // ── Closing, typed a character at a time ──────────────────────────────────
+
+    /** [typed] typed into an empty document, closing as it goes, with `|` for the caret. */
+    private fun LanguageService.typing(typed: String): String {
+        var text = ""
+        var caret = 0
+        for (c in typed) {
+            text = text.substring(0, caret) + c + text.substring(caret)
+            val closing = autoClose(CodeDocument(text), caret, c).orEmpty()
+            caret++
+            text = text.substring(0, caret) + closing + text.substring(caret)
+        }
+        return text.substring(0, caret) + "|" + text.substring(caret)
+    }
+
+    @Test
+    fun `C++'s doc comment closes once`() {
+        val service = service(Cpp)
+        assertEquals("/*|*/", service.typing("/*"))
+        assertEquals("/**| */", service.typing("/**"))
+    }
+
+    @Test
+    fun `XSL's comment closes once, where brackets are all it closes`() {
+        assertEquals("<|>", service(Xsl).typing("<"))
+        assertEquals("<!--|-->", service(Xsl).typing("<!--"))
+    }
+
     // ── Long lines ────────────────────────────────────────────────────────────
 
     /** Long enough that matching it overflows the JVM's stack, or takes Julia's rule for ever. */

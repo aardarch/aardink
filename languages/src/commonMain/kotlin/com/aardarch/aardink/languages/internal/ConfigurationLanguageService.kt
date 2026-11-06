@@ -60,6 +60,17 @@ internal class ConfigurationLanguageService(private val configuration: LanguageC
     /** What the language closes with, besides quotes, which open as much as they close. */
     private val closingStarts: Set<Char> = closingPairs.filter { it.open != it.close }.mapTo(HashSet()) { it.close.first() }
 
+    /**
+     * For a pair, the longest other pair inside its opening whose close ends its own, as `/*` and
+     * its `*/` for `/**` and its ` */`: typing the longer one turns the shorter one into it.
+     */
+    private val contained: Map<AutoClosingPair, AutoClosingPair> = buildMap {
+        for (pair in closingPairs) {
+            val inside = closingPairs.filter { it.open != pair.open && it.open in pair.open && pair.close.endsWith(it.close) }
+            inside.maxByOrNull { it.open.length }?.let { put(pair, it) }
+        }
+    }
+
     private val surrounds: Map<Char, String> =
         configuration.surroundingPairs.filter { it.open.length == 1 && it.close.isNotEmpty() }.associate { it.open.single() to it.close }
 
@@ -77,18 +88,22 @@ internal class ConfigurationLanguageService(private val configuration: LanguageC
         val text = lineOf(document, line)
         val caret = column + 1
         val openedAt = caret - pair.open.length
-        // `/**` typed inside the `/* */` that `/*` closed already has its end.
-        if (pair.open.length > 1 && text.startsWith(pair.close, caret)) return null
-        val quote = pair.open.length == 1 && pair.open[0] in QUOTES
-        // Not the apostrophe in `don't`.
-        if (quote && openedAt > 0 && text[openedAt - 1].isWordCharacter()) return null
-        val next = text.getOrNull(caret)
-        if (next != null && next !in closingStarts && next !in (if (quote) CLOSE_BEFORE_QUOTE else CLOSE_BEFORE_BRACKET)) return null
+        // `/**` typed inside the `/*|*/` that `/*` closed: that end stays, and only the rest goes in.
+        val closedAlready = contained[pair]?.close?.takeIf { text.startsWith(it, caret) }
+        if (closedAlready == null) {
+            // `/**` typed where its whole end is already.
+            if (pair.open.length > 1 && text.startsWith(pair.close, caret)) return null
+            val quote = pair.open.length == 1 && pair.open[0] in QUOTES
+            // Not the apostrophe in `don't`.
+            if (quote && openedAt > 0 && text[openedAt - 1].isWordCharacter()) return null
+            val next = text.getOrNull(caret)
+            if (next != null && next !in closingStarts && next !in (if (quote) CLOSE_BEFORE_QUOTE else CLOSE_BEFORE_BRACKET)) return null
+        }
         if (pair.notInString || pair.notInComment) {
             val place = placeIn(text, openedAt)
             if ((pair.notInString && place == Place.String) || (pair.notInComment && place == Place.Comment)) return null
         }
-        return pair.close
+        return if (closedAlready == null) pair.close else pair.close.removeSuffix(closedAlready).ifEmpty { null }
     }
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? =

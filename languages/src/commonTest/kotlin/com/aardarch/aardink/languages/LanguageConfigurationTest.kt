@@ -216,8 +216,8 @@ class LanguageConfigurationTest {
           "comments": { "lineComment": "//", "blockComment": ["/*", "*/"] },
           "autoClosingPairs": [
             ["(", ")"],
-            ["/*", " */"],
-            ["/**", " */"],
+            { "open": "/*", "close": "*/", "notIn": ["string", "comment"] },
+            { "open": "/**", "close": " */", "notIn": ["string"] },
             { "open": "\"", "close": "\"", "notIn": ["string"] },
             { "open": "'", "close": "'", "notIn": ["string", "comment"] },
             { "open": "{", "close": "}", "notIn": ["comment"] }
@@ -236,7 +236,7 @@ class LanguageConfigurationTest {
     @Test
     fun `an opening of several characters closes when the line ends in it`() {
         val service = service(closes)
-        assertEquals(" */", service.closing("/|", '*'))
+        assertEquals("*/", service.closing("/|", '*'))
         assertNull(service.closing("a|", '*'), "only the end of the opening was typed")
         assertEquals(" */", service.closing("/*|", '*'), "the longest fits, and no end follows")
     }
@@ -244,6 +244,45 @@ class LanguageConfigurationTest {
     @Test
     fun `a longer opening over a shorter one's end does not close twice`() {
         assertNull(service(closes).closing("/*| */", '*'))
+    }
+
+    @Test
+    fun `a longer opening over a shorter one's end adds only the rest of its own`() {
+        val service = service(closes)
+        assertEquals(" ", service.closing("/*|*/", '*'))
+        assertEquals(" ", service.closing("/*|*/ word", '*'))
+        assertNull(service.closing("\"/*|*/", '*'), "its notIn still counts")
+    }
+
+    @Test
+    fun `a contained pair's end is no reason not to close, as a character before the caret's next would be`() {
+        val service = service("""{ "autoClosingPairs": [["$", "$"], ["$$", "$$"]] }""")
+        assertEquals("$", service.closing("$|$", '$'))
+        assertNull(service.closing("|$", '$'), "the same character stops the shorter pair")
+    }
+
+    @Test
+    fun `an opening whose contained pair has the same end adds nothing`() {
+        val service = service("""{ "autoClosingPairs": [["/*", " */"], ["/**", " */"]] }""")
+        assertNull(service.closing("/*| */", '*'))
+    }
+
+    @Test
+    fun `the longest contained pair is the one that counts`() {
+        val service = service("""{ "autoClosingPairs": [["<", ">"], ["<%", "%>"], ["<%=", "=%>"]] }""")
+        assertEquals("=", service.closing("<%|%>", '='))
+    }
+
+    @Test
+    fun `a pair inside the opening that closes differently is not contained`() {
+        val service = service("""{ "autoClosingPairs": [["(", ")"], ["(*", "*]"]] }""")
+        assertEquals("*]", service.closing("(|)", '*'))
+    }
+
+    @Test
+    fun `three quotes over one quote's end add the rest`() {
+        val service = service("""{ "autoClosingPairs": [["\"", "\""], ["\"\"\"", "\"\"\""]] }""")
+        assertEquals("\"\"", service.closing("\"\"|\"", '"'))
     }
 
     @Test

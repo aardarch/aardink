@@ -62,7 +62,9 @@ data class LanguageConfiguration(
      * [close] goes after the caret when the last character of [open] is typed and the line then ends
      * in [open]. Of several that fit, the longest [open] wins. As with VS Code's default
      * `autoCloseBefore`, it closes at the line's end or before blanks and what ends an expression,
-     * not before a word; a quote does not close right after a word, as in `don't`.
+     * not before a word; a quote does not close right after a word, as in `don't`. Where a shorter
+     * pair inside [open] closed already, and [close] ends with its close, only the rest of [close]
+     * goes in: `/**` over the `*/` that `/*` closed with adds the space of its ` */`.
      *
      * Whether the caret is in a string or a comment is worked out from its own line alone: strings
      * are delimited by the pairs with the same one-character opening and closing, and a block comment
