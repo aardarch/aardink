@@ -16,19 +16,19 @@
 
 # Aardink roadmap: 0.6.3 to 1.0
 
-Status: **draft for review** (2026-10-22). Continues [`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md),
-which stays as the record of 0.6. Facts about the code are as of `v0.6.2` (commit `3fbaef6`);
-facts about the aardflex apps are as of the same day (Android on 0.6.2, aardflex-web-app on
-0.6.1 with a Renovate PR to 0.6.2 open).
+Status: **in progress**, drafted 2026-10-22; the table below is current. Continues
+[`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §10, facts
+about the code are as of `v0.6.2` (commit `3fbaef6`) and facts about the aardflex apps are as of
+the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 0.6.2 open).
 
 ## Progress
 
 | Version | State | Notes |
 | --- | --- | --- |
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
-| 0.7 | Done, not released (branch `feat/0.7`, 2026-10-22) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
-| 0.8 | Done, not released (branch `feat/0.8`, 2026-11-01) | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
-| 0.9 | Planned | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
+| 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
+| 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
+| 0.9 | In progress (branch `feat/0.9`, ledger in §15) | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
 | 0.10 | Planned | §8: more built-in languages, web provider parity, view options, find extras, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
@@ -707,7 +707,8 @@ Chrome 155 one in §1.3, not 0.8's. Every other measurement meets its target.
 ## 13. Verification
 
 - **Per PR:** `pwsh ./scripts/pre-push.ps1 -NoFix`, CI green on `main` before the next merge, the
-  §11 ledger line approved, ABI dumps updated.
+  current version's ledger line approved, ABI dumps updated. A version built on one branch, as 0.8
+  and 0.9 are, runs the same check after each unit of work, before the next starts.
 - **Performance:** `node tools/vite-smoke/perf.mjs --gate` on every PR; the results go in the PR
   description. From 0.10, the JVM and Android gates too.
 - **Behaviour:** `commonTest` on JVM and wasm, the Compose UI tests, the Robolectric
