@@ -408,7 +408,7 @@ that changes line layout, and it gets a spike first, as the 0.6 renderer did.
   `shutdown` and `exit`; `willSave` and `didSave`.
 - `documentSymbol`, `foldingRange`, `documentHighlight`, `documentColor` and `colorPresentation`,
   `documentLink`, `selectionRange`, `linkedEditingRange`, `completionItem/resolve`,
-  `onTypeFormatting`, `typeDefinition`, `implementation`, `declaration`.
+  `typeDefinition`, `implementation`, `declaration`. (`onTypeFormatting` moved to §8.3.)
 - `workspace/applyEdit` through an `onApplyWorkspaceEdit` host callback, so multi-file renames
   stop being rejected. `$/progress`, `logMessage` and `showMessage` to host callbacks.
   `positionEncoding` negotiation and pull diagnostics.
@@ -463,11 +463,13 @@ About fifteen PRs.
 
 - JavaScript providers: `provideDefinition`, `provideReferences`,
   `provideDocumentFormattingEdits`, `provideSignatureHelp`, `provideCodeActions`,
-  `provideRenameEdits`, `provideFoldingRanges`, `provideDocumentSymbols`,
-  `provideDocumentColors`, `provideInlineCompletions`.
+  `provideRenameEdits`, `provideFoldingRanges`. (`provideDocumentSymbols` and
+  `provideDocumentColors` came in 0.8; inline completions are §7.3's
+  `registerInlineCompletionsProvider`.)
 - `fontFamily` through `registerFont(name, url or bytes)`: wasmJs code in `:editor-web`, no
   `expect`.
-- Theme keys for the minimap, scrollbar, guides and widgets; high-contrast built-in themes.
+- Theme keys for the minimap, scrollbar, guides and widgets; high-contrast built-in themes; a
+  Monaco rule's `background` drawn (§11.1).
 - `wordWrap` defaults to off as in Monaco (breaking on the web only, flagged).
 
 ### 8.3 View options and find extras (`:editor`; 3 PRs)
@@ -477,6 +479,10 @@ About fifteen PRs.
   `wrappingIndent`, `wordWrapColumn`, `cursorSurroundingLines`, drag and drop of a selection.
 - Find in selection, preserve case, a search history, a replace preview, and an
   `onSearchWorkspace` hook for Ctrl+Shift+F.
+- Format on type, moved from §7.1: `LanguageService.formatOnType` (suspend) and
+  `formatOnTypeCharacters`, `EditorOptions.formatOnType`, off by default, and LSP
+  `onTypeFormatting`. `attach` cannot do it alone, because the request needs `tabSize` and
+  `insertSpaces` and `CodeEditorState.formattingOptions` is internal.
 
 ### 8.4 Performance (all modules; 3 PRs)
 
@@ -703,6 +709,121 @@ colour; the minimap marks errors, warnings and find matches.
 The web performance gate's key-to-idle p95 measures about 265 ms on this machine's Chrome
 156.0.8078.74, for v0.7.1 (261 ms) and for 0.8 (267 ms) alike: a local Chrome effect like the
 Chrome 155 one in §1.3, not 0.8's. Every other measurement meets its target.
+
+## 15. API ledger for 0.9
+
+Drafted from §7 against commit `2d1186f`, and approved as a whole on 2026-11-06. What is built
+where it differs, and the symbols it does not name, go in §15.1 as the work lands. Lines
+under §7.3 depend on the inline-layout spike (`docs/spikes/0.9-inline-layout.md`): a part the spike
+rules out moves to 0.10 and its line is struck here.
+
+### Choices behind the ledger
+
+| Choice | Decision | Why |
+| --- | --- | --- |
+| How 0.9 lands | One `feat/0.9` branch and one PR, as 0.8 | Agreed 2026-11-06 |
+| Completion documentation (§7.2) | A detail pane beside the list for the selected item, on desktop and web; phones keep the one-line label | Agreed 2026-11-06. The list has one ellipsized line today, so Markdown needs a surface |
+| Web provider callbacks | `aardinkRegisterLanguage` takes one `(method, text, argsJson)` dispatcher | Agreed 2026-11-06. Positional callbacks break template consumers with each provider, and §8.2 adds more |
+| `$S0` and `$#` | In guards and `next`; rejected in token names with a clear error | Token names are resolved once at parse, and `tokenNames` promises every name a grammar can produce |
+| `language-configuration.json` | Read as JSONC, through `allowComments` and `allowTrailingComma` | VS Code's files use both, and the JSON library already has them |
+| `ExperimentalAardinkApi` | Stays in 1.0 (§9) | SemVer before 1.0 already allows a break, and the marker would be one more symbol |
+| `positionEncoding` | Declares UTF-16 only | `ContentChange` columns are UTF-16; every server must accept it |
+| Server capabilities (§7.1) | Decided inside `LspLanguageService`: an unsupported request returns empty without being sent. No new `supportsX` flags in `:editor` | An empty answer already turns a passive feature off. Commands stay listed, as they do for built-in services, except Rename, which keeps its `supportsRename` gate: `LspLanguageService.supportsRename` follows `LspClient.serverCapabilities` when the host passed no `serverRenameSupport` |
+| `onEnterRules` actions | Honoured through `smartIndent`: `none`, `indent`, `outdent`, `appendText` and `removeText`. `indentOutdent` adds no second line: the closer stays at the opener's indentation with the caret before it, as the built-in services do today | `smartIndent` inserts one string with the caret after it, so it cannot put the caret between two lines. A new Enter hook is not worth it for 0.9 |
+| `wordPattern` | Left out of `LanguageConfiguration` | Nothing would read it |
+
+### `:editor`, new
+
+| Symbol | Item |
+| --- | --- |
+| `LanguageService.inlayHints(document, range): List<InlayHint>`, default empty; `InlayHint(offset, label)` | §7.3 |
+| `LanguageService.codeLenses(document): List<CodeLens>`, default empty; `CodeLens(offset, title, onClick)` | §7.3 |
+| `LanguageService.semanticTokens(document): List<Token>`, default empty | §7.3 |
+| `DecorationStyle.before`, `after`, `inlineColor` | §7.3 |
+| `fun interface InlineCompletionProvider`; `InlineCompletion(text, range)`; `CodeEditorLayout(inlineCompletionProvider)` | §7.3 |
+| `EditorCommand.AcceptInlineCompletion`, `CycleInlineCompletion(forward)` | §7.3: a soft keyboard has no Tab |
+| `EditorOptions.inlayHints`, `codeLens`, `semanticHighlighting`, all off by default | §7.3 |
+| `LocalCodeFenceTokenizers`, a `(languageId) -> IncrementalTokenizer?` CompositionLocal, default `{ null }` | §7.2 |
+| `LanguageService.resolveCompletion(item): CompletionItem`, default `item` | §7.1 |
+| `FoldingProvider.requestFoldableRanges(document)`, a default suspend method calling `foldableRanges` | §7.1: a server's answer cannot be awaited in a synchronous call |
+| `LanguageService.surroundingClose(typed): String?`, default null | §7.4: `:editor` has no surround feature, and `autoClose` runs after the selection is gone |
+
+Each new `LanguageService` method also gets a merge rule on `CompositeLanguageService`. The
+Markdown renderer and the detail pane are internal.
+
+### `:languages`, new
+
+| Symbol | Item |
+| --- | --- |
+| `DeclarativeTokenizer(grammar, embedded: (String) -> DeclarativeGrammar? = { null })` | §7.4 |
+| Grammar data, with no new symbols: `nextEmbedded`, `switchTo`, `goBack`, `$S` and `$#` in guards and `next`, `@brackets`, `log` | §7.4 |
+| `LanguageConfiguration` with its rule types, and `LanguageConfiguration.parse(json)`, which refuses lookbehind | §7.4 |
+| `LanguageDefinition.withConfiguration(configuration)` | §7.4 |
+
+### `:languages-lsp`, new
+
+| Symbol | Item |
+| --- | --- |
+| `LspClient.serverCapabilities`, `shutdown()`; `DefaultClientCapabilities` | §7.1 |
+| `LspClientHost`, with defaulted `applyWorkspaceEdit`, `showMessageRequest`, `showMessage`, `logMessage`, `progress`; `LspClient(host)` | §7.1 |
+| `LspLanguageService.attach(state)`, `detach()`, `willSave(reason)`, `didSave(document)`, `supports(provider: String)`, where `provider` is a `ServerCapabilities` member name such as `renameProvider` | §7.1 |
+| `LspLanguageService.typeDefinition`, `implementation`, `declaration` | §7.1: for a host's own menu items, with no new commands |
+| `LspFoldingProvider(service)` | §7.1 |
+| Overrides of `documentSymbols`, `documentHighlights`, `selectionRanges`, `linkedEditingRanges`, `documentLinks`, `documentColors`, `colorPresentations`, and of the new `inlayHints`, `codeLenses`, `semanticTokens`, `resolveCompletion` | §7.1, §7.3 |
+
+New wire types stay internal unless a public signature needs them.
+
+### `:editor-web` and the npm package, new
+
+| Symbol | Item |
+| --- | --- |
+| `connectLanguageServer(url, languageId)`, returning a disposable; `AardinkWeb.connectLanguageServer`; a dependency on `:languages-lsp` | §7.1 |
+| `registerInlineCompletionsProvider(languageId, provider)` | §7.3 |
+| `editor.action.inlineSuggest.commit`, `showNext` and `showPrevious` in `trigger` and `getAction`, for `AcceptInlineCompletion` and `CycleInlineCompletion` | §7.3: the web reaches commands only through action ids |
+| `provideInlayHints(text, range)`, `provideCodeLenses(text)`, `runCodeLensCommand(id, args)` in `registerLanguage`'s providers, answering Monaco's shapes `AardinkInlayHint { position, label }` and `AardinkCodeLens { range, command: { id, title, arguments? } }`; `WebLanguageProviders.inlayHints`, `codeLenses`, `runCodeLensCommand` | §7.3: a click comes back through the provider, because an answer is JSON and a language's service has no editor handle |
+| `before`, `after` (Monaco's `{ content }`) and `inlineColor` (a CSS hex colour, in place of Monaco's `inlineClassName`) in `AardinkDecorationOptions`, for `deltaDecorations` and `createDecorationsCollection` | §7.3 |
+| `WebEditorOptions.inlayHints`, `codeLens`, `semanticHighlighting` | §7.3 |
+| `configuration` in `registerLanguage`'s definition; `nextEmbedded` resolved from registered grammars | §7.4 |
+
+### Breaking
+
+| Symbol | Change | Item |
+| --- | --- | --- |
+| `aardinkRegisterLanguage` | Positional callbacks become one dispatcher; a wasm module built from the template copies the new version, npm users are unaffected | §7.1 |
+| `DecorationStyle`, `EditorOptions`, `WebEditorOptions` | Gain fields (data class signatures) | §7.3 |
+| `CodeEditorLayout`, `LspClient`, `DeclarativeTokenizer`, `WebLanguageProviders` | Gain a defaulted parameter (recompile) | §7.1, §7.3, §7.4 |
+| `EditorCommand` | Gains members (an exhaustive `when` needs a branch) | §7.3 |
+| Grammar parser | `$` in a token name is rejected; `$#==$S2`-style guards, a literal regex today, start matching | §7.4 |
+
+### Not in 0.9
+
+- Non-UTF-16 position encodings; `semanticTokens/delta` and `/range`; label parts and tooltips on
+  inlay hints; `willSaveWaitUntil`.
+- A Monaco theme rule's `background` (§11.1): `EditorTheme` has no field for it. Moved to §8.2.
+- JS providers for `semanticTokens` and `resolveCompletion`: on the web these come through
+  `connectLanguageServer` only, and a JS host gives `documentation` with the item. No built-in
+  `inlayHints`, `codeLenses`, `semanticTokens` or `resolveCompletion`: each is tested through its
+  `LspLanguageService` override, and `inlayHints` and `codeLenses` also through their web
+  providers. §13's rule of a built-in and a web provider per method is waived for these in 0.9.
+- `onTypeFormatting`, moved to §8.3: it needs three more `:editor` symbols, and neither aardflex
+  app uses it.
+- If the wave overruns, in this order: TypeScript regexp literals to §8.1, pull diagnostics,
+  `goBack`, then multi-line ghost text and code lens.
+
+### Notes for the build
+
+These need no public symbol, and are kept here so they are not worked out twice:
+
+- `resolveCompletion` reads the document through `attach`, or the last `didOpen` and `didChange`.
+  The server's raw item, with its `data`, stays in an internal table beside the returned item.
+- `connectLanguageServer` builds one `LspLanguageService` per editor, with a generated document URI.
+- An LSP lens's `onClick` sends `workspace/executeCommand` through `LspClient.sendRequest`.
+- A feature registered through `client/registerCapability`, or a server whose capabilities are
+  unknown, counts as supported, as `serverRenameSupport = null` does today.
+- The aardflex expression language's own grammar and catalog are downstream (§12). Here, only the
+  test fixture and its goldens change.
+- Kotlin symbols behind an npm line, and types behind `LspClientHost`, go in §15.1 as they land,
+  as §11.1 and §14.1 did.
 
 ## 13. Verification
 
