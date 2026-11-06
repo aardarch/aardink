@@ -1260,7 +1260,8 @@ class CodeEditorState(
                 val position = caret.end + shift
                 placed[index] = TextRange(position)
                 if (position == 0 || document[position - 1] != typed) continue
-                val followUp = TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions) ?: continue
+                val followUp =
+                    TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions, eol = eol) ?: continue
                 applied += document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
                 placed[index] = TextRange(followUp.caret)
                 shift += followUp.text.length

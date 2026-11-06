@@ -104,6 +104,43 @@ class EditorInputTest {
         assertEquals(TextRange(7), state.selection)
     }
 
+    /** What a language configuration can answer: text with line breaks in it. */
+    private object MultiLine : LanguageService by Service {
+        override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = "\n'@"
+
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = "  a\n  b"
+    }
+
+    @Test
+    fun `a closing with a line break takes the document's line ending, and the caret stays before it`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        val typed = state.applyInput(1, 1, "'", service = MultiLine)
+        assertEquals("x'\r\n'@\r\ny", state.text)
+        assertEquals(TextRange(2), state.selection)
+        assertEquals(4, typed?.autoCloseLength, "the closing as it is in the document")
+    }
+
+    @Test
+    fun `an indent with a line break takes the document's line ending, and the caret goes after it`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        state.applyInput(1, 1, "\n", service = MultiLine)
+        assertEquals("x\r\n  a\r\n  b\r\ny", state.text)
+        assertEquals(TextRange(11), state.selection)
+    }
+
+    @Test
+    fun `a closing's CR LF becomes the document's LF`() {
+        val state = stateFor("x")
+        state.selection = TextRange(1)
+        val service = object : LanguageService by Service {
+            override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = "\r\n)"
+        }
+        state.applyInput(1, 1, "(", service = service)
+        assertEquals("x(\n)", state.text)
+    }
+
     @Test
     fun `backspace and delete remove a CR LF line break whole`() {
         val state = stateFor("x\r\ny")
