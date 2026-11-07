@@ -122,6 +122,7 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         feature("foldingRange") {
             put("lineFoldingOnly", true)
             putJsonObject("foldingRangeKind") { put("valueSet", strings("comment", "imports", "region")) }
+            putJsonObject("foldingRange") { put("collapsedText", true) }
         }
         feature("selectionRange")
         feature("linkedEditingRange")

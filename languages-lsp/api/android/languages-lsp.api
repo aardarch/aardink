@@ -564,6 +564,13 @@ public final class com/aardarch/aardink/languages/lsp/LspError$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class com/aardarch/aardink/languages/lsp/LspFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspLanguageService;)V
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class com/aardarch/aardink/languages/lsp/LspFormattingOptions {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions$Companion;
@@ -637,6 +644,7 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun declaration (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun detach ()V
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -657,6 +665,7 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun implementation (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun linkedEditingRanges (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -665,6 +674,8 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
+	public final fun supports (Ljava/lang/String;)Z
+	public final fun typeDefinition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun willSave (Lcom/aardarch/aardink/languages/lsp/LspSaveReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

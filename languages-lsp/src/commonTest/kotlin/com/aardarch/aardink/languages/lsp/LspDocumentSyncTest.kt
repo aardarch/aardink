@@ -57,7 +57,7 @@ private const val DID_SAVE = "textDocument/didSave"
 private const val COMPLETION = "textDocument/completion"
 
 private fun withSync(sync: String, block: suspend Harness.() -> Unit) = withServer("") {
-    serverDeclares("""{"textDocumentSync":$sync}""")
+    serverDeclares("""{"textDocumentSync":$sync,"completionProvider":{},"hoverProvider":true}""")
     block()
 }
 
@@ -112,13 +112,6 @@ private fun Harness.replayed(text: String): String {
 }
 
 /** Runs the handshake with no sync declared, and the server then registers [registrations], given as JSON. */
-private suspend fun Harness.serverRegisters(vararg registrations: String) {
-    serverAsks("1", "client/registerCapability", """{"registrations":[${registrations.joinToString()}]}""")
-    nextSent()
-}
-
-private fun registration(method: String, options: String = "{}") = """{"id":"$method","method":"$method","registerOptions":$options}"""
-
 private val JsonObject.openedText: String get() = params["textDocument"]!!.jsonObject["text"]!!.jsonPrimitive.content
 
 class LspDocumentSyncTest {

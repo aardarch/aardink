@@ -432,6 +432,18 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         }
     }
 
+    /**
+     * The text the server has been given, after every edit reported so far, or null when it has been
+     * given none: what the positions in its answers are about. Whole-document work, so only for
+     * answers that need it.
+     */
+    suspend fun currentText(): String? {
+        if (queue == null) return null
+        var text: String? = null
+        submit(Send { text = mirror?.text ?: lastText })
+        return text
+    }
+
     private fun syncOptions() = LspTextDocumentSync.from(client.serverCapabilities, client.registrations)
 
     private suspend fun submit(item: Send) {

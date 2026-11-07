@@ -305,7 +305,7 @@ class LspLanguageServiceTest {
         val arrayServer = async {
             respond("textDocument/hover", """{"contents":["first",{"language":"kotlin","value":"val x: Int"}]}""")
         }
-        assertEquals("first\n\nval x: Int", service.hoverDoc(doc, 4)?.content)
+        assertEquals("first\n\n```kotlin\nval x: Int\n```", service.hoverDoc(doc, 4)?.content)
         arrayServer.await()
 
         val nullServer = async { respond("textDocument/hover", "null") }

@@ -206,6 +206,14 @@ internal fun withServer(text: String, host: LspClientHost = NoLspClientHost, blo
     }
 }
 
+/** The server registers [registrations], each one a `Registration` as JSON, and is answered. */
+internal suspend fun Harness.serverRegisters(vararg registrations: String) {
+    serverAsks("1", "client/registerCapability", """{"registrations":[${registrations.joinToString()}]}""")
+    nextSent()
+}
+
+internal fun registration(method: String, options: String = "{}") = """{"id":"$method","method":"$method","registerOptions":$options}"""
+
 internal val JsonObject.method: String get() = this["method"]!!.jsonPrimitive.content
 
 internal val JsonObject.params: JsonObject get() = this["params"]!!.jsonObject
