@@ -546,6 +546,13 @@ do not settle). `perf.mjs --hints` measures the reference document with real hin
 registered language's providers, and `perf.mjs --semantic` with semantic tokens from a language
 server on a local WebSocket, each to a file of its own; neither is part of `--gate` yet.
 
+Measured with those on the built 0.9, with nothing opted in, key-to-idle and key-to-change are
+within 1% and 5% of 0.8.0 on the same machine. Semantic highlighting from a server adds about
+210 ms to key-to-idle on the reference document, with a task of about 73 ms as each answer lands.
+Hints and lenses on a 60,000-line document take key-to-idle to about 215 ms, against 20 ms at 5,000
+lines. Keys typed at a steady pace still show within 6 ms in both. The figures are in the roadmap's
+§15.1.
+
 ## Verification checklist
 
 Automated items run against the production build: `pnpm checklist` in `tools/vite-smoke/`
@@ -592,4 +599,9 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
 - Inlay hints, code lenses and semantic tokens are not asked for again when a server says they are
   out of date (`workspace/inlayHint/refresh` and the like). The editor asks again only for reasons of
   its own: an edit; for hints, scrolling or a fold; for lenses, one without a title coming on screen.
+- Semantic highlighting from a language server asks for the whole document after each edit, and its
+  answer is parsed in one piece: on a 5,000-line file each answer holds the page for about 70 ms as
+  it lands, and a key pressed then waits for it. Code lenses are asked about the whole document too,
+  so on a file of tens of thousands of lines the editor takes about 200 ms to settle after a key.
+  Both are off by default (`semanticHighlighting`, `codeLens`).
 - The items marked **manual** in the checklist above still wait for real devices.

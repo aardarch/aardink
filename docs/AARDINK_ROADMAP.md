@@ -503,6 +503,10 @@ About fifteen PRs.
   (`profileinstaller` only in the sample, never in `:editor`).
 - JVM and Android performance gates; today only the web is gated.
 - A cheaper plain-text-with-find path above the `EditorLimits` size where highlighting turns off.
+- Whole-document answers on wasm (§15.1, Still open): parse a large LSP answer in slices, ask for
+  semantic tokens less often while typing or through `semanticTokens/delta`, and keep a keystroke's
+  code lens cost off the document's size. Then put `perf.mjs --hints` and `--semantic` under
+  `--gate`.
 
 ## 9. 1.0: stable API, diff editor, accessibility, i18n
 
@@ -999,11 +1003,26 @@ held earlier 0.9 work.
   (`docs/spikes/0.9-inline-layout.md`) has not been done: the `rowShift` branch, Gboard and Samsung
   Keyboard on a line with a hint, and ghost text while a keyboard composes, which on Android may be
   every word.
-- **Timing with real hosts.** `perf.mjs --hints` and `--semantic` exist but have been run only to
-  prove they work. The spike's 100,000-line run with a lens every 20 lines is still to repeat with
-  the real hosts, and `InlineContent` still maps over the lens list on each edit. One `--semantic`
-  run showed key-to-idle p95 of 513 ms while each answer landed, with an 81 ms long task: unverified,
-  and worth a look before 0.9 ships.
+- **Timing with real hosts**, measured on 2026-11-08 with nothing else running on the machine:
+  medians of three interleaved runs in headless Chrome 157. With nothing opted in, 0.9 matches 0.8.0:
+  key-to-idle p95 272.1 ms against 270.3, key-to-change p95 4.1 ms against 4.3, and the same at
+  100,000 lines (23.5 ms against 24.4). Two opt-in paths cost more. In both, typing at a steady pace
+  stays fast (key-to-change p95 at most 6 ms, no key lost), but a key pressed while an answer lands
+  waits for it. Both costs move to §8.4.
+  - Semantic tokens from a server (`--semantic`): key-to-idle p95 is 484 ms, against 272 ms with them
+    off, because each edit asks for the whole document again. As an answer of about 28,000 tokens
+    (272 KB) lands, one task of about 73 ms runs and a frame takes about 72 ms. The decode and the
+    store are paced; the JSON parse of the answer in `LspClient` is one block on wasm.
+  - Hints and lenses at 60,000 lines (`--hints --lines 60000`, about 3,000 lenses): key-to-idle p95
+    is 215 ms, against 20 ms at 5,000 lines, and set-value to idle is about 520 ms. Lenses are asked
+    about the whole document after each pause, and `InlineContent` maps over the lens list on each
+    edit. Not profiled further.
+  - Above the 2 MiB analysis limit, about 62,000 lines of this Kotlin, nothing asks for hints, lenses
+    or semantic tokens, so `--hints --lines 100000` has nothing to measure and stops.
+  - `perf.mjs --gate` fails on this machine for 0.8.0 and 0.9 alike, on key-to-idle p95 (285 ms
+    against the 50 ms gate); CI's run is the gate. One `--gate` run read key-to-change p95 at
+    19.2 ms, under the 20 ms target. In seven runs 0.9 has shown two such slow keys (13.8 and
+    19.2 ms) and 0.8.0 none in six, which is too few runs to tell from noise.
 
 ## 13. Verification
 

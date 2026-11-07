@@ -176,6 +176,11 @@ parameters, so code compiled against 0.8 that calls them needs a recompile. A `L
   keeps that language's formatter and outline ahead of a server's.
 - A server's `workspace/*/refresh` for inlay hints, code lens and semantic tokens is not honoured:
   they are asked for again on the editor's own schedule.
+- On the web, semantic tokens from a server are asked for the whole document after each edit and
+  parsed in one piece, so each answer holds the page for about 70 ms on a 5,000-line file. Code
+  lenses are asked about the whole document too, and on a 60,000-line file the editor takes about
+  215 ms to settle after a key. Typing at a steady pace still shows within 6 ms. Both are off by
+  default.
 
 ## [0.8.0] - 2026-11-02
 
