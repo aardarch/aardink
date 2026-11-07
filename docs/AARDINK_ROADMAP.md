@@ -741,7 +741,7 @@ rules out moves to 0.10 and its line is struck here.
 | `LanguageService.semanticTokens(document): List<Token>`, default empty | §7.3 |
 | `DecorationStyle.before`, `after`, `inlineColor` | §7.3 |
 | `fun interface InlineCompletionProvider`; `InlineCompletion(text, range)`; `CodeEditorLayout(inlineCompletionProvider)` | §7.3 |
-| `EditorCommand.AcceptInlineCompletion`, `CycleInlineCompletion(forward)` | §7.3: a soft keyboard has no Tab |
+| `EditorCommand.AcceptInlineCompletion`, `CycleInlineCompletion(forward)`, `DismissInlineCompletion` | §7.3: a soft keyboard has no Tab or Escape. Escape reaches dismissal as an `EditorKeyBindings` entry |
 | `EditorOptions.inlayHints`, `codeLens`, `semanticHighlighting`, all off by default | §7.3 |
 | `LocalCodeFenceTokenizers`, a `(languageId) -> IncrementalTokenizer?` CompositionLocal, default `{ null }` | §7.2 |
 | `LanguageService.resolveCompletion(item): CompletionItem`, default `item` | §7.1 |
@@ -779,7 +779,7 @@ New wire types stay internal unless a public signature needs them.
 | --- | --- |
 | `connectLanguageServer(url, languageId)`, returning a disposable; `AardinkWeb.connectLanguageServer`; a dependency on `:languages-lsp` | §7.1 |
 | `registerInlineCompletionsProvider(languageId, provider)` | §7.3 |
-| `editor.action.inlineSuggest.commit`, `showNext` and `showPrevious` in `trigger` and `getAction`, for `AcceptInlineCompletion` and `CycleInlineCompletion` | §7.3: the web reaches commands only through action ids |
+| `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` and `hide` in `trigger` and `getAction`, for `AcceptInlineCompletion`, `CycleInlineCompletion` and `DismissInlineCompletion` | §7.3: the web reaches commands only through action ids |
 | `provideInlayHints(text, range)`, `provideCodeLenses(text)`, `runCodeLensCommand(id, args)` in `registerLanguage`'s providers, answering Monaco's shapes `AardinkInlayHint { position, label }` and `AardinkCodeLens { range, command: { id, title, arguments? } }`; `WebLanguageProviders.inlayHints`, `codeLenses`, `runCodeLensCommand` | §7.3: a click comes back through the provider, because an answer is JSON and a language's service has no editor handle |
 | `before`, `after` (Monaco's `{ content }`) and `inlineColor` (a CSS hex colour, in place of Monaco's `inlineClassName`) in `AardinkDecorationOptions`, for `deltaDecorations` and `createDecorationsCollection` | §7.3 |
 | `WebEditorOptions.inlayHints`, `codeLens`, `semanticHighlighting` | §7.3 |
