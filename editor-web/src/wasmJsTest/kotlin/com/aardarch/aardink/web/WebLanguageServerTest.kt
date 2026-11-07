@@ -71,6 +71,13 @@ private const val EVERYTHING = """{
   "renameProvider": true
 }"""
 
+private const val SEMANTIC_TOKENS_METHOD = "textDocument/semanticTokens/full"
+
+private const val SEMANTIC_TOKENS_SERVER = """{
+  "textDocumentSync": 2,
+  "semanticTokensProvider": { "legend": { "tokenTypes": ["variable"], "tokenModifiers": [] }, "full": true }
+}"""
+
 private fun range(startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int): String =
     """{"start":{"line":$startLine,"character":$startCharacter},"end":{"line":$endLine,"character":$endCharacter}}"""
 
@@ -910,5 +917,55 @@ class WebLanguageServerTest {
         val items = withContext(Dispatchers.Main) { handle.languageService!!.completions(handle.state.value.document.snapshot(), 0) }
 
         assertEquals(listOf("same"), items.map { it.label })
+    }
+
+    /** A server that calls the first four characters a variable. */
+    private fun servingSemanticTokens() =
+        FakeServer(SEMANTIC_TOKENS_SERVER) { method -> if (method == SEMANTIC_TOKENS_METHOD) """{"data":[0,0,4,0,0]}""" else null }
+
+    /** The layout asks by itself, once the server has the document, and the server's answer comes back. */
+    private suspend fun assertSemanticTokensServed(handle: AardinkEditorHandle, server: FakeServer) {
+        awaitUntil { SEMANTIC_TOKENS_METHOD in server.methods }
+        assertTrue(server.methods.indexOf("textDocument/didOpen") in 0 until server.methods.indexOf(SEMANTIC_TOKENS_METHOD))
+
+        val tokens = withContext(Dispatchers.Main) { handle.languageService!!.semanticTokens(handle.state.value.document.snapshot()) }
+
+        assertEquals(listOf(0 to 4), tokens.map { it.start to it.end })
+    }
+
+    @Test
+    fun `semantic highlighting reaches a server through a registered language, which has none of its own`() = runTest {
+        language("toy-semantic")
+        val handle = mount("name", "toy-semantic")
+        AardinkWeb.patchOptions(handle, """{"semanticHighlighting": true}""")
+        val server = servingSemanticTokens()
+
+        connect("toy-semantic", server)
+
+        assertSemanticTokensServed(handle, server)
+    }
+
+    @Test
+    fun `semantic highlighting reaches a server ahead of a built-in language`() = runTest {
+        val handle = mount("true", "json")
+        AardinkWeb.patchOptions(handle, """{"semanticHighlighting": true}""")
+        val server = servingSemanticTokens()
+
+        connect("json", server)
+
+        assertSemanticTokensServed(handle, server)
+    }
+
+    @Test
+    fun `with semantic highlighting off, a server is not asked`() = runTest {
+        language("toy-semantic-off")
+        val handle = mount("name", "toy-semantic-off")
+        val server = servingSemanticTokens()
+        connect("toy-semantic-off", server)
+        served(handle)
+
+        pause(600)
+
+        assertFalse(SEMANTIC_TOKENS_METHOD in server.methods)
     }
 }
