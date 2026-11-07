@@ -116,7 +116,7 @@ class CodeEditorState(
 
     /**
      * The language service's semantic tokens, a layer over [tokenStore] that a line's layout merges
-     * in. It moves with edits as that store does. Null until there is an answer to keep, and while
+     * in. It moves with edits as that store does. Null while there is no answer to keep, and while
      * [EditorOptions.semanticHighlighting][com.aardarch.aardink.ui.EditorOptions] is off, so that
      * an edit then costs nothing more than it did without it.
      */
@@ -127,8 +127,19 @@ class CodeEditorState(
     internal var semanticVersion by mutableIntStateOf(0)
         private set
 
-    /** Shows [tokens], the language service's answer about [snapshot], unless an edit overtakes them. */
+    /** The language service whose answers [semanticStore] holds, set by the layout. */
+    internal var semanticSource: LanguageService? = null
+
+    /**
+     * Shows [tokens], the language service's answer about [snapshot], unless an edit overtakes them.
+     * No tokens is no layer: most services have none to give, and an edit should not pay for that.
+     */
     internal suspend fun applySemanticTokens(tokens: List<Token>, snapshot: CodeDocument) {
+        if (document.version != snapshot.version) return
+        if (tokens.isEmpty()) {
+            clearSemanticTokens()
+            return
+        }
         val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
         if (store.overlay(tokens, snapshot)) semanticVersion++
     }

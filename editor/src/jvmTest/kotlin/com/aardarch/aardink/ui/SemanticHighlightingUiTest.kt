@@ -240,7 +240,7 @@ class SemanticHighlightingUiTest {
         service.requests[0].answer.complete(listOf(Token(0, 4, type)))
         waitForIdle()
 
-        assertEquals(emptyList(), state.semanticStore?.tokensForLine(0).orEmpty())
+        assertNull(state.semanticStore)
     }
 
     @Test
@@ -291,6 +291,75 @@ class SemanticHighlightingUiTest {
         pause()
 
         assertNotNull(service.requests.singleOrNull(), "asked once")
+    }
+
+    @Test
+    fun `no tokens from the service means no store`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val service = HeldTokens()
+        show(state, service)
+        pause()
+        waitUntil { service.requests.size == 1 }
+
+        service.requests[0].answer.complete(emptyList())
+        waitForIdle()
+
+        assertNull(state.semanticStore)
+    }
+
+    @Test
+    fun `another service takes the last one's colours away at once, answered or not`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val first = HeldTokens()
+        val second = HeldTokens()
+        var service by mutableStateOf(first)
+        state.computeDispatcher = Dispatchers.Unconfined
+        setContent {
+            CodeEditorLayout(state = state, languageService = service, options = ON, modifier = Modifier.size(600.dp, 400.dp))
+        }
+        waitForIdle()
+        pause()
+        waitUntil { first.requests.size == 1 }
+        first.requests[0].answer.complete(listOf(Token(0, 4, type)))
+        waitUntil { state.semanticStore != null }
+
+        service = second
+        waitForIdle()
+        assertNull(state.semanticStore, "before the new service is even asked")
+
+        pause()
+        waitUntil { second.requests.size == 1 }
+        assertNull(state.semanticStore, "while it says nothing")
+    }
+
+    @Test
+    fun `the same service coming back keeps its colours while it is asked again`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val service = HeldTokens()
+        var showing by mutableStateOf(true)
+        state.computeDispatcher = Dispatchers.Unconfined
+        setContent {
+            if (showing) {
+                CodeEditorLayout(state = state, languageService = service, options = ON, modifier = Modifier.size(600.dp, 400.dp))
+            }
+        }
+        waitForIdle()
+        pause()
+        waitUntil { service.requests.size == 1 }
+        service.requests[0].answer.complete(listOf(Token(0, 4, type)))
+        waitUntil { state.semanticStore != null }
+        val layer = state.semanticStore
+        val shown = state.semanticVersion
+
+        showing = false
+        waitForIdle()
+        showing = true
+        waitForIdle()
+        pause()
+        waitUntil { service.requests.size == 2 }
+
+        assertSame(layer, state.semanticStore, "a tab coming back does not flash the syntax colours")
+        assertEquals(shown, state.semanticVersion)
     }
 
     @Test

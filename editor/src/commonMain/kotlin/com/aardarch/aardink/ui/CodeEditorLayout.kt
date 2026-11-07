@@ -722,11 +722,12 @@ private fun CodeEditorLayoutContent(
 
     // ── Semantic tokens: a layer of colours over the syntax's, moved with edits between answers ─
     LaunchedEffect(state, languageService, options.semanticHighlighting) {
-        val service = languageService
-        if (service == null || !options.semanticHighlighting) {
-            state.clearSemanticTokens()
-            return@LaunchedEffect
-        }
+        val service = languageService.takeIf { options.semanticHighlighting }
+        // Another service's colours mean nothing in this one's language, and it may be long in
+        // answering, or never answer. The same service coming back still stands by its own.
+        if (service == null || service !== state.semanticSource) state.clearSemanticTokens()
+        state.semanticSource = service
+        if (service == null) return@LaunchedEffect
         snapshotFlow { state.textVersion }.collectLatest {
             delay(SEMANTIC_TOKENS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {

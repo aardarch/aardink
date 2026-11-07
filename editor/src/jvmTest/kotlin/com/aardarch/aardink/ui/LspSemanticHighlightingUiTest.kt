@@ -24,6 +24,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.LanguageService
@@ -36,6 +37,7 @@ import com.aardarch.aardink.languages.lsp.ChannelLspTransport
 import com.aardarch.aardink.languages.lsp.DefaultClientCapabilities
 import com.aardarch.aardink.languages.lsp.LspClient
 import com.aardarch.aardink.languages.lsp.LspLanguageService
+import com.aardarch.aardink.languages.lsp.LspRequestException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +50,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -63,7 +67,12 @@ class LspSemanticHighlightingUiTest {
     private val options = EditorOptions(semanticHighlighting = true)
 
     /** A server over [transport] that declares [capabilities] and answers each request for tokens with [data]. */
-    private class Server(private val transport: ChannelLspTransport, private val capabilities: String, private val data: (Int) -> String) {
+    private class Server(
+        private val transport: ChannelLspTransport,
+        private val capabilities: String,
+        private val refusesHandshake: Boolean,
+        private val data: (Int) -> String,
+    ) {
         val methods = CopyOnWriteArrayList<String>()
 
         suspend fun serve() {
@@ -72,6 +81,10 @@ class LspSemanticHighlightingUiTest {
                 val method = message["method"]?.jsonPrimitive?.content ?: continue
                 methods += method
                 val id = message["id"] ?: continue
+                if (method == "initialize" && refusesHandshake) {
+                    transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"no"}}""")
+                    continue
+                }
                 val result = when (method) {
                     "initialize" -> """{"capabilities":$capabilities}"""
                     "textDocument/semanticTokens/full" -> """{"data":${data(methods.count { it == method })}}"""
@@ -82,12 +95,12 @@ class LspSemanticHighlightingUiTest {
         }
     }
 
-    private class Connection(capabilities: String, data: (Int) -> String) {
+    private class Connection(capabilities: String, refusesHandshake: Boolean = false, data: (Int) -> String) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val transport = ChannelLspTransport()
         val client = LspClient(transport, scope)
         val service = LspLanguageService(client, "file:///Main.kt", "kotlin")
-        val server = Server(transport, capabilities, data).also { server -> scope.launch { server.serve() } }
+        val server = Server(transport, capabilities, refusesHandshake, data).also { server -> scope.launch { server.serve() } }
 
         fun close() = scope.cancel()
     }
@@ -213,7 +226,29 @@ class LspSemanticHighlightingUiTest {
             pause()
 
             assertTrue(method !in connection.server.methods)
-            assertEquals(emptyList(), state.semanticStore?.tokensForLine(0).orEmpty())
+            assertNull(state.semanticStore)
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `a handshake that fails after the editor asked gives a composite's fallback its colours`() = runComposeUiTest {
+        val connection = Connection(capabilities("""["variable"]"""), refusesHandshake = true) { "[]" }
+        try {
+            val dialect = Token(0, 4, NamedTokenType("type.class"))
+            val fallback = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+                override suspend fun semanticTokens(document: CodeDocument): List<Token> = listOf(dialect)
+            }
+            val state = CodeEditorState("name")
+            show(state, CompositeLanguageService(connection.service, fallback))
+            pause()
+            assertNull(state.semanticStore, "the server may yet be coming up")
+
+            assertFailsWith<LspRequestException> { connection.client.initialize(rootUri = null) }
+
+            assertEquals(dialect, awaitLayer(0, state).single())
+            assertTrue(method !in connection.server.methods)
         } finally {
             connection.close()
         }

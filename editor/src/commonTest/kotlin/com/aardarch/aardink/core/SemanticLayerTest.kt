@@ -298,6 +298,56 @@ class SemanticLayerTest {
     }
 
     @Test
+    fun `an empty answer keeps no store, so that an edit costs nothing more`() = runTest {
+        val state = CodeEditorState("one", scope = CoroutineScope(Dispatchers.Unconfined))
+        state.computeDispatcher = Dispatchers.Unconfined
+
+        state.applySemanticTokens(emptyList(), state.document.snapshot())
+
+        assertNull(state.semanticStore)
+        assertEquals(0, state.semanticVersion)
+    }
+
+    @Test
+    fun `an answer the document has moved on from keeps no store`() = runTest {
+        val state = CodeEditorState("one", scope = CoroutineScope(Dispatchers.Unconfined))
+        state.computeDispatcher = Dispatchers.Unconfined
+        val snapshot = state.document.snapshot()
+        state.document.insert(0, "x")
+
+        state.applySemanticTokens(listOf(Token(0, 3, named)), snapshot)
+
+        assertNull(state.semanticStore)
+    }
+
+    @Test
+    fun `an empty answer takes the layer away, and the store with it`() = runTest {
+        val state = CodeEditorState("one", scope = CoroutineScope(Dispatchers.Unconfined))
+        state.computeDispatcher = Dispatchers.Unconfined
+        state.applySemanticTokens(listOf(Token(0, 3, named)), state.document.snapshot())
+        val store = state.semanticStore!!
+
+        state.applySemanticTokens(emptyList(), state.document.snapshot())
+        state.document.insert(0, "x\n")
+
+        assertNull(state.semanticStore)
+        assertEquals(1, store.lineCount, "an edit no longer reaches it")
+    }
+
+    @Test
+    fun `an empty answer the document has moved on from leaves the layer`() = runTest {
+        val state = CodeEditorState("one", scope = CoroutineScope(Dispatchers.Unconfined))
+        state.computeDispatcher = Dispatchers.Unconfined
+        state.applySemanticTokens(listOf(Token(0, 3, named)), state.document.snapshot())
+        val snapshot = state.document.snapshot()
+        state.document.insert(0, "x")
+
+        state.applySemanticTokens(emptyList(), snapshot)
+
+        assertEquals(listOf(Token(1, 4, named)), state.semanticStore!!.tokensForLine(0))
+    }
+
+    @Test
     fun `clearing the layer stops it following the document`() = runTest {
         val state = CodeEditorState("one", scope = CoroutineScope(Dispatchers.Unconfined))
         state.computeDispatcher = Dispatchers.Unconfined
