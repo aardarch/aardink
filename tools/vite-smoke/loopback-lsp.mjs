@@ -31,9 +31,10 @@ const CAPABILITIES = {
 /**
  * `hoverLink` is where the link in every hover goes. `capabilities` adds to what it declares,
  * `answers` to what it answers, by method, and requests for the `unanswered` methods get no answer
- * at all, as from a server stuck on them.
+ * at all, as from a server stuck on them. An answer may be a Promise, sent when it settles. With
+ * `diagnostics: false` it publishes none after an open or a change.
  */
-export async function startLoopbackLsp(hoverLink, { capabilities = {}, answers: more = {}, unanswered = [] } = {}) {
+export async function startLoopbackLsp(hoverLink, { capabilities = {}, answers: more = {}, unanswered = [], diagnostics = true } = {}) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(server, 'listening');
   const heard = [];
@@ -50,9 +51,14 @@ export async function startLoopbackLsp(hoverLink, { capabilities = {}, answers: 
       const message = JSON.parse(data.toString());
       heard.push(message);
       if (message.id !== undefined && !unanswered.includes(message.method)) {
-        send({ id: message.id, result: answers[message.method]?.(message.params) ?? null });
+        const result = answers[message.method]?.(message.params) ?? null;
+        if (typeof result?.then === 'function') {
+          result.then((settled) => send({ id: message.id, result: settled ?? null }));
+        } else {
+          send({ id: message.id, result });
+        }
       }
-      if (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange') {
+      if (diagnostics && (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange')) {
         const { uri, version } = message.params.textDocument;
         const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
         send({

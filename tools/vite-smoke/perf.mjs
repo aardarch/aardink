@@ -20,15 +20,35 @@
 // misses its CI gate.
 //
 //   pnpm build && node perf.mjs [--gate] [--keys 30] [--lines 5000]
+//
+// Two more runs measure the same things with what the 0.9 inline layout and a language server add,
+// each to a file of its own, and neither is part of --gate yet:
+//
+//   node perf.mjs --hints [--lines 5000]      dist/perf-hints.json
+//   node perf.mjs --semantic [--lines 5000]   dist/perf-semantic.json
+//
+// --hints types in a registered language whose provideInlayHints answers 3 hints for each line it
+// is asked about and whose provideCodeLenses puts a lens above every 20th line, with inlayHints and
+// codeLens on, through the npm package's dispatcher. Its grammar is a small Kotlin one of its own
+// (a registered language needs one), so compare it with a run of itself, not with dist/perf.json.
+// --semantic connects the built-in Kotlin language to a WebSocket language server in this process
+// that answers textDocument/semanticTokens/full with a token for every word of the document, with
+// semanticHighlighting on. Its first answer is held until the editor is idle, and the frames and
+// long tasks while it lands are measured on their own. A run with --lines other than 5,000 adds
+// the size to the file name.
 
 import { writeFileSync } from 'node:fs';
 import { freshPage, largeKotlin, MOUNT, percentile, startHarness } from './harness.mjs';
+import { startLoopbackLsp } from './loopback-lsp.mjs';
 
 const args = process.argv.slice(2);
 const gate = args.includes('--gate');
 const keyCount = Number(args[args.indexOf('--keys') + 1]) || 30;
 // The gates are defined on the 5,000-line reference document; other sizes are for comparison.
 const lineCount = Number(args[args.indexOf('--lines') + 1]) || 5000;
+const mode = args.includes('--hints') ? 'hints' : args.includes('--semantic') ? 'semantic' : null;
+if (args.includes('--hints') && args.includes('--semantic')) throw new Error('--hints and --semantic are separate runs');
+if (mode && gate) throw new Error(`--${mode} is not part of --gate yet`);
 
 // Target: what 0.6.0 aims for, recorded in WEB_INTEGRATION.md. Gate: what CI enforces with
 // --gate, looser to absorb shared-runner noise. null = informational only.
@@ -46,6 +66,79 @@ const LIMITS = {
   droppedKeysAtBurst: { target: 0, gate: 0, unit: 'keys' },
 };
 
+// ── --semantic: the language server, and the tokens it answers with ─────────────
+const SEMANTIC_TYPES = ['function', 'type', 'parameter', 'property', 'variable'];
+
+/** The text of `uri` as the server has heard it, kept up message by message. */
+function mirrorOf(server) {
+  const texts = new Map();
+  let read = 0;
+  const offsetOf = (text, { line, character }) => {
+    let at = 0;
+    for (let i = 0; i < line; i++) at = text.indexOf('\n', at) + 1;
+    return at + character;
+  };
+  return (uri) => {
+    for (; read < server.heard.length; read++) {
+      const message = server.heard[read];
+      const document = message.params?.textDocument;
+      if (message.method === 'textDocument/didOpen') texts.set(document.uri, document.text);
+      if (message.method !== 'textDocument/didChange' || !texts.has(document.uri)) continue;
+      let text = texts.get(document.uri);
+      for (const change of message.params.contentChanges) {
+        text = change.range
+          ? text.slice(0, offsetOf(text, change.range.start)) + change.text + text.slice(offsetOf(text, change.range.end))
+          : change.text;
+      }
+      texts.set(document.uri, text);
+    }
+    return texts.get(uri) ?? '';
+  };
+}
+
+/** A semantic token for every word of `text`, encoded as LSP's relative integers. */
+function semanticTokensOf(text) {
+  const data = [];
+  let previousLine = 0;
+  text.split('\n').forEach((line, number) => {
+    let previousStart = 0;
+    let index = 0;
+    for (const word of line.matchAll(/[A-Za-z_]\w*/g)) {
+      data.push(number - previousLine, number === previousLine ? word.index - previousStart : word.index, word[0].length);
+      data.push(index++ % SEMANTIC_TYPES.length, 0);
+      previousLine = number;
+      previousStart = word.index;
+    }
+  });
+  return data;
+}
+
+const semantic = { server: null, release: () => {}, answers: [] };
+if (mode === 'semantic') {
+  let releaseFirst;
+  const firstHeld = new Promise((resolve) => { releaseFirst = resolve; });
+  semantic.release = releaseFirst;
+  semantic.server = await startLoopbackLsp('', {
+    diagnostics: false,
+    // Nothing but sync and semantic tokens: typing in a comment must not ask for completions.
+    capabilities: {
+      completionProvider: undefined,
+      hoverProvider: undefined,
+      definitionProvider: undefined,
+      semanticTokensProvider: { legend: { tokenTypes: SEMANTIC_TYPES, tokenModifiers: [] }, full: true },
+    },
+    answers: {
+      'textDocument/semanticTokens/full': async (params) => {
+        if (semantic.answers.length === 0) await firstHeld;
+        const data = semanticTokensOf(semantic.mirror(params.textDocument.uri));
+        semantic.answers.push({ tokens: data.length / 5, kb: Math.round(JSON.stringify(data).length / 1024) });
+        return { data };
+      },
+    },
+  });
+  semantic.mirror = mirrorOf(semantic.server);
+}
+
 const harness = await startHarness();
 const results = {};
 const text = largeKotlin(lineCount);
@@ -56,6 +149,65 @@ try {
   results.package = await page.evaluate(() => window.__aardinkSmoke.version);
   results.documentKb = Math.round(text.length / 1024);
   results.keys = keyCount;
+  if (mode) results.mode = mode;
+
+  // What the editor is mounted as: the reference run's built-in Kotlin, or what a mode adds to it.
+  let language = 'kotlin';
+  let modeOptions = {};
+  if (mode === 'hints') {
+    language = 'perf-hints';
+    modeOptions = { inlayHints: true, codeLens: true };
+    await page.evaluate(async () => {
+      window.__perfHints = { hintCalls: 0, hints: 0, lensCalls: 0, lenses: 0 };
+      await window.__aardink.registerLanguage({
+        id: 'perf-hints',
+        grammar: {
+          keywords: ['package', 'data', 'class', 'val', 'fun'],
+          tokenizer: {
+            root: [
+              [/\/\/.*/, 'comment'],
+              [/\/\*/, 'comment', '@comment'],
+              [/"([^"\\]|\\.)*"/, 'string'],
+              [/0[xX][0-9a-fA-F]+|\d+/, 'number'],
+              [/[A-Za-z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+            ],
+            comment: [[/\*\//, 'comment', '@pop'], [/./, 'comment']],
+          },
+        },
+      }, {
+        // Three on each line asked about: at its start, in its middle and at its end.
+        provideInlayHints: (text, range) => {
+          const lines = text.split('\n');
+          const hints = [];
+          for (let line = range.startLineNumber; line <= Math.min(range.endLineNumber, lines.length); line++) {
+            const length = lines[line - 1].length;
+            for (const column of [1, Math.floor(length / 2) + 1, length + 1]) hints.push({ position: { lineNumber: line, column }, label: ': Int' });
+          }
+          window.__perfHints.hintCalls++;
+          window.__perfHints.hints += hints.length;
+          return hints;
+        },
+        // A lens above every 20th line, the first on line 20, below the comment on line 6 that is typed on.
+        provideCodeLenses: (text) => {
+          const lenses = [];
+          const lineCount = text.split('\n').length;
+          for (let line = 20; line <= lineCount; line += 20) {
+            const range = { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 };
+            lenses.push({ range, command: { id: 'perf.lens', title: `${line} references` } });
+          }
+          window.__perfHints.lensCalls++;
+          window.__perfHints.lenses += lenses.length;
+          return lenses;
+        },
+        runCodeLensCommand: () => {},
+      });
+    });
+  } else if (mode === 'semantic') {
+    modeOptions = { semanticHighlighting: true };
+    await page.evaluate(async (url) => {
+      window.__perfServer = await window.__aardink.connectLanguageServer(url, 'kotlin');
+    }, semantic.server.url);
+  }
 
   // Instrumentation lives in the page: key events are timed from their own timeStamp to the
   // point where frames are smooth again (settled, below), so a key's time includes its layout
@@ -93,18 +245,66 @@ try {
   });
 
   // ── Mount → idle ────────────────────────────────────────────────────────────
-  results.mountToIdleMs = await page.evaluate(async (text, mount) => {
+  results.mountToIdleMs = await page.evaluate(async (text, mount, language, modeOptions) => {
     const onChange = () => {
       const pending = window.__perf.keys.find((k) => k.change === null && !k.dropped);
       if (pending) pending.change = performance.now() - pending.ts;
     };
     const start = performance.now();
-    window.__perfEditor = await window.__aardink.createEditor(eval(mount), onChange, { value: text, language: 'kotlin' });
+    window.__perfEditor = await window.__aardink.createEditor(eval(mount), onChange, { value: text, language, ...modeOptions });
     return window.__perf.settled(start);
-  }, text, MOUNT);
+  }, text, MOUNT, language, modeOptions);
 
   // Let the initial tokenization finish (it runs in chunks above 64 KB) before typing.
   await new Promise((r) => setTimeout(r, 3000));
+
+  // ── --semantic: the first answer landing, measured on its own ───────────────
+  // Every frame and long task from the moment it is let go until the editor is idle with its
+  // colours on screen. Long tasks are Chrome's, of 50 ms and more; the longest frame shows a
+  // slice of work that went over its budget even when it stayed under that.
+  if (mode === 'semantic') {
+    const asked = await semantic.server.until(() => semantic.server.count('textDocument/semanticTokens/full') > 0);
+    if (!asked && text.length <= 2 * 1024 * 1024) throw new Error('The editor never asked the server for semantic tokens');
+    results.semanticAskedOnMount = asked;
+    if (asked) {
+      const before = await page.screenshot({ encoding: 'base64' });
+      await page.evaluate(() => {
+        const landing = { from: performance.now(), frames: [], longTasks: [], recording: true };
+        window.__perf.landing = landing;
+        new PerformanceObserver((list) => list.getEntries().forEach((e) => {
+          if (landing.recording && e.startTime >= landing.from) landing.longTasks.push(e.duration);
+        })).observe({ type: 'longtask' });
+        let last = landing.from;
+        requestAnimationFrame(function tick(now) {
+          landing.frames.push(now - last);
+          last = now;
+          if (landing.recording) requestAnimationFrame(tick);
+        });
+      });
+      semantic.release();
+      // Shown is when the picture changes; the screenshots between cost the page little, and the
+      // time to idle is counted from when it is let go, not from there.
+      const started = Date.now();
+      let shown = false;
+      while (!shown && Date.now() - started < 60000) {
+        await new Promise((r) => setTimeout(r, 250));
+        shown = (await page.screenshot({ encoding: 'base64' })) !== before;
+      }
+      if (!shown) throw new Error('The semantic tokens never showed');
+      const landed = await page.evaluate(async () => {
+        const landing = window.__perf.landing;
+        const idle = await window.__perf.settled(landing.from);
+        landing.recording = false;
+        return { idle, longestTask: Math.max(0, ...landing.longTasks), longestFrame: Math.max(0, ...landing.frames.slice(1)) };
+      });
+      results.semanticLandToIdleMs = landed.idle;
+      results.semanticLandLongestTaskMs = landed.longestTask;
+      results.semanticLandLongestFrameMs = landed.longestFrame;
+      results.semanticAnswerTokens = semantic.answers[0].tokens;
+      results.semanticAnswerKb = semantic.answers[0].kb;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
 
   // ── Keystroke → idle, keystroke → onChange ──────────────────────────────────
   // Keys go one at a time, each waiting for its frame plus a pause, so none overlaps a previous
@@ -118,6 +318,17 @@ try {
   await page.keyboard.press('End');
   await new Promise((r) => setTimeout(r, 1500));
   await page.evaluate(() => { window.__perf.keys = []; }); // End changes no text
+  // A mode's runs must type where the reference run does, on the comment, or a lens moving it
+  // would have them measure other work. A fixed pixel only finds it if nothing moved it.
+  const TYPED_LINE = 6;
+  const lineAt = (number) => page.evaluate((n) => window.__perfEditor.getValue().split('\n')[n - 1], number);
+  const typedLineBefore = mode ? await lineAt(TYPED_LINE) : null;
+  if (mode) {
+    const caret = await page.evaluate(() => window.__perfEditor.getPosition());
+    if (caret.lineNumber !== TYPED_LINE || !typedLineBefore.trimStart().startsWith('//')) {
+      throw new Error(`The caret is on line ${caret.lineNumber}, not the comment on line ${TYPED_LINE}: '${typedLineBefore}'`);
+    }
+  }
   const lengthBefore = await documentLength();
   const letters = 'abcdefghijklmnopqrstuvwxyz ';
   for (let i = 0; i < keyCount; i++) {
@@ -132,6 +343,12 @@ try {
     // Isolate the keys: none should start inside the previous key's work. The burst below is
     // what measures typing faster than the editor keeps up.
     await new Promise((r) => setTimeout(r, 400));
+  }
+  if (mode) {
+    const typed = Array.from({ length: keyCount }, (_, i) => letters[i % letters.length]).join('');
+    if ((await lineAt(TYPED_LINE)) !== typedLineBefore + typed) {
+      throw new Error(`The typed text is not at the end of line ${TYPED_LINE}: '${await lineAt(TYPED_LINE)}'`);
+    }
   }
   const allKeys = await page.evaluate(() => window.__perf.keys);
   const keys = allKeys.filter((k) => k.change !== null);
@@ -208,9 +425,15 @@ try {
   results.minimapFrameCostMs = Math.max(0, withMinimap.busyPerFrameMs - plain.busyPerFrameMs);
   results.minimapScrollFrameP95Ms = percentile([...withMinimap.frames].sort((a, b) => a - b), 95);
   results.longestTaskMs = await page.evaluate(() => Math.max(0, ...window.__perf.longTasks));
+  if (mode === 'hints') {
+    Object.assign(results, await page.evaluate(() => window.__perfHints));
+    if (results.hintCalls === 0 || results.lensCalls === 0) throw new Error('The editor never asked for hints or lenses');
+  }
+  if (mode === 'semantic') results.semanticRequests = semantic.server.count('textDocument/semanticTokens/full');
   await page.close();
 } finally {
   await harness.close();
+  await semantic.server?.close();
 }
 
 const failures = [];
@@ -223,8 +446,21 @@ for (const [name, limit] of Object.entries(LIMITS)) {
   console.log(`  ${name.padEnd(22)} ${value.toFixed(1).padStart(8)} ${unit.padEnd(4)}  target ${limit.target}${limit.gate !== null ? `, gate ${limit.gate}` : ''}   ${verdict}`);
 }
 console.log(`  ${'longestTaskMs'.padEnd(22)} ${results.longestTaskMs.toFixed(1).padStart(8)} ms`);
-writeFileSync('dist/perf.json', `${JSON.stringify({ ...results, limits: LIMITS, date: new Date().toISOString() }, null, 2)}\n`);
-console.log('Wrote dist/perf.json');
+if (mode) {
+  const extra = mode === 'hints'
+    ? ['hintCalls', 'hints', 'lensCalls', 'lenses']
+    : ['semanticLandToIdleMs', 'semanticLandLongestTaskMs', 'semanticLandLongestFrameMs', 'semanticAnswerTokens', 'semanticAnswerKb', 'semanticRequests'];
+  for (const name of extra) {
+    if (results[name] !== undefined) console.log(`  ${name.padEnd(26)} ${Number(results[name]).toFixed(name.endsWith('Ms') ? 1 : 0).padStart(8)}`);
+  }
+  if (mode === 'semantic' && !results.semanticAskedOnMount) console.log('  the document is over the 2 MiB analysis limit, so nothing was asked for and nothing landed');
+  const output = `dist/perf-${mode}${lineCount === 5000 ? '' : `-${lineCount}`}.json`;
+  writeFileSync(output, `${JSON.stringify({ ...results, limits: LIMITS, date: new Date().toISOString() }, null, 2)}\n`);
+  console.log(`Wrote ${output} (not gated)`);
+} else {
+  writeFileSync('dist/perf.json', `${JSON.stringify({ ...results, limits: LIMITS, date: new Date().toISOString() }, null, 2)}\n`);
+  console.log('Wrote dist/perf.json');
+}
 
 if (gate && failures.length) {
   console.error(`Performance gate failed: ${failures.join(', ')}`);
