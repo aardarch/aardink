@@ -47,6 +47,8 @@ import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeBlock
@@ -176,6 +178,7 @@ class EditorSceneScreenshotTest {
         editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
         languageService: LanguageService? = null,
         theme: EditorTheme = EditorThemes.VsCodeDark,
+        inlineCompletionProvider: InlineCompletionProvider? = null,
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
@@ -190,6 +193,7 @@ class EditorSceneScreenshotTest {
                         options = editorOptions,
                         languageService = languageService,
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
+                        inlineCompletionProvider = inlineCompletionProvider,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -481,6 +485,23 @@ class EditorSceneScreenshotTest {
         }
         val state = stateOf(code)
         capture("code-lens", state, editorOptions = EditorOptions(codeLens = true, inlayHints = true), languageService = lensed)
+    }
+
+    @Test
+    fun inlineCompletion() {
+        // Ghost text from the middle of a line, as an assistant offers it: dim, its first row at the
+        // caret, a row of its own below that, and the bracket it repeats after the last of it, once.
+        val state = stateOf(code)
+        state.selection = TextRange(code.indexOf("println(count)") + "println(count".length)
+        capture(
+            "inline-completion",
+            state,
+            inlineCompletionProvider = { _, _ -> listOf(InlineCompletion(".plus(1)\n            .also(::report))")) },
+            focused = {
+                composeTestRule.runOnUiThread { state.execute(EditorCommand.CycleInlineCompletion()) }
+                composeTestRule.mainClock.advanceTimeBy(100)
+            },
+        )
     }
 
     @OptIn(ExperimentalRoborazziApi::class)

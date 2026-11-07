@@ -36,10 +36,11 @@ import kotlin.math.min
  *   the range is not shown again: over `)`, the text `x) {` shows `x` before the bracket and ` {`
  *   after it. So [text] has to hold all the range, in order, or it is not shown, as in Monaco.
  *
- *   Null is the word at the caret and the rest of the line, Monaco's default, except that text which
- *   does not hold all that is put in at the caret and replaces nothing. A provider that only knows
- *   what comes next leaves this null, and a closing bracket it repeats is still not doubled. An
- *   empty range is a plain insertion: a bracket [text] repeats there is meant, and doubled.
+ *   Null is the word at the caret and the rest of the line, Monaco's default, or if [text] does not
+ *   hold that, the rest of the line alone, and if it does not hold that either, it goes in at the
+ *   caret and replaces nothing, where Monaco would show nothing. So a provider that only knows what
+ *   comes next leaves this null, and a closing bracket it repeats is still not doubled. An empty
+ *   range is a plain insertion: a bracket [text] repeats there is meant, and doubled.
  */
 @Immutable
 data class InlineCompletion(val text: String, val range: IntRange? = null)
@@ -274,9 +275,11 @@ internal class GhostTextTracker(
         }
         val lineEnd = document.lineEnd(lineOf(at))
         val end = if (lineEnd > at && document[lineEnd - 1] == '\r') lineEnd - 1 else lineEnd
-        val toLineEnd = Offer(text, TextNavigator.wordAt(document, at).first, end)
+        val wordStart = TextNavigator.wordAt(document, at).first
         // Text that is all there already has nothing to add, here or at the caret.
-        return if (ghostOf(toLineEnd, at) != null || document.startsWith(text, toLineEnd.start)) toLineEnd else Offer(text, at, at)
+        if (document.startsWith(text, wordStart)) return Offer(text, wordStart, end)
+        // Most text does not start with the word, as a provider asked what comes next says only that.
+        return listOf(Offer(text, wordStart, end), Offer(text, at, end)).firstOrNull { ghostOf(it, at) != null } ?: Offer(text, at, at)
     }
 
     /** What [offer] shows, with the caret [at], or just by the text when that is not known yet; null for nothing. */

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
@@ -218,5 +219,49 @@ class InlineInputConnectionTest {
         val connection = connect(state, 5)
         connection.run { deleteSurroundingText(1, 1) }
         assertEquals("val = 1", state.document.text)
+    }
+
+    /** Ghost text, through what a layout does with an answer, on the view [connect] made. */
+    private fun offer(state: CodeEditorState, text: String) {
+        rule.runOnIdle {
+            val tracker = state.inlineCompletions
+            tracker.provided = true
+            tracker.askAgain(now = true)
+            tracker.answer(requireNotNull(tracker.ask), state.document.version, listOf(InlineCompletion(text)))
+            view.prepare(600, 400)
+        }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun `a keyboard reads the document past ghost text, and commits through it`() {
+        val state = stateOf("val x = ")
+        val connection = connect(state, 8, realHint = true)
+        offer(state, "compute()")
+        rule.runOnIdle {
+            assertEquals("val x = ", connection.getTextBeforeCursor(100, 0).toString())
+            assertEquals("", connection.getTextAfterCursor(100, 0).toString())
+            assertEquals("val x = ", connection.getExtractedText(ExtractedTextRequest(), 0).text.toString())
+        }
+        connection.run { commitText("c", 1) }
+        assertEquals("val x = c", state.document.text)
+        rule.runOnIdle { assertEquals("ompute()", state.inlineCompletions.shown?.pieces?.single()?.text) }
+    }
+
+    @Test
+    fun `a keyboard composing shows no ghost text, and a command accepts it when it is done`() {
+        val state = stateOf("val x = ")
+        val connection = connect(state, 8, realHint = true)
+        offer(state, "compute()")
+        connection.run { setComposingText("co", 1) }
+        rule.runOnIdle {
+            assertEquals(null, state.inlineCompletions.shown)
+            assertEquals(null, state.inlineCompletions.ask)
+        }
+        connection.run { finishComposingText() }
+        rule.runOnIdle { assertEquals(10, state.inlineCompletions.ask?.caret) }
+        offer(state, "mpute()")
+        rule.runOnIdle { assertTrue(state.execute(com.aardarch.aardink.core.EditorCommand.AcceptInlineCompletion)) }
+        assertEquals("val x = compute()", state.document.text)
     }
 }

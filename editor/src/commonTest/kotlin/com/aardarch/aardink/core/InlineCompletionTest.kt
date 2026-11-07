@@ -117,6 +117,15 @@ class InlineCompletionTest {
     }
 
     @Test
+    fun `with no range, text that goes on from a word still does not double what follows`() {
+        val state = stateAt("println(count|)")
+        state.offer(".plus(1))")
+        assertEquals("println(count[.plus(1)])", state.drawn)
+        state.accept()
+        assertEquals("println(count.plus(1))", state.document.text)
+    }
+
+    @Test
     fun `with no range, the word typed so far is taken as typed`() {
         val state = stateAt("val s = pri|")
         state.offer("println()")
