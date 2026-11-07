@@ -986,7 +986,11 @@ until now, are drawn.
 The web bundle: `aardink-web.wasm` went from 5,201,007 to 5,422,720 bytes with
 `connectLanguageServer` (+221,713, 4.3%), 1,585,294 to 1,648,018 gzipped (+62,724, 4.0%), nearly
 all of it `:languages-lsp`; `skiko.wasm` did not change. As built for 0.9,
-`aardink-web.wasm` is 5,537,300 bytes (1.7 MB gzipped) and `skiko.wasm` 8,648,883 (3.3 MB).
+`aardink-web.wasm` is 5,537,300 bytes (1.7 MB gzipped) and `skiko.wasm` 8,648,883 (3.3 MB). Against
+the npm package's 0.8.0, whose `aardink-web.wasm` is 5,051,231 bytes (1,548,756 gzipped) and whose
+`skiko.wasm` is the same, 0.9 adds 486,069 bytes (9.6%), 145,013 gzipped (9.4%; both gzipped at
+gzip's default level, 1,693,769 for 0.9). The 5,201,007 above was a mid-wave baseline that already
+held earlier 0.9 work.
 
 #### Still open
 

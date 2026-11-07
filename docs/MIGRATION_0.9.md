@@ -19,23 +19,28 @@
 [AARDINK_ROADMAP.md](AARDINK_ROADMAP.md) §7 has the plan for 0.9, §15 the API ledger and §15.1 what
 was built where it differs.
 
-Most of 0.9 is new and off by default. What can break an upgrade is in the table; the sections after
-it have the details, with a before and after where code changes.
+Most of 0.9 is new and off by default. What can break an upgrade, and what behaves differently with
+no change on your side, is in the table; the sections after it have the details, with a before and
+after where code changes.
 
 ## At a glance
 
 | Change | Who it reaches | What to do |
 | --- | --- | --- |
-| Documentation strings are Markdown | Your own hover, signature help, completion and schema text; the npm package's `contents` and `documentation` | Escape a literal `*` or `_`, and end a line with a backslash to keep a break: [Documentation text is Markdown](#documentation-text-is-markdown) |
+| Documentation strings are Markdown, and cut past 10,000 characters | Your own hover, signature help, completion and schema text; the npm package's `contents` and `documentation` | Escape a literal `*` or `_`, and end a line with a backslash to keep a break: [Documentation text is Markdown](#documentation-text-is-markdown) |
 | `EditorCommand` gains `AcceptInlineCompletion`, `CycleInlineCompletion` and `DismissInlineCompletion` | An exhaustive `when` over `EditorCommand` | Add the branches: [New members and parameters](#new-members-and-parameters) |
-| `EditorOptions`, `DecorationStyle`, `WebEditorOptions` and `WebLanguageProviders` gain fields | Code compiled against 0.8 that calls their constructors or `copy` | Recompile. Every new field is last and has a default, so source does not change |
+| `EditorOptions`, `DecorationStyle`, `WebEditorOptions` and `WebLanguageProviders` gain fields | Code compiled against 0.8 that calls their constructors or `copy` | Recompile. Every new field is last and has a default, so source does not change but for a trailing lambda, two rows down |
 | `CodeEditorLayout`, `LspClient` and `DeclarativeTokenizer` gain a defaulted parameter | Code compiled against 0.8 | Recompile |
+| The last parameter of `CodeEditorLayout` is now `inlineCompletionProvider`, and of `WebLanguageProviders` `runCodeLensCommand` | A trailing lambda meant for `onFontSizeChange` or `documentColors` | Name the argument: [New members and parameters](#new-members-and-parameters) |
 | `LanguageService` and `FoldingProvider` gain methods with defaults | A `FoldingProvider` that wraps another | Forward `requestFoldableRanges`: [Folding through a suspend call](#folding-through-a-suspend-call) |
 | Grammars: `$` in a token name is refused; guard keys starting `~`, `!~`, `==`, `!=` or `!@` are operators; `@name` attributes expand as a group | Monarch grammars of your own, in Kotlin or registered on the web | Read your grammars through once: [Grammars](#grammars) |
 | `aardinkRegisterLanguage` takes one dispatcher | A wasm module built from the export template | Copy the new template: [A wasm module built from the export template](#a-wasm-module-built-from-the-export-template) |
 | `LspClient` declares real client capabilities, and `LspLanguageService` sends only what the server declared | Hosts of `aardink-languages-lsp` | Check your server answers as you expect: [Language servers](#language-servers) |
 | Ctrl/Cmd+click on a URL opens a tab on the web | Web hosts | Nothing, or `editor.onOpenLink(listener)` to decide: [Links on the web](#links-on-the-web) |
 | `CodeBlock` and fences tokenize with an empty `previousTokens` | An `IncrementalTokenizer` of your own | Answer every line asked for: [A tokenizer of your own](#a-tokenizer-of-your-own) |
+| The npm package draws a decoration's `before` and `after` | Web hosts passing Monaco's decoration options as they are | Drop them, or expect their text in the line: [Inline text and inlay hints](#inline-text-and-inlay-hints) |
+| An empty or collapsed decoration follows the edits | Hosts relying on one staying at its offset | Nothing, or set it again where you want it: [Inline text and inlay hints](#inline-text-and-inlay-hints) |
+| `aardink-editor-web` depends on `aardink-languages-lsp`, and on `kotlinx-coroutines-core` as `api`; `aardink-web.wasm` is 486 KB larger than in 0.8 | Gradle consumers of `aardink-editor-web`; every web page | Check the dependency tree: [Language servers on the web](#language-servers-on-the-web) |
 
 ## Documentation text is Markdown
 
@@ -58,7 +63,14 @@ If these strings come from your own service or schema, read them through once:
 - A single newline no longer breaks a line: it reads as a space, as in Monaco's hover. End the line
   with a backslash, or two spaces, to keep the break. A blank line starts a new paragraph. Text
   built with `lines.join('\n')` runs together into one paragraph.
-- A line starting with `# `, `- `, `+ `, `1. ` or four spaces is a heading, a list or code.
+- A line starting with `# `, `- `, `+ `, `* `, `1. `, `1) ` or four spaces is a heading, a list or
+  code, and a line starting with three backticks or three tildes opens a code block.
+- A line of three or more `-`, `*` or `_` alone is a rule. A line of `=` or `-` under a line of text
+  makes that text a heading, so a numpy-style `Parameters` underlined with `----------` is one.
+- Text between backticks is code.
+- A backslash before ASCII punctuation is dropped, so `\.` and `\(` show as `.` and `(`: write `\\`
+  for a backslash.
+- An entity such as `&lt;`, `&amp;` or `&#60;` shows as its character.
 - Any `http://` or `https://` URL in the text becomes a link.
 - Text built from what the user typed can hold any of these, so escape it before putting it in.
 
@@ -66,6 +78,9 @@ Write a string once and it reads the same on hover and in the completion list: t
 marks and resolves the escapes, so `Uses a\_b *only* here` shows as `Uses a_b only here` in both.
 
 An attribute's list of values on a schema hover is escaped for you, so `_top_` shows as `_top_`.
+
+Documentation longer than 10,000 characters is now cut, at a line end when there is one in the last
+half of that, and ends with an ellipsis. 0.8 showed plain text whole.
 
 ## Links in documentation
 
@@ -109,8 +124,24 @@ shows these plain.
 ## New members and parameters
 
 Every new field and parameter is last and has a default, so code written against 0.8 compiles
-unchanged. Code compiled against 0.8, such as a library built on Aardink, needs a recompile, because
-the constructors, `copy` and the composable have new signatures:
+unchanged but for a trailing lambda. Code compiled against 0.8, such as a library built on Aardink,
+needs a recompile, because the constructors, `copy` and the composable have new signatures. That
+holds for calls with named arguments too, which compile to the same constructor.
+
+A trailing lambda goes to the last parameter, and that has changed for two of them. In 0.8 it went
+to `CodeEditorLayout`'s `onFontSizeChange` and to `WebLanguageProviders`' `documentColors`; it now
+goes to `inlineCompletionProvider` and `runCodeLensCommand`, and fails to compile. Name the
+argument:
+
+```kotlin
+// 0.8
+CodeEditorLayout(state) { size -> zoom = size }
+WebLanguageProviders(hover = hover) { text -> colorsOf(text) }
+
+// 0.9
+CodeEditorLayout(state, onFontSizeChange = { size -> zoom = size })
+WebLanguageProviders(hover = hover, documentColors = { text -> colorsOf(text) })
+```
 
 | Class | New, all at the end and all off or null by default |
 | --- | --- |
@@ -135,7 +166,9 @@ when (command) {
 
 `LanguageService` gains `resolveCompletion`, `surroundingClose`, `semanticTokens`, `inlayHints` and
 `codeLenses`, each with a default that does nothing, so a service of your own needs no change.
-`CompositeLanguageService` has a rule for each; its KDoc lists them.
+`CompositeLanguageService` has a rule for each; its KDoc lists them. These defaults, and
+`FoldingProvider.requestFoldableRanges`, are JVM default methods, so an implementation compiled
+against 0.8 also runs unchanged on JVM and Android, without a recompile.
 
 ### Folding through a suspend call
 
@@ -222,8 +255,10 @@ a colour must read the embedded grammars' `tokenNames` as well.
 ## Inline completions
 
 `CodeEditorLayout` gains `inlineCompletionProvider`, last and null by default, so a compiled caller
-needs a recompile and nothing else. `EditorCommand` gains `AcceptInlineCompletion`,
-`CycleInlineCompletion` and `DismissInlineCompletion`, so an exhaustive `when` over it needs branches.
+needs a recompile, and a trailing lambda meant for `onFontSizeChange` must become a named argument,
+as [New members and parameters](#new-members-and-parameters) shows. `EditorCommand` gains
+`AcceptInlineCompletion`, `CycleInlineCompletion` and `DismissInlineCompletion`, so an exhaustive
+`when` over it needs branches.
 `EditorKeyBindings.Default` gains Tab, Alt+], Alt+[ and Escape for them.
 
 Tab is in that list now, where it said Tab was a fixed key, but it does what it did unless ghost text
@@ -251,9 +286,10 @@ thing from Kotlin. Nothing changes unless you call them.
 ## Code lenses
 
 `EditorOptions` and `WebEditorOptions` gain `codeLens`, and `WebLanguageProviders` gains `codeLenses`
-and `runCodeLensCommand`, all at the end and off by default, so code calling their constructors by
-position, or their `copy`, needs a recompile. `LanguageService.codeLenses` has a default, so a service
-of your own needs no change.
+and `runCodeLensCommand`, all at the end and off by default, so code compiled against 0.8 that calls
+their constructors or `copy` needs a recompile; source changes only for a trailing lambda meant for
+`documentColors`, as [New members and parameters](#new-members-and-parameters) shows.
+`LanguageService.codeLenses` has a default, so a service of your own needs no change.
 
 A `CodeLens` with a blank title is not an error: it keeps its row and the editor asks
 `codeLenses` again when it is on screen. That is how a service leaves out what costs a lot until it
@@ -272,7 +308,8 @@ read. A registration of `textDocument/codeLens` counts as resolving lenses only 
 ## Inline text and inlay hints
 
 `DecorationStyle`, `EditorOptions` and `WebEditorOptions` gain fields, and `WebLanguageProviders` a
-parameter, so code calling their constructors by position, or their `copy`, needs a recompile:
+parameter, so code compiled against 0.8 that calls their constructors or `copy` needs a recompile.
+Source does not change, but for a trailing lambda meant for `documentColors`:
 
 | Class | New, all at the end and all off by default |
 | --- | --- |
@@ -431,9 +468,11 @@ follows a target must check it first. To go back to no links opening at all, lis
 [WEB_INTEGRATION.md](WEB_INTEGRATION.md#language-servers). Nothing changes unless you call it, but:
 
 - `aardink-editor-web` now depends on `aardink-languages-lsp` at runtime, and its dependency on
-  `kotlinx-coroutines-core` is now `api`, as `DisposableHandle` is in a public signature. The npm
-  package's `aardink-web.wasm` grew by 221,713 bytes (4.3%), or 62,724 bytes gzipped (4.0%), for
-  everyone, with or without a server.
+  `kotlinx-coroutines-core` is now `api`, as `DisposableHandle` is in a public signature.
+- The npm package's `aardink-web.wasm` is 5,537,300 bytes, 1,693,769 gzipped, where 0.8.0's was
+  5,051,231 and 1,548,756: 486,069 bytes larger (9.6%), or 145,013 gzipped (9.4%), for everyone,
+  with or without a server. The language server bridge is 221,713 of that (62,724 gzipped), and
+  the rest is the other features of 0.9. `skiko.wasm` is the same 8,648,883 bytes.
 - With a server connected, a built-in language's answers come after the server's, so a formatter or
   outline the language has gives way to the server's. A language from `registerLanguage` answers
   before the server, and so does the language it `extends`.

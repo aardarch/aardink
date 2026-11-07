@@ -162,11 +162,11 @@ editor.dispose();
 
 `createEditor` is async: the first call loads the WebAssembly module (~14 MB of `.wasm`, ~5 MB
 gzipped: `aardink-web.wasm` 5.5 MB, 1.7 MB gzipped, and `skiko.wasm` 8.6 MB, 3.3 MB gzipped, as
-built for 0.9), and `preloadAardink()` starts that early. `connectLanguageServer`, with the language
-server bridge behind it, made `aardink-web.wasm` 222 KB larger (4.3%), 63 KB gzipped, for every page
-whether or not it connects a server. The package depends on `@js-joda/core`, which
-Compose's date/time support imports. Its dependency list is copied from the one Kotlin generates
-for the module, so it stays accurate.
+built for 0.9), and `preloadAardink()` starts that early. `aardink-web.wasm` is 486 KB larger than
+in 0.8.0 (9.6%), 145 KB gzipped, for every page whether or not it uses what 0.9 adds; 222 KB of
+that, 63 KB gzipped, is `connectLanguageServer` and the language server bridge behind it. The package
+depends on `@js-joda/core`, which Compose's date/time support imports. Its dependency list is copied
+from the one Kotlin generates for the module, so it stays accurate.
 
 ### Vite
 

@@ -39,11 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 0.9 is about everything a language, a language server or an assistant can tell the editor:
 documentation in Markdown, the rest of the Language Server Protocol, inlay hints, code lens, semantic
 highlighting and ghost text, with grammars that embed one another and VS Code's language
-configuration. Every new option is off by default. It breaks source in three places: `EditorCommand`
+configuration. Every new option is off by default. It breaks source in four places: `EditorCommand`
 has new members, so an exhaustive `when` over it needs branches; documentation strings are read as
-Markdown; and some Monarch grammars parse differently. `EditorOptions`, `DecorationStyle`,
-`CodeEditorLayout`, `LspClient`, `DeclarativeTokenizer`, `WebEditorOptions` and
-`WebLanguageProviders` gain defaulted parameters, so code compiled against 0.8 needs a recompile.
+Markdown; some Monarch grammars parse differently; and a trailing lambda meant for
+`CodeEditorLayout`'s `onFontSizeChange` or `WebLanguageProviders`' `documentColors` now goes to a
+new last parameter, so it must be named. `EditorOptions`, `DecorationStyle`, `CodeEditorLayout`,
+`LspClient`, `DeclarativeTokenizer`, `WebEditorOptions` and `WebLanguageProviders` gain defaulted
+parameters, so code compiled against 0.8 that calls them needs a recompile. A `LanguageService` or
+`FoldingProvider` compiled against 0.8 runs as it is: their new methods are JVM default methods.
 [`docs/MIGRATION_0.9.md`](docs/MIGRATION_0.9.md) has the details.
 
 ### Added
@@ -109,22 +112,28 @@ Markdown; and some Monarch grammars parse differently. `EditorOptions`, `Decorat
 - **Documentation strings are Markdown:** `HoverDoc.content`, signature and completion
   documentation, `XmlSchema` documentation, and the npm package's hover `contents` and
   `documentation`. A literal `*` or `_` is escaped, and a single newline reads as a space.
+  Documentation longer than 10,000 characters is cut, at a line end where one is near, and ends
+  with an ellipsis.
 - **`EditorCommand`** has `AcceptInlineCompletion`, `CycleInlineCompletion` and
   `DismissInlineCompletion`, and **`EditorKeyBindings.Default`** binds Tab, Escape, Alt+] and Alt+[
   to them. Tab and Escape do what they did whenever no ghost text shows.
-- **Grammars:** `$` in a token name, `defaultToken` or `tokenPostfix` is refused at parse, and so is
-  a non-string `nextEmbedded`. A `cases` key starting `~`, `!~`, `==`, `!=` or `!@` is that
-  operator, so `$#==$S2` now matches and a key of `==` alone tests for the empty string. An `@name`
-  attribute expands as a group, `(?:value)`, as in Monarch.
+- **Grammars:** `$` in a token name, `defaultToken` or `tokenPostfix` is refused at parse, and so
+  are a non-string or empty `nextEmbedded`, an `@name` attribute that is only half a regex, and, in a
+  grammar with a `@brackets` action, a top-level `brackets` that is a string, holds a bracket whose
+  open and close are the same, or has `$` in a bracket's token. A `cases` key starting `~`, `!~`,
+  `==`, `!=` or `!@` is that operator, so `$#==$S2` now matches and a key of `==` alone tests for
+  the empty string. An `@name` attribute expands as a group, `(?:value)`, as in Monarch, so
+  `[@chars]` now holds the group's own characters.
 - **The export template:** `aardinkRegisterLanguage` takes one `(method, text, argsJson)`
   dispatcher in place of a callback per provider, so a later provider needs no change to a copy.
   npm users are unaffected.
 - **On the web, links open.** Ctrl/Cmd+click on a URL in the text, and a click on a link in a hover,
   signature help or the detail pane, opens `http` and `https` in a new tab with `noopener`, in the
   click itself so a popup blocker lets it through. Anything else does nothing.
-- **The web bundle:** `aardink-web.wasm` is 222 KB larger (4.3%), 63 KB gzipped, for the language
-  server bridge, whether or not a page uses it. `aardink-editor-web` depends on
-  `aardink-languages-lsp`, and its `kotlinx-coroutines-core` dependency is now `api`.
+- **The web bundle:** `aardink-web.wasm` is 5,537,300 bytes, 1.7 MB gzipped: 486 KB (9.6%) larger
+  than 0.8.0's, 145 KB (9.4%) gzipped, whether or not a page uses what is new. The language server
+  bridge is 222 KB of that, 63 KB gzipped; `skiko.wasm` did not change. `aardink-editor-web`
+  depends on `aardink-languages-lsp`, and its `kotlinx-coroutines-core` dependency is now `api`.
 - **On the web, with a language server connected,** a built-in language's answers come after the
   server's, and a registered language's, with the language it extends, before them. A server never
   changes what typing does. Diagnostics it pushes show after the same pause in typing as any
