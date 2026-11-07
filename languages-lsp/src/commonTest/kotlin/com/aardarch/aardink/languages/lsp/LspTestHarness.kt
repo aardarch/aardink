@@ -153,11 +153,11 @@ internal class Harness(val doc: CodeDocument, private val test: TestScope, clien
     }
 
     /** Answers the next request with a JSON-RPC error. */
-    suspend fun respondWithError(expectedMethod: String) {
+    suspend fun respondWithError(expectedMethod: String, code: Int = -32603) {
         val sent = nextSent()
         assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
         val id = sent["id"]!!.jsonPrimitive.content
-        serverSends("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"boom"}}""")
+        serverSends("""{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"boom"}}""")
     }
 
     /** Answers the next request the way a server that doesn't implement the method would. */

@@ -51,6 +51,8 @@ import kotlin.test.assertTrue
 
 private const val RESOLVE = "completionItem/resolve"
 private const val RESOLVING_SERVER = """{"completionProvider":{"resolveProvider":true}}"""
+private const val CONTENT_MODIFIED = -32801
+private const val SERVER_NOT_INITIALIZED = -32002
 
 private fun json(text: String): JsonElement = LspJson.parseToJsonElement(text)
 
@@ -740,8 +742,95 @@ class LspFeaturesTest {
 
     private val tenLines = (1..10).joinToString("\n") { "line $it" }
 
+    /** Opens the document, which a fold request waits for, and takes that off the wire. */
+    private suspend fun Harness.opened() {
+        service.didOpen(doc)
+        assertEquals("textDocument/didOpen", nextSent().method)
+    }
+
+    @Test
+    fun `folds wait for the document to open, behind a server still starting up`() = withServer(tenLines) {
+        val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
+        assertNothingSent("the client is not even initialized")
+
+        serverDeclares("""{"foldingRangeProvider":true}""")
+        assertNothingSent("the server has not heard of the document")
+
+        opened()
+        val server = async { respond("textDocument/foldingRange", """[{"startLine":1,"endLine":2}]""") }
+
+        assertEquals(listOf(FoldRange(1, 2)), folds.await())
+        server.await()
+    }
+
+    @Test
+    fun `attaching opens the way for folds, even if the server did not ask to hear of it`() = withServer("") {
+        serverDeclares("""{"foldingRangeProvider":true}""")
+        val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
+        assertNothingSent("the document is not open")
+
+        service.attach(editorState(tenLines))
+        val server = async { respond("textDocument/foldingRange", "[]") }
+
+        assertTrue(folds.await().isEmpty())
+        server.await()
+    }
+
+    @Test
+    fun `a server that turns out not to fold is not asked once the document opens`() = withServer(tenLines) {
+        val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
+        settle()
+
+        serverDeclares("{}")
+        opened()
+
+        assertTrue(folds.await().isEmpty())
+        assertNothingSent("it declared no folding")
+    }
+
+    @Test
+    fun `a closed document is waited for again`() = withServer(tenLines) {
+        opened()
+        service.didClose()
+        assertEquals("textDocument/didClose", nextSent().method)
+
+        val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
+        assertNothingSent("the server has let go of the document")
+
+        opened()
+        val server = async { respond("textDocument/foldingRange", "[]") }
+        assertTrue(folds.await().isEmpty())
+        server.await()
+    }
+
+    @Test
+    fun `a server that says to try again is asked again`() = withServer(tenLines) {
+        opened()
+        val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
+
+        respondWithError("textDocument/foldingRange", CONTENT_MODIFIED)
+        assertNothingSent("not straight away")
+        respondWithError("textDocument/foldingRange", SERVER_NOT_INITIALIZED)
+        val server = async { respond("textDocument/foldingRange", """[{"startLine":1,"endLine":2}]""") }
+
+        assertEquals(listOf(FoldRange(1, 2)), folds.await())
+        server.await()
+    }
+
+    @Test
+    fun `a server that keeps saying so is given up on, for now`() = withServer(tenLines) {
+        opened()
+        val folds = async { assertFailsWith<IllegalStateException> { LspFoldingProvider(service).requestFoldableRanges(doc) } }
+
+        repeat(4) { respondWithError("textDocument/foldingRange", CONTENT_MODIFIED) }
+
+        folds.await()
+        assertNothingSent("the next edit asks again")
+    }
+
     @Test
     fun `folding ranges map their kinds and collapsed text, in order`() = withServer(tenLines) {
+        opened()
         val server = async {
             respond(
                 "textDocument/foldingRange",
@@ -769,6 +858,7 @@ class LspFeaturesTest {
 
     @Test
     fun `folding ranges stay in the document, fold something, and one line starts one`() = withServer(tenLines) {
+        opened()
         val server = async {
             respond(
                 "textDocument/foldingRange",
@@ -785,6 +875,7 @@ class LspFeaturesTest {
 
     @Test
     fun `an empty answer folds nothing, and a server that has no folding says the same`() = withServer(tenLines) {
+        opened()
         val empty = async { respond("textDocument/foldingRange", "[]") }
         assertTrue(LspFoldingProvider(service).requestFoldableRanges(doc).isEmpty())
         empty.await()
@@ -796,6 +887,7 @@ class LspFeaturesTest {
 
     @Test
     fun `no answer is not an empty one, so that nothing gets unfolded`() = withServer(tenLines) {
+        opened()
         val failing = async { respondWithError("textDocument/foldingRange") }
         assertFailsWith<IllegalStateException> { LspFoldingProvider(service).requestFoldableRanges(doc) }
         failing.await()

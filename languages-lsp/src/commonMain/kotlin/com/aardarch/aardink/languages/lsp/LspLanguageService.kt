@@ -46,6 +46,7 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
+import kotlinx.coroutines.delay
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
@@ -716,10 +717,15 @@ class LspLanguageService(
     /**
      * The server's folds in order, one per first line, or null when it gave no answer: an empty list
      * is one it means. See [LspFoldingProvider].
+     *
+     * The editor asks once per edit, so a request that comes too soon may be the only one an
+     * unedited document gets. Hence the wait for the document, which opens after the handshake: a
+     * server asked before that can only fail, or say a document it has not heard of folds nothing.
      */
     internal suspend fun foldingRanges(document: CodeDocument): List<FoldRange>? {
+        if (supports("foldingRangeProvider")) sync.awaitOpen()
         if (!supports("foldingRangeProvider")) return emptyList()
-        val result = when (val outcome = requestOrFailure("textDocument/foldingRange", documentParams())) {
+        val result = when (val outcome = foldingRangeAnswer()) {
             is LspResult.Unsupported -> return emptyList()
             is LspResult.Failed -> return null
             is LspResult.Value -> outcome.element as? JsonArray ?: return null
@@ -729,6 +735,17 @@ class LspLanguageService(
             .mapNotNull { it.toFoldRange(lastLine = document.lineCount - 1) }
             .sortedWith(compareBy<FoldRange> { it.startLine }.thenByDescending { it.endLine })
             .distinctBy { it.startLine }
+    }
+
+    /** The server's answer, asking a few more times if it says to, as it may while it starts up. */
+    private suspend fun foldingRangeAnswer(): LspResult {
+        var outcome = requestOrFailure("textDocument/foldingRange", documentParams())
+        for (wait in FOLD_RETRY_MILLIS) {
+            if ((outcome as? LspResult.Failed)?.tryAgain != true) break
+            delay(wait)
+            outcome = requestOrFailure("textDocument/foldingRange", documentParams())
+        }
+        return outcome
     }
 
     // ── Transport helpers ────────────────────────────────────────────────────
@@ -753,9 +770,9 @@ class LspLanguageService(
             },
         )
     } catch (e: LspRequestException) {
-        if (e.code == LspRequestException.METHOD_NOT_FOUND) LspResult.Unsupported else LspResult.Failed
+        if (e.code == LspRequestException.METHOD_NOT_FOUND) LspResult.Unsupported else LspResult.Failed(e.code in TRY_AGAIN_ERRORS)
     } catch (_: SerializationException) {
-        LspResult.Failed
+        LspResult.Failed(tryAgain = false)
     }
 
     private sealed interface LspResult {
@@ -765,8 +782,8 @@ class LspLanguageService(
         /** The server does not implement the method. */
         data object Unsupported : LspResult
 
-        /** The server errored, or the connection is gone. */
-        data object Failed : LspResult
+        /** The server errored, or the connection is gone. [tryAgain]: it may answer later. */
+        data class Failed(val tryAgain: Boolean) : LspResult
     }
 
     private fun <T> encode(serializer: KSerializer<T>, value: T): JsonElement = LspJson.encodeToJsonElement(serializer, value)
@@ -991,6 +1008,12 @@ class LspLanguageService(
     private class OfferedCompletion(val item: CompletionItem, val raw: JsonElement)
 
     companion object {
+        /** LSP's `ServerNotInitialized`, `ContentModified` and `ServerCancelled`: nothing wrong with the request. */
+        private val TRY_AGAIN_ERRORS = setOf(-32002, -32801, -32802)
+
+        /** The pauses before each further request for folds. An edit asks anew after those. */
+        private val FOLD_RETRY_MILLIS = listOf(1_000L, 2_000L, 4_000L)
+
         /**
          * The `completionProvider.triggerCharacters` a server declared, for
          * [LspLanguageService]'s `serverTriggerCharacters`, or null when it declared none.

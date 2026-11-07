@@ -25,6 +25,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -232,7 +234,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         get() = attached != null
 
     /** Open as far as the host is concerned, whether or not the server was told. */
-    private var opened = false
+    private val opened = MutableStateFlow(false)
 
     /** Following a state opened the document for a server that had not asked to hear of it. */
     private var openWithheld = false
@@ -300,10 +302,10 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         changeSync = sync.change
         mirror = TextMirror(text)
         when {
-            !opened -> if (sync.openClose) {
+            !opened.value -> if (sync.openClose) {
                 sendOpen(text)
             } else {
-                opened = true
+                opened.value = true
                 openWithheld = true
                 sentVersion = 1
             }
@@ -340,7 +342,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     suspend fun open(text: String) = submit(
         Send {
             when {
-                !opened || openWithheld -> sendOpen(text)
+                !opened.value || openWithheld -> sendOpen(text)
 
                 text != lastText -> {
                     lastText = text
@@ -369,7 +371,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         queue = null
         val closed = Send {
             val announced = !openWithheld
-            opened = false
+            opened.value = false
             openWithheld = false
             lastText = null
             sentVersion = 0
@@ -454,6 +456,14 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         var text: String? = null
         submit(Send { if (textRevision == revision) text = mirror?.text ?: lastText })
         return text
+    }
+
+    /**
+     * Returns once the document is open, through [attach] or [open], whether or not the server
+     * asked to be told. Until then this waits for as long as the caller does.
+     */
+    suspend fun awaitOpen() {
+        opened.first { it }
     }
 
     private fun syncOptions() = LspTextDocumentSync.from(client.serverCapabilities, client.registrations)
@@ -574,7 +584,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
 
     /** At the version already reached if a server that took no open has had edits. */
     private suspend fun sendOpen(text: String) {
-        opened = true
+        opened.value = true
         openWithheld = false
         lastText = text
         sentVersion = sentVersion.coerceAtLeast(1)

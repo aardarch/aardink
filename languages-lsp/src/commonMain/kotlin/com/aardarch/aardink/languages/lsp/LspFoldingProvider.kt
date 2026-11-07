@@ -26,6 +26,11 @@ import com.aardarch.aardink.core.FoldingProvider
  * A server that does not fold gets no request, and has nothing to fold. A server that fails, or
  * answers `null`, has given no answer rather than an empty one, which would open whatever is folded
  * at the first hiccup: [requestFoldableRanges] throws, and the editor keeps the ranges it has.
+ *
+ * This can go to the editor before the server is ready. The first request waits for the document
+ * to open, through [LspLanguageService.attach] or [LspLanguageService.didOpen], and the editor asks
+ * again only after an edit, so a host that opens the document some other way gets no folds. A
+ * server that says to try later, as one still starting up may, is asked a few more times.
  */
 class LspFoldingProvider(private val service: LspLanguageService) : FoldingProvider {
 
@@ -33,7 +38,8 @@ class LspFoldingProvider(private val service: LspLanguageService) : FoldingProvi
     override fun foldableRanges(document: CodeDocument): List<FoldRange> = emptyList()
 
     /**
-     * What the server answers for [document], which should be what it was last sent.
+     * What the server answers for [document], which should be what it was last sent, once the
+     * document is open. The editor's cancellation ends the wait.
      *
      * @throws IllegalStateException if it gave no answer.
      */
