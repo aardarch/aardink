@@ -763,7 +763,8 @@ export function registerTheme(name: string, theme: AardinkThemeData | object): P
  * What the server knows joins what the language has. The providers of a language from
  * `registerLanguage` answer first and the server fills in; a built-in language's answers come after
  * the server's. Either way Enter, closing pairs and surrounding a selection stay the language's,
- * even where it does nothing. Completions, diagnostics, code actions, references, links and colours
+ * even where it does nothing, and an editor with no language service, such as plain text, types as
+ * it does without a server. Completions, diagnostics, code actions, references, links and colours
  * come from both, and what a server pushes shows after a pause in typing.
  *
  * Resolves once the connection has been asked for, not once it is up. A server that cannot be

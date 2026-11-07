@@ -222,13 +222,14 @@ private class WatchedTransport(private val transport: LspTransport, private val 
  * they connected. A registered language's service stays first, so the host's providers keep their
  * word and the server fills in what they leave ([CompositeLanguageService]'s rules). A built-in
  * language's goes after the server, as a real server knows more than its service does. Either way
- * what happens as text is typed stays the language's ([TypedByLanguage]).
+ * what happens as text is typed stays the language's ([TypedByLanguage]), and with no language there
+ * it is as it would be without a server ([TypedAsWithNoService]).
  */
 internal fun servedLanguage(own: LanguageService?, servers: List<LanguageService>): LanguageService? {
     val server =
         servers.reduceOrNull<LanguageService, LanguageService> { first, next -> CompositeLanguageService(first, next) } ?: return own
     return when (own) {
-        null -> server
+        null -> TypedAsWithNoService(server)
         is WebLanguageService -> TypedByLanguage(primary = own, fallback = server, language = own)
         else -> TypedByLanguage(primary = server, fallback = own, language = own)
     }
@@ -238,7 +239,7 @@ internal fun servedLanguage(own: LanguageService?, servers: List<LanguageService
  * [primary] and [fallback] with what happens as text is typed answered by [language] alone:
  * indentation on Enter, closing pairs and surrounding a selection. Its "nothing" here is a rule, as
  * no pair for `'` in a comment is, so nothing falls through to the generic table that
- * [LspLanguageService] has for an editor with no language service at all.
+ * [LspLanguageService] has for a Kotlin host's editor with no language service at all.
  */
 private class TypedByLanguage(primary: LanguageService, fallback: LanguageService, private val language: LanguageService) :
     CompositeLanguageService(primary, fallback) {
@@ -249,6 +250,20 @@ private class TypedByLanguage(primary: LanguageService, fallback: LanguageServic
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = language.autoClose(document, offset, charTyped)
 
     override fun surroundingClose(typed: Char): String? = language.surroundingClose(typed)
+}
+
+/**
+ * [server] for an editor with no language service, which types as it does without one: a server
+ * never changes what typing does, and [LspLanguageService]'s generic table would make `don't` into
+ * `don''t`. Answering nothing here is what having no service does in the editor: no indentation on
+ * Enter, nothing closed, and a selection replaced.
+ */
+private class TypedAsWithNoService(server: LanguageService) : LanguageService by server {
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
+
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
+
+    override fun surroundingClose(typed: Char): String? = null
 }
 
 /**

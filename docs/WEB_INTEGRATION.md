@@ -362,7 +362,7 @@ What the server knows joins what the language has:
 | --- | --- |
 | A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
 | A built-in language | The server first, then the language. |
-| Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. An editor with no language service, such as plain text, gets the server's generic rules. |
+| Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. A server never changes what typing does, so an editor with no language service, such as plain text or a language this page does not know, types as it does without one. |
 | Completions, diagnostics, code actions, references, links, colours | Both, as above. |
 | Folding | The server, if it folds; otherwise the language. |
 | Trigger characters | Both. A server that declares none adds none. |

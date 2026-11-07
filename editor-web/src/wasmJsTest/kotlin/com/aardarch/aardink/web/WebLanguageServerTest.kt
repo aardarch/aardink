@@ -486,15 +486,46 @@ class WebLanguageServerTest {
     }
 
     @Test
-    fun `an editor with no language service takes the server's generic rules for typing`() = runTest {
+    fun `an editor with no language service types as it does without one, with a real server behind it`() = runTest {
         val handle = mount("  a\n", "toy-no-rules")
         assertNull(handle.languageService)
         connect("toy-no-rules", FakeServer())
+        val adapter = served(handle)
+        val service = assertNotNull(handle.languageService)
+
+        val quote = CodeDocument("don't")
+        assertEquals("'", adapter.autoClose(quote, 3, '\''), "the generic rule this must not fall through to")
+        assertEquals("  ", adapter.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
+        assertNull(service.autoClose(quote, 3, '\''))
+        for (typed in "([{\"'") {
+            assertNull(service.autoClose(CodeDocument(typed.toString()), 0, typed), "nothing closes $typed")
+            assertNull(service.surroundingClose(typed), "nothing surrounds with $typed")
+        }
+        assertEquals("", service.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
+    }
+
+    @Test
+    fun `an editor with no language service still has what a server knows`() = runTest {
+        val handle = mount("a", "toy-no-rules-answers")
+        val server = FakeServer { method -> """{"items":[{"label":"served"}]}""".takeIf { method == "textDocument/completion" } }
+        connect("toy-no-rules-answers", server)
         served(handle)
         val service = assertNotNull(handle.languageService)
 
-        assertEquals(")", service.autoClose(CodeDocument("("), 0, '('))
-        assertEquals("  ", service.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
+        assertEquals(listOf("served"), service.completions(handle.state.value.document.snapshot(), 1).map { it.label })
+        assertEquals(setOf('.'), service.triggerCharacters)
+    }
+
+    @Test
+    fun `two servers on an editor with no language service change no more than one`() = runTest {
+        val handle = mount("a", "toy-no-rules-two")
+        connect("toy-no-rules-two", FakeServer())
+        connect("toy-no-rules-two", FakeServer())
+        awaitUntil { handle.languageServers.size == 2 }
+        val service = assertNotNull(handle.languageService)
+
+        assertNull(service.autoClose(CodeDocument("("), 0, '('))
+        assertEquals("", service.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
     }
 
     @Test

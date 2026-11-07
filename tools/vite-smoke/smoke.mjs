@@ -549,6 +549,63 @@ async function linkPixel(page) {
  * the server knows reaching the text beside a host's providers, the end of a session, a connection
  * that drops and one that never comes up.
  */
+/**
+ * The same keys, in an editor with no language service, with and without a real server following
+ * it: a server changes nothing about typing. It offers no completions here, as a list up would be
+ * something else that Enter reaches.
+ */
+async function serverTypingCheck(page) {
+  const checks = {};
+  const typedIn = async (language, serverUrl) => {
+    setPhase(`typing in ${language} ${serverUrl ? 'with' : 'without'} a server`);
+    await page.evaluate(async (mount, language, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: '  word', language });
+      window.__typingServer = serverUrl ? await window.__aardink.connectLanguageServer(serverUrl, language) : null;
+    }, MOUNT, language, serverUrl);
+    await sleep(500);
+    await page.mouse.click(300, 12);
+    await sleep(300);
+    await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 7 }));
+    await sleep(100);
+    await page.keyboard.type(" don't (a) [b] {c} \"d\"");
+    await sleep(300);
+    await page.keyboard.press('Enter');
+    await sleep(100);
+    await page.keyboard.type('next');
+    await sleep(300);
+    await page.evaluate(() => window.__smokeEditor.setSelections([{
+      selectionStartLineNumber: 2, selectionStartColumn: 1, positionLineNumber: 2, positionColumn: 5,
+    }]));
+    await sleep(100);
+    await page.keyboard.type('(');
+    await sleep(300);
+    const text = await page.evaluate(() => window.__smokeEditor.getValue());
+    await page.evaluate(() => {
+      window.__typingServer?.dispose();
+      window.__typingServer = null;
+    });
+    await sleep(100);
+    return text;
+  };
+  const server = await startLoopbackLsp('', { answers: { 'textDocument/completion': () => ({ isIncomplete: false, items: [] }) } });
+  try {
+    const expected = '  word don\'t (a) [b] {c} "d"\n(';
+    for (const language of ['python', 'plaintext']) {
+      const without = await typedIn(language, null);
+      const opened = server.count('textDocument/didOpen');
+      const served = await typedIn(language, server.url);
+      checks[`typing in ${language} is as it says, with no server`] = without === expected;
+      checks[`typing in ${language} is the same with a server, which did follow it`] =
+        served === without && server.count('textDocument/didOpen') === opened + 1;
+    }
+  } finally {
+    await server.close();
+  }
+  return checks;
+}
+
 async function languageServerCheck(page) {
   const checks = {};
   const hoverLink = `${url}smoke-hover-link.txt`;
@@ -1005,6 +1062,7 @@ try {
     ...(await stuckServerLensCheck(desktop)),
     ...(await inlineCompletionCheck(desktop)),
     ...(await languageServerCheck(desktop)),
+    ...(await serverTypingCheck(desktop)),
     ...(await linkCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
