@@ -39,12 +39,17 @@ import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorLimits
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.NoOpFoldingProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +106,8 @@ class InlayHintsUiTest {
         state: CodeEditorState,
         service: LanguageService?,
         find: FindReplaceState? = null,
+        folds: FoldState? = null,
+        foldable: List<FoldRange> = emptyList(),
         options: () -> EditorOptions = { on },
     ) {
         state.computeDispatcher = Dispatchers.Unconfined
@@ -109,6 +116,8 @@ class InlayHintsUiTest {
                 state = state,
                 languageService = service,
                 findReplaceState = find,
+                foldState = folds,
+                foldingProvider = if (folds != null) FoldingProvider { foldable } else NoOpFoldingProvider,
                 options = options(),
                 modifier = Modifier.size(600.dp, 400.dp),
             )
@@ -321,6 +330,93 @@ class InlayHintsUiTest {
         } finally {
             EditorLimits.plainTextFallbackChars = limit
         }
+    }
+
+    // ── With folds closed ────────────────────────────────────────────────────
+
+    /** Answers every request not yet answered from [from], with a hint at the start of each of its lines. */
+    private fun ComposeUiTest.answerEachLine(state: CodeEditorState, service: HeldHints, from: Int) {
+        for (request in service.requests.drop(from)) {
+            val lines =
+                state.document.offsetToLineCol(request.range.first).first..state.document.offsetToLineCol(request.range.last + 1).first
+            request.answer.complete(lines.map { InlayHint(state.document.lineStart(it), "line $it") })
+        }
+        waitForIdle()
+    }
+
+    private fun ComposeUiTest.foldedAsked(state: CodeEditorState, service: HeldHints, foldable: List<FoldRange>): FoldState {
+        val folds = FoldState()
+        show(state, service, folds = folds, foldable = foldable)
+        answer(service, emptyList())
+        waitUntil(timeoutMillis = 5_000) { folds.foldableRanges.isNotEmpty() }
+        assertTrue(state.execute(EditorCommand.FoldAll))
+        waitForIdle()
+        return folds
+    }
+
+    @Test
+    fun `a long closed fold is asked around, and the lines below it get their hints`() = runComposeUiTest {
+        val state = CodeEditorState(manyLines)
+        val service = HeldHints()
+        val folds = foldedAsked(state, service, listOf(FoldRange(5, 1_950)))
+        val before = service.requests.size
+
+        pause()
+        waitUntil { service.requests.size == before + 2 }
+
+        val document = state.document
+        val asked = service.requests.drop(before).map {
+            document.offsetToLineCol(it.range.first).first..document.offsetToLineCol(it.range.last + 1).first
+        }
+        assertEquals(0..5, asked[0])
+        assertEquals(1_951, asked[1].first)
+        answerEachLine(state, service, before)
+        val lines = state.inlayHints.map { document.offsetToLineCol(it.offset).first }
+        assertTrue(lines.isNotEmpty() && 1_951 in lines, "$lines")
+        assertTrue(lines.none { it in 6..1_950 }, "$lines")
+        assertTrue(folds.isFolded(5))
+    }
+
+    @Test
+    fun `fold all leaves few questions, about few lines, and keeps no hint it hides`() = runComposeUiTest {
+        val state = CodeEditorState(manyLines)
+        val service = HeldHints()
+        foldedAsked(state, service, (0 until 2_000 step 100).map { FoldRange(it, it + 98) })
+        val before = service.requests.size
+
+        pause()
+        waitUntil { service.requests.size > before }
+        waitForIdle()
+
+        val asked = service.requests.drop(before)
+        assertTrue(asked.size <= 8, "${asked.size} questions")
+        assertTrue(asked.sumOf { it.range.last - it.range.first } < 400, "${asked.map { it.range }}")
+        answerEachLine(state, service, before)
+        assertTrue(state.inlayHints.isNotEmpty())
+        val document = state.document
+        assertTrue(state.inlayHints.all { document.offsetToLineCol(it.offset).first % 100 in setOf(0, 99) }, "${state.inlayHints}")
+    }
+
+    @Test
+    fun `opening a fold asks about the lines it shows`() = runComposeUiTest {
+        val state = CodeEditorState(manyLines)
+        val service = HeldHints()
+        foldedAsked(state, service, listOf(FoldRange(1, 3)))
+        val before = service.requests.size
+        pause()
+        waitUntil { service.requests.size > before }
+        answerEachLine(state, service, before)
+        val document = state.document
+        assertTrue(state.inlayHints.none { document.offsetToLineCol(it.offset).first in 2..3 }, "${state.inlayHints}")
+        val folded = service.requests.size
+
+        assertTrue(state.execute(EditorCommand.UnfoldAll))
+        waitForIdle()
+        pause()
+        waitUntil { service.requests.size > folded }
+        answerEachLine(state, service, folded)
+
+        assertTrue(state.inlayHints.any { document.offsetToLineCol(it.offset).first == 2 }, "${state.inlayHints}")
     }
 
     // ── What it does with an answer ──────────────────────────────────────────

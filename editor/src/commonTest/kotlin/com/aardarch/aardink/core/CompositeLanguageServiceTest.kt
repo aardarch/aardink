@@ -15,7 +15,14 @@
  */
 package com.aardarch.aardink.core
 
+import com.aardarch.aardink.ui.view.HintWindow
+import com.aardarch.aardink.ui.view.InlineContent
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -224,5 +231,126 @@ class CompositeLanguageServiceTest {
         CompositeLanguageService(recording, recording).inlayHints(doc, 1..2)
 
         assertEquals(listOf(1..2, 1..2), asked)
+    }
+
+    /** A fallback that keeps the caller waiting until told what to say. */
+    private class HeldHints : LanguageService by Fake() {
+        val answer = CompletableDeferred<List<InlayHint>>()
+        var asked = 0
+
+        override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+            asked++
+            return answer.await()
+        }
+    }
+
+    private val own = listOf(InlayHint(1, "own"))
+    private val inherited = listOf(InlayHint(1, "taken"), InlayHint(2, "inherited"))
+    private val all = own + InlayHint(2, "inherited")
+
+    @Test
+    fun `a primary's hints are offered while the fallback has yet to answer`() = runTest {
+        val held = HeldHints()
+        val offers = mutableListOf<List<InlayHint>>()
+
+        val answer = async(EarlyInlayHints { offers += it }) { CompositeLanguageService(Fake(hints = own), held).inlayHints(doc, 0..2) }
+        runCurrent()
+
+        assertEquals(listOf(own), offers)
+        assertEquals(1, held.asked, "the fallback still gets its turn")
+        held.answer.complete(inherited)
+        assertEquals(all, answer.await())
+    }
+
+    @Test
+    fun `a primary with no hints offers nothing, which would take a fallback's off the screen`() = runTest {
+        val held = HeldHints()
+        val offers = mutableListOf<List<InlayHint>>()
+
+        val answer = async(EarlyInlayHints { offers += it }) { CompositeLanguageService(Fake(), held).inlayHints(doc, 0..2) }
+        runCurrent()
+        held.answer.complete(inherited)
+
+        assertEquals(inherited, answer.await())
+        assertTrue(offers.isEmpty())
+    }
+
+    @Test
+    fun `a composite behind another offers on top of what is there`() = runTest {
+        val held = HeldHints()
+        val offers = mutableListOf<List<InlayHint>>()
+        val behind = CompositeLanguageService(Fake(hints = inherited), held)
+
+        val answer = async(EarlyInlayHints { offers += it }) { CompositeLanguageService(Fake(hints = own), behind).inlayHints(doc, 0..2) }
+        runCurrent()
+        held.answer.complete(listOf(InlayHint(0, "last")))
+
+        assertEquals(listOf(own, all), offers)
+        assertEquals(all + InlayHint(0, "last"), answer.await())
+    }
+
+    @Test
+    fun `the editor shows the primary's hints once the fallback has kept it waiting, then the whole answer`() = runTest {
+        val held = HeldHints()
+        val shown = mutableListOf<List<InlayHint>>()
+        val service = CompositeLanguageService(Fake(hints = own), held)
+
+        val answer = async { InlineContent.askForHints(service, doc, HintWindow(listOf(0..0)), EmptyCoroutineContext) { shown += it } }
+        advanceTimeBy(999)
+        runCurrent()
+        assertTrue(shown.isEmpty(), "a fallback that answers soon keeps what it has on show from flickering")
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(listOf(own), shown)
+
+        held.answer.complete(inherited)
+
+        assertEquals(all, answer.await())
+    }
+
+    @Test
+    fun `a fallback that answers in time makes it one step`() = runTest {
+        val held = HeldHints()
+        val shown = mutableListOf<List<InlayHint>>()
+        val service = CompositeLanguageService(Fake(hints = own), held)
+
+        val answer = async { InlineContent.askForHints(service, doc, HintWindow(listOf(0..0)), EmptyCoroutineContext) { shown += it } }
+        advanceTimeBy(500)
+        runCurrent()
+        held.answer.complete(inherited)
+        assertEquals(all, answer.await())
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertTrue(shown.isEmpty())
+    }
+
+    @Test
+    fun `each run is asked at once, and what is offered early is all of theirs`() = runTest {
+        val document = CodeDocument("ab\ncd\nef")
+        val held = HeldHints()
+        val primary = object : LanguageService by Fake() {
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) = listOf(InlayHint(range.first, "at ${range.first}"))
+        }
+        val shown = mutableListOf<List<InlayHint>>()
+
+        val answer = async {
+            InlineContent.askForHints(
+                CompositeLanguageService(primary, held),
+                document,
+                HintWindow(listOf(0..0, 2..2)),
+                EmptyCoroutineContext,
+            ) { shown += it }
+        }
+        advanceTimeBy(1_001)
+        runCurrent()
+
+        assertEquals(2, held.asked, "a question stuck on one run holds no other back")
+        assertEquals(listOf(listOf(InlayHint(0, "at 0"), InlayHint(6, "at 6"))), shown)
+        held.answer.complete(listOf(InlayHint(3, "both ask, one is kept")))
+        assertEquals(
+            listOf(InlayHint(0, "at 0"), InlayHint(3, "both ask, one is kept"), InlayHint(6, "at 6")),
+            answer.await(),
+        )
     }
 }

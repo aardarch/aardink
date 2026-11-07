@@ -16,6 +16,8 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withContext
 
 /**
  * One language service made of two: [primary], a host's own for its dialect, answers first and
@@ -37,7 +39,9 @@ import androidx.compose.ui.graphics.Color
  *   fallback's when the primary has none. **Linked editing ranges:** likewise.
  * - **Document links and colours:** both, without two for the same range. **Colour
  *   presentations:** the primary's, or else the fallback's.
- * - **Inlay hints:** both, less any of the fallback's at an offset the primary has one at.
+ * - **Inlay hints:** both, less any of the fallback's at an offset the primary has one at. The
+ *   editor shows the primary's without waiting for ever on the fallback, which may be a language
+ *   server that is starting up or not answering.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -141,8 +145,16 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
         val own = primary.inlayHints(document, range)
+        val early = currentCoroutineContext()[EarlyInlayHints] ?: return withHints(own, fallback.inlayHints(document, range))
+        // None to offer is not an offer of none: it would take a server's hints off the screen.
+        if (own.isNotEmpty()) early.offer(own)
+        val inherited = withContext(EarlyInlayHints { early.offer(withHints(own, it)) }) { fallback.inlayHints(document, range) }
+        return withHints(own, inherited)
+    }
+
+    private fun withHints(own: List<InlayHint>, inherited: List<InlayHint>): List<InlayHint> {
         val taken = own.mapTo(HashSet()) { it.offset }
-        return own + fallback.inlayHints(document, range).filterNot { it.offset in taken }
+        return own + inherited.filterNot { it.offset in taken }
     }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)

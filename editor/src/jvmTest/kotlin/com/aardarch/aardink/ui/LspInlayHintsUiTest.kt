@@ -35,6 +35,7 @@ import com.aardarch.aardink.languages.lsp.ChannelLspTransport
 import com.aardarch.aardink.languages.lsp.LspClient
 import com.aardarch.aardink.languages.lsp.LspLanguageService
 import com.aardarch.aardink.languages.lsp.LspRequestException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,8 +69,12 @@ class LspInlayHintsUiTest {
         private val transport: ChannelLspTransport,
         private val capabilities: String,
         private val refusesHandshake: Boolean,
+        private val holding: String?,
         private val hints: (asked: Int, startLine: Int, endLine: Int) -> String,
     ) {
+        /** Completed to let the [holding] method have its answer. */
+        val released = CompletableDeferred<Unit>()
+
         val methods = CopyOnWriteArrayList<String>()
 
         suspend fun serve() {
@@ -78,6 +83,7 @@ class LspInlayHintsUiTest {
                 val method = message["method"]?.jsonPrimitive?.content ?: continue
                 methods += method
                 val id = message["id"] ?: continue
+                if (method == holding) released.await()
                 if (method == "initialize" && refusesHandshake) {
                     transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"no"}}""")
                     continue
@@ -102,13 +108,14 @@ class LspInlayHintsUiTest {
     private class Connection(
         capabilities: String = """{"textDocumentSync":2,"inlayHintProvider":true}""",
         refusesHandshake: Boolean = false,
+        holding: String? = null,
         hints: (asked: Int, startLine: Int, endLine: Int) -> String,
     ) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val transport = ChannelLspTransport()
         val client = LspClient(transport, scope)
         val service = LspLanguageService(client, "file:///Main.kt", "kotlin")
-        val server = Server(transport, capabilities, refusesHandshake, hints).also { server -> scope.launch { server.serve() } }
+        val server = Server(transport, capabilities, refusesHandshake, holding, hints).also { server -> scope.launch { server.serve() } }
 
         fun close() = scope.cancel()
     }
@@ -231,6 +238,73 @@ class LspInlayHintsUiTest {
             assertTrue(method !in connection.server.methods)
             assertTrue(state.inlayHints.isEmpty())
         } finally {
+            connection.close()
+        }
+    }
+
+    /** A host's service for its dialect, saying [label] at [offset] whatever it is asked. */
+    private fun dialect(offset: Int, label: String) = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+        override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = listOf(InlayHint(offset, label))
+    }
+
+    /** Long enough for the editor to ask, and to stop waiting for the rest of the answer. */
+    private fun ComposeUiTest.outwait() {
+        pause()
+        mainClock.advanceTimeBy(1_100)
+        waitForIdle()
+    }
+
+    @Test
+    fun `a host's hints do not wait on a server that has not answered initialize`() = runComposeUiTest {
+        val connection = Connection(holding = "initialize") { _, _, _ -> "[${hint(0, 3, "server")}]" }
+        try {
+            val state = CodeEditorState("name")
+            show(state, CompositeLanguageService(dialect(1, "own"), connection.service))
+            connection.scope.launch {
+                connection.client.initialize(rootUri = null)
+                connection.service.attach(state)
+            }
+
+            outwait()
+
+            waitUntil { state.inlayHints.isNotEmpty() }
+            assertEquals(listOf(InlayHint(1, "own")), state.inlayHints)
+            assertTrue(method !in connection.server.methods)
+
+            connection.server.released.complete(Unit)
+
+            waitUntil { state.inlayHints.size == 2 }
+            assertEquals(listOf(InlayHint(1, "own"), InlayHint(3, "server")), state.inlayHints, "with no edit since")
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `a host's hints do not wait on a server stuck on the request, and go on being asked for`() = runComposeUiTest {
+        val connection = Connection(holding = method) { _, _, _ -> "[]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState("name")
+            connection.service.attach(state)
+            var asked = 0
+            val own = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+                override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> =
+                    listOf(InlayHint(1, "asked ${++asked}"))
+            }
+            show(state, CompositeLanguageService(own, connection.service))
+
+            outwait()
+            waitUntil { state.inlayHints == listOf(InlayHint(1, "asked 1")) }
+
+            state.selection = TextRange(4)
+            onNodeWithTag(EditorTestTags.EDITOR).performTextInput("s")
+            waitForIdle()
+            outwait()
+
+            waitUntil { state.inlayHints == listOf(InlayHint(1, "asked 2")) }
+        } finally {
+            connection.server.released.complete(Unit)
             connection.close()
         }
     }

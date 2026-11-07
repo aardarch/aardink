@@ -84,6 +84,7 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.Location
@@ -106,6 +107,7 @@ import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
+import com.aardarch.aardink.ui.view.HintWindow
 import com.aardarch.aardink.ui.view.InlineContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -747,24 +749,31 @@ private fun CodeEditorLayoutContent(
         // What is here came from a service, and a change of either the service or the switch ends that.
         state.publishInlayHints(emptyList())
         val service = languageService.takeIf { options.inlayHints } ?: return@LaunchedEffect
-        var asked: IntRange? = null
+        var asked: HintWindow? = null
         snapshotFlow {
-            val shown = view.frame.lines
+            val frame = view.frame
+            val shown = frame.lines
             if (shown.isEmpty()) return@snapshotFlow null
-            val lines = InlineContent.hintWindow(asked, shown.first().line..shown.last().line, shown.size)
-            asked = lines
-            state.textVersion to lines
-        }.filterNotNull().collectLatest { (_, lines) ->
+            val window = InlineContent.hintWindow(
+                asked,
+                shown.first().line..shown.last().line,
+                shown.size,
+                view.foldLayout,
+                frame.lineCount,
+            )
+            asked = window
+            state.textVersion to window
+        }.filterNotNull().collectLatest { (_, window) ->
             delay(INLAY_HINTS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
                 state.publishInlayHints(emptyList())
                 return@collectLatest
             }
             val document = state.document.snapshot()
-            val hints = withContext(state.computeDispatcher) {
-                service.inlayHints(document, InlineContent.hintRange(document, lines))
+            val show: (List<InlayHint>) -> Unit = { hints ->
+                if (state.document.version == document.version) state.publishInlayHints(InlineContent.usableHints(hints, document, window))
             }
-            if (state.document.version == document.version) state.publishInlayHints(InlineContent.usableHints(hints, document, lines))
+            show(InlineContent.askForHints(service, document, window, state.computeDispatcher, showEarly = show))
         }
     }
 

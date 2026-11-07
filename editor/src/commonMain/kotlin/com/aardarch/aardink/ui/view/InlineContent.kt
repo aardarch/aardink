@@ -21,13 +21,34 @@ import androidx.compose.ui.text.SpanStyle
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.EarlyInlayHints
 import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.LanguageService
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
 
 /** Columns [from, to) of a line's own text, drawn in [color]. */
 @Immutable
 internal data class ColumnColor(val from: Int, val to: Int, val color: Color)
+
+/**
+ * The lines a language service is asked for inlay hints about, each of [runs] one question, with
+ * [folds] closed as they were. Lines between two runs are all hidden, and a run may hold hidden
+ * lines too, where few are hidden between lines shown.
+ */
+@Immutable
+internal data class HintWindow(val runs: List<IntRange>, val folds: FoldLayout = FoldLayout.None) {
+    operator fun contains(line: Int): Boolean = runs.any { line in it }
+}
 
 /**
  * The one answer to what a line shows besides its document text, for [EditorView.injections],
@@ -173,23 +194,103 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     }
 
     companion object {
+        /** Most runs in a window: each may hand the whole document to a provider, and a server takes them one by one. */
+        private const val MAX_HINT_RUNS = 8
+
+        /** How long an answer in part waits for the rest before it is shown, which takes off what the rest would have kept. */
+        private const val HINT_PATIENCE_MS = 1_000L
+
         /**
-         * The lines to ask about, with [visible] on screen, [rows] of them shown: [asked] while it
-         * holds them, so that scrolling within what was asked about asks nothing, or else them and
-         * a screen either side. That is by [rows], as a closed fold puts many lines in [visible].
+         * The lines to ask about, with [visible] on screen, [rows] of them shown, [folds] closed and
+         * [lineCount] lines in all: [asked] while it holds them and the folds are as they were, so
+         * that scrolling within what was asked about asks nothing, or else them and a screen of
+         * shown lines either side.
+         *
+         * A closed fold puts many lines in [visible], and what it hides is not worth asking about:
+         * a fold of more than [rows] lines parts the window in two. So however much folds hide, what
+         * is asked about stays a matter of [rows] and not of the document. A screen so full of long
+         * folds that that makes too many runs is asked about without its margin, from the top, and
+         * the lines past the last run wait for a scroll.
          */
-        fun hintWindow(asked: IntRange?, visible: IntRange, rows: Int): IntRange {
-            if (asked != null && visible.first >= asked.first && visible.last <= asked.last) return asked
-            return (visible.first - rows).coerceAtLeast(0)..(visible.last + rows)
+        fun hintWindow(
+            asked: HintWindow?,
+            visible: IntRange,
+            rows: Int,
+            folds: FoldLayout = FoldLayout.None,
+            lineCount: Int = Int.MAX_VALUE,
+        ): HintWindow {
+            if (asked != null && asked.folds === folds && visible.first in asked && visible.last in asked) return asked
+            var first = visible.first
+            var last = visible.last
+            repeat(rows) {
+                first = folds.shownBefore(first)
+                last = folds.shownAfter(last)
+            }
+            last = last.coerceAtMost(lineCount - 1).coerceAtLeast(visible.last)
+            val runs = shownRuns(first..last, rows, folds)
+            return HintWindow(if (runs.size <= MAX_HINT_RUNS) runs else shownRuns(visible, rows, folds).take(MAX_HINT_RUNS), folds)
+        }
+
+        /** [lines], parted wherever [folds] hides more than [gap] lines in a row. */
+        private fun shownRuns(lines: IntRange, gap: Int, folds: FoldLayout): List<IntRange> {
+            val runs = ArrayList<IntRange>()
+            var start = lines.first
+            var line = lines.first
+            while (line < lines.last) {
+                val next = folds.shownAfter(line)
+                if (next > lines.last) break
+                if (next - line - 1 > gap) {
+                    runs += start..line
+                    start = next
+                }
+                line = next
+            }
+            runs += start..line
+            return runs
         }
 
         /** Lines [lines] of [document] as the range a language service is asked about. */
         fun hintRange(document: CodeDocument, lines: IntRange): IntRange =
             document.lineStart(lines.first) until document.lineEnd(lines.last)
 
-        /** What of [answer] a window of [lines] of [document] can show: not what is outside it, or nothing to see. */
-        fun usableHints(answer: List<InlayHint>, document: CodeDocument, lines: IntRange): List<InlayHint> = answer.filter {
-            it.label.isNotBlank() && it.offset in 0..document.length && document.offsetToLineCol(it.offset).first in lines
+        /**
+         * What of [answer] [window] of [document] can show: not what is outside it, on a line a fold
+         * hides, or nothing to see. So what is kept, and moved with each edit, goes by what is shown.
+         */
+        fun usableHints(answer: List<InlayHint>, document: CodeDocument, window: HintWindow): List<InlayHint> = answer.filter {
+            if (it.label.isBlank() || it.offset !in 0..document.length) return@filter false
+            val line = document.offsetToLineCol(it.offset).first
+            line in window && !window.folds.isHidden(line)
+        }
+
+        /**
+         * [service]'s answer about [window] of [document], its runs asked at once on [dispatcher].
+         *
+         * What it offers early ([EarlyInlayHints]) goes to [showEarly] if the rest is still not in
+         * after [HINT_PATIENCE_MS]. Not before, as that replaces the hints on show: an answer in two
+         * steps on every edit would take a server's hints off the screen and put them back each time.
+         */
+        suspend fun askForHints(
+            service: LanguageService,
+            document: CodeDocument,
+            window: HintWindow,
+            dispatcher: CoroutineContext,
+            showEarly: (List<InlayHint>) -> Unit,
+        ): List<InlayHint> = coroutineScope {
+            val offered = MutableStateFlow(emptyMap<IntRange, List<InlayHint>>())
+            val showing = launch {
+                offered.collectLatest { soFar ->
+                    if (soFar.isEmpty()) return@collectLatest
+                    delay(HINT_PATIENCE_MS)
+                    showEarly(soFar.values.flatten().distinct())
+                }
+            }
+            val answers = window.runs.map { lines ->
+                val early = EarlyInlayHints { hints -> offered.update { it + (lines to hints) } }
+                async(dispatcher + early) { service.inlayHints(document, hintRange(document, lines)) }
+            }.awaitAll()
+            showing.cancel()
+            answers.flatten().distinct()
         }
     }
 }

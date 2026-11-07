@@ -17,6 +17,8 @@ package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Immutable
 import com.aardarch.aardink.core.text.DocumentChange
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 
 /**
  * A short label [LanguageService.inlayHints] shows among the characters: a parameter's name, an
@@ -29,6 +31,16 @@ import com.aardarch.aardink.core.text.DocumentChange
  */
 @Immutable
 data class InlayHint(val offset: Int, val label: String)
+
+/**
+ * In the context of a call to [LanguageService.inlayHints], told what the answer holds so far when
+ * the rest may be long coming, or never come: [CompositeLanguageService] has its primary's hints
+ * while a language server behind them starts up or sits on the request. What the call returns is
+ * still the answer. Each [offer] stands for all the call has so far.
+ */
+internal class EarlyInlayHints(val offer: (List<InlayHint>) -> Unit) : AbstractCoroutineContextElement(EarlyInlayHints) {
+    companion object Key : CoroutineContext.Key<EarlyInlayHints>
+}
 
 /**
  * The hints on show, moved with each edit until the next answer. A hint on text that went goes with

@@ -230,8 +230,10 @@ interface LanguageService {
      * parameter's name or an inferred type, with
      * [EditorOptions.inlayHints][com.aardarch.aardink.ui.EditorOptions] on. [range] runs from the
      * start of a line to the end of that or a later one, first to last (inclusive), and holds the
-     * lines around the view: the editor asks again after a pause in typing, or in scrolling past what
-     * it asked about, and calls off a question it no longer needs answered.
+     * lines around the view: the editor asks again after a pause in typing, in scrolling past what it
+     * asked about, or after a fold opens or closes, and calls off a question it no longer needs
+     * answered. A long closed fold on screen makes that a few calls at once, one for the lines on
+     * either side of it, so that the lines it hides are not asked about.
      */
     suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = emptyList()
 

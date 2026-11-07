@@ -185,6 +185,15 @@ internal class FoldLayout private constructor(private val folds: List<FoldRange>
         return if (index >= 0 && folds[index].startLine == line) folds[index] else null
     }
 
+    /** The next line down from [line], itself not hidden, that is not hidden. */
+    fun shownAfter(line: Int): Int = (startingAt(line)?.endLine ?: line) + 1
+
+    /** The next line up from [line], itself not hidden, that is not hidden, or the first line. */
+    fun shownBefore(line: Int): Int {
+        val above = (line - 1).coerceAtLeast(0)
+        return if (isHidden(above)) folds[lastStartingAtOrBefore(above)].startLine else above
+    }
+
     private fun lastStartingAtOrBefore(line: Int): Int {
         var lo = 0
         var hi = folds.size - 1
