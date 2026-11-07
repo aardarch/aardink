@@ -87,8 +87,10 @@ try {
   const second = document.createElement('div');
   document.body.append(second);
   const other = await createEditor(second, undefined, { value: 'x' });
+  const stopLinks = other.onOpenLink(() => {});
   other.dispose();
   other.dispose();
+  stopLinks.dispose(); // after the editor: there is no one left to tell
   second.remove();
   report.checks.disposeIdempotent = true;
 
