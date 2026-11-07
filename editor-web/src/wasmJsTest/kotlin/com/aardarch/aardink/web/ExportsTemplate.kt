@@ -142,30 +142,17 @@ fun aardinkGetSymbolPathAt(id: Int, line: Int, column: Int): String = AardinkWeb
 @JsExport fun aardinkRevalidate(id: Int) = AardinkWeb.revalidate(handle(id))
 
 /**
- * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
- * [hover], [diagnostics], [documentSymbols] and [documentColors] answer with JSON through a Promise, or null for nothing (pass one that
- * resolves to null for what the language does not have). Returns "" when it worked, else what was
- * wrong with the definition.
+ * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [dispatcher] answers
+ * for all its providers: it gets a provider's name, the document's text and the provider's other
+ * arguments as a JSON array, and answers with JSON through a Promise, or null for nothing, as it
+ * should for a name it does not know: a later version asks for more by name, with no change here.
+ * Returns "" when it worked, else what was wrong with the definition.
  */
 @JsExport
-fun aardinkRegisterLanguage(
-    definitionJson: String,
-    completions: (String, Int, Int) -> Promise<JsString?>,
-    hover: (String, Int, Int) -> Promise<JsString?>,
-    diagnostics: (String) -> Promise<JsString?>,
-    documentSymbols: (String) -> Promise<JsString?>,
-    documentColors: (String) -> Promise<JsString?>,
-): String = try {
-    AardinkWeb.registerLanguage(
-        definitionJson,
-        WebLanguageProviders(
-            completions = { text, line, column -> completions(text, line, column).await<JsString?>()?.toString() },
-            hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
-            diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
-            documentSymbols = { text -> documentSymbols(text).await<JsString?>()?.toString() },
-            documentColors = { text -> documentColors(text).await<JsString?>()?.toString() },
-        ),
-    )
+fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String, String) -> Promise<JsString?>): String = try {
+    AardinkWeb.registerLanguage(definitionJson) { method, text, argsJson ->
+        dispatcher(method, text, argsJson).await<JsString?>()?.toString()
+    }
     ""
 } catch (e: IllegalArgumentException) {
     e.message ?: "not a language definition"

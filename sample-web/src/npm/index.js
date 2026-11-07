@@ -147,6 +147,19 @@ function regexAsPattern(key, value) {
 /** The decorations owner deltaDecorations sets; each collection has its own. */
 const DELTA_OWNER = 'delta';
 
+/**
+ * What the Kotlin side asks by name, and the host's function that answers it, read at each call. A
+ * new provider is one line here; a name not here has no provider, and gets null.
+ */
+const PROVIDERS = new Map([
+  ['completions', (providers) => providers.provideCompletionItems],
+  ['hover', (providers) => providers.provideHover],
+  ['diagnostics', (providers) => providers.provideDiagnostics &&
+    ((text) => Promise.resolve(providers.provideDiagnostics(text)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic))))],
+  ['documentSymbols', (providers) => providers.provideDocumentSymbols],
+  ['documentColors', (providers) => providers.provideDocumentColors],
+]);
+
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
   if (!provider) return Promise.resolve(null);
@@ -176,16 +189,7 @@ export async function registerLanguage(definition, providers = {}) {
       triggerCharacters: providers.triggerCharacters,
       grammar,
     }),
-    (text, line, column) => answer(providers.provideCompletionItems, text, line, column),
-    (text, line, column) => answer(providers.provideHover, text, line, column),
-    (text) =>
-      answer(
-        providers.provideDiagnostics &&
-          ((t) => Promise.resolve(providers.provideDiagnostics(t)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic)))),
-        text,
-      ),
-    (text) => answer(providers.provideDocumentSymbols, text),
-    (text) => answer(providers.provideDocumentColors, text),
+    (method, text, argsJson) => answer(PROVIDERS.get(method)?.(providers), text, ...JSON.parse(argsJson)),
   );
   if (error) throw new Error(`Aardink: ${error}`);
 }

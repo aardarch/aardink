@@ -276,6 +276,17 @@ object AardinkWeb {
     }
 
     /**
+     * [registerLanguage] with one function answering for every provider, as the `@JsExport` template
+     * has it: [dispatcher] gets a member of [WebLanguageProviders] by name (`"completions"`,
+     * `"hover"`, ...), the document's text and that provider's other arguments as a JSON array
+     * (`[line, column]`, 1-based, where it asks about a place, else `[]`), and answers as that
+     * provider does. A name it does not know should get null, which is what no provider answers, so
+     * that a template written for this version still works when a later one asks for more.
+     */
+    fun registerLanguage(definitionJson: String, dispatcher: suspend (method: String, text: String, argsJson: String) -> String?): String =
+        registerLanguage(definitionJson, dispatchedProviders(dispatcher))
+
+    /**
      * Adds (or replaces) a theme, for [WebEditorOptions.theme] to name: VS Code theme JSON, whose
      * `tokenColors` scopes also colour grammars' token names by dotted prefix (`tag.aardflex`, then
      * `tag`). What it does not set comes from `base` (a theme key) if given, else `vscode-light`

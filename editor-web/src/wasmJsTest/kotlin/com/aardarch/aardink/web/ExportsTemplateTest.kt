@@ -17,6 +17,7 @@
 
 package com.aardarch.aardink.web
 
+import com.aardarch.aardink.core.CodeDocument
 import kotlinx.browser.document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,7 +32,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+/** A JavaScript `Error`, for a Promise to reject with. */
+private fun jsError(message: String): JsAny = js("new Error(message)")
 
 /**
  * Drives the export template the way a JS host would, through its exports only — the template's
@@ -122,14 +127,60 @@ class ExportsTemplateTest {
 
     @Test
     fun `registering through the exports says what is wrong`() {
-        val nothing: (String, Int, Int) -> Promise<JsString?> = { _, _, _ -> Promise.resolve<JsString?>(null) }
-        val noDiagnostics: (String) -> Promise<JsString?> = { Promise.resolve<JsString?>(null) }
+        val nothing: (String, String, String) -> Promise<JsString?> = { _, _, _ -> Promise.resolve<JsString?>(null) }
         val good = """{ "id": "exported", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
-        assertEquals("", aardinkRegisterLanguage(good, nothing, nothing, noDiagnostics, noDiagnostics, noDiagnostics))
+        assertEquals("", aardinkRegisterLanguage(good, nothing))
         val bad = """{ "id": "exported2", "grammar": { "tokenizer": { "root": [ ["(?<=a)b", "x"] ] } } }"""
-        assertTrue(aardinkRegisterLanguage(bad, nothing, nothing, noDiagnostics, noDiagnostics, noDiagnostics).contains("lookbehind"))
+        assertTrue(aardinkRegisterLanguage(bad, nothing).contains("lookbehind"))
         assertEquals("", aardinkRegisterTheme("exported-theme", """{ "tokenColors": [] }"""))
         assertTrue(aardinkRegisterTheme("broken", "not json").isNotEmpty())
+    }
+
+    @Test
+    fun `a language's providers reach the dispatcher by name, with their arguments as JSON`() = runTest {
+        val asked = mutableListOf<String>()
+        val dispatcher: (String, String, String) -> Promise<JsString?> = { method, text, argsJson ->
+            asked += "$method $argsJson $text"
+            val answer = """[{ "label": "from-$method" }]""".takeIf { method == "completions" }
+            Promise.resolve<JsString?>(answer?.toJsString())
+        }
+        val definition = """{ "id": "dispatched", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, dispatcher))
+        val service = AardinkWeb.registry.byId("dispatched")!!.languageService!!
+        val document = CodeDocument("ab\ncd")
+        val items = withContext(Dispatchers.Main) {
+            val items = service.completions(document, 4)
+            assertNull(service.hoverDoc(document, 1))
+            assertTrue(service.diagnostics(document).isEmpty())
+            assertTrue(service.documentSymbols(document).isEmpty())
+            assertTrue(service.documentColors(document).isEmpty())
+            items
+        }
+        assertEquals(listOf("from-completions"), items.map { it.label })
+        assertEquals(
+            listOf(
+                "completions [2,2] ab\ncd",
+                "hover [1,2] ab\ncd",
+                "diagnostics [] ab\ncd",
+                "documentSymbols [] ab\ncd",
+                "documentColors [] ab\ncd",
+            ),
+            asked,
+        )
+    }
+
+    @Test
+    fun `a dispatcher that rejects or throws costs that answer, not the editor`() = runTest {
+        val failing: (String, String, String) -> Promise<JsString?> = { method, _, _ ->
+            if (method == "hover") error("no hover here") else Promise.reject(jsError("no completions here"))
+        }
+        val definition = """{ "id": "dispatched-failing", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, failing))
+        val service = AardinkWeb.registry.byId("dispatched-failing")!!.languageService!!
+        withContext(Dispatchers.Main) {
+            assertTrue(service.completions(CodeDocument("a"), 0).isEmpty())
+            assertNull(service.hoverDoc(CodeDocument("a"), 0))
+        }
     }
 
     @Test

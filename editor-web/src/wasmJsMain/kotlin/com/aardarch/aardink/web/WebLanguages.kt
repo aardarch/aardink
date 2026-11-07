@@ -101,6 +101,20 @@ class WebLanguageProviders(
 )
 
 /**
+ * [AardinkWeb.registerLanguage]'s one function for every provider, as [WebLanguageProviders]: each
+ * goes by its member's name, with what it takes beyond the text as a JSON array. A new provider is
+ * one more line here, and one in the npm package's `PROVIDERS`. A template's copy changes in
+ * nothing: a dispatcher answers null for a name it does not know, which is no provider.
+ */
+internal fun dispatchedProviders(dispatcher: suspend (method: String, text: String, argsJson: String) -> String?) = WebLanguageProviders(
+    completions = { text, line, column -> dispatcher("completions", text, "[$line,$column]") },
+    hover = { text, line, column -> dispatcher("hover", text, "[$line,$column]") },
+    diagnostics = { text -> dispatcher("diagnostics", text, "[]") },
+    documentSymbols = { text -> dispatcher("documentSymbols", text, "[]") },
+    documentColors = { text -> dispatcher("documentColors", text, "[]") },
+)
+
+/**
  * A registered language's service: the host's providers ([JsProviderService]) first, then what
  * [base] (the language it extends) has, by [CompositeLanguageService]'s rules. With
  * [inheritCompletions] the base's completions follow the host's, and [ownTriggerCharacters] (those
