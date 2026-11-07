@@ -87,6 +87,9 @@ import com.aardarch.aardink.core.LineEnding
  *   whatever this says.
  * @property fontLigatures The font's ligatures (`->` drawn as one arrow, in fonts that have them).
  *   On by default, as text has always been drawn; off draws every character on its own.
+ * @property semanticHighlighting What the language service's `semanticTokens` say about the text is
+ *   coloured over its syntax colours, and asked for after each pause in typing. A token the theme
+ *   has no colour for keeps its syntax colour. Off by default, and nothing is asked for while off.
  */
 @Immutable
 data class EditorOptions(
@@ -117,6 +120,7 @@ data class EditorOptions(
     val lineHeight: TextUnit = TextUnit.Unspecified,
     val pinchToZoom: Boolean = false,
     val fontLigatures: Boolean = true,
+    val semanticHighlighting: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

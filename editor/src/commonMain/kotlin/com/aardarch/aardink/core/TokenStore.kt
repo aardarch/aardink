@@ -36,6 +36,9 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
         fun start(index: Int): Int = bounds[2 * index]
 
         fun end(index: Int): Int = bounds[2 * index + 1]
+
+        /** Whether [other] has the same runs of the same types. */
+        fun sameRuns(other: LineTokens): Boolean = bounds.contentEquals(other.bounds) && types.contentEquals(other.types)
     }
 
     /**
@@ -100,6 +103,53 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
         flat = null
         document.dirtyLines = null
     }
+
+    /**
+     * Replaces every line with [tokens], a language service's answer about [snapshot], for a store
+     * that is a layer over the syntax tokens. Returns whether that changed any line; false too if
+     * the document moved on from [snapshot], which leaves the store as it was.
+     *
+     * This is not a tokenization pass, so unlike [replaceAll] and [merge] it leaves
+     * `document.dirtyLines` alone: those are what the tokenizer has yet to rescan, and it is the
+     * syntax store's pass that clears them.
+     *
+     * The answer can be as long as the document, and is not an edit's worth of work: this runs on
+     * the thread that edits the document, in slices paced by [pacer], and an edit between slices
+     * ends it. A line that comes out the same keeps its [LineTokens], and with them its layout, so
+     * what an answer costs on screen is the lines it really changes.
+     */
+    suspend fun overlay(tokens: List<Token>, snapshot: CodeDocument, pacer: CooperativePacer = CooperativePacer()): Boolean {
+        val lastLine = snapshot.lineCount - 1
+        val buckets = Buckets(snapshot, 0, lastLine)
+        var steps = 0
+        for (token in tokens) {
+            buckets.add(token)
+            pacer.onProgress(++steps)
+            if (document.version != snapshot.version) return false
+        }
+        val replaced = ArrayList<LineTokens>(lastLine + 1)
+        var changed = false
+        for (line in 0..lastLine) {
+            pacer.onProgress(++steps)
+            if (document.version != snapshot.version) return false
+            val old = lineTokens(line)
+            val new = buckets.build(line)
+            if (new.sameRuns(old)) {
+                replaced.add(old)
+            } else {
+                replaced.add(new)
+                changed = true
+            }
+        }
+        if (changed) {
+            lines = replaced
+            flat = null
+        }
+        return changed
+    }
+
+    /** Stops following the document, for a store the editor is done with. */
+    fun close() = document.removeChangeListener(this)
 
     override fun onDocumentChange(change: DocumentChange) {
         flat = null
@@ -205,13 +255,21 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
 
     /** [tokens] (absolute, sorted by start) split into per-line runs for lines [from]..[to]. */
     private fun bucket(tokens: List<Token>, from: Int, to: Int): List<LineTokens> {
-        val builders = Array(to - from + 1) { Builder() }
-        val length = document.length
-        var line = 0
-        for (token in tokens) {
+        val buckets = Buckets(document, from, to)
+        for (token in tokens) buckets.add(token)
+        return List(to - from + 1) { buckets.build(from + it) }
+    }
+
+    /** Tokens added one at a time, split into per-line runs for lines [from]..[to] of [document]. */
+    private class Buckets(private val document: CodeDocument, private val from: Int, private val to: Int) {
+        private val builders = arrayOfNulls<Builder>(to - from + 1)
+        private val length = document.length
+        private var line = 0
+
+        fun add(token: Token) {
             var start = token.start.coerceAtMost(length)
             val end = token.end.coerceAtMost(length)
-            if (end <= start) continue
+            if (end <= start) return
             // Tokens arrive sorted, so the line only moves forward; a stray one out of order is
             // located from scratch.
             if (start < document.lineStart(line)) line = document.offsetToLineCol(start).first
@@ -220,7 +278,8 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
                 val lineStart = document.lineStart(line)
                 val segmentEnd = minOf(end, document.lineEnd(line))
                 if (line >= from && segmentEnd > start) {
-                    builders[line - from].add(start - lineStart, segmentEnd - lineStart, token.type)
+                    val builder = builders[line - from] ?: Builder().also { builders[line - from] = it }
+                    builder.add(start - lineStart, segmentEnd - lineStart, token.type)
                 }
                 if (line + 1 >= document.lineCount) break
                 start = document.lineStart(line + 1)
@@ -228,7 +287,8 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
                 line++
             }
         }
-        return builders.map { it.build() }
+
+        fun build(line: Int): LineTokens = builders[line - from]?.build() ?: EMPTY
     }
 
     private class Builder {

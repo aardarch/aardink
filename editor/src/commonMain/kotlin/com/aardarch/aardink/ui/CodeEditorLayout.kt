@@ -720,6 +720,25 @@ private fun CodeEditorLayoutContent(
         }
     }
 
+    // ── Semantic tokens: a layer of colours over the syntax's, moved with edits between answers ─
+    LaunchedEffect(state, languageService, options.semanticHighlighting) {
+        val service = languageService
+        if (service == null || !options.semanticHighlighting) {
+            state.clearSemanticTokens()
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(SEMANTIC_TOKENS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                state.clearSemanticTokens()
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
+            state.applySemanticTokens(tokens, document)
+        }
+    }
+
     // ── Colours: swatches under the colours the language service finds, and their picker ─
     val colorTracker = remember(state) {
         TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
@@ -1951,6 +1970,9 @@ private const val LINKED_EDITING_DELAY_MS = 50L
 
 /** How long after the last edit the editor asks the language service for the document's colours. */
 private const val COLORS_DEBOUNCE_MS = 300L
+
+/** How long typing has to pause before the language service is asked for semantic tokens. */
+private const val SEMANTIC_TOKENS_DEBOUNCE_MS = 300L
 
 /** The smallest and largest font size zooming goes to, in sp. */
 private const val MIN_FONT_SIZE = 6f

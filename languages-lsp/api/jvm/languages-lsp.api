@@ -672,6 +672,7 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun resolveCompletion (Lcom/aardarch/aardink/core/CompletionItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun semanticTokens (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 	public final fun supports (Ljava/lang/String;)Z

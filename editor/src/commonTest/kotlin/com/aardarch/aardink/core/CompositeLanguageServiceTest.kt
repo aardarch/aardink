@@ -36,6 +36,7 @@ class CompositeLanguageServiceTest {
         override val supportsRename: Boolean = false,
         val renameTo: String = "",
         override val completionsAreIncomplete: Boolean = true,
+        val tokens: List<Token> = emptyList(),
     ) : LanguageService {
         override suspend fun completions(document: CodeDocument, cursorOffset: Int) = items
 
@@ -52,6 +53,8 @@ class CompositeLanguageServiceTest {
         override suspend fun format(document: CodeDocument, options: FormattingOptions) = formatted ?: document.text
 
         override suspend fun rename(document: CodeDocument, offset: Int, newName: String) = listOf(TextEdit(0..0, renameTo))
+
+        override suspend fun semanticTokens(document: CodeDocument) = tokens
     }
 
     private fun item(label: String, kind: CompletionKind = CompletionKind.Element) = CompletionItem(label, kind, label)
@@ -180,5 +183,15 @@ class CompositeLanguageServiceTest {
         assertTrue(composite.supportsRename)
         assertEquals("x", composite.rename(doc, 1, "y").single().newText)
         assertNull(CompositeLanguageService(Fake(), Fake()).prepareRename(doc, 1))
+    }
+
+    @Test
+    fun `semantic tokens are the primary's, or else the fallback's`() = runTest {
+        val own = listOf(Token(0, 1, NamedTokenType("type.class")))
+        val inherited = listOf(Token(1, 2, NamedTokenType("variable.parameter")))
+
+        assertEquals(own, CompositeLanguageService(Fake(tokens = own), Fake(tokens = inherited)).semanticTokens(doc))
+        assertEquals(inherited, CompositeLanguageService(Fake(), Fake(tokens = inherited)).semanticTokens(doc))
+        assertEquals(emptyList(), CompositeLanguageService(Fake(), Fake()).semanticTokens(doc))
     }
 }

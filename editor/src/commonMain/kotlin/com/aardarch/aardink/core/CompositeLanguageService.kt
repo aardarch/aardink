@@ -33,8 +33,8 @@ import androidx.compose.ui.graphics.Color
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
  * - **Formatting:** the primary's when it changes anything, else the fallback's.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
- * - **Document symbols, highlights and selection ranges:** the primary's, or the fallback's when
- *   the primary has none. **Linked editing ranges:** likewise.
+ * - **Document symbols, highlights, selection ranges and semantic tokens:** the primary's, or the
+ *   fallback's when the primary has none. **Linked editing ranges:** likewise.
  * - **Document links and colours:** both, without two for the same range. **Colour
  *   presentations:** the primary's, or else the fallback's.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
@@ -134,6 +134,9 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         primary.colorPresentations(document, info, color).ifEmpty { fallback.colorPresentations(document, info, color) }
+
+    override suspend fun semanticTokens(document: CodeDocument): List<Token> =
+        primary.semanticTokens(document).ifEmpty { fallback.semanticTokens(document) }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)
 
