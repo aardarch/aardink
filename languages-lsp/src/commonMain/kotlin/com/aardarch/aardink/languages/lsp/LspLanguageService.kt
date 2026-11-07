@@ -264,7 +264,7 @@ class LspLanguageService(
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
         val result = request("textDocument/hover", positionParams(document, offset)) ?: return null
         val hover = decodeOrNull(LspHover.serializer(), result) ?: return null
-        val content = markupText(hover.contents)?.takeIf { it.isNotBlank() } ?: return null
+        val content = hoverMarkdown(hover.contents)?.takeIf { it.isNotBlank() } ?: return null
         return HoverDoc(
             title = languageId,
             content = content,
@@ -349,7 +349,7 @@ class LspLanguageService(
             signatures = help.signatures.map { sig ->
                 SignatureInformation(
                     label = sig.label,
-                    documentation = markupText(sig.documentation),
+                    documentation = documentationMarkdown(sig.documentation),
                     parameters = sig.parameters.orEmpty().map { param ->
                         val labelRange = parameterLabelRange(sig.label, param.label)
                         ParameterInformation(
@@ -357,7 +357,7 @@ class LspLanguageService(
                             // matters for a signature that repeats a parameter type.
                             label = labelRange?.let { sig.label.substring(it.first, it.last + 1) }
                                 ?: (param.label as? JsonPrimitive)?.contentOrNull.orEmpty(),
-                            documentation = markupText(param.documentation),
+                            documentation = documentationMarkdown(param.documentation),
                             labelRange = labelRange,
                         )
                     },
@@ -600,14 +600,6 @@ class LspLanguageService(
         }
     }
 
-    /** `string | MarkedString | MarkupContent | (string | MarkedString)[]` → plain text, or null. */
-    private fun markupText(element: JsonElement?): String? = when (element) {
-        null -> null
-        is JsonPrimitive -> element.contentOrNull
-        is JsonObject -> (element["value"] as? JsonPrimitive)?.contentOrNull
-        is JsonArray -> element.mapNotNull { markupText(it) }.filter { it.isNotBlank() }.joinToString("\n\n").takeIf { it.isNotEmpty() }
-    }
-
     /**
      * The `[start, end]` form of an LSP parameter label as an inclusive offset range into
      * [signatureLabel], or null when the server gave the parameter as a bare string instead.
@@ -634,7 +626,7 @@ class LspLanguageService(
             label = label,
             kind = mapCompletionKind(kind),
             insertText = edit?.newText ?: insertText ?: label,
-            documentation = markupText(documentation),
+            documentation = documentationMarkdown(documentation),
             detail = detail,
             commitCharacters = commitCharacters.orEmpty().mapNotNullTo(mutableSetOf()) { it.singleOrNull() },
             filterText = filterText ?: label,

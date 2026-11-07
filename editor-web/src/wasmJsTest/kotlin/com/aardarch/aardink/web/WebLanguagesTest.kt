@@ -26,12 +26,15 @@ import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** Languages and themes registered from the page: grammars, their colours, and the providers. */
@@ -113,6 +116,16 @@ class WebLanguagesTest {
             )
         }
         assertEquals("configuration.onEnterRules[0].beforeText: lookbehind is not supported: (?<=a)b", error.message)
+    }
+
+    @Test
+    fun `a code fence finds a language by its id, including one registered after the editor asked`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        val fences = codeFenceTokenizers(registry)
+        assertSame(registry.byId("kotlin")!!.tokenizer, fences("kotlin"))
+        assertNull(fences("toy"), "not registered yet")
+        registry.register(languageFrom(toy, WebLanguageProviders(), registry))
+        assertSame(registry.byId("toy")!!.tokenizer, fences("toy"))
     }
 
     @Test

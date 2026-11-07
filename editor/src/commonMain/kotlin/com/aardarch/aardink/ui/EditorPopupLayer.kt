@@ -68,6 +68,60 @@ internal fun placePopup(
     return IntOffset(x, y)
 }
 
+/**
+ * Where a pane of [paneSize] goes beside [list], a popup already placed in the window of
+ * [windowSize]: to its right, else to its left, level with it, and otherwise above or below it,
+ * always inside the window. With [listAboveAnchor] the list has flipped above what it is anchored
+ * to, so the pane grows upwards with it and stays off that line where it can.
+ */
+internal fun placeBeside(list: IntRect, listAboveAnchor: Boolean, windowSize: IntSize, paneSize: IntSize, gap: Int): IntOffset {
+    val maxX = max(0, windowSize.width - paneSize.width)
+    val maxY = max(0, windowSize.height - paneSize.height)
+    val levelY = (if (listAboveAnchor) list.bottom - paneSize.height else list.top).coerceIn(0, maxY)
+    val right = list.right + gap
+    if (right + paneSize.width <= windowSize.width) return IntOffset(right, levelY)
+    val left = list.left - gap - paneSize.width
+    if (left >= 0) return IntOffset(left, levelY)
+    val below = list.bottom + gap
+    val above = list.top - gap - paneSize.height
+    val fitsBelow = below + paneSize.height <= windowSize.height
+    val fitsAbove = above >= 0
+    val y = when {
+        listAboveAnchor && fitsAbove -> above
+
+        !listAboveAnchor && fitsBelow -> below
+
+        fitsBelow -> below
+
+        fitsAbove -> above
+
+        // Fits nowhere clear of the list: the side with more room, over the list as far as it must.
+        list.top > windowSize.height - list.bottom -> above.coerceAtLeast(0)
+
+        else -> below.coerceAtMost(maxY)
+    }
+    return IntOffset(list.left.coerceIn(0, maxX), y)
+}
+
+/**
+ * [placeBeside] as a [PopupPositionProvider], for a pane beside a popup of [besideSize] that an
+ * [EditorAnchoredPopup] has at [anchor]. Both are composed in the same layout, so working out where
+ * that popup is takes the same [placePopup] call it made.
+ */
+internal class BesidePopupPositionProvider(private val anchor: Rect, private val besideSize: IntSize, private val gap: Int) :
+    PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val beside = IntRect(placePopup(anchorBounds, anchor, windowSize, besideSize, preferAbove = false, gap), besideSize)
+        val flipped = beside.top < anchorBounds.top + anchor.top.roundToInt()
+        return placeBeside(beside, flipped, windowSize, popupContentSize, gap)
+    }
+}
+
 /** [placePopup] as a [PopupPositionProvider]: the popup's host is the layout it is composed in. */
 internal class AnchoredPopupPositionProvider(private val anchor: Rect, private val preferAbove: Boolean, private val gap: Int) :
     PopupPositionProvider {
@@ -103,4 +157,4 @@ internal fun EditorAnchoredPopup(
     )
 }
 
-private val POPUP_GAP = 4.dp
+internal val POPUP_GAP = 4.dp

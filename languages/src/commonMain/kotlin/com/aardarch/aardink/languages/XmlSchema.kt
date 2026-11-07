@@ -47,7 +47,8 @@ data class XmlSchema(
     /**
      * An element.
      *
-     * @property documentation Shown on hover and with its completion.
+     * @property documentation Markdown, shown on hover and, as one line of plain text, with its
+     *   completion. A `*` or `_` that is not emphasis is written `\*` or `\_`.
      * @property attributes Its attributes, by name.
      * @property children The elements it may hold; null for any, empty for none (a completion then
      *   inserts it self-closing).
@@ -67,6 +68,7 @@ data class XmlSchema(
     /**
      * An attribute.
      *
+     * @property documentation Markdown, as [Element.documentation].
      * @property values The values it takes; empty for any. A value not among them is reported,
      *   unless it matches [XmlSchema.dynamicValue].
      * @property required Leaving it out is reported, and completing the element inserts it.
@@ -80,7 +82,7 @@ data class XmlSchema(
         val type: String? = null,
     )
 
-    /** One of an [Attribute]'s values, with what it means. */
+    /** One of an [Attribute]'s values, with what it means, in Markdown as [Element.documentation]. */
     data class Value(val value: String, val documentation: String? = null)
 
     companion object {

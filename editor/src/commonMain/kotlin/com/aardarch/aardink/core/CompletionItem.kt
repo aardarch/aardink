@@ -22,7 +22,9 @@ package com.aardarch.aardink.core
  * @param kind Visual classification controlling the icon shown beside the label.
  * @param insertText Text inserted into the document when the item is accepted. May differ from
  *   [label]; with [isSnippet] it is a snippet, such as `<text>$0</text>` for the label `text`.
- * @param documentation Optional secondary text shown below the label in the dropdown.
+ * @param documentation Optional Markdown about the item. The list at the caret shows it beside the
+ *   label as one line of plain text, when there is no [detail], and whole in the pane beside the
+ *   list while the item is selected.
  * @param filterText What the text typed so far is matched against when the editor filters the list
  *   itself (a service with [LanguageService.completionsAreIncomplete] false): its characters in
  *   order, ignoring case, the first at the start of [filterText] or of a word in it. Defaults to
@@ -44,7 +46,8 @@ package com.aardarch.aardink.core
  *   line it is accepted on, and a tab in their indentation becomes the editor's indent.
  * @param keepWhitespace With [isSnippet], insert the snippet's whitespace as written, without the
  *   indentation adjustment (Monaco's `KeepWhitespace`).
- * @param detail A short line about the item, such as a type or a signature, shown beside its label.
+ * @param detail A short line about the item, such as a type or a signature, shown beside its label
+ *   and at the top of the pane beside the list.
  * @param commitCharacters Characters that, typed while this item is selected in the list at the
  *   caret, accept it first and are then typed after it (LSP's and Monaco's `commitCharacters`).
  *   Not for snippets.

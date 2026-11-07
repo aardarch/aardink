@@ -41,6 +41,9 @@ internal object EditorTestTags {
     /** The completion list at the caret (desktop and the web). */
     const val COMPLETION_LIST = "aardink.completionList"
 
+    /** The pane beside the completion list, about the selected item. */
+    const val COMPLETION_DETAIL = "aardink.completionDetail"
+
     /** The menu over a touch selection. */
     const val TOUCH_MENU = "aardink.touchMenu"
 

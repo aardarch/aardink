@@ -178,6 +178,15 @@ class IncrementalTokenizingTest {
     }
 
     @Test
+    fun `a pass over all of a text with no previous tokens gives what a full scan gives`() {
+        // How CodeBlock colours a snippet: the colours must be the ones the editor would give it.
+        for ((id, sample) in samples) {
+            val tokenizer = BuiltInLanguages.all.single { it.id == id }.tokenizer
+            assertEquals(tokenizer.tokenizeFull(sample), tokenizer.tokenizeLines(sample, 0..sample.count { it == '\n' }, emptyList()), id)
+        }
+    }
+
+    @Test
     fun `a list the tokenizer did not return gets a full scan`() {
         val text = "val a = 1\nval b = 2\n"
         KotlinTokenizer.tokenizeFull(text)

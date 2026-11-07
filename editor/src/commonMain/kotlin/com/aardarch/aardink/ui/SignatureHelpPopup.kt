@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -39,7 +38,8 @@ import com.aardarch.aardink.core.SignatureHelp
  * Parameter hint popover shown while the cursor sits inside a call's argument list.
  *
  * Placed by the default [Popup] rules, at the top-start of the composable that hosts it. The editor
- * itself shows the same card above the caret.
+ * itself shows the same card above the caret. Links in the documentation show as their text here:
+ * only that card, through [CodeEditorLayout]'s `onOpenLink`, opens them.
  */
 @Composable
 fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
@@ -52,9 +52,9 @@ fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Mod
     }
 }
 
-/** The popover's card: the active signature with its parameter highlighted, and its documentation. */
+/** The popover's card: the active signature with its parameter highlighted, and its documentation as Markdown. */
 @Composable
-internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifier) {
+internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifier, onOpenLink: ((String) -> Unit)? = null) {
     if (help.signatures.isEmpty()) return
     val activeSigIndex = help.activeSignature.coerceIn(0, help.signatures.size - 1)
     val sig = help.signatures[activeSigIndex]
@@ -103,10 +103,11 @@ internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifie
                 // Parameter documentation if present
                 val activeParamDoc = sig.parameters.getOrNull(activeParamIndex)?.documentation ?: sig.documentation
                 if (activeParamDoc != null) {
-                    Text(
+                    MarkdownDoc(
                         text = activeParamDoc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onOpenLink = onOpenLink,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }

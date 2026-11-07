@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -47,6 +48,9 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -140,6 +144,9 @@ import kotlin.math.roundToInt
  *   the host's to open.
  * @param onRequestGoToLine Invoked on Cmd/Ctrl+G. Hosts wire it to [GoToLineDialog]; the default
  *   does nothing, so the shortcut is inert until a host opts in.
+ * @param onOpenLink Called with the target of a link opened by Ctrl/Cmd+click in the text, or by a
+ *   click in hover, signature help or a completion's detail pane. Nothing else opens one. Left
+ *   out, a link in any of those shows as its text.
  */
 @Composable
 fun CodeEditorLayout(
@@ -161,7 +168,7 @@ fun CodeEditorLayout(
     keyboardToolbarItems: List<KeyboardToolbarItem> = emptyList(),
     touchMenuItems: List<EditorMenuItem> = emptyList(),
     contextMenuItems: List<EditorMenuItem> = emptyList(),
-    onOpenLink: (target: String) -> Unit = {},
+    onOpenLink: (target: String) -> Unit = NoOpenLink,
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
@@ -387,6 +394,11 @@ private fun CodeEditorLayoutContent(
     // Hover documentation: after the mouse rests on a symbol, or from the touch menu's "Info".
     var hover by remember { mutableStateOf<HoverShown?>(null) }
     var hoverJob by remember { mutableStateOf<Job?>(null) }
+    // What a card says, or is about to, came from the service that wrote it.
+    LaunchedEffect(languageService) {
+        hoverJob?.cancel()
+        hover = null
+    }
 
     // The references list (Shift+F12), at the caret it was asked for.
     var references by remember { mutableStateOf<ReferencesShown?>(null) }
@@ -771,7 +783,7 @@ private fun CodeEditorLayoutContent(
     }
 
     // ── Hover: the decorations' messages, diagnostics and documentation under a resting mouse ─
-    val showHover: suspend (Int) -> Unit = hover@{ offset ->
+    val showHover: suspend (Int, Offset?) -> Unit = hover@{ offset, restedAt ->
         val service = languageService
         val here = currentShownDiagnostics.value
             .filter { offset in it.range.first..it.range.last + 1 }
@@ -801,14 +813,22 @@ private fun CodeEditorLayoutContent(
             listOfNotNull(word.first.takeUnless { word.isEmpty() })
         val ends = here.map { it.range.last + 1 } + decorated.map { it.range.last + 1 } + listOfNotNull(colorHere?.range?.last?.plus(1)) +
             listOfNotNull((word.last + 1).takeUnless { word.isEmpty() })
-        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages)
+        hover = HoverShown(doc, starts.min(), ends.max(), here, actions, messages, restedAt)
     }
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
-            hover = null
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
-            showHover(view.offsetAt(at).offset)
+            if (hover?.holding != true) showHover(view.offsetAt(at).offset, at)
+        }
+    }
+    // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
+    // the card, for a link or Quick Fix. Over the card it stays, and goes when the mouse leaves.
+    LaunchedEffect(controller) {
+        snapshotFlow { hover?.takeIf { !it.holding && controller.hoverAt != it.restedAt } }.collectLatest { leaving ->
+            if (leaving == null) return@collectLatest
+            delay(HOVER_HIDE_DELAY_MS)
+            hover = null
         }
     }
     // Typing or scrolling takes it down: it describes where the mouse was.
@@ -958,6 +978,8 @@ private fun CodeEditorLayoutContent(
         DocumentLink((lineStart + url.first) until (lineStart + url.last + 1), text.substring(url.first, url.last + 1))
     }
     val currentOnOpenLink = rememberUpdatedState(onOpenLink)
+    // A host that takes no links gets none in its cards, rather than ones that only look live.
+    val openCardLink = onOpenLink.takeUnless { it === NoOpenLink }
     val openLinkAt: (Int) -> Boolean = { offset ->
         val link = linkAt(offset)
         if (link != null) currentOnOpenLink.value(link.target)
@@ -1219,7 +1241,8 @@ private fun CodeEditorLayoutContent(
             EditorCommand.ShowHover -> true.also {
                 hoverJob?.cancel()
                 val at = state.selection.end
-                hoverJob = coroutineScope.launch { showHover(at) }
+                val mouse = controller.hoverAt
+                hoverJob = coroutineScope.launch { showHover(at, mouse) }
             }
 
             EditorCommand.ShowCodeActions -> showCodeActions()
@@ -1380,7 +1403,8 @@ private fun CodeEditorLayoutContent(
             onShowInfo = if (languageService != null) {
                 { offset ->
                     hoverJob?.cancel()
-                    hoverJob = coroutineScope.launch { showHover(offset) }
+                    val mouse = controller.hoverAt
+                    hoverJob = coroutineScope.launch { showHover(offset, mouse) }
                 }
             } else {
                 null
@@ -1589,17 +1613,27 @@ private fun CodeEditorLayoutContent(
             // ── Popups at the caret (or the symbol, or the diagnostic) ───────
             popups = {
                 if (completionAtCaret && showCompletion && completionItems.isNotEmpty()) {
-                    EditorAnchoredPopup(anchor = view.caretRect(state.selection.end), onDismiss = { showCompletion = false }) {
-                        CompletionList(
-                            items = completionItems,
-                            selected = completionSelected,
-                            onAccept = { item ->
-                                applyCompletion(state, item)
+                    CompletionPopup(
+                        anchor = view.caretRect(state.selection.end),
+                        items = completionItems,
+                        selected = completionSelected,
+                        onAccept = { item ->
+                            applyCompletion(state, item)
+                            showCompletion = false
+                            completionItems = emptyList()
+                        },
+                        onDismiss = { showCompletion = false },
+                        // SEAM(resolveCompletion): the one place the pane's item comes from, for
+                        // wiring LanguageService.resolveCompletion when it lands:
+                        // `{ item -> languageService?.let { withContext(state.computeDispatcher) { it.resolveCompletion(item) } } ?: item }`
+                        resolve = { it },
+                        onOpenLink = openCardLink?.let { open ->
+                            { target: String ->
                                 showCompletion = false
-                                completionItems = emptyList()
-                            },
-                        )
-                    }
+                                open(target)
+                            }
+                        },
+                    )
                 }
                 val signatureHelp = currentSignatureHelp
                 if (showSignatureHelp && signatureHelp != null) {
@@ -1607,7 +1641,7 @@ private fun CodeEditorLayoutContent(
                         anchor = view.caretRect(state.selection.end),
                         preferAbove = true,
                         onDismiss = { showSignatureHelp = false },
-                    ) { SignatureHelpCard(signatureHelp) }
+                    ) { SignatureHelpCard(signatureHelp, onOpenLink = openCardLink) }
                 }
                 hover?.let { shown ->
                     val start = view.caretRect(shown.start)
@@ -1618,6 +1652,7 @@ private fun CodeEditorLayoutContent(
                     ) {
                         val hoveredColor = if (options.readOnly) null else colorAt(shown.start)
                         EditorHoverCard(
+                            modifier = Modifier.holdingHover(shown),
                             onPickColor = hoveredColor?.let { color ->
                                 {
                                     hover = null
@@ -1627,6 +1662,12 @@ private fun CodeEditorLayoutContent(
                             messages = shown.messages,
                             diagnostics = shown.diagnostics,
                             doc = shown.doc,
+                            onOpenLink = openCardLink?.let { open ->
+                                { target: String ->
+                                    hover = null
+                                    open(target)
+                                }
+                            },
                             onQuickFix = if (shown.actions.isNotEmpty()) {
                                 {
                                     hover = null
@@ -1729,7 +1770,14 @@ private fun CodeEditorLayoutContent(
     }
 }
 
-/** Hover on screen: the [diagnostics] and the documentation of what is from [start] to [end], and quick fixes. */
+/** [CodeEditorLayout]'s `onOpenLink` when the host gives none. */
+private val NoOpenLink: (String) -> Unit = {}
+
+/**
+ * Hover on screen: the [diagnostics] and the documentation of what is from [start] to [end], and
+ * quick fixes. [restedAt] is where the mouse was when it was asked for, null when it was not over
+ * the text: a mouse anywhere else by now has moved on.
+ */
 private class HoverShown(
     val doc: HoverDoc?,
     val start: Int,
@@ -1737,13 +1785,40 @@ private class HoverShown(
     val diagnostics: List<Diagnostic> = emptyList(),
     val actions: List<CodeAction> = emptyList(),
     val messages: List<String> = emptyList(),
-)
+    val restedAt: Offset? = null,
+) {
+    /** The mouse is over the card, which stays until it leaves. */
+    var holding by mutableStateOf(false)
+}
+
+/**
+ * Keeps [HoverShown.holding] for this card. Only looks: clicks and scrolling go on untouched. Only
+ * a mouse holds it: a finger that lifts in the card sends no Exit, so it could never let go.
+ */
+private fun Modifier.holdingHover(shown: HoverShown): Modifier = pointerInput(shown) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            when (event.type) {
+                PointerEventType.Enter, PointerEventType.Move ->
+                    if (event.changes.firstOrNull()?.type == PointerType.Mouse) shown.holding = true
+
+                PointerEventType.Exit -> shown.holding = false
+
+                else -> Unit
+            }
+        }
+    }
+}
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
 private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
 
 /** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
 private const val HOVER_DELAY_MS = 500L
+
+/** How long the card outlasts a mouse that moved off the symbol, as Monaco's `hover.hidingDelay`. */
+private const val HOVER_HIDE_DELAY_MS = 300L
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
 

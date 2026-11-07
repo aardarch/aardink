@@ -1676,6 +1676,7 @@ public final class com/aardarch/aardink/ui/CodeActionMenuKt {
 
 public final class com/aardarch/aardink/ui/CodeBlockKt {
 	public static final fun CodeBlock (Ljava/lang/String;Lcom/aardarch/aardink/core/IncrementalTokenizer;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+	public static final fun getLocalCodeFenceTokenizers ()Landroidx/compose/runtime/ProvidableCompositionLocal;
 }
 
 public final class com/aardarch/aardink/ui/CodeEditorLayoutKt {
@@ -1702,8 +1703,8 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$ColorPickerKt {
 public final class com/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt;
 	public fun <init> ()V
-	public final fun getLambda$-1541257173$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$554578378$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1475229987$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1948915710$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt {
