@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -50,6 +51,7 @@ import androidx.compose.ui.window.ComposeViewport
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ContentChange
 import com.aardarch.aardink.core.Decoration
@@ -63,8 +65,11 @@ import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
@@ -74,7 +79,10 @@ import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.lsp.LspTransport
+import com.aardarch.aardink.languages.lsp.WebSocketLspTransport
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorKeyBindings
 import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
@@ -92,6 +100,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -120,6 +129,7 @@ import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.events.KeyboardEvent
 
 /**
  * One editor mounted by [AardinkWeb.mount]. Opaque to hosts: every operation goes through
@@ -142,6 +152,19 @@ class AardinkEditorHandle internal constructor(
     internal val language: MutableState<LanguageDefinition> = mutableStateOf(initialLanguage)
     internal val options: MutableState<WebEditorOptions> = mutableStateOf(initialOptions)
 
+    /** The language servers following this editor, oldest first; see [AardinkWeb.connectLanguageServer]. */
+    internal val languageServers = mutableStateListOf<ServerDocument>()
+
+    /** The language's service with those servers', which is what answers in this editor. */
+    internal val languageService: LanguageService? by derivedStateOf {
+        servedLanguage(language.value.languageService, languageServers.toList())
+    }
+
+    /** The language's folding, or a server's where one folds. */
+    internal val foldingProvider: FoldingProvider by derivedStateOf {
+        servedFolding(language.value.foldingProvider, languageServers.toList())
+    }
+
     /** The host's diagnostics, or null while the language's own are shown. */
     internal val diagnostics: MutableState<List<Diagnostic>?> = mutableStateOf(null)
 
@@ -152,6 +175,7 @@ class AardinkEditorHandle internal constructor(
     internal val languageDiagnostics: MutableState<List<Diagnostic>> = mutableStateOf(emptyList())
 
     internal var onScrollChange: ((String) -> Unit)? = null
+    internal var onOpenLink: ((String) -> Unit)? = null
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -173,6 +197,9 @@ class AardinkEditorHandle internal constructor(
 
     /** The focus last reported to [onFocusChange]. */
     internal var reportedFocus = false
+
+    /** Counts [AardinkWeb.revalidate] calls, for what collects the language's diagnostics beside the layout. */
+    internal val revalidations = mutableIntStateOf(0)
 
     /** The first key of one of the host's chords, while the second is awaited. */
     internal var pendingHostChord: KeyChord? = null
@@ -244,6 +271,18 @@ object AardinkWeb {
     /** Counts registrations, so editors on screen pick up a theme or language registered again. */
     internal val registrations = mutableIntStateOf(0)
 
+    /** Every editor from [mount] not yet disposed, for [languageServers] to find. */
+    internal val mountedEditors = ArrayList<AardinkEditorHandle>()
+
+    /** The connections from [connectLanguageServer] that have not ended. */
+    internal val languageServers = ArrayList<WebLanguageServer>()
+
+    /** What [registerInlineCompletionsProvider] holds, by language, oldest first. */
+    private val inlineCompletionProviders = mutableStateMapOf<String, List<suspend (String, Int, Int) -> String?>>()
+
+    /** What [registerInlineCompletionsProvider] holds for [languageId], or null for nothing. Snapshot state. */
+    internal fun inlineCompletionSources(languageId: String) = inlineCompletionProviders[languageId]
+
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
      * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
@@ -273,6 +312,73 @@ object AardinkWeb {
         registry.register(definition)
         registrations.intValue++
         return definition.id
+    }
+
+    /**
+     * [registerLanguage] with one function answering for every provider, as the `@JsExport` template
+     * has it: [dispatcher] gets a member of [WebLanguageProviders] by name (`"completions"`,
+     * `"hover"`, ...), the document's text and that provider's other arguments as a JSON array
+     * (`[line, column]`, 1-based, where it asks about a place, else `[]`), and answers as that
+     * provider does. A name it does not know should get null, which is what no provider answers, so
+     * that a template written for this version still works when a later one asks for more.
+     */
+    fun registerLanguage(definitionJson: String, dispatcher: suspend (method: String, text: String, argsJson: String) -> String?): String =
+        registerLanguage(definitionJson, dispatchedProviders(dispatcher))
+
+    /**
+     * Connects to the language server at the WebSocket [url], which carries one JSON-RPC message per
+     * frame, and has it follow every editor of [languageId]: those open now, those created later, and
+     * those switched to that language. Each is a document of its own to the server, under a generated
+     * `file:///aardink/` URI, kept up to date edit by edit. [languageId] is the language's id here and
+     * the one the server is told, and it need not be one this page knows: an editor asked for an
+     * unknown language shows plain text, but the server still follows it.
+     *
+     * What the server knows joins what the language has rather than replacing it. A language from
+     * [registerLanguage] keeps the first word, so the host's providers answer first and the server
+     * fills in; a built-in one's answers come after the server's, though it keeps Enter and closing
+     * pairs. Completions, diagnostics, code actions, references, links and colours come from both.
+     * Folding is the server's if it folds. Connecting a second server to a language adds to the
+     * first, which answers first.
+     *
+     * Never fails. A connection that cannot be made, or that drops later, is said on the console and
+     * the editors go on as they were, with their language's own service. Nothing reconnects by itself:
+     * call this again for that. A rename reaching other files, and `workspace/applyEdit`, are refused.
+     *
+     * Returns the handle to end it with: `dispose()` closes each document and shuts the server down.
+     */
+    fun connectLanguageServer(url: String, languageId: String): DisposableHandle =
+        connectLanguageServer(url, languageId) { WebSocketLspTransport.connect(it) }
+
+    /** [connectLanguageServer] over whatever [connect] opens. */
+    internal fun connectLanguageServer(url: String, languageId: String, connect: suspend (url: String) -> LspTransport): DisposableHandle {
+        val server = WebLanguageServer(url, languageId, connect, editors = { mountedEditors.toList() }, onEnded = { languageServers -= it })
+        languageServers += server
+        server.start()
+        return server
+    }
+
+    /**
+     * Has [provider] offer ghost text in every editor of [languageId], those open now and those to
+     * come, as Monaco's `registerInlineCompletionsProvider`. It takes the text and a 1-based line and
+     * column, and answers Monaco's `InlineCompletions` as JSON, `{ "items": [{ "insertText", "range"? }] }`,
+     * or null for nothing. [languageId] need not be one this page knows yet, and a language can have
+     * several, whose answers are shown one after the other, oldest first.
+     *
+     * Without `range`, the word at the caret and the rest of the line are what the item replaces,
+     * as in Monaco, or the rest of the line, or nothing, whichever its text can hold: see
+     * [com.aardarch.aardink.core.InlineCompletion]. A snippet in `insertText` is left out.
+     *
+     * Returns the handle to end it with.
+     */
+    fun registerInlineCompletionsProvider(
+        languageId: String,
+        provider: suspend (text: String, line: Int, column: Int) -> String?,
+    ): DisposableHandle {
+        inlineCompletionProviders[languageId] = inlineCompletionProviders[languageId].orEmpty() + provider
+        return DisposableHandle {
+            val rest = inlineCompletionProviders[languageId].orEmpty() - provider
+            if (rest.isEmpty()) inlineCompletionProviders.remove(languageId) else inlineCompletionProviders[languageId] = rest
+        }
     }
 
     /**
@@ -330,11 +436,15 @@ object AardinkWeb {
             setAttribute("data-aardink-editor", "")
         }
         container.appendChild(viewport)
+        // On the way down, ahead of the input element Compose has inside.
+        viewport.addEventListener("keydown", { event -> altBracketKey(handle, event as KeyboardEvent) }, true)
         ComposeViewport(viewport) {
             if (!handle.disposed.value) EditorContent(handle)
         }
         handle.viewportElement = viewport
         handle.stopFollowingSize = followSize(viewport)
+        mountedEditors += handle
+        followedByServers(handle)
         return handle
     }
 
@@ -457,6 +567,12 @@ object AardinkWeb {
             }
         }
         handle.options.value = options
+        followedByServers(handle)
+    }
+
+    /** Every connection takes up or lets go of [handle], as what it shows now says. */
+    private fun followedByServers(handle: AardinkEditorHandle) {
+        languageServers.toList().forEach { it.follow(handle) }
     }
 
     /**
@@ -758,6 +874,26 @@ object AardinkWeb {
     }
 
     /**
+     * Registers the single link listener, replacing any previous one; `null` removes it. Called with
+     * the target of every link opened in the editor, by Ctrl/Cmd+click in the text or a click in a
+     * hover, signature help or completion card, and whatever its scheme: a target can come from a
+     * language server, so a listener decides for itself what is safe to follow. With no listener,
+     * `http` and `https` links open in a new tab with `noopener`, and anything else does nothing.
+     */
+    fun onOpenLink(handle: AardinkEditorHandle, callback: ((target: String) -> Unit)?) {
+        handle.onOpenLink = callback
+    }
+
+    /** What the editor does with a link: see [onOpenLink]. */
+    internal fun openLink(handle: AardinkEditorHandle, target: String) {
+        val listener = handle.onOpenLink
+        when {
+            listener != null -> listener(target)
+            opensInNewTab(target) -> openNewTab(target)
+        }
+    }
+
+    /**
      * Monaco's `layout()`: the editor measures its container again now. It follows the container's
      * size by itself, so this is only needed when something it cannot see moved it.
      */
@@ -782,6 +918,7 @@ object AardinkWeb {
      * host's list from [setDiagnostics] is shown.
      */
     fun revalidate(handle: AardinkEditorHandle) {
+        handle.revalidations.intValue++
         handle.state.value.revalidate()
     }
 
@@ -791,10 +928,11 @@ object AardinkWeb {
      * Shows [decorationsJson], a JSON array of Monaco's `IModelDeltaDecoration` (`{ range, options }`),
      * as [owner]'s decorations, in place of what that owner had; other owners' stay. The options
      * read are Monaco's `isWholeLine`, `hoverMessage` (a string, `{ value }` or an array of them),
-     * `overviewRuler.color` and `minimap.color`, and, where Monaco takes a CSS class instead,
-     * `backgroundColor`, `borderColor`, `underlineColor` and `gutterColor` as CSS hex colours
-     * (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after. The npm
-     * package's `deltaDecorations` and `createDecorationsCollection` are built on this.
+     * `overviewRuler.color`, `minimap.color`, and `before` and `after` (`{ content }`, of which only
+     * `content` is read), and, where Monaco takes a CSS class instead, `backgroundColor`,
+     * `borderColor`, `underlineColor`, `gutterColor` and `inlineColor` as CSS hex colours (`#rgb`,
+     * `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after, and the text with
+     * them. The npm package's `deltaDecorations` and `createDecorationsCollection` are built on this.
      */
     fun setDecorationsJson(handle: AardinkEditorHandle, owner: String, decorationsJson: String) {
         val state = handle.state.value
@@ -821,6 +959,7 @@ object AardinkWeb {
         fun color(key: String): Color = (options[key] as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
         fun nestedColor(key: String): Color =
             ((options[key] as? JsonObject)?.get("color") as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        fun content(key: String): String? = ((options[key] as? JsonObject)?.get("content") as? JsonPrimitive)?.contentOrNull
         val hover = options["hoverMessage"]
         val message = when (hover) {
             is JsonPrimitive -> hover.contentOrNull
@@ -847,6 +986,9 @@ object AardinkWeb {
             minimapColor = nestedColor("minimap"),
             overviewRulerColor = nestedColor("overviewRuler"),
             hoverMessage = message,
+            before = content("before"),
+            after = content("after"),
+            inlineColor = color("inlineColor"),
         )
     }
 
@@ -898,6 +1040,42 @@ object AardinkWeb {
             val offsets = rangeOf(document, range)
             if (offsets.isEmpty()) return@mapNotNull null
             ColorInfo(offsets, Color(red, green, blue, alpha))
+        }
+
+    /** An inclusive [range] of [document] as a [WebRange] in JSON, for a provider asked about one. */
+    internal fun rangeJson(document: CodeDocument, range: IntRange): String =
+        json.encodeToString(WebRange.serializer(), webRange(document, range))
+
+    /**
+     * A JSON array of `{ position: { lineNumber, column }, label }` (Monaco's position, 1-based) as
+     * hints in [document]; those it cannot read are left out.
+     */
+    internal fun parseInlayHints(document: CodeDocument, hintsJson: String): List<InlayHint> =
+        (parsedJson(hintsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val position = item["position"]?.let { runCatching { json.decodeFromJsonElement(WebPosition.serializer(), it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val label = (item["label"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
+            InlayHint(offsetOf(document, position.lineNumber, position.column), label)
+        }
+
+    /**
+     * A JSON array of Monaco's `CodeLens`, `{ range, command: { id, title, arguments? } }`, as lenses
+     * in [document], each at the start of its range; those it cannot read, or with nothing to show,
+     * are left out. A click calls [run] with the command's `id` and its `arguments` in JSON, `[]` when
+     * it has none.
+     */
+    internal fun parseCodeLenses(document: CodeDocument, lensesJson: String, run: (id: String, argsJson: String) -> Unit): List<CodeLens> =
+        (parsedJson(lensesJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range = item["range"]?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val command = item["command"] as? JsonObject ?: return@mapNotNull null
+            val title = (command["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val id = (command["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
+            val arguments = (command["arguments"] as? JsonArray)?.toString() ?: "[]"
+            CodeLens(offsetOf(document, range.startLineNumber, range.startColumn), title) { run(id, arguments) }
         }
 
     /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
@@ -1012,7 +1190,7 @@ object AardinkWeb {
      */
     fun format(handle: AardinkEditorHandle, then: (Boolean) -> Unit = {}) {
         val state = handle.state.value
-        val service = handle.language.value.languageService
+        val service = handle.languageService
         if (service == null || handle.options.value.readOnly) return then(false)
         val options = handle.options.value
         val formatting = FormattingOptions(options.tabSize, options.insertSpaces)
@@ -1129,6 +1307,8 @@ object AardinkWeb {
     fun dispose(handle: AardinkEditorHandle) {
         if (handle.disposed.value) return
         handle.disposed.value = true
+        mountedEditors -= handle
+        followedByServers(handle)
         // Out of the page: from Compose Multiplatform 1.13 that tears the viewport down entirely
         // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops.
         handle.stopFollowingSize?.let(::callStop)
@@ -1141,6 +1321,7 @@ object AardinkWeb {
         handle.onDiagnosticsChange = null
         handle.onSelectionChange = null
         handle.onFocusChange = null
+        handle.onOpenLink = null
         handle.hostActions.clear()
         handle.pendingChanges.clear()
         handle.scope.cancel()
@@ -1196,8 +1377,11 @@ object AardinkWeb {
 @Composable
 private fun EditorContent(handle: AardinkEditorHandle) {
     val state = handle.state.value
-    val language = handle.language.value
+    val service = handle.languageService
     val options = handle.options.value
+    // By the language asked for, as a server follows it: an unknown one shows as plain text.
+    val inlineSources = AardinkWeb.inlineCompletionSources(options.language) ?: AardinkWeb.inlineCompletionSources(handle.language.value.id)
+    val inlineCompletions = remember(inlineSources) { inlineSources?.let(::WebInlineCompletions) }
     var showGoToLine by remember { mutableStateOf(false) }
 
     // Keyed on the state: a language change swaps it, and the new one's versions start over.
@@ -1224,10 +1408,17 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     // own are collected here, on the layout's schedule, to go with them.
     val owners = handle.ownerDiagnostics.toMap()
     val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
-    LaunchedEffect(state, language, collectLanguage) {
-        val service = language.languageService
-        if (!collectLanguage || service == null) return@LaunchedEffect
-        snapshotFlow { state.textVersion }.collectLatest { asked ->
+    LaunchedEffect(state, service, collectLanguage) {
+        if (!collectLanguage) return@LaunchedEffect
+        if (service == null) {
+            // A language server gone, or a language with no service: nothing here will ask again.
+            if (handle.languageDiagnostics.value.isNotEmpty()) {
+                handle.languageDiagnostics.value = emptyList()
+                AardinkWeb.reportDiagnostics(handle, emptyList())
+            }
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion to handle.revalidations.intValue }.collectLatest { (asked, _) ->
             delay(500)
             val document = state.document.snapshot()
             val list = service.diagnostics(document)
@@ -1283,10 +1474,10 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 contextMenuItems = handle.hostActions.filter {
                     it.inContextMenu
                 }.map { action -> EditorMenuItem(action.label, onClick = action.run) },
-                languageService = language.languageService,
+                languageService = service,
                 findReplaceState = handle.findReplaceState,
                 foldState = handle.foldState,
-                foldingProvider = language.foldingProvider,
+                foldingProvider = handle.foldingProvider,
                 diagnostics = handle.diagnostics.value ?: if (owners.isEmpty()) {
                     null
                 } else {
@@ -1316,8 +1507,13 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     colorDecorators = options.colorDecorators,
                     breadcrumbs = options.breadcrumbs,
                     fontLigatures = options.fontLigatures,
+                    semanticHighlighting = options.semanticHighlighting,
+                    inlayHints = options.inlayHints,
+                    codeLens = options.codeLens,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
+                onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },
+                inlineCompletionProvider = inlineCompletions,
             )
         }
     }
@@ -1363,6 +1559,28 @@ private fun followSize(element: Element): JsAny = js(
         cancelAnimationFrame(frame);
         observer.disconnect();
     };
+}""",
+)
+
+/**
+ * Whether a link opens in a new tab when the host has no listener: only `http` and `https`, as the
+ * target can come from a language server and a `javascript:` URL would run in the page. The scheme
+ * is read as a browser reads it, past the leading spaces and control characters it drops and in
+ * any case. A tab or newline inside the scheme, which a browser also drops, is simply not `http`.
+ */
+internal fun opensInNewTab(target: String): Boolean {
+    val scheme = target.trimStart { it <= ' ' }.substringBefore(':', "").lowercase()
+    return scheme == "http" || scheme == "https"
+}
+
+/** A new tab that cannot reach this page, or nothing for a URL the browser refuses: `http://` alone throws. */
+private fun openNewTab(url: String): Unit = js(
+    """{
+    try {
+        window.open(url, '_blank', 'noopener');
+    } catch (e) {
+        console.warn('Aardink: could not open ' + url, e);
+    }
 }""",
 )
 
@@ -1507,6 +1725,32 @@ private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
         return true
     }
     return false
+}
+
+/**
+ * Alt+] and Alt+[, which Compose never hands over as keys: to its web input, a key that makes a
+ * character and has neither Ctrl nor Cmd held is typing, and Alt is not looked at. So they are read
+ * here from the page, by the same bindings every other key goes by, the host's first. Left alone
+ * when nothing runs, a key goes on to type what it types.
+ */
+private fun altBracketKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    val chord = KeyChord(
+        key = when (event.code) {
+            "BracketLeft" -> Key.LeftBracket
+            "BracketRight" -> Key.RightBracket
+            else -> return
+        },
+        alt = true,
+    )
+    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it == listOf(chord) } }
+    val command = EditorKeyBindings.Default.firstOrNull { it.chord == listOf(chord) }?.command
+    when {
+        action != null -> action.run()
+        command == null || !handle.state.value.execute(command) -> return
+    }
+    event.preventDefault()
+    event.stopPropagation()
 }
 
 /** Keys that are only modifiers, which do not complete a chord. */

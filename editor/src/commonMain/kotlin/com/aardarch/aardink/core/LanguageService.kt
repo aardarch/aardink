@@ -216,6 +216,42 @@ interface LanguageService {
     suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> = emptyList()
 
     /**
+     * What is known about the tokens of [document] beyond its syntax (that a name is a parameter, a
+     * type, a constant), for the editor to colour over its syntax tokens
+     * ([com.aardarch.aardink.ui.EditorOptions.semanticHighlighting]). Each token's type is looked up
+     * in the theme as a syntax token's is; where the theme has no colour for it, or no token covers
+     * a character, the syntax colour stays. The editor asks after a pause in typing, and moves
+     * the tokens with the text in between. The default is none.
+     */
+    suspend fun semanticTokens(document: CodeDocument): List<Token> = emptyList()
+
+    /**
+     * Short labels the editor shows among the characters of [range] of [document], such as a
+     * parameter's name or an inferred type, with
+     * [EditorOptions.inlayHints][com.aardarch.aardink.ui.EditorOptions] on. [range] runs from the
+     * start of a line to the end of that or a later one, first to last (inclusive), and holds the
+     * lines around the view: the editor asks again after a pause in typing, in scrolling past what it
+     * asked about, or after a fold opens or closes, and calls off a question it no longer needs
+     * answered. A long closed fold on screen makes that a few calls at once, one for the lines on
+     * either side of it, so that the lines it hides are not asked about.
+     */
+    suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = emptyList()
+
+    /**
+     * What the editor shows in a row above lines of [document], such as a reference count or a way
+     * to run a test, with [EditorOptions.codeLens][com.aardarch.aardink.ui.EditorOptions] on. Lenses
+     * on one line share its row, each clicked on its own.
+     *
+     * The answer is about the whole document. The editor asks after a pause in typing, calls off a
+     * question it no longer needs answered, and moves what it has with each edit until the next
+     * answer. A service for which a lens's title costs a lot can leave it blank
+     * ([CodeLens.title]), and the editor asks again when such a lens comes on screen, and whenever
+     * an answer leaves fewer blank there. Those rows being up, it waits as long as that question
+     * takes, and a service may take its time over the next title.
+     */
+    suspend fun codeLenses(document: CodeDocument): List<CodeLens> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */

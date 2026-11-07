@@ -38,6 +38,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The Monaco-shaped surface around the editor: selections, undo, format, the change events, tokenize. */
@@ -66,6 +67,63 @@ class WebEditorApiTest {
         withTimeout(5_000) {
             while (!condition()) delay(16)
         }
+    }
+
+    @Test
+    fun `only http and https links open by themselves, however the scheme is written`() {
+        val opening = listOf(
+            "http://example.com",
+            "https://example.com/a?b=c#d",
+            "HTTP://EXAMPLE.COM",
+            "hTtPs://example.com",
+            "  https://example.com",
+            "\t\r\n https://example.com",
+            "\u0001https://example.com",
+        )
+        opening.forEach { assertTrue(opensInNewTab(it), it) }
+        val staying = listOf(
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            "JAVASCRIPT:alert(1)",
+            "  javascript:alert(1)",
+            "\t\n javascript:alert(1)",
+            "\u0001javascript:alert(1)",
+            "java\tscript:alert(1)",
+            "java\nscript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "DATA:text/html,x",
+            " data:text/html,x",
+            "vbscript:x",
+            "blob:https://example.com/id",
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "mailto:someone@example.com",
+            "ht\ntp://example.com",
+            "\u00A0https://example.com",
+            "//example.com",
+            "/relative/path",
+            "relative/path",
+            "#anchor",
+            "https",
+            "",
+        )
+        staying.forEach { assertFalse(opensInNewTab(it), it) }
+    }
+
+    @Test
+    fun `a listener gets every link, and the last one set is the one that does`() {
+        val handle = mount("")
+        val first = mutableListOf<String>()
+        val second = mutableListOf<String>()
+        AardinkWeb.onOpenLink(handle) { first += it }
+        AardinkWeb.openLink(handle, "https://example.com")
+        AardinkWeb.openLink(handle, "javascript:alert(1)")
+        AardinkWeb.openLink(handle, "command:editor.doSomething")
+        assertEquals(listOf("https://example.com", "javascript:alert(1)", "command:editor.doSomething"), first)
+        AardinkWeb.onOpenLink(handle) { second += it }
+        AardinkWeb.openLink(handle, "data:text/plain,x")
+        assertEquals(3, first.size)
+        assertEquals(listOf("data:text/plain,x"), second)
     }
 
     @Test
@@ -305,6 +363,33 @@ class WebEditorApiTest {
         )
         AardinkWeb.setDecorationsJson(handle, "delta", "[]")
         assertEquals("[]", AardinkWeb.getDecorationRangesJson(handle, "delta"))
+    }
+
+    @Test
+    fun `before, after and inlineColor come in Monaco's shape, and text follows its range`() {
+        val handle = mount("one two\nthree")
+        AardinkWeb.setDecorationsJson(
+            handle,
+            "delta",
+            """[{ "range": { "startLineNumber": 1, "startColumn": 5, "endLineNumber": 1, "endColumn": 8 },
+                 "options": { "before": { "content": "<", "inlineClassName": "not read" }, "after": { "content": ">" },
+                              "inlineColor": "#ff0000" } },
+                { "range": { "startLineNumber": 2, "startColumn": 1, "endLineNumber": 2, "endColumn": 2 },
+                  "options": { "before": "not Monaco's shape", "after": { "notContent": "x" }, "inlineColor": "red" } }]""",
+        )
+        val state = handle.state.value
+        val (first, second) = state.decorations("delta")
+
+        assertEquals("<", first.style.before)
+        assertEquals(">", first.style.after)
+        assertEquals(Color(0xFFFF0000), first.style.inlineColor)
+        assertNull(second.style.before)
+        assertNull(second.style.after)
+        assertEquals(Color.Unspecified, second.style.inlineColor)
+
+        state.applyTextEdits(listOf(TextEdit(IntRange(0, -1), ">> ")))
+        assertEquals(7..9, state.decorations("delta").first().range)
+        assertEquals("<", state.decorations("delta").first().style.before)
     }
 
     @Test

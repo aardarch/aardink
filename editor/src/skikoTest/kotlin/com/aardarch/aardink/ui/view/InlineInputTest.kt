@@ -21,6 +21,9 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.DecorationStyle
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.platform.EditorTextInputRequest
 import com.aardarch.aardink.ui.input.EditorImeAdapter
 import com.aardarch.aardink.ui.input.EditorImeGeometry
@@ -57,8 +60,10 @@ class InlineInputTest {
         return EditorTextInputRequest(EditorImeAdapter(view.state, windowed = true), geometry)
     }
 
-    private fun checkComposition(injected: LineInjections, text: String, caret: Int) {
-        val view = viewOf(text, injections = lines(0 to injected))
+    private fun checkComposition(injected: LineInjections, text: String, caret: Int) =
+        checkComposition(viewOf(text, injections = lines(0 to injected)), text, caret)
+
+    private fun checkComposition(view: EditorView, text: String, caret: Int) {
         val request = requestFor(view, caret)
         val before = text.substring(0, caret)
         val after = text.substring(caret)
@@ -101,6 +106,30 @@ class InlineInputTest {
     @Test
     fun `a composition lands once on a line with a break in its ghost text`() {
         checkComposition(LineInjections.of(Injection(8, "ghost\nrow")), "val s = rest", 8)
+    }
+
+    @Test
+    fun `a composition lands once at a real hint, which stays with the text after it`() {
+        val view = viewOf("val s = 1")
+        view.state.publishInlayHints(listOf(InlayHint(5, ": Int"), InlayHint(8, "n: ")))
+        view.prepare(600, 400)
+
+        checkComposition(view, "val s = 1", 5)
+
+        assertEquals(listOf(InlayHint(5, ": Int"), InlayHint(8, "n: ")), view.state.inlayHints, "back where they were after the undo")
+    }
+
+    @Test
+    fun `a composition lands once at a decoration's text, in front of the before and behind the after`() {
+        val view = viewOf("val s = 1")
+        val decoration = Decoration(4..4, DecorationStyle(before = "<", after = ">"))
+        view.state.setDecorations("test", listOf(decoration))
+        view.prepare(600, 400)
+
+        checkComposition(view, "val s = 1", 4)
+        checkComposition(view, "val s = 1", 5)
+
+        assertEquals(listOf(decoration), view.state.decorations("test"))
     }
 
     @Test

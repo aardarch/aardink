@@ -140,6 +140,10 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
             put("formats", strings("relative"))
             put("tokenTypes", SemanticTokenTypes)
             put("tokenModifiers", SemanticTokenModifiers)
+            put("multilineTokenSupport", true)
+            put("overlappingTokenSupport", false)
+            // Colours over the syntax's, so a server need not send what a grammar already knows.
+            put("augmentsSyntaxTokens", true)
         }
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
@@ -45,6 +46,9 @@ import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeBlock
@@ -174,6 +178,7 @@ class EditorSceneScreenshotTest {
         editorOptions: EditorOptions = EditorOptions(softWrap = softWrap),
         languageService: LanguageService? = null,
         theme: EditorTheme = EditorThemes.VsCodeDark,
+        inlineCompletionProvider: InlineCompletionProvider? = null,
         focused: (() -> Unit)? = null,
     ) {
         composeTestRule.setContent {
@@ -188,6 +193,7 @@ class EditorSceneScreenshotTest {
                         options = editorOptions,
                         languageService = languageService,
                         keyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
+                        inlineCompletionProvider = inlineCompletionProvider,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -425,6 +431,77 @@ class EditorSceneScreenshotTest {
         // The editor in an app's Material 3 colours.
         val scheme = lightColorScheme(primary = Color(0xFF00658E), secondary = Color(0xFF4F616E), tertiary = Color(0xFF7C4E7E))
         capture("material", stateOf(code), theme = EditorTheme.fromColorScheme(scheme, dark = false))
+    }
+
+    @Test
+    fun inlineText() {
+        // Inlay hints from a service, two of them where a line wraps, a decoration's text with a
+        // colour and without, and a selection running across a hint on one row.
+        val hinted = object : LanguageService by kotlin.languageService!! {
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) = listOf(
+                InlayHint(code.indexOf("names)") + 5, ": List<String>"),
+                InlayHint(code.indexOf("\"${'$'}prefix"), "message: "),
+                InlayHint(code.indexOf(" = Greeter"), ": Int"),
+                InlayHint(code.indexOf("\"Ada\""), "elements: "),
+                InlayHint(code.indexOf("count)"), "value: "),
+            )
+        }
+        val state = stateOf(code)
+        val size = code.indexOf("names.size")
+        state.setDecorations(
+            "scene",
+            listOf(
+                Decoration(
+                    size until size + "names.size".length,
+                    DecorationStyle(before = "<", after = ">", inlineColor = Color(0xFFE5C07B)),
+                ),
+                Decoration(code.indexOf("demo").let { it until it + 4 }, DecorationStyle(after = " /* faint */")),
+            ),
+        )
+        val count = code.indexOf("count =")
+        capture(
+            "inline-text",
+            state,
+            editorOptions = EditorOptions(softWrap = true, inlayHints = true),
+            languageService = hinted,
+            focused = { state.selection = TextRange(count, count + "count = Gr".length) },
+        )
+    }
+
+    @Test
+    fun codeLens() {
+        // A lens on its own, two sharing a row above an indented line, one whose title has yet to
+        // come, holding its row, and a hint on a line under a lens.
+        val lensed = object : LanguageService by kotlin.languageService!! {
+            override suspend fun codeLenses(document: CodeDocument) = listOf(
+                CodeLens(code.indexOf("class Greeter"), "2 references"),
+                CodeLens(code.indexOf("fun greetAll"), "1 reference"),
+                CodeLens(code.indexOf("fun greetAll"), "Run"),
+                CodeLens(code.indexOf("fun main"), ""),
+            )
+
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) =
+                listOf(InlayHint(code.indexOf("names)") + 5, ": List<String>"))
+        }
+        val state = stateOf(code)
+        capture("code-lens", state, editorOptions = EditorOptions(codeLens = true, inlayHints = true), languageService = lensed)
+    }
+
+    @Test
+    fun inlineCompletion() {
+        // Ghost text from the middle of a line, as an assistant offers it: dim, its first row at the
+        // caret, a row of its own below that, and the bracket it repeats after the last of it, once.
+        val state = stateOf(code)
+        state.selection = TextRange(code.indexOf("println(count)") + "println(count".length)
+        capture(
+            "inline-completion",
+            state,
+            inlineCompletionProvider = { _, _ -> listOf(InlineCompletion(".plus(1)\n            .also(::report))")) },
+            focused = {
+                composeTestRule.runOnUiThread { state.execute(EditorCommand.CycleInlineCompletion()) }
+                composeTestRule.mainClock.advanceTimeBy(100)
+            },
+        )
     }
 
     @OptIn(ExperimentalRoborazziApi::class)

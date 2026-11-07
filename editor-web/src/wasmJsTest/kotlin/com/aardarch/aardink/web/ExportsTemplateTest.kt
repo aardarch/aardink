@@ -17,6 +17,7 @@
 
 package com.aardarch.aardink.web
 
+import com.aardarch.aardink.core.CodeDocument
 import kotlinx.browser.document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,7 +32,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+/** A JavaScript `Error`, for a Promise to reject with. */
+private fun jsError(message: String): JsAny = js("new Error(message)")
 
 /**
  * Drives the export template the way a JS host would, through its exports only — the template's
@@ -122,14 +127,126 @@ class ExportsTemplateTest {
 
     @Test
     fun `registering through the exports says what is wrong`() {
-        val nothing: (String, Int, Int) -> Promise<JsString?> = { _, _, _ -> Promise.resolve<JsString?>(null) }
-        val noDiagnostics: (String) -> Promise<JsString?> = { Promise.resolve<JsString?>(null) }
+        val nothing: (String, String, String) -> Promise<JsString?> = { _, _, _ -> Promise.resolve<JsString?>(null) }
         val good = """{ "id": "exported", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
-        assertEquals("", aardinkRegisterLanguage(good, nothing, nothing, noDiagnostics, noDiagnostics, noDiagnostics))
+        assertEquals("", aardinkRegisterLanguage(good, nothing))
         val bad = """{ "id": "exported2", "grammar": { "tokenizer": { "root": [ ["(?<=a)b", "x"] ] } } }"""
-        assertTrue(aardinkRegisterLanguage(bad, nothing, nothing, noDiagnostics, noDiagnostics, noDiagnostics).contains("lookbehind"))
+        assertTrue(aardinkRegisterLanguage(bad, nothing).contains("lookbehind"))
         assertEquals("", aardinkRegisterTheme("exported-theme", """{ "tokenColors": [] }"""))
         assertTrue(aardinkRegisterTheme("broken", "not json").isNotEmpty())
+    }
+
+    @Test
+    fun `a language's providers reach the dispatcher by name, with their arguments as JSON`() = runTest {
+        val asked = mutableListOf<String>()
+        val dispatcher: (String, String, String) -> Promise<JsString?> = { method, text, argsJson ->
+            asked += "$method $argsJson $text"
+            val answer = """[{ "label": "from-$method" }]""".takeIf { method == "completions" }
+            Promise.resolve<JsString?>(answer?.toJsString())
+        }
+        val definition = """{ "id": "dispatched", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, dispatcher))
+        val service = AardinkWeb.registry.byId("dispatched")!!.languageService!!
+        val document = CodeDocument("ab\ncd")
+        val items = withContext(Dispatchers.Main) {
+            val items = service.completions(document, 4)
+            assertNull(service.hoverDoc(document, 1))
+            assertTrue(service.diagnostics(document).isEmpty())
+            assertTrue(service.documentSymbols(document).isEmpty())
+            assertTrue(service.documentColors(document).isEmpty())
+            assertTrue(service.inlayHints(document, 3..4).isEmpty())
+            assertTrue(service.codeLenses(document).isEmpty())
+            items
+        }
+        assertEquals(listOf("from-completions"), items.map { it.label })
+        assertEquals(
+            listOf(
+                "completions [2,2] ab\ncd",
+                "hover [1,2] ab\ncd",
+                "diagnostics [] ab\ncd",
+                "documentSymbols [] ab\ncd",
+                "documentColors [] ab\ncd",
+                """inlayHints [{"startLineNumber":2,"startColumn":1,"endLineNumber":2,"endColumn":3}] ab
+                |cd
+                """.trimMargin(),
+                "codeLenses [] ab\ncd",
+            ),
+            asked,
+        )
+    }
+
+    @Test
+    fun `a click on a lens reaches the dispatcher as runCodeLensCommand, with no text`() = runTest {
+        val asked = mutableListOf<String>()
+        val dispatcher: (String, String, String) -> Promise<JsString?> = { method, text, argsJson ->
+            asked += "$method [$text] $argsJson"
+            val range = """{ "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 }"""
+            val command = """{ "id": "a \"quoted\" id", "title": "Run", "arguments": [1, "two"] }"""
+            val answer = if (method == "codeLenses") """[{ "range": $range, "command": $command }]""" else null
+            Promise.resolve<JsString?>(answer?.toJsString())
+        }
+        val definition = """{ "id": "dispatched-lens", "grammar": { "tokenizer": { "root": [] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, dispatcher))
+        val service = AardinkWeb.registry.byId("dispatched-lens")!!.languageService!!
+
+        withContext(Dispatchers.Main) {
+            service.codeLenses(CodeDocument("ab")).single().onClick()
+            withTimeout(5_000) {
+                while (asked.size < 2) delay(16)
+            }
+        }
+
+        assertEquals("""runCodeLensCommand [] ["a \"quoted\" id",[1,"two"]]""", asked.last())
+    }
+
+    @Test
+    fun `a dispatcher that rejects or throws costs that answer, not the editor`() = runTest {
+        val failing: (String, String, String) -> Promise<JsString?> = { method, _, _ ->
+            if (method == "hover") error("no hover here") else Promise.reject(jsError("no completions here"))
+        }
+        val definition = """{ "id": "dispatched-failing", "grammar": { "tokenizer": { "root": [ ["a", "x"] ] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, failing))
+        val service = AardinkWeb.registry.byId("dispatched-failing")!!.languageService!!
+        withContext(Dispatchers.Main) {
+            assertTrue(service.completions(CodeDocument("a"), 0).isEmpty())
+            assertNull(service.hoverDoc(CodeDocument("a"), 0))
+        }
+    }
+
+    @Test
+    fun `a link goes to the listener through the exports, until it is taken away`() {
+        val id = aardinkCreate(container.id, "", "{}")
+        try {
+            val handle = requireNotNull(AardinkWeb.mountedEditors.lastOrNull())
+            val opened = mutableListOf<String>()
+            aardinkOnOpenLink(id) { opened += it }
+            AardinkWeb.openLink(handle, "javascript:void(0)")
+            assertEquals(listOf("javascript:void(0)"), opened)
+            aardinkOnOpenLink(id, null)
+            AardinkWeb.openLink(handle, "javascript:void(0)")
+            assertEquals(1, opened.size)
+        } finally {
+            aardinkDispose(id)
+        }
+    }
+
+    @Test
+    fun `a URL the browser refuses is still an id to disconnect, and costs no editor`() = runTest {
+        val id = aardinkCreate(container.id, "one", "{}")
+        // A scheme a WebSocket cannot have: the browser throws from its constructor, in JavaScript.
+        val server = aardinkConnectLanguageServer("ftp://example.invalid", "plaintext")
+        try {
+            withContext(Dispatchers.Main) {
+                withTimeout(5_000) {
+                    while (AardinkWeb.languageServers.isNotEmpty()) delay(16)
+                }
+            }
+            assertEquals("one", aardinkGetValue(id))
+        } finally {
+            aardinkDisconnectLanguageServer(server)
+            aardinkDisconnectLanguageServer(server) // idempotent
+            aardinkDispose(id)
+        }
     }
 
     @Test

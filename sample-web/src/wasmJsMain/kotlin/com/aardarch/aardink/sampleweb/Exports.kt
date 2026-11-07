@@ -22,12 +22,18 @@ package com.aardarch.aardink.sampleweb
 
 import com.aardarch.aardink.web.AardinkEditorHandle
 import com.aardarch.aardink.web.AardinkWeb
-import com.aardarch.aardink.web.WebLanguageProviders
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.await
 import kotlin.js.Promise
 
 private val handles = mutableMapOf<Int, AardinkEditorHandle>()
 private var nextHandleId = 1
+
+private val languageServers = mutableMapOf<Int, DisposableHandle>()
+private var nextLanguageServerId = 1
+
+private val inlineCompletionsProviders = mutableMapOf<Int, DisposableHandle>()
+private var nextInlineCompletionsProviderId = 1
 
 private fun handle(id: Int): AardinkEditorHandle =
     handles[id] ?: error("No Aardink editor with id $id; it was never created or is already disposed")
@@ -108,6 +114,12 @@ fun aardinkSetModelMarkers(id: Int, owner: String, diagnosticsJson: String) =
 /** JSON `{ scrollTop, scrollLeft, scrollHeight }` as the text scrolls. */
 @JsExport fun aardinkOnScrollChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onScrollChange(handle(id), callback)
 
+/**
+ * Called with the target of every link opened in the editor, or `null` to go back to opening `http`
+ * and `https` links in a new tab; see `AardinkWeb.onOpenLink`.
+ */
+@JsExport fun aardinkOnOpenLink(id: Int, callback: ((String) -> Unit)?) = AardinkWeb.onOpenLink(handle(id), callback)
+
 /** Measures the container again now. */
 @JsExport fun aardinkLayout(id: Int) = AardinkWeb.layout(handle(id))
 
@@ -131,33 +143,54 @@ fun aardinkGetSymbolPathAt(id: Int, line: Int, column: Int): String = AardinkWeb
 @JsExport fun aardinkRevalidate(id: Int) = AardinkWeb.revalidate(handle(id))
 
 /**
- * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [completions],
- * [hover], [diagnostics], [documentSymbols] and [documentColors] answer with JSON through a Promise, or null for nothing (pass one that
- * resolves to null for what the language does not have). Returns "" when it worked, else what was
- * wrong with the definition.
+ * Adds a language highlighted by a grammar; see `AardinkWeb.registerLanguage`. [dispatcher] answers
+ * for all its providers: it gets a provider's name, the document's text and the provider's other
+ * arguments as a JSON array, and answers with JSON through a Promise, or null for nothing, as it
+ * should for a name it does not know: a later version asks for more by name, with no change here.
+ * Returns "" when it worked, else what was wrong with the definition.
  */
 @JsExport
-fun aardinkRegisterLanguage(
-    definitionJson: String,
-    completions: (String, Int, Int) -> Promise<JsString?>,
-    hover: (String, Int, Int) -> Promise<JsString?>,
-    diagnostics: (String) -> Promise<JsString?>,
-    documentSymbols: (String) -> Promise<JsString?>,
-    documentColors: (String) -> Promise<JsString?>,
-): String = try {
-    AardinkWeb.registerLanguage(
-        definitionJson,
-        WebLanguageProviders(
-            completions = { text, line, column -> completions(text, line, column).await<JsString?>()?.toString() },
-            hover = { text, line, column -> hover(text, line, column).await<JsString?>()?.toString() },
-            diagnostics = { text -> diagnostics(text).await<JsString?>()?.toString() },
-            documentSymbols = { text -> documentSymbols(text).await<JsString?>()?.toString() },
-            documentColors = { text -> documentColors(text).await<JsString?>()?.toString() },
-        ),
-    )
+fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String, String) -> Promise<JsString?>): String = try {
+    AardinkWeb.registerLanguage(definitionJson) { method, text, argsJson ->
+        dispatcher(method, text, argsJson).await<JsString?>()?.toString()
+    }
     ""
 } catch (e: IllegalArgumentException) {
     e.message ?: "not a language definition"
+}
+
+/** Connects a language server over a WebSocket; see `AardinkWeb.connectLanguageServer`. Returns its id for [aardinkDisconnectLanguageServer]. */
+@JsExport
+fun aardinkConnectLanguageServer(url: String, languageId: String): Int {
+    val id = nextLanguageServerId++
+    languageServers[id] = AardinkWeb.connectLanguageServer(url, languageId)
+    return id
+}
+
+/** Closes each document and shuts the server down. Safe to call twice; the second call is a no-op. */
+@JsExport
+fun aardinkDisconnectLanguageServer(id: Int) {
+    languageServers.remove(id)?.dispose()
+}
+
+/**
+ * Has [provider] offer ghost text in every editor of [languageId]; see
+ * `AardinkWeb.registerInlineCompletionsProvider`. It takes the text and a 1-based line and column.
+ * Returns its id for [aardinkDisposeInlineCompletionsProvider].
+ */
+@JsExport
+fun aardinkRegisterInlineCompletionsProvider(languageId: String, provider: (String, Int, Int) -> Promise<JsString?>): Int {
+    val id = nextInlineCompletionsProviderId++
+    inlineCompletionsProviders[id] = AardinkWeb.registerInlineCompletionsProvider(languageId) { text, line, column ->
+        provider(text, line, column).await<JsString?>()?.toString()
+    }
+    return id
+}
+
+/** Ends what [aardinkRegisterInlineCompletionsProvider] started. Safe to call twice; the second call is a no-op. */
+@JsExport
+fun aardinkDisposeInlineCompletionsProvider(id: Int) {
+    inlineCompletionsProviders.remove(id)?.dispose()
 }
 
 /** Adds a theme from VS Code theme JSON; see `AardinkWeb.registerTheme`. Returns "" when it worked, else what was wrong. */

@@ -185,6 +185,15 @@ internal class FoldLayout private constructor(private val folds: List<FoldRange>
         return if (index >= 0 && folds[index].startLine == line) folds[index] else null
     }
 
+    /** The next line down from [line], itself not hidden, that is not hidden. */
+    fun shownAfter(line: Int): Int = (startingAt(line)?.endLine ?: line) + 1
+
+    /** The next line up from [line], itself not hidden, that is not hidden, or the first line. */
+    fun shownBefore(line: Int): Int {
+        val above = (line - 1).coerceAtLeast(0)
+        return if (isHidden(above)) folds[lastStartingAtOrBefore(above)].startLine else above
+    }
+
     private fun lastStartingAtOrBefore(line: Int): Int {
         var lo = 0
         var hi = folds.size - 1
@@ -253,6 +262,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         set(value) {
             if (value == styleState) return
             styleState = value
+            inline.tabColumns = if (value != null && value.columnWidthEm > 0f) value.tabSize else 0
             layouts.clear()
             structureDirty = true
         }
@@ -277,8 +287,14 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             injectionVersion++
         }
 
+    /** The decorations' text and colours, the inlay hints and the code lenses, which [injections] answers from once there are any. */
+    val inline = InlineContent(state, ::inlineChanged)
+
+    private val inlineSourceChanged: () -> Unit = inline::changed
+    private val ghostChanged: (List<Int>) -> Unit = ::inlineChanged
+
     /** A click on injected text with an [Injection.id], on a line. */
-    var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = null
+    var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = inline::clicked
 
     private var folds = FoldLayout.None
     private var wrapWidth = 0
@@ -302,17 +318,40 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     fun attach() {
         document.addChangeListener(this)
+        state.inlineListeners += inlineSourceChanged
+        state.ghostListeners += ghostChanged
+        inline.changed()
         structureDirty = true
     }
 
     fun detach() {
         document.removeChangeListener(this)
+        state.inlineListeners -= inlineSourceChanged
+        state.ghostListeners -= ghostChanged
+    }
+
+    /**
+     * What [inline] answers for [lines] changed. A view with nothing inline has no [injections], and
+     * so costs what one without the feature does, until the first thing to show arrives. That leaves
+     * the row map as it is, unlike setting [injections] to anything else: every other line still
+     * answers nothing, and a rebuild would lose the rows measured so far for estimates.
+     */
+    private fun inlineChanged(lines: List<Int>) {
+        if (injections == null) {
+            if (inline.isEmpty) return
+            val rowsStand = !structureDirty
+            injections = inline.lookup
+            if (rowsStand) structureDirty = false
+        }
+        injectionsChanged(lines)
     }
 
     /** The folds the view is showing, for the gutter. */
     val foldLayout: FoldLayout get() = folds
 
     override fun onDocumentChange(change: DocumentChange) {
+        // First: the rows below are estimated from what it answers.
+        inline.onDocumentChange()
         if (change.lineDelta != 0 && !change.isReset) {
             foldState?.onLinesChanged(change.startLine, change.removedLines, change.addedLines)
             folds = FoldLayout.of(foldState?.foldedRanges().orEmpty(), document.lineCount)
@@ -349,7 +388,10 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
      * lands between a scroll and its layout pass, or just before the next tick of a fling, and
      * neither should be undone by what the last pass saw.
      */
-    fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) {
+    fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) = injectionsChanged(firstLine..lastLine)
+
+    /** As above, for [lines] that need not be next to each other. With none, only what is on screen is laid out again. */
+    fun injectionsChanged(lines: Iterable<Int>) {
         injectionVersion++
         if (structureDirty || lineMap.lineCount == 0) return
         val metrics = style?.metrics ?: return
@@ -357,13 +399,18 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         if (keepInPlace) captureAnchor(scroll.scrollY, metrics)
         // A scroll since the last pass has left its frame: what that showed will not be measured.
         val measured = if (frame.scrollY == scroll.scrollY) frame else ViewFrame.Empty
-        for (line in firstLine.coerceAtLeast(0)..lastLine.coerceAtMost(lineMap.lineCount - 1)) {
-            if (measured.find(line) == null) lineMap.setRows(line, estimateRows(line))
+        for (line in lines) {
+            if (line in 0 until lineMap.lineCount && measured.find(line) == null) lineMap.setRows(line, estimateRows(line))
         }
         if (keepInPlace) {
             scroll.contentHeight = rowsHeight(metrics)
             scroll.placeY(anchorY(metrics))
         }
+    }
+
+    /** Counts [line]'s rows from its layout now, for a move that cannot wait for the layout pass to do so. */
+    fun measureRows(line: Int) {
+        if (style != null && line in 0 until lineMap.lineCount) lineMap.setRows(line, layoutFor(line).lineCount)
     }
 
     /**
@@ -395,6 +442,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         // Reads the pass depends on.
         state.textVersion
         state.tokenVersion
+        state.semanticVersion
         revealRequests
         injectionVersion
         val folded = foldState?.foldedRanges().orEmpty()
@@ -572,7 +620,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         if (style == null || !style.softWrap || wrapWidth <= 0) return 1 + added
         val placeholder = folds.startingAt(line)?.let { it.placeholder.length + 1 } ?: 0
         val chars = min(lineLength(line), MAX_RENDERED_LINE_CHARS) + placeholder + (injected?.inlineChars ?: 0)
-        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added
+        // A row above that is wider than the view takes more rows than the break that makes it.
+        val wrappedAbove = ceil((injected?.charsAbove ?: 0) * style.metrics.charWidth / wrapWidth).toInt() - (injected?.rowsAbove ?: 0)
+        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added + max(0, wrappedAbove)
     }
 
     /** The characters of [line] that are laid out: its text, cut at [MAX_RENDERED_LINE_CHARS]. */
@@ -588,24 +638,32 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     private fun layoutFor(line: Int, text: String): LineLayout {
         val style = checkNotNull(style) { "layoutFor before the view has a style" }
         val tokens = if (state.exceedsAnalysisLimit) null else state.tokenStore.lineTokens(line)
+        // Nothing here and no layer at all are the same layout: turning the layer on costs none.
+        val semantic = if (tokens == null) null else state.semanticStore?.lineTokens(line)?.takeIf { it.size > 0 }
         val fold = folds.startingAt(line)
         // Bracket colours depend on the depth the line starts at: part of what the layout shows.
         val bracketStyles = style.bracketStyles?.takeIf { tokens != null && it.isNotEmpty() }
         val depth = if (bracketStyles != null) state.brackets.depthAtLineStart(line) % bracketStyles.size else -1
         val injected = injections?.invoke(line)
-        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth, injected))) {
-            measureLine(style, line, text, tokens, fold, bracketStyles, depth, injected)
+        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth, injected, semantic))) {
+            measureLine(style, line, text, tokens, semantic, fold, bracketStyles, depth, injected)
         }
     }
 
-    /** What a line's layout shows besides its text and tokens. */
-    private data class LineDecoration(val placeholder: String?, val bracketDepth: Int, val injections: LineInjections?)
+    /** What a line's layout shows besides its text and tokens; [semantic] is by identity, as they are. */
+    private data class LineDecoration(
+        val placeholder: String?,
+        val bracketDepth: Int,
+        val injections: LineInjections?,
+        val semantic: TokenStore.LineTokens?,
+    )
 
     private fun measureLine(
         style: ViewStyle,
         line: Int,
         text: String,
         tokens: TokenStore.LineTokens?,
+        semantic: TokenStore.LineTokens?,
         fold: FoldRange?,
         bracketStyles: List<SpanStyle>?,
         startDepth: Int,
@@ -614,7 +672,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val builder = AnnotatedString.Builder(text.length + 4)
         val indent = if (style.softWrap && style.joinIndentation) indentationLength(text) else 0
         val shownInjections = injected?.fitted(text, indent, MAX_RENDERED_LINE_CHARS)
-        val map = if (shownInjections == null) OffsetMap.Identity else OffsetMap.of(shownInjections, text.length)
+        val map = if (shownInjections == null || shownInjections.items.isEmpty()) {
+            OffsetMap.Identity
+        } else {
+            OffsetMap.of(shownInjections, text.length)
+        }
         var appended = 0
         shownInjections?.items?.forEach { injection ->
             appendText(builder, text, appended, injection.column, indent)
@@ -633,6 +695,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 if (to > from) builder.addColumnStyle(map, spanStyle, from, to)
             }
         }
+        if (semantic != null && tokens != null) builder.addSemanticStyles(map, style, semantic, tokens, text)
+        val colors = shownInjections?.colors.orEmpty()
+        val bracketColumns = if (colors.isEmpty()) null else ArrayList<Int>()
         if (bracketStyles != null) {
             // A pair shares a colour: an opening bracket takes the colour of the depth it opens,
             // its closing one the colour of the depth it closes. Only the depth modulo the
@@ -641,6 +706,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             var depth = startDepth
             state.brackets.forEachBracket(line) { column, open ->
                 if (column >= text.length) return@forEachBracket
+                bracketColumns?.add(column)
                 if (open) {
                     builder.addColumnStyle(map, bracketStyles[depth], column, column + 1)
                     depth = (depth + 1) % colours
@@ -650,6 +716,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 }
             }
         }
+        if (colors.isNotEmpty()) builder.addInlineColors(map, colors, text.length, indent, spanStarts(tokens, semantic, bracketColumns))
         if (fold != null) {
             builder.pushStyle(style.placeholderStyle)
             builder.append(" ")
@@ -675,6 +742,70 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         for (i in from until glyphs) builder.append(INDENT_GLYPH)
         val start = max(from, glyphs)
         if (to > start) builder.append(text, start, to)
+    }
+
+    /**
+     * What [style] gives each run of [semantic], over the spans [syntax] already added on a line
+     * reading [text]. Where spans overlap, Skia's text takes the one that starts last, and only
+     * between spans that start together the one added last. So a run is cut at each syntax run
+     * that starts inside it: every piece starts with the syntax span under it, and comes after it.
+     */
+    private fun AnnotatedString.Builder.addSemanticStyles(
+        map: OffsetMap,
+        style: ViewStyle,
+        semantic: TokenStore.LineTokens,
+        syntax: TokenStore.LineTokens,
+        text: String,
+    ) {
+        var next = 0
+        for (i in 0 until semantic.size) {
+            val spanStyle = style.tokenStyle(semantic.types[i]) ?: continue
+            var from = semantic.start(i).coerceIn(0, text.length)
+            val to = semantic.end(i).coerceIn(from, text.length)
+            while (next < syntax.size && syntax.start(next) < to) {
+                val cut = syntax.start(next++)
+                if (cut > from) {
+                    addColumnStyle(map, spanStyle, from, cut)
+                    from = cut
+                }
+            }
+            if (to > from) addColumnStyle(map, spanStyle, from, to)
+        }
+    }
+
+    /** Where every span the line already has starts, in order. */
+    private fun spanStarts(tokens: TokenStore.LineTokens?, semantic: TokenStore.LineTokens?, brackets: List<Int>?): List<Int> {
+        val starts = ArrayList<Int>(brackets.orEmpty())
+        if (tokens != null) for (i in 0 until tokens.size) starts += tokens.start(i)
+        if (semantic != null) for (i in 0 until semantic.size) starts += semantic.start(i)
+        starts.sort()
+        return starts
+    }
+
+    /**
+     * Each of [colors] over the text of a line [length] long, over every span there is: cut at each
+     * of [spanStarts], for the reason [addSemanticStyles] gives. Not over the first [indent]
+     * columns, whose glyphs must stay hidden.
+     */
+    private fun AnnotatedString.Builder.addInlineColors(
+        map: OffsetMap,
+        colors: List<ColumnColor>,
+        length: Int,
+        indent: Int,
+        spanStarts: List<Int>,
+    ) {
+        for (color in colors) {
+            val spanStyle = SpanStyle(color = color.color)
+            var from = color.from.coerceIn(indent, length)
+            val to = color.to.coerceIn(from, length)
+            for (cut in spanStarts) {
+                if (cut >= to) break
+                if (cut <= from) continue
+                addColumnStyle(map, spanStyle, from, cut)
+                from = cut
+            }
+            if (to > from) addColumnStyle(map, spanStyle, from, to)
+        }
     }
 
     /** [spanStyle] over columns [from, to), leaving injected text between them its own style. */

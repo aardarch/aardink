@@ -36,6 +36,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.9 is about everything a language, a language server or an assistant can tell the editor:
+documentation in Markdown, the rest of the Language Server Protocol, inlay hints, code lens, semantic
+highlighting and ghost text, with grammars that embed one another and VS Code's language
+configuration. Every new option is off by default. It breaks source in four places: `EditorCommand`
+has new members, so an exhaustive `when` over it needs branches; documentation strings are read as
+Markdown; some Monarch grammars parse differently; and a trailing lambda meant for
+`CodeEditorLayout`'s `onFontSizeChange` or `WebLanguageProviders`' `documentColors` now goes to a
+new last parameter, so it must be named. `EditorOptions`, `DecorationStyle`, `CodeEditorLayout`,
+`LspClient`, `DeclarativeTokenizer`, `WebEditorOptions` and `WebLanguageProviders` gain defaulted
+parameters, so code compiled against 0.8 that calls them needs a recompile. A `LanguageService` or
+`FoldingProvider` compiled against 0.8 runs as it is: their new methods are JVM default methods.
+[`docs/MIGRATION_0.9.md`](docs/MIGRATION_0.9.md) has the details.
+
+### Added
+
+- **Markdown in documentation.** Hover, signature help and completion documentation are Markdown:
+  paragraphs, headings, lists, emphasis, inline code, links, and code blocks drawn as `CodeBlock`
+  draws them, highlighted by the tokenizer `LocalCodeFenceTokenizers` gives for the fence's
+  language. Links go to `CodeEditorLayout`'s `onOpenLink`. The hover card stays 300 ms after the
+  mouse leaves its symbol, and while the mouse is over it, so its links can be reached.
+- **A completion detail pane** beside the list on desktop and web, with the selected item's detail
+  and documentation. `LanguageService.resolveCompletion` fills in what the list left out, for the
+  pane and on accepting; edits it adds go in after the item, as an undo step of their own.
+- **Inlay hints and text inside the line.** `LanguageService.inlayHints` and `InlayHint`, shown with
+  `EditorOptions.inlayHints`: asked about the lines around the view after a pause in typing, and
+  moved with the text between answers. `DecorationStyle.before`, `after` and `inlineColor` put a
+  host's own text before and after a range, and colour it.
+- **Code lens.** `LanguageService.codeLenses` and `CodeLens(offset, title, onClick)`, shown with
+  `EditorOptions.codeLens` as a row above the line, starting where its text does; several on a line
+  share the row, split by ` | `. A blank title means the title is not known yet: the lens keeps its
+  row, and the editor asks again when it comes on screen. Rows keep the document's height steady
+  through scrolling, and one arriving above the view moves nothing on screen.
+- **Semantic highlighting.** `LanguageService.semanticTokens`, drawn over the syntax colours with
+  `EditorOptions.semanticHighlighting`, taken in slices of about 8 ms and relaying out only the lines
+  they change.
+- **Inline completions (ghost text).** An `InlineCompletionProvider` passed to `CodeEditorLayout`
+  offers `InlineCompletion`s at the caret after a pause in typing, shown dim in the line, or over
+  rows of their own when they run to several lines. Tab accepts, Alt+] and Alt+[ go through what is
+  on offer, and Escape dismisses, as `EditorCommand.AcceptInlineCompletion`,
+  `CycleInlineCompletion` and `DismissInlineCompletion`, so a phone's buttons can run them too. Text
+  the document already has after the caret is not doubled.
+- **Language configuration.** `LanguageConfiguration.parse(json)` reads VS Code's
+  `language-configuration.json` (comments and trailing commas allowed, JavaScript regexes
+  translated, lookbehind refused), and `LanguageDefinition.withConfiguration` gives a grammar-only
+  language closing pairs, surrounding a selection, `onEnterRules`, indentation rules, comments and
+  folding markers. `LanguageService.surroundingClose` lets any service surround a selection with
+  what is typed over it.
+- **Grammars:** `switchTo`, `goBack`, `$S0` to `$Sn` and `$#` in guards and `next`, Monarch's full
+  guard form (`~`, `!~`, `==`, `!=`, `@`, `!@`), `@brackets` with a top-level `brackets`, `log`
+  (accepted and ignored), and `nextEmbedded` with `@pop`, which hands text to another grammar by id
+  through `DeclarativeTokenizer(grammar, embedded)`, up to 16 languages deep.
+- **`FoldingProvider.requestFoldableRanges`**, a suspend call the editor now asks for folds through,
+  so a provider can wait on a server.
+- **Language servers** (`aardink-languages-lsp`): `LspLanguageService.attach(state)` keeps a server
+  in step edit by edit, with incremental `didChange` where the server takes it, and every request in
+  order behind the edits before it; `detach`, `willSave(LspSaveReason)` and `didSave`. Document
+  symbols, highlights, selection ranges, linked editing, links, colours, folds (`LspFoldingProvider`),
+  `completionItem/resolve`, type definition, implementation and declaration, inlay hints, code lens
+  with `workspace/executeCommand`, semantic tokens (`full`), and pull diagnostics. `LspClientHost`
+  receives `workspace/applyEdit`, renames that reach other files, `showMessage`,
+  `showMessageRequest`, `logMessage` and `$/progress`. `LspClient.shutdown()`,
+  `serverCapabilities`, `DefaultClientCapabilities`, `supports(provider)`, and `$/cancelRequest`
+  when a request's caller is cancelled. Registrations through `client/registerCapability` count.
+- **Web:** `connectLanguageServer(url, languageId)` has a language server on a WebSocket follow
+  every editor of a language. `registerInlineCompletionsProvider` with
+  `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` and `hide`. `provideInlayHints`,
+  `provideCodeLenses` and `runCodeLensCommand` in `registerLanguage`'s providers, and the
+  `inlayHints`, `codeLens` and `semanticHighlighting` options. `before`, `after` and `inlineColor` in
+  decorations. `configuration` in `registerLanguage`'s definition, and `nextEmbedded` resolved from
+  the registered languages. `editor.onOpenLink(listener)` for every link the editor opens.
+
+### Changed
+
+- **Documentation strings are Markdown:** `HoverDoc.content`, signature and completion
+  documentation, `XmlSchema` documentation, and the npm package's hover `contents` and
+  `documentation`. A literal `*` or `_` is escaped, and a single newline reads as a space.
+  Documentation longer than 10,000 characters is cut, at a line end where one is near, and ends
+  with an ellipsis.
+- **`EditorCommand`** has `AcceptInlineCompletion`, `CycleInlineCompletion` and
+  `DismissInlineCompletion`, and **`EditorKeyBindings.Default`** binds Tab, Escape, Alt+] and Alt+[
+  to them. Tab and Escape do what they did whenever no ghost text shows.
+- **Grammars:** `$` in a token name, `defaultToken` or `tokenPostfix` is refused at parse, and so
+  are a non-string or empty `nextEmbedded`, an `@name` attribute that is only half a regex, and, in a
+  grammar with a `@brackets` action, a top-level `brackets` that is a string, holds a bracket whose
+  open and close are the same, or has `$` in a bracket's token. A `cases` key starting `~`, `!~`,
+  `==`, `!=` or `!@` is that operator, so `$#==$S2` now matches and a key of `==` alone tests for
+  the empty string. An `@name` attribute expands as a group, `(?:value)`, as in Monarch, so
+  `[@chars]` now holds the group's own characters.
+- **The export template:** `aardinkRegisterLanguage` takes one `(method, text, argsJson)`
+  dispatcher in place of a callback per provider, so a later provider needs no change to a copy.
+  npm users are unaffected.
+- **On the web, links open.** Ctrl/Cmd+click on a URL in the text, and a click on a link in a hover,
+  signature help or the detail pane, opens `http` and `https` in a new tab with `noopener`, in the
+  click itself so a popup blocker lets it through. Anything else does nothing.
+- **The web bundle:** `aardink-web.wasm` is 5,537,300 bytes, 1.7 MB gzipped: 486 KB (9.6%) larger
+  than 0.8.0's, 145 KB (9.4%) gzipped, whether or not a page uses what is new. The language server
+  bridge is 222 KB of that, 63 KB gzipped; `skiko.wasm` did not change. `aardink-editor-web`
+  depends on `aardink-languages-lsp`, and its `kotlinx-coroutines-core` dependency is now `api`.
+- **On the web, with a language server connected,** a built-in language's answers come after the
+  server's, and a registered language's, with the language it extends, before them. A server never
+  changes what typing does. Diagnostics it pushes show after the same pause in typing as any
+  others, and `revalidate` also reaches the language's own diagnostics shown beside a host's
+  markers.
+- **Folding** is asked for after a pause in typing, not on each edit. A provider that throws keeps
+  the folds there are, rather than opening them.
+- `CodeBlock` and code fences tokenize through `tokenizeLines` with an empty `previousTokens`, so a
+  snippet leaves no trace in a tokenizer a document also uses.
+- With an inline completion provider, Up and Down end ghost text before moving.
+- `LspClient` declares `DefaultClientCapabilities` in `initialize` where it declared `{}`, so servers
+  send Markdown, snippets and resolvable completions, and may stop pushing diagnostics to a client
+  that says it pulls. `LspLanguageService` sends nothing a server did not declare or register, and
+  returns empty for it.
+- Requests from a server run concurrently, off the loop that reads its messages, and a diagnostics
+  listener is called one at a time, not always from that loop. A default `LspClientHost` answers
+  `workspace/applyEdit` with `applied: false`, where it answered `MethodNotFound`.
+- A second `didOpen` of a document still open sends one whole-text `didChange`, or nothing, instead
+  of a second `didOpen`. A rename or code action whose `documentChanges` cannot all be read is
+  refused, where the readable part was applied. A server whose positions are not UTF-16 is kept to
+  whole-text sync and pushed diagnostics, and the host is told why.
+
+### Fixed
+
+- An `@name` regex attribute holding a backslash or `$` expanded to the wrong regex, since 0.6.
+- A grammar's deep `@push` stacks overflowed when compared during an incremental rescan.
+- An empty or collapsed decoration stayed at its offset while the text around it moved, against
+  its documentation; it now follows the edits.
+- `StreamLspTransport.close()` could block behind a read on a hung process, and on Windows closing
+  never reached a healthy server's input, so `stop()` could wait until the server exited.
+
+### Known issues
+
+- Code lens rows and multi-line ghost text are tested on Android under Robolectric with real text
+  layout, not yet on a physical device, nor with Gboard or Samsung Keyboard composing on a line
+  with a hint.
+- On the web, Alt+character keys other than Alt+] and Alt+[ never reach the editor's bindings,
+  including `addCommand('Alt+K')` and the default Shift+Alt+A and Shift+Alt+I; the page has no save
+  to send a server `willSave` and `didSave`; and a registered language that extends a built-in one
+  keeps that language's formatter and outline ahead of a server's.
+- A server's `workspace/*/refresh` for inlay hints, code lens and semantic tokens is not honoured:
+  they are asked for again on the editor's own schedule.
+
 ## [0.8.0] - 2026-11-02
 
 0.8 lets the editor understand the document's structure and lets hosts draw on it. Every new

@@ -783,6 +783,19 @@ class LspFeaturesTest {
     }
 
     @Test
+    fun `folds give up on a document a failed handshake will not open, asking nothing`() = withServer(tenLines) {
+        val folds = async { assertFailsWith<IllegalStateException> { LspFoldingProvider(service).requestFoldableRanges(doc) } }
+        assertNothingSent("the client is not even initialized")
+
+        val handshake = async { assertFailsWith<LspRequestException> { client.initialize(rootUri = null) } }
+        respondWithError("initialize")
+        handshake.await()
+
+        folds.await()
+        assertNothingSent("the server has no document to fold")
+    }
+
+    @Test
     fun `attaching opens the way for folds, even if the server did not ask to hear of it`() = withServer("") {
         serverDeclares("""{"foldingRangeProvider":true}""")
         val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }

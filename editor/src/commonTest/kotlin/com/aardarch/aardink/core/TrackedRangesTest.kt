@@ -65,6 +65,25 @@ class TrackedRangesTest {
     }
 
     @Test
+    fun `an empty range moves with the text before it, though it equals every other empty range`() {
+        val document = CodeDocument("one two")
+        val ranges = TrackedRanges<Mark>({ it.range }, { mark, range -> mark.copy(range = range) }, keepsOneCharacter = false)
+        document.addChangeListener(ranges)
+        ranges.replace(listOf(Mark("point", 4 until 4)))
+
+        document.insert(0, ">> ")
+        assertEquals(7, ranges.items.single().range.first)
+        assertTrue(ranges.items.single().range.isEmpty())
+
+        document.insert(7, "x")
+        assertEquals(8, ranges.items.single().range.first, "at the insertion, it moves along")
+        assertTrue(ranges.items.single().range.isEmpty())
+
+        document.delete(0, 3)
+        assertEquals(5, ranges.items.single().range.first)
+    }
+
+    @Test
     fun `an edit after every range leaves the list itself unchanged`() {
         val (document, ranges) = tracked(keepsOneCharacter = false)
         val before = ranges.items

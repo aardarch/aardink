@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.ui.view.InlineFixture.viewOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,5 +69,64 @@ class InlineScaleTest {
         view.state.applyEdit(first.start, 0, "\n", TextRange(first.start + 1))
         view.prepare(600, height)
         assertTrue(asked < 100, "a new line asked $asked times")
+    }
+
+    @Test
+    fun `real lenses are counted without laying their lines out, and an edit keeps them all`() {
+        val view = viewOf((0 until lines).joinToString("\n") { "line $it" }, height = height)
+        val lenses = (0 until lines step 20).map { CodeLens(view.state.document.lineStart(it), "3 references") }
+
+        view.state.publishCodeLenses(lenses)
+        view.prepare(600, height)
+
+        assertEquals(lines + lines / 20, view.lineMap.totalRows)
+        assertTrue(view.frame.lines.size <= 30, "only what fits is laid out: ${view.frame.lines.size}")
+
+        val first = view.frame.lines.first()
+        view.state.applyEdit(first.start + 2, 0, "x", TextRange(first.start + 3))
+        view.prepare(600, height)
+
+        assertEquals(lines + lines / 20, view.lineMap.totalRows)
+        assertEquals(lenses.size, view.state.codeLenses.size)
+        assertTrue(view.frame.lines.size <= 30, "only what fits is laid out: ${view.frame.lines.size}")
+    }
+
+    @Test
+    fun `a keystroke builds the rows on screen, not one for each lens`() {
+        val view = viewOf((0 until lines).joinToString("\n") { "line $it" }, height = height)
+        val lenses = (0 until lines step 20).map { CodeLens(view.state.document.lineStart(it), "3 references") }
+        view.state.publishCodeLenses(lenses)
+        view.prepare(600, height)
+        val first = view.frame.lines.first()
+
+        for (typed in listOf("x", "\n")) {
+            val built = view.inline.lensLinesBuilt
+            view.state.applyEdit(first.start + 2, 0, typed, TextRange(first.start + 3))
+            view.prepare(600, height)
+
+            val keystroke = view.inline.lensLinesBuilt - built
+            assertTrue(keystroke < 30, "typing $typed built $keystroke rows of ${lenses.size}")
+        }
+
+        assertEquals(1, view.inline.lookup(lines - 19)?.rowsAbove, "the last lens, a line down from where it was given")
+        assertEquals(null, view.inline.lookup(lines - 20))
+    }
+
+    @Test
+    fun `an answer like the last builds nothing more, and one with a lens more only that row`() {
+        val view = viewOf((0 until lines).joinToString("\n") { "line $it" }, height = height)
+        val lenses = (0 until lines step 20).map { CodeLens(view.state.document.lineStart(it), "3 references") }
+        view.state.publishCodeLenses(lenses)
+        view.prepare(600, height)
+
+        val built = view.inline.lensLinesBuilt
+        view.state.publishCodeLenses(lenses.map { it.copy(onClick = {}) })
+        view.prepare(600, height)
+        assertTrue(view.inline.lensLinesBuilt - built < 30, "only what is on screen is laid out again")
+
+        val again = view.inline.lensLinesBuilt
+        view.state.publishCodeLenses(lenses + CodeLens(view.state.document.lineStart(lines - 1), "one more"))
+        view.prepare(600, height)
+        assertTrue(view.inline.lensLinesBuilt - again < 30, "the new row, and what is on screen")
     }
 }

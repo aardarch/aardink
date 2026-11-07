@@ -44,6 +44,13 @@ import kotlinx.serialization.Serializable
  * @property colorDecorators Colour swatches under the colours in the text, with a picker.
  * @property breadcrumbs The path of symbols at the caret, in a row above the text.
  * @property fontLigatures The font's ligatures; on by default.
+ * @property semanticHighlighting What the language service's `semanticTokens` say, coloured over
+ *   the syntax's. Off by default. Those come from a language server, with no JS provider for them.
+ * @property inlayHints What `provideInlayHints` or a language server says, shown among the
+ *   characters of the lines around the view. Off by default, and nothing is asked for while off.
+ * @property codeLens What `provideCodeLenses` or a language server says, in a row above its lines,
+ *   each a click or a tap away from what it does. Off by default, where Monaco's is on, and nothing
+ *   is asked for while off.
  */
 @Serializable
 data class WebEditorOptions(
@@ -69,6 +76,9 @@ data class WebEditorOptions(
     val colorDecorators: Boolean = false,
     val breadcrumbs: Boolean = false,
     val fontLigatures: Boolean = true,
+    val semanticHighlighting: Boolean = false,
+    val inlayHints: Boolean = false,
+    val codeLens: Boolean = false,
 )
 
 /**

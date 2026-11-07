@@ -182,4 +182,25 @@ sealed class EditorCommand {
 
     /** Scrolls [offset] into view, to the middle when [center], without moving the caret. */
     data class Reveal(val offset: Int, val center: Boolean = false) : EditorCommand()
+
+    /**
+     * Tab while ghost text shows: puts it in the document, as one undo step, with the caret at the end
+     * of what it added. A soft keyboard has no Tab, so a toolbar button runs this. It can run only
+     * while ghost text shows, which is what leaves Tab to indent otherwise.
+     */
+    data object AcceptInlineCompletion : EditorCommand()
+
+    /**
+     * Alt+] ([forward]) and Alt+[: the next or previous of the completions on offer, wrapping. With
+     * none showing, asks the layout's [InlineCompletionProvider] now, without waiting for a pause.
+     */
+    data class CycleInlineCompletion(val forward: Boolean = true) : EditorCommand()
+
+    /**
+     * Escape while ghost text shows: takes it away, and what was being asked for with it. It stays
+     * gone until the next edit asks again. A soft keyboard has no Escape, so a toolbar button runs
+     * this. It can run only while ghost text shows, which is what leaves Escape to the rest of what
+     * it does otherwise.
+     */
+    data object DismissInlineCompletion : EditorCommand()
 }

@@ -30,8 +30,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -39,7 +45,17 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.EditorCommand
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.languages.BuiltInLanguages
+import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorTestTags
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
@@ -81,7 +97,7 @@ class InlineInputConnectionTest {
             computeDispatcher = Dispatchers.Unconfined
         }
 
-    private fun connect(state: CodeEditorState, column: Int): InputConnection {
+    private fun connect(state: CodeEditorState, column: Int, realHint: Boolean = false): InputConnection {
         val injected = LineInjections.of(Injection.rowAbove(lens), Injection(column, hint))
         rule.setContent {
             val measurer = rememberTextMeasurer(cacheSize = 0)
@@ -102,7 +118,11 @@ class InlineInputConnectionTest {
                     ),
                     softWrap = false,
                 )
-                made.injections = { line -> if (line == 0) injected else null }
+                if (realHint) {
+                    state.publishInlayHints(listOf(InlayHint(column, hint)))
+                } else {
+                    made.injections = { line -> if (line == 0) injected else null }
+                }
                 made.attach()
                 made.prepare(600, 400)
                 view = made
@@ -187,10 +207,142 @@ class InlineInputConnectionTest {
     }
 
     @Test
+    fun `around a real hint a keyboard reads and writes the document, and the hint moves with it`() {
+        val state = stateOf("val x = 1")
+        val connection = connect(state, 5, realHint = true)
+        val shown: String = view.layoutFor(0).result.layoutInput.text.text
+        assertEquals("val x: Hint = 1", shown)
+        rule.runOnIdle {
+            assertEquals("val x", connection.getTextBeforeCursor(100, 0).toString())
+            assertEquals("val x = 1", connection.getExtractedText(ExtractedTextRequest(), 0).text.toString())
+        }
+
+        connection.run { setComposingText("n", 1) }
+        connection.run { setComposingText("ni", 1) }
+        connection.run { commitText("y", 1) }
+
+        assertEquals("val xy = 1", state.document.text)
+        rule.runOnIdle { assertEquals(listOf(InlayHint(6, hint)), state.inlayHints) }
+        rule.runOnIdle { state.undo() }
+        rule.runOnIdle { assertEquals(listOf(InlayHint(5, hint)), state.inlayHints) }
+    }
+
+    @Test
     fun `delete surrounding text takes the document's characters, not the hint`() {
         val state = stateOf("val x = 1")
         val connection = connect(state, 5)
         connection.run { deleteSurroundingText(1, 1) }
         assertEquals("val = 1", state.document.text)
+    }
+
+    /**
+     * A phone's list is a strip above the keyboard that takes no keys and is not at the caret. It is
+     * up for most of a word, so if it hid ghost text as a list at the caret does, none would show.
+     */
+    @Test
+    fun `the strip above a keyboard leaves ghost text showing`() {
+        val state = stateOf("a")
+        val words = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+            override suspend fun completions(document: CodeDocument, cursorOffset: Int) =
+                listOf(CompletionItem("listed", CompletionKind.Value, "listed"))
+        }
+        rule.setContent {
+            CodeEditorLayout(
+                state = state,
+                languageService = words,
+                inlineCompletionProvider = { _, _ -> listOf(InlineCompletion("ghost")) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        rule.runOnIdle {
+            state.selection = TextRange(1)
+            state.execute(EditorCommand.TriggerSuggest)
+        }
+        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.CycleInlineCompletion())) }
+        rule.waitUntil(timeoutMillis = 5_000) { state.inlineCompletions.shown != null }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.AcceptInlineCompletion)) }
+        assertEquals("aghost", state.document.text)
+    }
+
+    /**
+     * The strip takes no keys of its own, so Escape reaches the bindings with ghost text showing. It
+     * closes the strip all the same, as it does a list at the caret, and the next one dismisses.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `Escape closes the strip above a keyboard first, and the next one dismisses`() {
+        val state = stateOf("a")
+        val words = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+            override suspend fun completions(document: CodeDocument, cursorOffset: Int) =
+                listOf(CompletionItem("listed", CompletionKind.Value, "listed"))
+        }
+        rule.setContent {
+            CodeEditorLayout(
+                state = state,
+                languageService = words,
+                inlineCompletionProvider = { _, _ -> listOf(InlineCompletion("ghost")) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        rule.runOnIdle {
+            state.selection = TextRange(1)
+            state.execute(EditorCommand.TriggerSuggest)
+        }
+        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.CycleInlineCompletion())) }
+        rule.waitUntil(timeoutMillis = 5_000) { state.inlineCompletions.shown != null }
+        val editor = rule.onNodeWithTag(EditorTestTags.EDITOR)
+        editor.requestFocus()
+        editor.performKeyInput { pressKey(Key.Escape) }
+        rule.waitForIdle()
+        assertTrue("the strip went first", rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isEmpty())
+        rule.runOnIdle { assertTrue("and ghost text waits", state.inlineCompletions.shown != null) }
+        editor.performKeyInput { pressKey(Key.Escape) }
+        rule.runOnIdle { assertEquals(null, state.inlineCompletions.shown) }
+    }
+
+    /** Ghost text, through what a layout does with an answer, on the view [connect] made. */
+    private fun offer(state: CodeEditorState, text: String) {
+        rule.runOnIdle {
+            val tracker = state.inlineCompletions
+            tracker.provided = true
+            tracker.askAgain(now = true)
+            tracker.answer(requireNotNull(tracker.ask), state.document.version, listOf(InlineCompletion(text)))
+            view.prepare(600, 400)
+        }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun `a keyboard reads the document past ghost text, and commits through it`() {
+        val state = stateOf("val x = ")
+        val connection = connect(state, 8, realHint = true)
+        offer(state, "compute()")
+        rule.runOnIdle {
+            assertEquals("val x = ", connection.getTextBeforeCursor(100, 0).toString())
+            assertEquals("", connection.getTextAfterCursor(100, 0).toString())
+            assertEquals("val x = ", connection.getExtractedText(ExtractedTextRequest(), 0).text.toString())
+        }
+        connection.run { commitText("c", 1) }
+        assertEquals("val x = c", state.document.text)
+        rule.runOnIdle { assertEquals("ompute()", state.inlineCompletions.shown?.pieces?.single()?.text) }
+    }
+
+    @Test
+    fun `a keyboard composing shows no ghost text, and a command accepts it when it is done`() {
+        val state = stateOf("val x = ")
+        val connection = connect(state, 8, realHint = true)
+        offer(state, "compute()")
+        connection.run { setComposingText("co", 1) }
+        rule.runOnIdle {
+            assertEquals(null, state.inlineCompletions.shown)
+            assertEquals(null, state.inlineCompletions.ask)
+        }
+        connection.run { finishComposingText() }
+        rule.runOnIdle { assertEquals(10, state.inlineCompletions.ask?.caret) }
+        offer(state, "mpute()")
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.AcceptInlineCompletion)) }
+        assertEquals("val x = compute()", state.document.text)
     }
 }

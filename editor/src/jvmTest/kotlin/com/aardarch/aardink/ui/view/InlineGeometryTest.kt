@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
@@ -331,5 +332,22 @@ class InlineGeometryTest {
         val box = scene.draw(highlighted).boxOf(colors.lineHighlight, scene.name)
         assertEquals(PADDING + LINE_HEIGHT, box.top, 0.5f, "not on the lens row")
         assertEquals(PADDING + 2 * LINE_HEIGHT, box.bottom, 0.5f, "only the text row")
+    }
+
+    @Test
+    fun `a lens row starts where the text of its tab-indented line does`() {
+        for (text in listOf("\t\tfunc main()", "  \tfunc main()", "    func main()")) {
+            val view = viewOf(text)
+            view.state.publishCodeLenses(listOf(CodeLens(0, "Run")))
+            view.prepare(width, height)
+
+            val layout = view.layoutFor(0).result
+            val laidOut = layout.layoutInput.text.text
+            val title = layout.getBoundingBox(laidOut.indexOf("Run")).left
+            val code = layout.getBoundingBox(laidOut.indexOf("func")).left
+
+            assertTrue(code > 0f, "the text is indented")
+            assertEquals(code, title, 0.5f, "under ${text.takeWhile { it.isWhitespace() }.length} characters of indentation")
+        }
     }
 }

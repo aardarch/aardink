@@ -89,8 +89,14 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     private var depth = 0
 
     /** The text being composed, in document offsets, or null. */
-    var composition by mutableStateOf<TextRange?>(null)
-        private set
+    var composition: TextRange?
+        get() = composed
+        private set(value) {
+            composed = value
+            state.inlineCompletions.setComposing(value != null)
+        }
+
+    private var composed by mutableStateOf<TextRange?>(null)
 
     /** The language service for the typing rules; read when an edit arrives. */
     var service: () -> LanguageService? = { null }
@@ -297,6 +303,8 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
         val wasComposing = composition != null
         val composing = wasComposing || newComposition != null
         val expectedLength = buffer.length
+        // Where what was composing ends now, whatever it turned into.
+        val composedEnd = composition?.let { it.max + expectedLength - state.document.length }
         val change = buffer.change() ?: if (composing) null else overItself(selection)
         if (change != null) {
             val input = if (composing) change else overSelection(change, selection)
@@ -317,6 +325,8 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
             // Repeated at the other selections now, then closed as one undo step.
             state.endComposition()
             state.pushUndoStop()
+            // Committed at the caret, that was typing; moved away from, it was not.
+            if (selection.collapsed && selection.end == composedEnd) state.inlineCompletions.askAgain()
         }
         ownVersion = state.textVersion
         lastSelection = state.selection

@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.takeOrElse
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
@@ -84,6 +85,9 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.Location
@@ -106,6 +110,8 @@ import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
+import com.aardarch.aardink.ui.view.HintWindow
+import com.aardarch.aardink.ui.view.InlineContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -114,6 +120,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -151,6 +158,13 @@ import kotlin.math.roundToInt
  * @param onOpenLink Called with the target of a link opened by Ctrl/Cmd+click in the text, or by a
  *   click in hover, signature help or a completion's detail pane. Nothing else opens one. Left
  *   out, a link in any of those shows as its text.
+ * @param inlineCompletionProvider What offers ghost text at the caret, once typing pauses: Tab accepts
+ *   it, Alt+] and Alt+[ go through what is on offer, Escape dismisses it, and typing what it says
+ *   keeps it. Nothing shows in a read-only editor, with a selection or several carets, in a snippet,
+ *   or while an input method composes. An open completion list at the caret hides it, as in Monaco,
+ *   and takes Tab; the touch strip does not, as a phone would otherwise never show any. A new
+ *   instance needs no [remember]: it answers from the next ask, and what shows stays until then. Only
+ *   null ends what is on offer.
  */
 @Composable
 fun CodeEditorLayout(
@@ -174,6 +188,7 @@ fun CodeEditorLayout(
     contextMenuItems: List<EditorMenuItem> = emptyList(),
     onOpenLink: (target: String) -> Unit = NoOpenLink,
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
+    inlineCompletionProvider: InlineCompletionProvider? = null,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -225,6 +240,7 @@ fun CodeEditorLayout(
             touchMenuItems = touchMenuItems,
             contextMenuItems = contextMenuItems,
             onOpenLink = onOpenLink,
+            inlineCompletionProvider = inlineCompletionProvider,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -262,6 +278,7 @@ private fun CodeEditorLayoutContent(
     touchMenuItems: List<EditorMenuItem>,
     contextMenuItems: List<EditorMenuItem>,
     onOpenLink: (target: String) -> Unit,
+    inlineCompletionProvider: InlineCompletionProvider?,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
@@ -720,6 +737,121 @@ private fun CodeEditorLayoutContent(
         }
     }
 
+    // ── Semantic tokens: a layer of colours over the syntax's, moved with edits between answers ─
+    LaunchedEffect(state, languageService, options.semanticHighlighting) {
+        val service = languageService.takeIf { options.semanticHighlighting }
+        // Another service's colours mean nothing in this one's language, and it may be long in
+        // answering, or never answer. The same service coming back still stands by its own.
+        if (service == null || service !== state.semanticSource) state.clearSemanticTokens()
+        state.semanticSource = service
+        if (service == null) return@LaunchedEffect
+        snapshotFlow { state.textVersion }.collectLatest {
+            delay(SEMANTIC_TOKENS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                state.clearSemanticTokens()
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
+            state.applySemanticTokens(tokens, document)
+        }
+    }
+
+    // ── Inlay hints: asked for around the view after a pause, moved with edits between answers ─
+    LaunchedEffect(state, view, languageService, options.inlayHints) {
+        // What is here came from a service, and a change of either the service or the switch ends that.
+        state.publishInlayHints(emptyList())
+        val service = languageService.takeIf { options.inlayHints } ?: return@LaunchedEffect
+        var asked: HintWindow? = null
+        snapshotFlow {
+            val frame = view.frame
+            val shown = frame.lines
+            if (shown.isEmpty()) return@snapshotFlow null
+            val window = InlineContent.hintWindow(
+                asked,
+                shown.first().line..shown.last().line,
+                shown.size,
+                view.foldLayout,
+                frame.lineCount,
+            )
+            asked = window
+            state.textVersion to window
+        }.filterNotNull().collectLatest { (_, window) ->
+            delay(INLAY_HINTS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                state.publishInlayHints(emptyList())
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val show: (List<InlayHint>) -> Unit = { hints ->
+                if (state.document.version == document.version) state.publishInlayHints(InlineContent.usableHints(hints, document, window))
+            }
+            show(InlineContent.askForHints(service, document, window, state.computeDispatcher, showEarly = show))
+        }
+    }
+
+    // ── Code lenses: asked for after a pause, and again when one still to be worked out comes on screen ─
+    LaunchedEffect(state, view, languageService, options.codeLens) {
+        // As with hints: what is here came from a service, and a change of either ends that.
+        state.publishCodeLenses(emptyList())
+        val service = languageService.takeIf { options.codeLens } ?: return@LaunchedEffect
+        var answered: Int? = null
+        // A first answer may leave the same lines waiting as before it, which alone asks nothing.
+        var firstAnswers by mutableIntStateOf(0)
+        snapshotFlow {
+            state.codeLenses
+            val waiting = view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
+            Triple(state.textVersion, waiting, firstAnswers)
+        }.collectLatest { (version, waiting) ->
+            if (version == answered && waiting.isEmpty()) return@collectLatest
+            delay(CODE_LENSES_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                state.publishCodeLenses(emptyList())
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val show: (List<CodeLens>) -> Unit = { lenses ->
+                if (state.document.version == document.version) {
+                    state.publishCodeLenses(lenses.filter { it.offset in 0..document.length })
+                }
+            }
+            // Asked again about the same text, all its rows are up, and part of an answer would
+            // take off those of whoever is slow: this may go on until something more is known.
+            val first = version != answered
+            show(InlineContent.askForLenses(service, document, state.computeDispatcher, showEarly = if (first) show else { _ -> }))
+            answered = version
+            if (first) firstAnswers++
+        }
+    }
+
+    // ── Inline completions: what the provider offers at the caret, once typing pauses ─
+    // Not keyed on the provider: a host may well build one in composition, and each recomposition
+    // would then end what shows, and what ghost text showing recomposes is a host's accept button.
+    val currentInlineProvider = rememberUpdatedState(inlineCompletionProvider)
+    val offersInlineCompletions = inlineCompletionProvider != null && !options.readOnly
+    LaunchedEffect(state, offersInlineCompletions) {
+        val completions = state.inlineCompletions
+        // What is on offer came from a provider, and losing it, or being read-only, ends it.
+        completions.clear()
+        completions.provided = offersInlineCompletions
+        if (!offersInlineCompletions) return@LaunchedEffect
+        // Latest: a newer ask, or none, calls off the pause and a provider still at work.
+        snapshotFlow { completions.ask }.collectLatest { ask ->
+            if (ask == null) return@collectLatest
+            if (!ask.now) delay(INLINE_COMPLETIONS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) return@collectLatest
+            val provider = currentInlineProvider.value ?: return@collectLatest
+            val document = state.document.snapshot()
+            completions.answer(ask, document.version, askForInlineCompletions(provider, document, ask.caret, state))
+        }
+    }
+    DisposableEffect(state) {
+        onDispose {
+            state.inlineCompletions.provided = false
+            state.inlineCompletions.clear()
+        }
+    }
+
     // ── Colours: swatches under the colours the language service finds, and their picker ─
     val colorTracker = remember(state) {
         TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
@@ -810,7 +942,9 @@ private fun CodeEditorLayoutContent(
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
-            if (hover?.holding != true) showHover(view.offsetAt(at).offset, at)
+            val hit = view.offsetAt(at)
+            // What a click does something on says it itself, and is not the text of the line under it.
+            if (hover?.holding != true && hit.injection?.id == null) showHover(hit.offset, at)
         }
     }
     // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
@@ -1183,6 +1317,7 @@ private fun CodeEditorLayoutContent(
         }
         true
     }
+    val closeList: () -> Boolean = { showCompletion.also { showCompletion = false } }
     // Ctrl+F / Ctrl+H: a selection on one line becomes the query, as in VS Code.
     val seedFind: (FindReplaceState) -> Unit = { find ->
         val selection = state.selection
@@ -1291,6 +1426,8 @@ private fun CodeEditorLayoutContent(
 
             is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
 
+            is EditorCommand.CycleInlineCompletion -> state.inlineCompletions.cycle(command.forward)
+
             else -> false
         }
     }
@@ -1317,8 +1454,12 @@ private fun CodeEditorLayoutContent(
             state.uiCommandsAvailable = emptySet()
         }
     }
+    // Ghost text gives way to the list at the caret. Derived, and read here and not in the side
+    // effect: this scope has to run when the list comes and goes, and for nothing else about it.
+    val listAtCaret = remember { derivedStateOf { completionAtCaret && showCompletion && completionItems.isNotEmpty() } }.value
     SideEffect {
         state.readOnly = options.readOnly
+        state.inlineCompletions.hideForList(listAtCaret)
         state.uiCommandHandler = runUiCommand
         if (state.uiCommandsAvailable != uiCommands) state.uiCommandsAvailable = uiCommands
         state.formattingOptions = FormattingOptions(options.tabSize, options.insertSpaces)
@@ -1347,10 +1488,7 @@ private fun CodeEditorLayoutContent(
                 // Consume Escape only when it actually dismissed something, so a host's own
                 // dialog still sees the key when the editor had nothing open.
                 when {
-                    showCompletion -> {
-                        showCompletion = false
-                        true
-                    }
+                    closeList() -> true
 
                     findReplaceState?.visible == true -> {
                         findReplaceState.hide()
@@ -1370,6 +1508,7 @@ private fun CodeEditorLayoutContent(
                     else -> false
                 }
             },
+            onCloseList = closeList,
             onGoToProblem = goToProblem,
             onOpenLink = openLinkAt,
             onQuickFix = showCodeActions,
@@ -1833,6 +1972,20 @@ private suspend fun currentFoldableRanges(state: CodeEditorState, provider: Fold
     return ranges.takeIf { state.document.version == document.version }
 }
 
+/** What [provider] offers at [caret] in [document]; nothing if it fails, which costs its answer and not the editor. */
+private suspend fun askForInlineCompletions(
+    provider: InlineCompletionProvider,
+    document: CodeDocument,
+    caret: Int,
+    state: CodeEditorState,
+): List<InlineCompletion> = try {
+    withContext(state.computeDispatcher) { provider.provideInlineCompletions(document, caret) }
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    emptyList()
+}
+
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
 /** [item] as [service] resolves it, or as it is if that fails: the list works without an answer. */
@@ -1951,6 +2104,18 @@ private const val LINKED_EDITING_DELAY_MS = 50L
 
 /** How long after the last edit the editor asks the language service for the document's colours. */
 private const val COLORS_DEBOUNCE_MS = 300L
+
+/** How long typing has to pause before the language service is asked for semantic tokens. */
+private const val SEMANTIC_TOKENS_DEBOUNCE_MS = 300L
+
+/** How long typing, or scrolling past what was asked about, has to pause before asking for inlay hints. */
+private const val INLAY_HINTS_DEBOUNCE_MS = 300L
+
+/** How long typing, or scrolling to a lens still to be worked out, has to pause before asking for code lenses. */
+private const val CODE_LENSES_DEBOUNCE_MS = 300L
+
+/** How long typing has to pause before an inline completion provider is asked. */
+private const val INLINE_COMPLETIONS_DEBOUNCE_MS = 300L
 
 /** The smallest and largest font size zooming goes to, in sp. */
 private const val MIN_FONT_SIZE = 6f

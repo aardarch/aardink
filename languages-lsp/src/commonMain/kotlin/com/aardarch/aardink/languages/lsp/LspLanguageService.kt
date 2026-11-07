@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CodeActionKind
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ColorPresentation
 import com.aardarch.aardink.core.CompletionItem
@@ -37,6 +38,7 @@ import com.aardarch.aardink.core.FoldKind
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LinkedEditingRanges
 import com.aardarch.aardink.core.Location
@@ -46,8 +48,16 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.Token
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
@@ -228,6 +238,10 @@ class LspLanguageService(
     @Volatile
     private var offeredCompletions: List<OfferedCompletion> = emptyList()
 
+    /** The last code lens answer, kept for what is still to be resolved of it. */
+    @Volatile
+    private var servedLenses: ServedLenses? = null
+
     private val diagnosticsListener: DiagnosticsListener = { uri, version, diagnostics ->
         if (uri == documentUri && !isStale(version)) {
             lspDiagnostics = diagnostics
@@ -366,6 +380,7 @@ class LspLanguageService(
         lspDiagnostics = emptyList()
         diagnosticsVersion = null
         offeredCompletions = emptyList()
+        servedLenses = null
         sync.close()
     }
 
@@ -785,15 +800,191 @@ class LspLanguageService(
     }
 
     /**
+     * The server's `textDocument/semanticTokens/full` answer for [document], which should be what it
+     * was last sent, read through the legend it declared in `semanticTokensProvider` or registered.
+     * A server that declared neither, or none that answers a `full` request, is not asked, and neither
+     * is one whose capabilities are not known, since its numbers could not be read.
+     *
+     * The editor asks once per edit, so a request that comes too soon may be the only one an unedited
+     * document gets, as with [LspFoldingProvider]: this waits for the document to open, and asks a few
+     * more times if the server says to. The editor's cancellation ends either wait, and so does a
+     * handshake that failed or a connection that ended, which leaves no tokens, so that a
+     * [CompositeLanguageService][com.aardarch.aardink.core.CompositeLanguageService]'s fallback gets
+     * its turn.
+     *
+     * A token's type is a [NamedTokenType][com.aardarch.aardink.core.NamedTokenType] under the part of
+     * a name a theme colours: `type.class`, `variable.parameter`, `function.method`, then its
+     * modifiers, `function.method.static`. A theme can colour any of those by name.
+     */
+    override suspend fun semanticTokens(document: CodeDocument): List<Token> {
+        if (supports("semanticTokensProvider") && !sync.awaitOpen()) return emptyList()
+        val legend = semanticLegend ?: return emptyList()
+        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
+        val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
+        return decodeSemanticTokens(data, legend, document)
+    }
+
+    /**
+     * The server's `textDocument/inlayHint` answer for [range] of [document], which should be what it
+     * was last sent. A label is a string, or parts whose values are joined: their commands, locations
+     * and tooltips are not read. `paddingLeft` and `paddingRight` become a space on that side of it.
+     *
+     * The editor may ask once and then not again until an edit or a scroll, so a request that comes
+     * too soon waits and asks again as [semanticTokens] does, and is over as that one is.
+     *
+     * A `workspace/inlayHint/refresh` from the server is not honoured, and `refreshSupport` is not
+     * declared: nothing in a language service can tell the editor to ask again. Hints come back with
+     * the next edit or scroll.
+     */
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+        if (supports("inlayHintProvider") && !sync.awaitOpen()) return emptyList()
+        if (!supports("inlayHintProvider")) return emptyList()
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            put("range", encode(LspRange.serializer(), lspRangeOf(document, range)))
+        }
+        val answer = requestPatiently("textDocument/inlayHint", params)
+        val hints = (answer as? LspResult.Value)?.element as? JsonArray ?: return emptyList()
+        return hints.filterIsInstance<JsonObject>().mapNotNull { it.toInlayHint(document) }
+    }
+
+    /**
+     * The server's `textDocument/codeLens` answer about [document], which should be what it was last
+     * sent. Clicking a lens sends its command with `workspace/executeCommand`, in the document's
+     * order, unless the server did not say it runs that command: such a command is its client's own
+     * (VS Code's "show references", say), and here the lens is only something to read. The answer to
+     * the request is not read: what a command changes comes back as a `workspace/applyEdit`, for
+     * [LspClientHost.applyWorkspaceEdit].
+     *
+     * A lens the server sends without a command it fills in on `codeLens/resolve`, which can cost it
+     * a search of the project. So that is only asked about lenses around the view of the state given
+     * to [attach], those on screen first, or about all of them without one: the rest come back with
+     * a blank title, which keeps their rows, and the editor asks again when one comes on screen.
+     * Asked again about the same text, this goes on from the same answer rather than the server's
+     * being asked for it. A lens that the server does not resolve (`resolveProvider`), or that comes
+     * back without a command, is left out. One that failed in a way that may pass stays blank.
+     *
+     * No resolve holds the rows back, as `codeLens/resolve` has no time limit and one that is never
+     * answered would hold them for good: what has not come after [LENS_PATIENCE_MILLIS] stays blank
+     * for now, and its request is called off. That patience keeps a titled row from going blank
+     * after each edit, on a server that answers in time. Once a text's rows have been given, a
+     * blank title has cost nothing more, so asking again waits for as long as the first resolve
+     * takes, and gives the rest the same patience from there. It may never return, then, if the
+     * server never answers, which the editor calls off with the next edit or scroll.
+     *
+     * The editor may ask once and then not again until an edit, so a request that comes too soon
+     * waits and asks again as [semanticTokens] does.
+     *
+     * A `workspace/codeLens/refresh` from the server is not honoured, and `refreshSupport` is not
+     * declared, for the reason [inlayHints] gives. Lenses come back with the next edit.
+     */
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+        if (supports("codeLensProvider") && !sync.awaitOpen()) return emptyList()
+        if (!supports("codeLensProvider")) return emptyList()
+        val served = lensesOf(document) ?: return emptyList()
+        val screen = linesOnScreen()
+        val around = screen?.let { (it.first - (it.last - it.first + 1))..(it.last + (it.last - it.first + 1)) } ?: 0..Int.MAX_VALUE
+        val wanted = served.lenses.filter { it.isPending && it.line in around }.sortedBy { screen != null && it.line !in screen }
+        if (wanted.isNotEmpty()) resolvePatiently(wanted, untilOneAnswers = served.given)
+        served.given = true
+        return served.lenses.mapNotNull { it.toCodeLens() }
+    }
+
+    /** [lenses], in that order, for as long as [codeLenses] says. What is not back by then is called off. */
+    private suspend fun resolvePatiently(lenses: List<ServedLens>, untilOneAnswers: Boolean) = coroutineScope {
+        val turns = Semaphore(MAX_LENSES_RESOLVING)
+        val oneAnswered = CompletableDeferred<Unit>()
+        val resolving = lenses.map { lens ->
+            launch {
+                turns.withPermit { resolve(lens) }
+                oneAnswered.complete(Unit)
+            }
+        }
+        if (untilOneAnswers) oneAnswered.await()
+        withTimeoutOrNull(LENS_PATIENCE_MILLIS) { resolving.joinAll() }
+        resolving.forEach { it.cancel() }
+    }
+
+    /** The server's lenses for [document], from the last answer if that was about the same text. */
+    private suspend fun lensesOf(document: CodeDocument): ServedLenses? {
+        val text = document.text
+        servedLenses?.takeIf { it.text == text }?.let { return it }
+        val answer = requestPatiently("textDocument/codeLens", documentParams())
+        val lenses = (answer as? LspResult.Value)?.element as? JsonArray ?: return null
+        return ServedLenses(text, lenses.filterIsInstance<JsonObject>().mapNotNull { it.toServedLens(document) }).also { servedLenses = it }
+    }
+
+    /** Whether the server fills lenses in: what it declared or registered, by LSP's default of no, or not known. */
+    private val resolvesLenses: Boolean
+        get() {
+            val capabilities = client.serverCapabilities as? JsonObject ?: return true
+            val declared = capabilities["codeLensProvider"] as? JsonObject
+            val method = methodOf("codeLensProvider")
+            return declared?.boolean("resolveProvider") == true ||
+                client.registrations.any { it.method == method && it.options?.boolean("resolveProvider") == true }
+        }
+
+    /** The lines on screen, or null with no view to go by. */
+    private fun linesOnScreen(): IntRange? = sync.viewport?.takeIf { it.height > 0f }?.let { it.firstVisibleLine..it.lastVisibleLine }
+
+    private suspend fun resolve(lens: ServedLens) {
+        when (val outcome = requestPatiently("codeLens/resolve", lens.raw)) {
+            is LspResult.Value -> {
+                lens.command = (outcome.element as? JsonObject)?.lensCommand()
+                lens.gone = lens.command == null
+            }
+
+            is LspResult.Unsupported -> lens.gone = true
+
+            is LspResult.Failed -> lens.gone = !outcome.tryAgain
+        }
+    }
+
+    /** [command] on the server, if it runs it; see [codeLenses]. Off the caller's thread, and past the life of its screen. */
+    private fun runCommand(command: JsonObject) {
+        val name = command.string("command")?.takeIf { it.isNotEmpty() } ?: return
+        if (!runsCommand(name)) return
+        val params = buildJsonObject {
+            put("command", name)
+            command["arguments"]?.let { put("arguments", it) }
+        }
+        client.launchUntilClosed { requestOrFailure("workspace/executeCommand", params) }
+    }
+
+    /** Whether what the server declared or registered lists [name]. One that gives no list, and none at all, runs anything. */
+    private fun runsCommand(name: String): Boolean {
+        if (!supports("executeCommandProvider")) return false
+        val declared = (client.serverCapabilities as? JsonObject)?.get("executeCommandProvider") as? JsonObject
+        val method = methodOf("executeCommandProvider")
+        val offers = listOfNotNull(declared).plus(client.registrations.filter { it.method == method }.map { it.options })
+        if (offers.isEmpty()) return true
+        return offers.any { offer ->
+            val commands = offer?.get("commands") as? JsonArray
+            commands == null || commands.any { (it as? JsonPrimitive)?.contentOrNull == name }
+        }
+    }
+
+    /** What the server's numbers mean, from what it declared or else registered; null when it does not say. */
+    private val semanticLegend: LspSemanticLegend?
+        get() {
+            if (!supports("semanticTokensProvider")) return null
+            val declared = (client.serverCapabilities as? JsonObject)?.get("semanticTokensProvider") as? JsonObject
+            val method = methodOf("semanticTokensProvider")
+            val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
+            return (listOfNotNull(declared) + registered).firstNotNullOfOrNull(LspSemanticLegend::from)
+        }
+
+    /**
      * The server's folds in order, one per first line, or null when it gave no answer: an empty list
      * is one it means. See [LspFoldingProvider].
      *
      * The editor asks once per edit, so a request that comes too soon may be the only one an
      * unedited document gets. Hence the wait for the document, which opens after the handshake: a
      * server asked before that can only fail, or say a document it has not heard of folds nothing.
+     * A document that will not open, the handshake having failed, is no answer either.
      */
     internal suspend fun foldingRanges(document: CodeDocument): List<FoldRange>? {
-        if (supports("foldingRangeProvider")) sync.awaitOpen()
+        if (supports("foldingRangeProvider") && !sync.awaitOpen()) return null
         if (!supports("foldingRangeProvider")) return emptyList()
         val result = when (val outcome = requestPatiently("textDocument/foldingRange", documentParams())) {
             is LspResult.Unsupported -> return emptyList()
@@ -1019,6 +1210,36 @@ class LspLanguageService(
     /** Member by member, for the reason [LspClient] gives: these wire types would be public ABI as `@Serializable`. */
     private fun JsonObject.range(name: String): LspRange? = this[name]?.let { decodeOrNull(LspRange.serializer(), it) }
 
+    private fun JsonObject.toInlayHint(document: CodeDocument): InlayHint? {
+        val position = this["position"]?.let { decodeOrNull(LspPosition.serializer(), it) } ?: return null
+        val label = when (val given = this["label"]) {
+            is JsonPrimitive -> given.contentOrNull
+            is JsonArray -> given.joinToString("") { (it as? JsonObject)?.string("value").orEmpty() }
+            else -> null
+        }
+        if (label.isNullOrEmpty()) return null
+        val left = if (boolean("paddingLeft") == true) " " else ""
+        val right = if (boolean("paddingRight") == true) " " else ""
+        return InlayHint(offsetOf(document, position), left + label + right)
+    }
+
+    private fun JsonObject.toServedLens(document: CodeDocument): ServedLens? {
+        val start = range("range")?.start ?: return null
+        val command = lensCommand()
+        if (command == null && !resolvesLenses) return null
+        val offset = offsetOf(document, start)
+        return ServedLens(this, offset, document.offsetToLineCol(offset).first, command)
+    }
+
+    /** A lens's `command`, or null if it has none with a title to show. */
+    private fun JsonObject.lensCommand(): JsonObject? = (this["command"] as? JsonObject)?.takeIf { !it.string("title").isNullOrBlank() }
+
+    private fun ServedLens.toCodeLens(): CodeLens? {
+        if (gone) return null
+        val shown = command ?: return CodeLens(offset, "")
+        return CodeLens(offset, shown.string("title").orEmpty()) { runCommand(shown) }
+    }
+
     private fun JsonObject.toDocumentSymbol(document: CodeDocument): DocumentSymbol? {
         val name = string("name") ?: return null
         val range = offsetRangeOf(document, range("range") ?: return null)
@@ -1082,12 +1303,41 @@ class LspLanguageService(
     /** An item of the last completion answer, and that item as the server sent it. */
     private class OfferedCompletion(val item: CompletionItem, val raw: JsonElement)
 
+    /** What the server said about [text]: its lenses, with what has been resolved of them since. */
+    private class ServedLenses(val text: String, val lenses: List<ServedLens>) {
+        /** Whether these have been answered with, so that the editor has their rows. */
+        @Volatile
+        var given = false
+    }
+
+    /** A lens as the server sent it, [raw], `data` and all, at [offset] on [line]. */
+    private class ServedLens(val raw: JsonObject, val offset: Int, val line: Int, command: JsonObject?) {
+        /** What it shows and runs; null while it is to be resolved. */
+        @Volatile
+        var command: JsonObject? = command
+
+        /** The server has said this lens has no command. */
+        @Volatile
+        var gone = false
+
+        val isPending: Boolean get() = command == null && !gone
+    }
+
     companion object {
         /** LSP's `ServerNotInitialized`, `ContentModified` and `ServerCancelled`: nothing wrong with the request. */
         private val TRY_AGAIN_ERRORS = setOf(-32002, -32801, -32802)
 
         /** The pauses before each further request of [requestPatiently]. An edit asks anew after those. */
         private val RETRY_MILLIS = listOf(1_000L, 2_000L, 4_000L)
+
+        /** Most `codeLens/resolve` requests out at once: without a view to go by, that could be a whole document's. */
+        private const val MAX_LENSES_RESOLVING = 16
+
+        /**
+         * How long [codeLenses] waits for what it resolves. Shorter than the editor waits for a
+         * server behind a host's own lenses, so that a resolve cannot cost it those it has.
+         */
+        private const val LENS_PATIENCE_MILLIS = 500L
 
         /** How long the text has to stand still for its diagnostics to be pulled. */
         private const val DIAGNOSTICS_PULL_DEBOUNCE_MILLIS = 400L
