@@ -17,6 +17,7 @@ package com.aardarch.aardink.core
 
 import com.aardarch.aardink.core.text.DocumentChange
 import com.aardarch.aardink.core.text.DocumentChangeListener
+import kotlin.concurrent.Volatile
 
 /**
  * The document's tokens, one entry per line, as columns into that line.
@@ -37,7 +38,13 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
         fun end(index: Int): Int = bounds[2 * index + 1]
     }
 
-    private val lines = ArrayList<LineTokens>()
+    /**
+     * Replaced whole, never emptied and refilled: a pass ends on whatever thread the state's scope
+     * resumes on, and an edit landing then must not find no lines. Such an edit may be lost to the
+     * new list, which the line count check in [onDocumentChange] catches.
+     */
+    @Volatile
+    private var lines = ArrayList<LineTokens>()
 
     /** Told after a pass replaces lines' tokens: the lines, or null for all of them. */
     var onRetokenized: ((IntRange?) -> Unit)? = null
@@ -67,9 +74,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
 
     /** Replaces every line with [tokens], the result of a pass over the whole document. */
     fun replaceAll(tokens: List<Token>) {
-        val built = bucket(tokens, 0, document.lineCount - 1)
-        lines.clear()
-        lines.addAll(built)
+        lines = ArrayList(bucket(tokens, 0, document.lineCount - 1))
         onRetokenized?.invoke(null)
         flat = null
         document.dirtyLines = null
@@ -109,8 +114,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
     }
 
     private fun resetLines() {
-        lines.clear()
-        repeat(document.lineCount) { lines.add(EMPTY) }
+        lines = ArrayList<LineTokens>(document.lineCount).apply { repeat(document.lineCount) { add(EMPTY) } }
     }
 
     /** Text was inserted at the change's start column; [LineTokens] after it move with it. */

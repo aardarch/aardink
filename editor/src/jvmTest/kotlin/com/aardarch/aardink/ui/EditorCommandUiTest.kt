@@ -42,8 +42,6 @@ import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Token
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -107,7 +105,7 @@ class EditorCommandUiTest {
 
     @Test
     fun `text commands work without a layout, the others need one`() {
-        val state = CodeEditorState("a\nb", tokenizer = Slashes, scope = CoroutineScope(Dispatchers.Unconfined))
+        val state = CodeEditorState("a\nb", tokenizer = Slashes)
         assertFalse(state.canExecute(EditorCommand.Undo))
         assertTrue(state.execute(EditorCommand.ToggleComment))
         assertEquals("// a\nb", state.text)
