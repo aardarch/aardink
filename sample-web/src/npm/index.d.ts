@@ -688,8 +688,10 @@ export interface AardinkLanguageProviders {
   /**
    * Labels shown among the characters of `range`, as Monaco's `provideInlayHints`, with the
    * `inlayHints` option on. `range` holds whole lines around the view: it is asked after a pause in
-   * typing, or in scrolling past what it last asked about. With `extends`, the base language's are
-   * added, less any at a position this has one at.
+   * typing, in scrolling past what it last asked about, or after a fold opens or closes. A long closed
+   * fold on screen makes that a few calls at once, one for the lines on either side of it. With
+   * `extends`, the base language's are added, less any at a position this has one at. With a language
+   * server these are shown after a second if it has not answered by then.
    */
   provideInlayHints?(text: string, range: AardinkRange): AardinkInlayHint[] | null | Promise<AardinkInlayHint[] | null>;
 }

@@ -265,7 +265,7 @@ function toKotlinOptions(options) {
     // read, so those two are their first word. A plain boolean works too.
     const value = options.inlayHints;
     const enabled = typeof value === 'object' && value !== null ? value.enabled ?? 'on' : value;
-    out.inlayHints = enabled !== false && enabled !== 'off' && enabled !== 'offUnlessPressed';
+    out.inlayHints = !!enabled && enabled !== 'off' && enabled !== 'offUnlessPressed';
   }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];

@@ -41,6 +41,9 @@ const provideKotlin = () => {
       'export const aardinkSetBundledFontUrl = () => {};',
       'export const aardinkTokenize = () => "[[]]";',
       'export const aardinkRegisterLanguage = (definition, dispatcher) => { globalThis.dispatcher = dispatcher; return ""; };',
+      'export const aardinkCreate = (container, value, options) => { globalThis.optionsSent.push(JSON.parse(options)); return 1; };',
+      'export const aardinkUpdateOptions = (id, options) => globalThis.optionsSent.push(JSON.parse(options));',
+      ...['Content', 'Cursor', 'Selection', 'Focus', 'Diagnostics', 'Scroll'].map((kind) => `export const aardinkOn${kind}Change = () => {};`),
     ].join('\n'),
   );
 };
@@ -76,4 +79,22 @@ test('a provider answers by its name, with its arguments after the text, and any
   assert.equal(await dispatcher('documentSymbols', 'the text', '[]'), null, 'a provider the host did not give');
   assert.equal(await dispatcher('somethingLater', 'the text', '[]'), null, 'a name this package does not know');
   assert.equal(await dispatcher('constructor', 'the text', '[]'), null, "nor one on an object's prototype");
+});
+
+test('inlayHints is on for what says so, and off for anything else, as its neighbours are', async () => {
+  const { createEditor } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  globalThis.optionsSent = [];
+  const editor = await createEditor({ id: 'hints' }, undefined, { inlayHints: null });
+  const sent = (inlayHints) => {
+    editor.updateOptions({ inlayHints });
+    return globalThis.optionsSent.at(-1).inlayHints;
+  };
+
+  assert.equal(globalThis.optionsSent[0].inlayHints, false, 'null, when the editor is made');
+  for (const off of [null, false, 0, '', 'off', 'offUnlessPressed', { enabled: false }, { enabled: 'off' }, { enabled: 'offUnlessPressed' }]) {
+    assert.equal(sent(off), false, `${JSON.stringify(off)} is off`);
+  }
+  for (const on of [true, 'on', 'onUnlessPressed', {}, { enabled: true }, { enabled: 'on' }, { enabled: 'onUnlessPressed' }]) {
+    assert.equal(sent(on), true, `${JSON.stringify(on)} is on`);
+  }
 });
