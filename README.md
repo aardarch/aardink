@@ -1,8 +1,9 @@
 # Aardink
 
 A Compose Multiplatform code editor with VS Code's keys and Monaco's API shape: multiple cursors,
-incremental highlighting, folding, find and replace, diagnostics, completions, a minimap and
-sticky scroll. It runs on Android, desktop (JVM) and the browser (Wasm) from one codebase, and
+incremental highlighting, folding, find and replace, diagnostics, completions, inlay hints, code
+lens, ghost text for an assistant, language servers, a minimap and sticky scroll. It runs on
+Android, desktop (JVM) and the browser (Wasm) from one codebase, and
 draws only the lines on screen, so a keystroke costs the same in a 5,000-line file as in a
 50-line one.
 
@@ -12,9 +13,11 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 [![minSdk](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](#requirements)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20JVM%20%7C%20Wasm-blue.svg)](#requirements)
 
-> **Upgrading?** From 0.6, [`docs/MIGRATION_0.7.md`](docs/MIGRATION_0.7.md); from 0.5, which had
-> a different text field underneath the editor, [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md)
-> first. Each has every change with a before and after. What comes next is in
+> **Upgrading?** From 0.8, [`docs/MIGRATION_0.9.md`](docs/MIGRATION_0.9.md); from 0.7,
+> [`docs/MIGRATION_0.8.md`](docs/MIGRATION_0.8.md); from 0.6,
+> [`docs/MIGRATION_0.7.md`](docs/MIGRATION_0.7.md); from 0.5, which had a different text field
+> underneath the editor, [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md) first. Each has every
+> change with a before and after. What comes next is in
 > [`docs/AARDINK_ROADMAP.md`](docs/AARDINK_ROADMAP.md).
 
 ## Features
@@ -22,8 +25,9 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | | Android | Desktop | Web |
 | --- | :---: | :---: | :---: |
 | Syntax highlighting, incremental, for Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown | ✓ | ✓ | ✓ |
-| Your own language: a tokenizer in Kotlin, or a Monarch grammar as data (`DeclarativeGrammar`) | ✓ | ✓ | ✓ |
-| … or registered from JavaScript, with completions, hover and diagnostics in JavaScript | | | ✓ |
+| Your own language: a tokenizer in Kotlin, or a Monarch grammar as data (`DeclarativeGrammar`), one grammar embedding another | ✓ | ✓ | ✓ |
+| … or registered from JavaScript, with completions, hover, diagnostics, inlay hints and code lenses in JavaScript | | | ✓ |
+| VS Code's `language-configuration.json`: closing pairs, surrounding a selection, Enter indentation | ✓ | ✓ | ✓ |
 | An XML dialect from a schema: completions by nesting, hover, checks (`XmlSchemaLanguageService`) | ✓ | ✓ | ✓ |
 | A dialect over a built-in language, keeping its checks and formatting (`CompositeLanguageService`) | ✓ | ✓ | ✓ |
 | Folding, find and replace, go to line | ✓ | ✓ | ✓ |
@@ -31,6 +35,11 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Undo grouped as Monaco does, `alternativeVersionId` for dirty tracking | ✓ | ✓ | ✓ |
 | Content and selection events with ranges; commands for a host's buttons (`EditorCommand`) | ✓ | ✓ | ✓ |
 | Completions, hover, signature help and quick fixes at the caret | ✓ | ✓ | ✓ |
+| Markdown in hover, signature help and completion documentation, with live links and highlighted code | ✓ | ✓ | ✓ |
+| A detail pane beside the completion list for the selected item | | ✓ | without touch |
+| Inlay hints, text before and after a decoration, code lens rows above a line | ✓ | ✓ | ✓ |
+| Semantic highlighting over the syntax's colours | ✓ | ✓ | ✓ |
+| Ghost text from an assistant (inline completions): Tab to accept, Alt+] for the next | ✓ | ✓ | ✓ |
 | Completions filtered and ordered by the editor, quick suggestions, commit characters | ✓ | ✓ | ✓ |
 | Diagnostics (squiggles and gutter markers), from the language or the host, with codes, tags and hints | ✓ | ✓ | ✓ |
 | F8 through the problems; a squiggle's message under the mouse or a tap | ✓ | ✓ | ✓ |
@@ -49,8 +58,12 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Magnifier while dragging a handle | ✓ | | |
 | Keyboard toolbar above the soft keyboard: the language's characters, caret arrows, undo, redo, and your own buttons | ✓ | | on touch devices |
 | Touch menu and right-click menu, with your own items | ✓ | ✓ | ✓ |
-| Language servers (`aardink-languages-lsp`) | streams | streams | WebSocket |
+| Language servers (`aardink-languages-lsp`): every feature above that a server declares, kept in step edit by edit | streams | streams | WebSocket, `connectLanguageServer` |
 | Themes: `EditorTheme` data classes, six built in, VS Code theme JSON, or Monaco's `defineTheme` data | ✓ | ✓ | ✓ |
+
+Code lens rows and multi-line ghost text add rows inside a line's layout. On Android that is tested
+under Robolectric with real text layout, not yet on a physical device or with Gboard and Samsung
+Keyboard.
 
 ## Modules
 
@@ -166,9 +179,11 @@ covers both routes: the export template, npm packaging, Vite configuration, and 
 mapping.
 
 A language of your own can be registered from JavaScript as a Monarch grammar, with completions,
-hover and diagnostics answered by JavaScript functions, and a theme as Monaco's `defineTheme`
-data. [`docs/AARDFLEX_WEB_SWITCHOVER.md`](docs/AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco
-app over.
+hover, diagnostics, inlay hints and code lenses answered by JavaScript functions, VS Code's
+`language-configuration.json` for typing, and a theme as Monaco's `defineTheme` data.
+`connectLanguageServer(url, languageId)` adds a language server over a WebSocket, and
+`registerInlineCompletionsProvider` an assistant's ghost text.
+[`docs/AARDFLEX_WEB_SWITCHOVER.md`](docs/AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco app over.
 
 > **On the web:** a keystroke settles in about 10 ms, and nearly always under 35 ms, whatever the size of the document (measured
 > in [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance)). A disposed editor is not
@@ -190,10 +205,17 @@ To add a new language, implement these interfaces from the `editor` module:
 - `IncrementalTokenizer` — syntax highlighting, and `commentSyntax` for toggling comments
 - `FoldingProvider` — code folding
 - `LanguageService` *(optional)* — completions, diagnostics, hover, signature help, quick fixes,
-  definitions, references and formatting
+  definitions, references, formatting, document symbols, inlay hints, code lenses and semantic
+  tokens; each method added in 0.8 and 0.9 has a default, so a service implements what it knows
 
 Bundle them as a `LanguageDefinition` and register with `LanguageRegistry`.
 The [`languages/`](languages/) module is a working reference.
+
+An assistant's ghost text is not part of a language: pass an `InlineCompletionProvider` to
+`CodeEditorLayout(inlineCompletionProvider = …)`. A language server's service is
+`LspLanguageService` from `aardink-languages-lsp`, attached to the editor's state with `attach(state)`
+so the server follows every edit, with `LspFoldingProvider(service)` as the folding provider for its
+folds.
 
 For a dialect of a built-in language, `LanguageDefinition.extending(BuiltInLanguages.Xml, myService)`
 puts your service over the base's, keeping its checks, indentation and formatting. For an XML
@@ -203,7 +225,11 @@ dialect, describe its elements and attributes once as an `XmlSchema` (JSON) and
 For highlighting alone, no tokenizer code is needed: `DeclarativeTokenizer(DeclarativeGrammar.parse(json))`
 highlights from a Monarch grammar (Monaco's format) as JSON, a line at a time and incrementally.
 Its tokens are `NamedTokenType`s named by the grammar, which an `EditorTheme` colours by the
-longest dotted prefix it has an entry for, as Monaco's themes do.
+longest dotted prefix it has an entry for, as Monaco's themes do. A grammar can hand part of the
+text to another with `nextEmbedded`, resolved by `DeclarativeTokenizer(grammar) { id -> … }`.
+`LanguageConfiguration.parse(json)` reads VS Code's `language-configuration.json`, and
+`definition.withConfiguration(configuration)` gives a grammar-only language its closing pairs,
+surrounding and Enter indentation.
 
 ## Sample apps
 
