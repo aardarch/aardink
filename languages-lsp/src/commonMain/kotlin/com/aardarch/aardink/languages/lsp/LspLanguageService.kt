@@ -793,14 +793,17 @@ class LspLanguageService(
      *
      * The editor asks once per edit, so a request that comes too soon may be the only one an unedited
      * document gets, as with [LspFoldingProvider]: this waits for the document to open, and asks a few
-     * more times if the server says to. The editor's cancellation ends either wait.
+     * more times if the server says to. The editor's cancellation ends either wait, and so does a
+     * handshake that failed or a connection that ended, which leaves no tokens, so that a
+     * [CompositeLanguageService][com.aardarch.aardink.core.CompositeLanguageService]'s fallback gets
+     * its turn.
      *
      * A token's type is a [NamedTokenType][com.aardarch.aardink.core.NamedTokenType] under the part of
      * a name a theme colours: `type.class`, `variable.parameter`, `function.method`, then its
      * modifiers, `function.method.static`. A theme can colour any of those by name.
      */
     override suspend fun semanticTokens(document: CodeDocument): List<Token> {
-        if (supports("semanticTokensProvider")) sync.awaitOpen()
+        if (supports("semanticTokensProvider") && !sync.awaitOpen()) return emptyList()
         val legend = semanticLegend ?: return emptyList()
         val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
         val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
@@ -824,9 +827,10 @@ class LspLanguageService(
      * The editor asks once per edit, so a request that comes too soon may be the only one an
      * unedited document gets. Hence the wait for the document, which opens after the handshake: a
      * server asked before that can only fail, or say a document it has not heard of folds nothing.
+     * A document that will not open, the handshake having failed, is no answer either.
      */
     internal suspend fun foldingRanges(document: CodeDocument): List<FoldRange>? {
-        if (supports("foldingRangeProvider")) sync.awaitOpen()
+        if (supports("foldingRangeProvider") && !sync.awaitOpen()) return null
         if (!supports("foldingRangeProvider")) return emptyList()
         val result = when (val outcome = requestPatiently("textDocument/foldingRange", documentParams())) {
             is LspResult.Unsupported -> return emptyList()

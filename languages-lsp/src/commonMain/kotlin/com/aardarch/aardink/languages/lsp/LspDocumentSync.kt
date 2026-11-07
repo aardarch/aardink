@@ -26,6 +26,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -470,11 +471,13 @@ internal class LspDocumentSync(
         get() = mirror?.text ?: lastText
 
     /**
-     * Returns once the document is open, through [attach] or [open], whether or not the server
-     * asked to be told. Until then this waits for as long as the caller does.
+     * Returns true once the document is open, through [attach] or [open], whether or not the server
+     * asked to be told, and false once it will not be, as [LspClient.givenUp] has it. Until then this
+     * waits for as long as the caller does.
      */
-    suspend fun awaitOpen() {
-        opened.first { it }
+    suspend fun awaitOpen(): Boolean {
+        opened.combine(client.givenUp) { open, givenUp -> open || givenUp }.first { it }
+        return opened.value
     }
 
     private fun syncOptions() = LspTextDocumentSync.from(client.serverCapabilities, client.registrations)

@@ -17,11 +17,13 @@ package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompositeLanguageService
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.Token
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -30,6 +32,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration
@@ -467,5 +470,91 @@ class LspSemanticTokensTest {
         server.await()
 
         assertEquals(listOf(0..1 to "variable"), tokens.spans)
+    }
+
+    // ── A document that will not open ────────────────────────────────────────
+
+    private val dialect = listOf(Token(0, 1, type("dialect")))
+
+    /** The service over a fallback with tokens of its own, as a dialect's would have. */
+    private fun Harness.overDialect() = CompositeLanguageService(
+        service,
+        object : LanguageService by service {
+            override suspend fun semanticTokens(document: CodeDocument): List<Token> = dialect
+        },
+    )
+
+    private suspend fun Harness.handshakeRefused() {
+        val handshake = async { assertFailsWith<LspRequestException> { client.initialize(rootUri = null) } }
+        respondWithError("initialize")
+        handshake.await()
+    }
+
+    @Test
+    fun `a failed handshake ends the wait, and the fallback answers`() = withServer("ab") {
+        val composite = overDialect()
+        val asked = async { composite.semanticTokens(doc) }
+        assertNothingSent("no document to ask about yet")
+        assertFalse(asked.isCompleted, "the handshake may yet go well")
+
+        handshakeRefused()
+
+        assertEquals(dialect, asked.await())
+        assertNothingSent("a server that refused the handshake has no document and no legend")
+    }
+
+    @Test
+    fun `asked after a failed handshake, the fallback answers at once`() = withServer("ab") {
+        handshakeRefused()
+
+        assertEquals(dialect, overDialect().semanticTokens(doc))
+    }
+
+    @Test
+    fun `a handshake the host gave up on ends the wait`() = withServer("ab") {
+        val composite = overDialect()
+        val asked = async { composite.semanticTokens(doc) }
+
+        withTimeoutOrNull(1_000) { client.initialize(rootUri = null) }
+
+        assertEquals(dialect, asked.await())
+    }
+
+    @Test
+    fun `a client stopped before the document opened ends the wait`() = withServer("ab") {
+        val composite = overDialect()
+        val asked = async { composite.semanticTokens(doc) }
+        assertNothingSent("no document to ask about yet")
+
+        client.stop()
+
+        assertEquals(dialect, asked.await())
+    }
+
+    @Test
+    fun `a server gone before the document opened ends the wait`() = withServer("ab") {
+        val composite = overDialect()
+        val asked = async { composite.semanticTokens(doc) }
+        client.start()
+        assertNothingSent("no document to ask about yet")
+
+        transport.receiveChannel.close()
+
+        assertEquals(dialect, asked.await())
+    }
+
+    @Test
+    fun `a handshake that goes well the second time is waited for again`() = withServer("") {
+        handshakeRefused()
+        serverDeclares(incremental)
+        val state = editorState("name")
+        val asked = async { service.semanticTokens(state.document.snapshot()) }
+        assertNothingSent("no document to ask about yet")
+
+        service.attach(state)
+
+        assertEquals("textDocument/didOpen", nextSent().method)
+        respond(FULL, """{"data":[0, 0, 4, 2, 0]}""")
+        assertEquals(listOf(0..3 to "variable"), asked.await().spans)
     }
 }
