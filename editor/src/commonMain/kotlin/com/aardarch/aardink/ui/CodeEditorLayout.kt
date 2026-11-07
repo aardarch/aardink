@@ -751,7 +751,7 @@ private fun CodeEditorLayoutContent(
         snapshotFlow {
             val shown = view.frame.lines
             if (shown.isEmpty()) return@snapshotFlow null
-            val lines = InlineContent.hintWindow(asked, shown.first().line..shown.last().line)
+            val lines = InlineContent.hintWindow(asked, shown.first().line..shown.last().line, shown.size)
             asked = lines
             state.textVersion to lines
         }.filterNotNull().collectLatest { (_, lines) ->

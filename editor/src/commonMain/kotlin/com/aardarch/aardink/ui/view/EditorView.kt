@@ -319,13 +319,18 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     /**
      * What [inline] answers for [lines] changed. A view with nothing inline has no [injections], and
-     * so costs what one without the feature does, until the first thing to show arrives.
+     * so costs what one without the feature does, until the first thing to show arrives. That leaves
+     * the row map as it is, unlike setting [injections] to anything else: every other line still
+     * answers nothing, and a rebuild would lose the rows measured so far for estimates.
      */
     private fun inlineChanged(lines: List<Int>) {
-        when {
-            injections != null -> injectionsChanged(lines)
-            !inline.isEmpty -> injections = inline.lookup
+        if (injections == null) {
+            if (inline.isEmpty) return
+            val rowsStand = !structureDirty
+            injections = inline.lookup
+            if (rowsStand) structureDirty = false
         }
+        injectionsChanged(lines)
     }
 
     /** The folds the view is showing, for the gutter. */

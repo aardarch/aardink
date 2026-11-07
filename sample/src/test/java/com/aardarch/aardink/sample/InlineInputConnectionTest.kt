@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
@@ -81,7 +82,7 @@ class InlineInputConnectionTest {
             computeDispatcher = Dispatchers.Unconfined
         }
 
-    private fun connect(state: CodeEditorState, column: Int): InputConnection {
+    private fun connect(state: CodeEditorState, column: Int, realHint: Boolean = false): InputConnection {
         val injected = LineInjections.of(Injection.rowAbove(lens), Injection(column, hint))
         rule.setContent {
             val measurer = rememberTextMeasurer(cacheSize = 0)
@@ -102,7 +103,11 @@ class InlineInputConnectionTest {
                     ),
                     softWrap = false,
                 )
-                made.injections = { line -> if (line == 0) injected else null }
+                if (realHint) {
+                    state.publishInlayHints(listOf(InlayHint(column, hint)))
+                } else {
+                    made.injections = { line -> if (line == 0) injected else null }
+                }
                 made.attach()
                 made.prepare(600, 400)
                 view = made
@@ -184,6 +189,27 @@ class InlineInputConnectionTest {
             assertEquals("from the first text row, up goes to the start", 0, shown.verticalMove(5, -1))
             assertEquals("the caret's band is the text row's", 8f + 20f, shown.caretRect(5).top, 2f)
         }
+    }
+
+    @Test
+    fun `around a real hint a keyboard reads and writes the document, and the hint moves with it`() {
+        val state = stateOf("val x = 1")
+        val connection = connect(state, 5, realHint = true)
+        val shown: String = view.layoutFor(0).result.layoutInput.text.text
+        assertEquals("val x: Hint = 1", shown)
+        rule.runOnIdle {
+            assertEquals("val x", connection.getTextBeforeCursor(100, 0).toString())
+            assertEquals("val x = 1", connection.getExtractedText(ExtractedTextRequest(), 0).text.toString())
+        }
+
+        connection.run { setComposingText("n", 1) }
+        connection.run { setComposingText("ni", 1) }
+        connection.run { commitText("y", 1) }
+
+        assertEquals("val xy = 1", state.document.text)
+        rule.runOnIdle { assertEquals(listOf(InlayHint(6, hint)), state.inlayHints) }
+        rule.runOnIdle { state.undo() }
+        rule.runOnIdle { assertEquals(listOf(InlayHint(5, hint)), state.inlayHints) }
     }
 
     @Test

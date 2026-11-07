@@ -174,13 +174,13 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
 
     companion object {
         /**
-         * The lines to ask about, with [visible] on screen: [asked] while it holds them, so that
-         * scrolling within what was asked about asks nothing, or else them and a screen either side.
+         * The lines to ask about, with [visible] on screen, [rows] of them shown: [asked] while it
+         * holds them, so that scrolling within what was asked about asks nothing, or else them and
+         * a screen either side. That is by [rows], as a closed fold puts many lines in [visible].
          */
-        fun hintWindow(asked: IntRange?, visible: IntRange): IntRange {
+        fun hintWindow(asked: IntRange?, visible: IntRange, rows: Int): IntRange {
             if (asked != null && visible.first >= asked.first && visible.last <= asked.last) return asked
-            val margin = visible.last - visible.first + 1
-            return (visible.first - margin).coerceAtLeast(0)..(visible.last + margin)
+            return (visible.first - rows).coerceAtLeast(0)..(visible.last + rows)
         }
 
         /** Lines [lines] of [document] as the range a language service is asked about. */

@@ -330,6 +330,25 @@ class InlineContentTest {
     }
 
     @Test
+    fun `the first hint leaves the rows measured so far as they were`() {
+        // Words too long for two to a row: the estimate, going by characters, comes out short.
+        val words = (0 until 10).joinToString(" ") { "w".repeat(20) }
+        val view = viewOf(words + "\n" + longLines, softWrap = true, width = 300, height = 200)
+        val measured = view.rowsOf(0)
+        assertTrue(measured > 8, "laid out, it takes a row a word: $measured")
+        view.scroll.scrollToY(view.contentTop(150))
+        view.prepare(300, 200)
+        view.prepare(300, 200)
+        assertTrue(view.frame.find(0) == null, "the line is off screen, so an estimate would stick")
+
+        view.state.publishInlayHints(listOf(InlayHint(view.state.document.lineStart(100), ": Int")))
+        view.prepare(300, 200)
+
+        assertEquals(measured, view.rowsOf(0))
+        assertEquals(": Int", view.inline.lookup(100)?.items?.single()?.text)
+    }
+
+    @Test
     fun `hints arriving above the view move nothing on screen`() {
         val text = (0 until 300).joinToString("\n") { "line $it with some more words on it" }
         val view = viewOf(text, softWrap = true, width = 300, height = 200)
