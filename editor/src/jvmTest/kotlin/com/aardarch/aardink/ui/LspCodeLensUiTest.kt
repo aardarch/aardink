@@ -77,6 +77,7 @@ class LspCodeLensUiTest {
         private val refusesHandshake: Boolean,
         private val holding: String?,
         private val neverResolving: Int?,
+        private val parksResolves: Boolean,
         private val lenses: (asked: Int) -> String,
     ) {
         /** Completed to let the [holding] method have its answer. */
@@ -90,6 +91,19 @@ class LspCodeLensUiTest {
         /** The lines asked about with `codeLens/resolve`, in order. */
         val resolved = CopyOnWriteArrayList<Int>()
 
+        /** The resolves not answered yet, while the server goes on answering the rest. */
+        val parked = CopyOnWriteArrayList<JsonObject>()
+
+        /** Answers what is parked, and from now on all that comes. */
+        suspend fun answerParked() {
+            released.complete(Unit)
+            for (message in parked) {
+                transport.receiveChannel.send(
+                    """{"jsonrpc":"2.0","id":${message["id"]},"result":${resolved(message["params"]!!.jsonObject)}}""",
+                )
+            }
+        }
+
         suspend fun serve() {
             for (payload in transport.sendChannel) {
                 val message = Json.parseToJsonElement(payload).jsonObject
@@ -99,6 +113,10 @@ class LspCodeLensUiTest {
                 val id = message["id"] ?: continue
                 if (method == holding) released.await()
                 if (method == "codeLens/resolve" && lineOf(message["params"]!!.jsonObject) == neverResolving) continue
+                if (method == "codeLens/resolve" && parksResolves && !released.isCompleted) {
+                    parked += message
+                    continue
+                }
                 if (method == "initialize" && refusesHandshake) {
                     transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"no"}}""")
                     continue
@@ -126,13 +144,14 @@ class LspCodeLensUiTest {
         refusesHandshake: Boolean = false,
         holding: String? = null,
         neverResolving: Int? = null,
+        parksResolves: Boolean = false,
         lenses: (asked: Int) -> String,
     ) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val transport = ChannelLspTransport()
         val client = LspClient(transport, scope)
         val service = LspLanguageService(client, "file:///Main.kt", "kotlin")
-        val server = Server(transport, capabilities, refusesHandshake, holding, neverResolving, lenses).also { server ->
+        val server = Server(transport, capabilities, refusesHandshake, holding, neverResolving, parksResolves, lenses).also { server ->
             scope.launch { server.serve() }
         }
 
@@ -402,6 +421,8 @@ class LspCodeLensUiTest {
             assertEquals(listOf(""), state.titles())
 
             outwait()
+            // Past the patience of the question asked again, which is still out.
+            Thread.sleep(700)
             connection.server.released.complete(Unit)
 
             waitUntil(timeoutMillis = 5_000) { state.titles() == listOf("2 references") }
@@ -411,8 +432,8 @@ class LspCodeLensUiTest {
     }
 
     @Test
-    fun `an edit on a slow server asks again for lines that were waiting before it too`() = runComposeUiTest {
-        val connection = Connection(holding = resolve) { "[${unresolved(2)}]" }
+    fun `after an edit a slow server's title still comes, on a line that was waiting before it too`() = runComposeUiTest {
+        val connection = Connection(parksResolves = true) { "[${unresolved(2)}]" }
         try {
             connection.client.initialize(rootUri = null)
             val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
@@ -425,8 +446,13 @@ class LspCodeLensUiTest {
             onNodeWithTag(EditorTestTags.EDITOR).performTextInput("x")
             waitForIdle()
             pause()
-            waitUntil(timeoutMillis = 5_000) { connection.server.methods.count { it == method } == 1 }
-            connection.server.released.complete(Unit)
+            waitUntil(timeoutMillis = 5_000) { connection.server.methods.count { it == method } == 2 }
+            val parked = connection.server.parked.size
+            waitUntil(timeoutMillis = 5_000) { connection.server.parked.size > parked }
+            // Past the answer to the edit's question, which came with the same line waiting.
+            Thread.sleep(700)
+            outwait()
+            connection.scope.launch { connection.server.answerParked() }
 
             waitUntil(timeoutMillis = 5_000) { state.titles() == listOf("2 references") }
         } finally {
