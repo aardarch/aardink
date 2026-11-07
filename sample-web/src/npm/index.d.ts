@@ -246,8 +246,8 @@ export interface AardinkEditor {
    * `editor.action.changeAll`, `editor.action.insertCursorAtEndOfEachLineSelected`,
    * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
    * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
-   * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext` and
-   * `.showPrevious`, and
+   * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext`,
+   * `.showPrevious` and `.hide`, and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -819,10 +819,11 @@ export interface AardinkInlineCompletionsProvider {
  * Has `provider` offer ghost text in every editor of `languageId`, open now or to come, as Monaco's
  * `languages.registerInlineCompletionsProvider`. Several for one language are all asked, and their
  * answers follow each other, oldest first. Tab accepts, as one undo step; Alt+] and Alt+[ go through
- * what is on offer; Escape dismisses. A phone has no Tab, so run `editor.action.inlineSuggest.commit`
- * from a button: `getAction` says whether there is anything to accept. Nothing shows in a read-only
- * editor, with a selection or several carets, while filling in a snippet, while an input method
- * composes, or under an open completion list, which takes Tab. `dispose()` ends it.
+ * what is on offer; Escape dismisses, until the next edit asks again. A phone has neither key, so run
+ * `editor.action.inlineSuggest.commit` and `.hide` from buttons: `getAction` says whether anything
+ * shows. Nothing shows in a read-only editor, with a selection or several carets, while filling in a
+ * snippet, while an input method composes, or under an open completion list, which takes Tab.
+ * `dispose()` ends it.
  */
 export function registerInlineCompletionsProvider(
   languageId: string,

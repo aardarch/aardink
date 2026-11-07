@@ -119,6 +119,7 @@ internal object MonacoActions {
             "editor.action.inlineSuggest.showPrevious",
             "Show Previous Inline Suggestion" to EditorCommand.CycleInlineCompletion(forward = false),
         )
+        put("editor.action.inlineSuggest.hide", "Hide Inline Suggestion" to EditorCommand.DismissInlineCompletion)
         put("editor.action.showHover", "Show Hover" to EditorCommand.ShowHover)
         put("editor.action.quickFix", "Quick Fix..." to EditorCommand.ShowCodeActions)
         put("editor.action.rename", "Rename Symbol" to EditorCommand.Rename)

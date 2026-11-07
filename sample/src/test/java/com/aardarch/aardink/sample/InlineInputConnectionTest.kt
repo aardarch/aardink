@@ -30,9 +30,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -50,6 +55,7 @@ import com.aardarch.aardink.core.InlineCompletion
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorTestTags
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
@@ -257,6 +263,43 @@ class InlineInputConnectionTest {
         rule.waitUntil(timeoutMillis = 5_000) { state.inlineCompletions.shown != null }
         rule.runOnIdle { assertTrue(state.execute(EditorCommand.AcceptInlineCompletion)) }
         assertEquals("aghost", state.document.text)
+    }
+
+    /**
+     * The strip takes no keys of its own, so Escape reaches the bindings with ghost text showing. It
+     * closes the strip all the same, as it does a list at the caret, and the next one dismisses.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `Escape closes the strip above a keyboard first, and the next one dismisses`() {
+        val state = stateOf("a")
+        val words = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+            override suspend fun completions(document: CodeDocument, cursorOffset: Int) =
+                listOf(CompletionItem("listed", CompletionKind.Value, "listed"))
+        }
+        rule.setContent {
+            CodeEditorLayout(
+                state = state,
+                languageService = words,
+                inlineCompletionProvider = { _, _ -> listOf(InlineCompletion("ghost")) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        rule.runOnIdle {
+            state.selection = TextRange(1)
+            state.execute(EditorCommand.TriggerSuggest)
+        }
+        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.CycleInlineCompletion())) }
+        rule.waitUntil(timeoutMillis = 5_000) { state.inlineCompletions.shown != null }
+        val editor = rule.onNodeWithTag(EditorTestTags.EDITOR)
+        editor.requestFocus()
+        editor.performKeyInput { pressKey(Key.Escape) }
+        rule.waitForIdle()
+        assertTrue("the strip went first", rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isEmpty())
+        rule.runOnIdle { assertTrue("and ghost text waits", state.inlineCompletions.shown != null) }
+        editor.performKeyInput { pressKey(Key.Escape) }
+        rule.runOnIdle { assertEquals(null, state.inlineCompletions.shown) }
     }
 
     /** Ghost text, through what a layout does with an answer, on the view [connect] made. */

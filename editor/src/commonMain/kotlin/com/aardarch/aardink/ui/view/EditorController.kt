@@ -64,6 +64,8 @@ internal class EditorHostActions(
     val onGoToLine: () -> Unit = {},
     /** Escape with one caret: returns whether it closed something (a popup, the find panel). */
     val onEscape: () -> Boolean = { false },
+    /** Closes the completion list; returns whether one was up. Ghost text waits for it, wherever it is. */
+    val onCloseList: () -> Boolean = { false },
     /** Ctrl+Space. */
     val onTriggerSuggest: () -> Unit = {},
     /** After every input edit, with the character typed when it was one (completion follows it). */
@@ -249,7 +251,8 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             }
 
             // Unbound by the host: no binding of the editor's own, so the key types if it types.
-            KeyBindingMatch.Unbound -> return typeKey(event)
+            // Escape's binding is only its dismissal of ghost text, and the rest of it stays.
+            KeyBindingMatch.Unbound -> if (event.key != Key.Escape) return typeKey(event)
 
             null -> {}
         }
@@ -274,9 +277,26 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
      * the text changed, except for commands that scroll the view themselves.
      */
     private fun run(command: EditorCommand) {
+        if (command == EditorCommand.DismissInlineCompletion) {
+            dismissGhost()
+            return
+        }
         val ran = state.execute(command)
         val scrolls = command is EditorCommand.ScrollLines || command is EditorCommand.Reveal
         if (ran && !scrolls) revealCaret()
+    }
+
+    /**
+     * The key that dismisses ghost text, Escape unless a host moved it. It is Escape's step on the way
+     * to what else is open, so it does what Escape does up to there and shows nothing: the caret can
+     * be far from the view. A list that is not at the caret, a phone's strip, takes no keys of its own
+     * and leaves ghost text showing beside it, and it closes first.
+     */
+    private fun dismissGhost() {
+        if (!state.canExecute(EditorCommand.DismissInlineCompletion)) return
+        contextMenuAt = null
+        preferredX = null
+        if (!actions.onCloseList()) state.execute(EditorCommand.DismissInlineCompletion)
     }
 
     /** Types [text] at every selection, as a keyboard does. */

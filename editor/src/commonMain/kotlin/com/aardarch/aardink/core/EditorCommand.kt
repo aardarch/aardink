@@ -195,4 +195,12 @@ sealed class EditorCommand {
      * none showing, asks the layout's [InlineCompletionProvider] now, without waiting for a pause.
      */
     data class CycleInlineCompletion(val forward: Boolean = true) : EditorCommand()
+
+    /**
+     * Escape while ghost text shows: takes it away, and what was being asked for with it. It stays
+     * gone until the next edit asks again. A soft keyboard has no Escape, so a toolbar button runs
+     * this. It can run only while ghost text shows, which is what leaves Escape to the rest of what
+     * it does otherwise.
+     */
+    data object DismissInlineCompletion : EditorCommand()
 }

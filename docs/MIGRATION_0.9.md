@@ -166,17 +166,24 @@ follows a target must check it first. To go back to no links opening at all, lis
 ## Inline completions
 
 `CodeEditorLayout` gains `inlineCompletionProvider`, last and null by default, so a compiled caller
-needs a recompile and nothing else. `EditorCommand` gains `AcceptInlineCompletion` and
-`CycleInlineCompletion`, so an exhaustive `when` over it needs branches. `EditorKeyBindings.Default`
-gains Tab, Alt+] and Alt+[ for them.
+needs a recompile and nothing else. `EditorCommand` gains `AcceptInlineCompletion`,
+`CycleInlineCompletion` and `DismissInlineCompletion`, so an exhaustive `when` over it needs branches.
+`EditorKeyBindings.Default` gains Tab, Alt+], Alt+[ and Escape for them.
 
 Tab is in that list now, where it said Tab was a fixed key, but it does what it did unless ghost text
 shows: a binding whose command cannot run leaves its key alone. A host with its own binding on Alt+]
 or Alt+[ keeps it, as yours come first, and has no key for going through what is on offer until it
 binds one. Unbinding Tab with a null command takes away indenting too, as it already did.
 
+Escape is in that list too, and does what it did unless ghost text shows. Unbinding it is different
+from Tab: a null command takes away dismissing and no more, so that a host can move dismissing to
+another key and keep the rest. Escape still ends a snippet and extra carets and closes the find panel
+and the hover, where before 0.9 a null binding took all of that away. A list that is open takes its
+Escape first either way. With your own command on Escape, ghost text stays up unless you run
+`DismissInlineCompletion`, even when your command cannot run.
+
 On the web, `registerInlineCompletionsProvider` is new, with
-`editor.action.inlineSuggest.commit`, `showNext` and `showPrevious` for `trigger` and `getAction`. A wasm
+`editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` and `hide` for `trigger` and `getAction`. A wasm
 module built from the template copies `aardinkRegisterInlineCompletionsProvider` and
 `aardinkDisposeInlineCompletionsProvider`. `AardinkWeb.registerInlineCompletionsProvider` is the same
 thing from Kotlin. Nothing changes unless you call them.

@@ -1798,6 +1798,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.CursorsAtLineEnds.toString|toString(){}[0]
     }
 
+    final object DismissInlineCompletion : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.DismissInlineCompletion|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.DismissInlineCompletion.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.DismissInlineCompletion.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.DismissInlineCompletion.toString|toString(){}[0]
+    }
+
     final object ExpandSelection : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.ExpandSelection|null[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.ExpandSelection.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.ExpandSelection.hashCode|hashCode(){}[0]
@@ -2182,6 +2188,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Chan
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Fold$stableprop[0]
@@ -2323,6 +2330,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Chan
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop_getter|com_aardarch_aardink_core_EditorCommand_CursorUndo$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop_getter|com_aardarch_aardink_core_EditorCommand_CursorsAtLineEnds$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop_getter|com_aardarch_aardink_core_EditorCommand_CycleInlineCompletion$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop_getter|com_aardarch_aardink_core_EditorCommand_DismissInlineCompletion$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ExpandSelection$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter|com_aardarch_aardink_core_EditorCommand_FindReferences$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Fold$stableprop_getter(){}[0]

@@ -322,11 +322,12 @@ the text, past its last line or reversed, is left out.
 | Tab | `editor.action.inlineSuggest.commit` | Accepts, as one undo step, with the caret at the end of what it added, and asks for what comes next |
 | Alt+] | `editor.action.inlineSuggest.showNext` | The next on offer; with none showing, asks now. `addCommand` on the same key comes first |
 | Alt+[ | `editor.action.inlineSuggest.showPrevious` | The previous on offer |
-| Escape | none | Dismisses, ahead of closing the find panel |
+| Escape | `editor.action.inlineSuggest.hide` | Dismisses, ahead of closing the find panel, and it stays gone until the next edit asks. An open completion list closes first. `addCommand` on the same key comes first |
 
-Tab indents as usual when nothing shows. A phone has no Tab, so give it a button that runs
-`trigger(null, 'editor.action.inlineSuggest.commit')`, enabled by `getAction(...).isSupported()`. It
-scrolls to the caret, as Tab does.
+Tab indents as usual when nothing shows, and Escape goes on to what else is open. A phone has neither
+key, so give it buttons that run `trigger(null, 'editor.action.inlineSuggest.commit')` and
+`trigger(null, 'editor.action.inlineSuggest.hide')`, enabled by `getAction(...).isSupported()`.
+Accepting scrolls to the caret, as Tab does; hiding leaves the view where it is, as Escape does.
 
 Nothing shows in a read-only editor, with a selection or several carets, while a snippet is being
 filled in, or while an input method composes: on Android that can be each word as it is typed,
@@ -433,7 +434,7 @@ files to apply them to.
 | `codeLens` | The same | Off by default, where Monaco's is on. |
 | `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
 | `languages.registerInlineCompletionsProvider` | `registerInlineCompletionsProvider(languageId, { provideInlineCompletions(text, line, column) })`, returning a Promise of a disposable | Answers Monaco's `{ items: [{ insertText, range? }] }`, or the array alone. See [Inline completions](#inline-completions). |
-| `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` | The same ids, in `trigger` and `getAction` | `isSupported()` on `commit` says whether anything shows. `hide` and `trigger` are not there: Escape dismisses, and `showNext` with nothing showing asks. |
+| `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious`, `hide` | The same ids, in `trigger` and `getAction` | `isSupported()` on `commit` and `hide` says whether anything shows. `trigger` is not there: `showNext` with nothing showing asks. |
 | `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing, in scrolling past what it last asked about, or after a fold opens or closes; a long closed fold on screen makes that a few calls at once, one for the lines on either side of it. With `extends` or a language server, every source's hints are shown, the first's where two are at one position; a server that has not answered within a second does not hold yours back. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
@@ -556,8 +557,6 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   Multiplatform release that uses `kotlin.wasm.unsafe` instead.
 - A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
-- Ghost text cannot be dismissed from a key of your own, or from a button: Escape does it, and there
-  is no action for it.
 - A language server connection does not reconnect, and the host hears of its end only on the
   console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
 - The items marked **manual** in the checklist above wait for real devices before 0.6.0.

@@ -1317,6 +1317,7 @@ private fun CodeEditorLayoutContent(
         }
         true
     }
+    val closeList: () -> Boolean = { showCompletion.also { showCompletion = false } }
     // Ctrl+F / Ctrl+H: a selection on one line becomes the query, as in VS Code.
     val seedFind: (FindReplaceState) -> Unit = { find ->
         val selection = state.selection
@@ -1487,15 +1488,7 @@ private fun CodeEditorLayoutContent(
                 // Consume Escape only when it actually dismissed something, so a host's own
                 // dialog still sees the key when the editor had nothing open.
                 when {
-                    showCompletion -> {
-                        showCompletion = false
-                        true
-                    }
-
-                    state.inlineCompletions.shown != null -> {
-                        state.inlineCompletions.clear()
-                        true
-                    }
+                    closeList() -> true
 
                     findReplaceState?.visible == true -> {
                         findReplaceState.hide()
@@ -1515,6 +1508,7 @@ private fun CodeEditorLayoutContent(
                     else -> false
                 }
             },
+            onCloseList = closeList,
             onGoToProblem = goToProblem,
             onOpenLink = openLinkAt,
             onQuickFix = showCodeActions,

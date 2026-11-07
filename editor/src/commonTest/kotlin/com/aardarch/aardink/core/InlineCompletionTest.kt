@@ -430,6 +430,57 @@ class InlineCompletionTest {
     }
 
     @Test
+    fun `dismissing can run exactly while something shows, and needs no layout`() {
+        val state = stateAt("val x = |")
+        assertFalse(EditorCommand.DismissInlineCompletion in state.availableCommands)
+        assertFalse(state.execute(EditorCommand.DismissInlineCompletion))
+        state.offer("compute()")
+        assertTrue(EditorCommand.DismissInlineCompletion in state.availableCommands)
+        assertTrue(state.canExecute(EditorCommand.DismissInlineCompletion))
+        val version = state.alternativeVersionId
+        assertTrue(state.execute(EditorCommand.DismissInlineCompletion))
+        assertNull(state.inlineCompletions.shown)
+        assertEquals("val x = ", state.document.text)
+        assertEquals(version, state.alternativeVersionId, "the undo stack does not know of it")
+        assertFalse(EditorCommand.DismissInlineCompletion in state.availableCommands)
+        assertFalse(state.execute(EditorCommand.DismissInlineCompletion))
+    }
+
+    @Test
+    fun `dismissing cannot run under a list, and can again when it goes`() {
+        val state = stateAt("val x = |")
+        state.offer("compute()")
+        state.inlineCompletions.hideForList(true)
+        assertFalse(state.canExecute(EditorCommand.DismissInlineCompletion))
+        state.inlineCompletions.hideForList(false)
+        assertTrue(state.canExecute(EditorCommand.DismissInlineCompletion))
+    }
+
+    @Test
+    fun `dismissing ends all that is on offer, and only an edit asks again`() {
+        val state = stateAt("val x = |")
+        state.offer(InlineCompletion("one"), InlineCompletion("two"))
+        assertTrue(state.execute(EditorCommand.DismissInlineCompletion))
+        assertNull(state.inlineCompletions.ask)
+        state.inlineCompletions.hideForList(true)
+        state.inlineCompletions.hideForList(false)
+        assertNull(state.inlineCompletions.shown, "nothing is left to come back")
+        state.typeAtCaret("c")
+        assertNotNull(state.inlineCompletions.ask)
+    }
+
+    @Test
+    fun `dismissing works on what shows after the document was edited behind the state`() {
+        val state = stateAt("a|")
+        state.offer("cd")
+        state.document.insert(1, "c")
+        assertNotNull(state.inlineCompletions.shown)
+        assertNull(state.inlineCompletions.settled)
+        assertTrue(state.execute(EditorCommand.DismissInlineCompletion))
+        assertNull(state.inlineCompletions.shown)
+    }
+
+    @Test
     fun `nothing is accepted after the document was edited behind the state`() {
         val state = stateAt("a|")
         state.offer("c")

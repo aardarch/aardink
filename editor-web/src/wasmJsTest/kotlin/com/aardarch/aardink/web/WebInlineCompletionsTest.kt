@@ -46,6 +46,7 @@ class WebInlineCompletionsTest {
     private val commit = "editor.action.inlineSuggest.commit"
     private val showNext = "editor.action.inlineSuggest.showNext"
     private val showPrevious = "editor.action.inlineSuggest.showPrevious"
+    private val hide = "editor.action.inlineSuggest.hide"
 
     @AfterTest
     fun tearDown() {
@@ -103,6 +104,35 @@ class WebInlineCompletionsTest {
             assertEquals(TextRange("one\nfoo(other".length), handle.state.value.selection)
             handle.state.value.undo()
             assertEquals("one\nfoo()", AardinkWeb.getValue(handle))
+        }
+    }
+
+    @Test
+    fun `hide can run exactly while something shows, and what it hides stays gone until an edit asks`() = runTest {
+        var asked = 0
+        register("xml") { _, _, _ ->
+            asked++
+            """[{ "insertText": "bar" }]"""
+        }
+        val handle = mount("foo", "xml")
+        withContext(Dispatchers.Main) {
+            until { AardinkWeb.canTrigger(handle, showNext) }
+            onPlace("foo", 3, handle)
+            assertFalse(AardinkWeb.canTrigger(handle, hide), "nothing shows yet")
+            assertFalse(AardinkWeb.trigger(handle, hide))
+
+            assertTrue(AardinkWeb.trigger(handle, showNext))
+            until { AardinkWeb.canTrigger(handle, hide) }
+            assertTrue(AardinkWeb.trigger(handle, hide))
+            assertFalse(AardinkWeb.canTrigger(handle, hide))
+            assertFalse(AardinkWeb.canTrigger(handle, commit))
+            assertEquals("foo", AardinkWeb.getValue(handle))
+
+            delay(600)
+            assertEquals(1, asked, "nothing asks until an edit does")
+            handle.state.value.indentSelection()
+            until { AardinkWeb.canTrigger(handle, hide) }
+            assertEquals(2, asked)
         }
     }
 
@@ -169,6 +199,7 @@ class WebInlineCompletionsTest {
         assertEquals("Accept Inline Suggestion", MonacoActions.label(commit))
         assertEquals("Show Next Inline Suggestion", MonacoActions.label(showNext))
         assertEquals("Show Previous Inline Suggestion", MonacoActions.label(showPrevious))
+        assertEquals("Hide Inline Suggestion", MonacoActions.label(hide))
     }
 
     @Test

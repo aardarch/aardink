@@ -350,9 +350,22 @@ async function inlineCompletionCheck(page) {
   await page.waitForFunction(() => window.__inlineAsked.at(-1).text.includes('bq'), { timeout: 5000 }).catch(() => {});
   await sleep(300);
   const shownAgain = await canAccept();
+  const canHide = () => page.evaluate(() => window.__smokeEditor.getAction('editor.action.inlineSuggest.hide').isSupported());
+  const hideWhileShown = await canHide();
   await page.keyboard.press('Escape');
   await sleep(200);
   const afterEscape = await canAccept();
+  const hideAfterEscape = await canHide();
+
+  await page.keyboard.type('r');
+  await page.waitForFunction(() => window.__inlineAsked.at(-1).text.includes('bqr'), { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const shownForButton = await canAccept();
+  const asksBeforeHide = await page.evaluate(() => window.__inlineAsked.length);
+  const hid = await page.evaluate(() => window.__smokeEditor.trigger(null, 'editor.action.inlineSuggest.hide'));
+  await sleep(600);
+  const afterHide = await canAccept();
+  const hideStaysGone = (await page.evaluate(() => window.__inlineAsked.length)) === asksBeforeHide;
 
   await page.evaluate(() => window.__inlineProvider.dispose());
   await sleep(300);
@@ -372,7 +385,10 @@ async function inlineCompletionCheck(page) {
     'accepting leaves the caret at the end of what it added': caret?.lineNumber === 1 && caret?.column === 8,
     'accepting is one undo step': undone === 'foo(b)\nsecond',
     'typing something else drops it and asks again': shownAgain === true,
-    'Escape dismisses it': afterEscape === false,
+    'Escape dismisses it, and hide is there only while something shows':
+      hideWhileShown === true && afterEscape === false && hideAfterEscape === false,
+    'hide from a button dismisses it, and it stays gone until an edit asks':
+      shownForButton === true && hid === true && afterHide === false && hideStaysGone,
     'Tab indents when nothing shows': indented !== before && indented.length > before.length,
   };
 }

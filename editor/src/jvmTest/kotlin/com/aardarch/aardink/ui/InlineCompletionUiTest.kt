@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,12 +23,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.KeyInjectionScope
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -495,6 +502,180 @@ class InlineCompletionUiTest {
         assertEquals(1, provider.asked)
         keys { pressKey(Key.Escape) }
         assertFalse(find.visible)
+    }
+
+    @Test
+    fun `dismissing from a button leaves it gone until the next edit asks`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        val provider = Ready("bcd")
+        show(state, provider)
+        typeAndPause("a")
+        assertTrue(EditorCommand.DismissInlineCompletion in state.availableCommands)
+        assertTrue(state.execute(EditorCommand.DismissInlineCompletion))
+        waitForIdle()
+        assertNull(state.ghost)
+        assertFalse(EditorCommand.DismissInlineCompletion in state.availableCommands)
+        pause()
+        assertNull(state.ghost, "it stays gone")
+        assertEquals(1, provider.asked)
+        typeAndPause("b")
+        assertEquals(2, provider.asked, "an edit asks again")
+        assertEquals("bcd", state.ghost)
+    }
+
+    /** Answers hover at any place, for what Escape closes after ghost text. */
+    private class Documented : LanguageService by Words() {
+        override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc = HoverDoc("documented", "text")
+    }
+
+    @Test
+    fun `Escape dismisses ahead of the hover, and the next one closes it`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        show(state, Ready("bcd"), service = Documented())
+        typeAndPause("a")
+        assertTrue(state.execute(EditorCommand.ShowHover))
+        waitUntil { onAllNodes(hasText("documented")).fetchSemanticsNodes().isNotEmpty() }
+        assertNotNull(state.ghost)
+        keys { pressKey(Key.Escape) }
+        assertNull(state.ghost)
+        onNodeWithText("documented").assertExists()
+        keys { pressKey(Key.Escape) }
+        onNodeWithText("documented").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a snippet ends it, and Escape goes to the snippet`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        show(state, Ready("bcd"))
+        typeAndPause("a")
+        assertTrue(state.execute(EditorCommand.InsertSnippet("<$1>$0")))
+        waitForIdle()
+        assertNull(state.ghost)
+        keys { pressKey(Key.Escape) }
+        assertNull(state.snippet)
+    }
+
+    @Test
+    fun `a second caret ends it, and Escape goes to the carets`() = runComposeUiTest {
+        val state = stateAtEnd("one\n")
+        show(state, Ready("bcd"))
+        typeAndPause("a")
+        keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } } }
+        assertEquals(2, state.selections.size)
+        assertNull(state.ghost)
+        keys { pressKey(Key.Escape) }
+        assertEquals(1, state.selections.size)
+    }
+
+    @Test
+    fun `Escape leaves the view where it is, with the caret out of it`() = runComposeUiTest {
+        val state = stateAtEnd("line\n".repeat(200))
+        show(state, Ready("bcd"))
+        typeAndPause("a")
+        assertTrue(state.execute(EditorCommand.ScrollTo(0f)))
+        waitForIdle()
+        assertEquals(0, state.viewport.firstVisibleLine)
+        assertNotNull(state.ghost)
+        keys { pressKey(Key.Escape) }
+        assertNull(state.ghost)
+        assertEquals(0, state.viewport.firstVisibleLine, "nothing scrolled to the caret")
+    }
+
+    @Test
+    fun `after Escape the caret goes down from where it is, not where a column was kept`() = runComposeUiTest {
+        val state = stateAtEnd("abcdef\na\nabcdef")
+        state.selection = TextRange(6)
+        show(state, Ready("bcd"))
+        keys { pressKey(Key.DirectionDown) }
+        assertEquals(TextRange(8), state.selection)
+        keys { withKeyDown(Key.AltLeft) { pressKey(Key.RightBracket) } }
+        waitForIdle()
+        assertNotNull(state.ghost)
+        keys { pressKey(Key.Escape) }
+        keys { pressKey(Key.DirectionDown) }
+        assertEquals(TextRange(10), state.selection)
+    }
+
+    /** The editor inside a host that counts each Escape the editor leaves to it. */
+    private fun ComposeUiTest.showInHost(
+        state: CodeEditorState,
+        provider: InlineCompletionProvider,
+        options: EditorOptions,
+        reached: () -> Unit,
+    ) {
+        state.computeDispatcher = Dispatchers.Unconfined
+        setContent {
+            Box(
+                Modifier.onKeyEvent { event ->
+                    if (event.key == Key.Escape && event.type == KeyEventType.KeyDown) reached()
+                    false
+                },
+            ) {
+                CodeEditorLayout(
+                    state = state,
+                    options = options,
+                    inlineCompletionProvider = provider,
+                    modifier = Modifier.size(600.dp, 400.dp),
+                )
+            }
+        }
+        waitForIdle()
+    }
+
+    @Test
+    fun `Escape is kept while it dismisses, and a host gets the next one`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        var reached = 0
+        showInHost(state, Ready("bcd"), EditorOptions()) { reached++ }
+        typeAndPause("a")
+        keys { pressKey(Key.Escape) }
+        assertNull(state.ghost)
+        assertEquals(0, reached)
+        keys { pressKey(Key.Escape) }
+        assertEquals(1, reached)
+    }
+
+    private val noDismissingKey = listOf(EditorKeyBinding(KeyChord(Key.Escape), null))
+
+    @Test
+    fun `a host can move dismissing, and Escape keeps the rest of what it does`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        val find = FindReplaceState().apply { show() }
+        val bindings = noDismissingKey + EditorKeyBinding(KeyChord(Key.J, ctrlCmd = true), EditorCommand.DismissInlineCompletion)
+        show(state, Ready("bcd"), options = { EditorOptions(keyBindings = bindings) }, find = find)
+        typeAndPause("a")
+        keys { pressKey(Key.Escape) }
+        assertEquals("bcd", state.ghost, "Escape no longer dismisses")
+        assertFalse(find.visible, "and it still closes the find panel")
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.J) } }
+        assertNull(state.ghost)
+        assertEquals("a", state.document.text)
+    }
+
+    @Test
+    fun `a host that removes dismissing has Escape with it showing`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        var reached = 0
+        showInHost(state, Ready("bcd"), EditorOptions(keyBindings = noDismissingKey)) { reached++ }
+        typeAndPause("a")
+        keys { pressKey(Key.Escape) }
+        assertEquals("bcd", state.ghost)
+        assertEquals(1, reached, "nothing else was open, so the key is the host's")
+    }
+
+    @Test
+    fun `removing dismissing leaves Escape ending a snippet and extra carets`() = runComposeUiTest {
+        val state = stateAtEnd("one\ntwo")
+        show(state, null, options = { EditorOptions(keyBindings = noDismissingKey) })
+        keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } } }
+        assertEquals(2, state.selections.size)
+        keys { pressKey(Key.Escape) }
+        assertEquals(1, state.selections.size)
+        assertTrue(state.execute(EditorCommand.InsertSnippet("<$1>$0")))
+        waitForIdle()
+        assertNotNull(state.snippet)
+        keys { pressKey(Key.Escape) }
+        assertNull(state.snippet)
     }
 
     @Test

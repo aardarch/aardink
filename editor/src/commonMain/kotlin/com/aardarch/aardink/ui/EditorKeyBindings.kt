@@ -116,7 +116,9 @@ data class EditorKeyBinding(val chord: List<KeyChord>, val command: EditorComman
  * [EditorOptions.keyBindings] adds to them and overrides them. Moving the caret, typing, the
  * clipboard, Enter, Escape and Tab's indenting are the editor's fixed keys and not listed. A binding
  * whose command cannot run now leaves its key to them: Tab runs
- * [EditorCommand.AcceptInlineCompletion] only while ghost text shows, and indents otherwise.
+ * [EditorCommand.AcceptInlineCompletion] only while ghost text shows, and indents otherwise, and
+ * Escape runs [EditorCommand.DismissInlineCompletion] only while ghost text shows, and otherwise
+ * closes what else is open. A null binding of Escape takes away that dismissal and no more.
  */
 object EditorKeyBindings {
 
@@ -188,6 +190,7 @@ object EditorKeyBindings {
         add(bind(KeyChord(Key.NumPadSubtract, ctrlCmd = true), EditorCommand.ZoomOut))
         add(bind(KeyChord(Key.Zero, ctrlCmd = true), EditorCommand.ZoomReset))
         add(bind(KeyChord(Key.Tab), EditorCommand.AcceptInlineCompletion))
+        add(bind(KeyChord(Key.Escape), EditorCommand.DismissInlineCompletion))
         add(bind(KeyChord(Key.RightBracket, alt = true), EditorCommand.CycleInlineCompletion(forward = true)))
         add(bind(KeyChord(Key.LeftBracket, alt = true), EditorCommand.CycleInlineCompletion(forward = false)))
     }

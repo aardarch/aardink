@@ -636,6 +636,7 @@ class CodeEditorState(
             addAll(listOf(EditorCommand.ChangeAllOccurrences, EditorCommand.JumpToBracket))
             if (cursorHistory.isNotEmpty()) add(EditorCommand.CursorUndo)
             if (canShrinkSelection) add(EditorCommand.ShrinkSelection)
+            if (inlineCompletions.shown != null) add(EditorCommand.DismissInlineCompletion)
             addAll(uiCommandsAvailable)
         }
 
@@ -707,6 +708,8 @@ class CodeEditorState(
             EditorCommand.SelectLine -> selectLine()
 
             EditorCommand.AcceptInlineCompletion -> acceptInlineCompletion()
+
+            EditorCommand.DismissInlineCompletion -> true.also { inlineCompletions.clear() }
 
             is EditorCommand.InsertSnippet -> {
                 val primary = selection
