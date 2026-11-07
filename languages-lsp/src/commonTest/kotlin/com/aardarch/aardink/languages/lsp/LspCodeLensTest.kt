@@ -35,6 +35,7 @@ import kotlin.test.assertTrue
 private const val METHOD = "textDocument/codeLens"
 private const val RESOLVE = "codeLens/resolve"
 private const val EXECUTE = "workspace/executeCommand"
+private const val CANCEL = "\$/cancelRequest"
 private const val CONTENT_MODIFIED = -32801
 
 private const val LENS_SERVER = """{"textDocumentSync":2,"codeLensProvider":{},"executeCommandProvider":{"commands":["run"]}}"""
@@ -196,9 +197,9 @@ class LspCodeLensTest {
     }
 
     @Test
-    fun `a server that registered lenses counts as resolving them`() = withServer("abc") {
+    fun `a server that registered lenses as resolving them is asked to`() = withServer("abc") {
         serverDeclares("""{"textDocumentSync":2}""")
-        serverRegisters(registration(METHOD))
+        serverRegisters(registration(METHOD, """{"resolveProvider":true}"""))
         service.didOpen(doc)
         assertEquals("textDocument/didOpen", nextSent().method)
 
@@ -207,6 +208,22 @@ class LspCodeLensTest {
         respond(RESOLVE, lens(0, 1, command("x")))
 
         assertEquals(listOf(1 to "x"), asked.await().seen)
+    }
+
+    @Test
+    fun `a server that registered lenses without resolving them is not asked to, by LSP's default`() {
+        for (options in listOf("{}", """{"resolveProvider":false}""")) {
+            withServer("abc") {
+                serverDeclares("""{"textDocumentSync":2}""")
+                serverRegisters(registration(METHOD, options))
+                service.didOpen(doc)
+                assertEquals("textDocument/didOpen", nextSent().method)
+
+                assertEquals(listOf(2 to "kept"), answered("[${lens(0, 1)},${lens(0, 2, command("kept"))}]").seen)
+
+                assertNothingSent("no resolve from a server that registered $options")
+            }
+        }
     }
 
     @Test
@@ -226,15 +243,19 @@ class LspCodeLensTest {
     fun `a resolve that may pass is asked again, and past that keeps the lens's row without a title`() = withServer("abc") {
         open(RESOLVING_SERVER)
 
-        val asked = async { service.codeLenses(doc) }
+        val first = async { service.codeLenses(doc) }
         respond(METHOD, "[${lens(0, 1)}]")
+        respondWithError(RESOLVE, CONTENT_MODIFIED)
+        assertEquals(listOf(1 to ""), first.await().seen, "the row does not wait for the retries")
+
+        val again = async { service.codeLenses(doc) }
         respondWithError(RESOLVE, CONTENT_MODIFIED)
         for (wait in listOf(1_000L, 2_000L, 4_000L)) {
             advanceBy(wait)
             respondWithError(RESOLVE, CONTENT_MODIFIED)
         }
 
-        assertEquals(listOf(1 to ""), asked.await().seen)
+        assertEquals(listOf(1 to ""), again.await().seen)
     }
 
     @Test
@@ -245,10 +266,6 @@ class LspCodeLensTest {
         respond(METHOD, "[${lens(0, 0)},${lens(0, 1)}]")
         respond(RESOLVE, lens(0, 0, command("resolved")))
         respondWithError(RESOLVE, CONTENT_MODIFIED)
-        for (wait in listOf(1_000L, 2_000L, 4_000L)) {
-            advanceBy(wait)
-            respondWithError(RESOLVE, CONTENT_MODIFIED)
-        }
         assertEquals(listOf(0 to "resolved", 1 to ""), first.await().seen)
 
         val second = async { service.codeLenses(doc) }
@@ -322,6 +339,100 @@ class LspCodeLensTest {
         respond(RESOLVE, lens(0, 1, command("next")))
 
         assertEquals(listOf(0 to "kept", 1 to "next"), second.await().seen)
+    }
+
+    // ── What a resolve can hold back ─────────────────────────────────────────
+
+    @Test
+    fun `a resolve never answered holds back neither the rows nor the lenses with a command`() = withServer("abc") {
+        open(RESOLVING_SERVER)
+
+        val asked = async { service.codeLenses(doc) }
+        respond(METHOD, "[${lens(0, 0, command("came with it"))},${lens(0, 1)}]")
+        val stuck = nextSent()
+        assertEquals(RESOLVE, stuck.method)
+
+        advanceBy(499)
+        assertFalse(asked.isCompleted, "an answer in time keeps a row from going blank")
+        advanceBy(1)
+
+        assertEquals(listOf(0 to "came with it", 1 to ""), asked.await().seen)
+        val cancelled = nextSent()
+        assertEquals(CANCEL, cancelled.method)
+        assertEquals(stuck["id"], cancelled.params["id"])
+    }
+
+    @Test
+    fun `what did resolve is not held back by what did not`() = withServer("ab") {
+        open(RESOLVING_SERVER)
+
+        val asked = async { service.codeLenses(doc) }
+        respond(METHOD, "[${lens(0, 0)},${lens(0, 1)}]")
+        respond(RESOLVE, lens(0, 0, command("in time")))
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(500)
+
+        assertEquals(listOf(0 to "in time", 1 to ""), asked.await().seen)
+    }
+
+    @Test
+    fun `with the rows given, asking again waits for a resolve past the patience, as they cost nothing now`() = withServer("abc") {
+        open(RESOLVING_SERVER)
+        val first = async { service.codeLenses(doc) }
+        respond(METHOD, "[${lens(0, 1)}]")
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(500)
+        assertEquals(listOf(1 to ""), first.await().seen)
+        assertEquals(CANCEL, nextSent().method)
+
+        val again = async { service.codeLenses(doc) }
+        val slow = nextSent()
+        assertEquals(RESOLVE, slow.method)
+        advanceBy(60_000)
+        assertFalse(again.isCompleted, "it would only be cancelled again: this one takes the server a while")
+        serverSends("""{"jsonrpc":"2.0","id":${slow["id"]},"result":${lens(0, 1, command("slow"))}}""")
+
+        assertEquals(listOf(1 to "slow"), again.await().seen)
+    }
+
+    @Test
+    fun `with the rows given, the first to answer starts the patience for the rest`() = withServer("ab") {
+        open(RESOLVING_SERVER)
+        val first = async { service.codeLenses(doc) }
+        respond(METHOD, "[${lens(0, 0)},${lens(0, 1)}]")
+        assertEquals(RESOLVE, nextSent().method)
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(500)
+        first.await()
+        assertEquals(CANCEL, nextSent().method)
+        assertEquals(CANCEL, nextSent().method)
+
+        val again = async { service.codeLenses(doc) }
+        respond(RESOLVE, lens(0, 0, command("first")))
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(499)
+        assertFalse(again.isCompleted)
+        advanceBy(1)
+
+        assertEquals(listOf(0 to "first", 1 to ""), again.await().seen)
+    }
+
+    @Test
+    fun `other text starts over, and its rows are not held by a resolve`() = withServer("abc") {
+        open(RESOLVING_SERVER)
+        val first = async { service.codeLenses(doc) }
+        respond(METHOD, "[${lens(0, 1)}]")
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(500)
+        first.await()
+        assertEquals(CANCEL, nextSent().method)
+
+        val other = async { service.codeLenses(CodeDocument("abcd")) }
+        respond(METHOD, "[${lens(0, 2)}]")
+        assertEquals(RESOLVE, nextSent().method)
+        advanceBy(500)
+
+        assertEquals(listOf(2 to ""), other.await().seen)
     }
 
     // ── Clicks ───────────────────────────────────────────────────────────────
@@ -406,7 +517,31 @@ class LspCodeLensTest {
     @Test
     fun `a server that registered commands is sent them`() = withServer("abc") {
         serverDeclares("""{"textDocumentSync":2,"codeLensProvider":{}}""")
+        serverRegisters(registration(EXECUTE, """{"commands":["other","run"]}"""))
+        service.didOpen(doc)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val lens = answered("[${lens(0, 1, command("Run"))}]").single()
+
+        assertEquals(EXECUTE, clicked(lens).method)
+    }
+
+    @Test
+    fun `a command a registration does not list is its client's, and is not sent`() = withServer("abc") {
+        serverDeclares("""{"textDocumentSync":2,"codeLensProvider":{}}""")
         serverRegisters(registration(EXECUTE, """{"commands":["other"]}"""))
+        service.didOpen(doc)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val lens = answered("[${lens(0, 1, command("Show references", "client.showReferences"))}]").single()
+
+        lens.onClick()
+
+        assertNothingSent("not one of the commands it registered")
+    }
+
+    @Test
+    fun `a command is sent if a registration lists it and what was declared does not`() = withServer("abc") {
+        serverDeclares("""{"textDocumentSync":2,"codeLensProvider":{},"executeCommandProvider":{"commands":["other"]}}""")
+        serverRegisters(registration(EXECUTE, """{"commands":["run"]}"""))
         service.didOpen(doc)
         assertEquals("textDocument/didOpen", nextSent().method)
         val lens = answered("[${lens(0, 1, command("Run"))}]").single()

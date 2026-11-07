@@ -76,6 +76,7 @@ class LspCodeLensUiTest {
         private val capabilities: String,
         private val refusesHandshake: Boolean,
         private val holding: String?,
+        private val neverResolving: Int?,
         private val lenses: (asked: Int) -> String,
     ) {
         /** Completed to let the [holding] method have its answer. */
@@ -97,6 +98,7 @@ class LspCodeLensUiTest {
                 requests += message
                 val id = message["id"] ?: continue
                 if (method == holding) released.await()
+                if (method == "codeLens/resolve" && lineOf(message["params"]!!.jsonObject) == neverResolving) continue
                 if (method == "initialize" && refusesHandshake) {
                     transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"no"}}""")
                     continue
@@ -111,9 +113,10 @@ class LspCodeLensUiTest {
             }
         }
 
+        private fun lineOf(lens: JsonObject) = lens["range"]!!.jsonObject["start"]!!.jsonObject["line"]!!.jsonPrimitive.int
+
         private fun resolved(lens: JsonObject): String {
-            val line = lens["range"]!!.jsonObject["start"]!!.jsonObject["line"]!!.jsonPrimitive.int
-            resolved += line
+            resolved += lineOf(lens)
             return """{"range":${lens["range"]},"command":{"title":"${lens["data"]!!.jsonPrimitive.content} references","command":"run"}}"""
         }
     }
@@ -122,13 +125,16 @@ class LspCodeLensUiTest {
         capabilities: String = RESOLVING,
         refusesHandshake: Boolean = false,
         holding: String? = null,
+        neverResolving: Int? = null,
         lenses: (asked: Int) -> String,
     ) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val transport = ChannelLspTransport()
         val client = LspClient(transport, scope)
         val service = LspLanguageService(client, "file:///Main.kt", "kotlin")
-        val server = Server(transport, capabilities, refusesHandshake, holding, lenses).also { server -> scope.launch { server.serve() } }
+        val server = Server(transport, capabilities, refusesHandshake, holding, neverResolving, lenses).also { server ->
+            scope.launch { server.serve() }
+        }
 
         fun close() = scope.cancel()
     }
@@ -315,6 +321,8 @@ class LspCodeLensUiTest {
             val later = connection.server.resolved.drop(first)
             assertEquals(later.distinct(), later, "nothing resolved twice")
             assertTrue(later.all { it > lines / 4 }, "around the view: $later")
+            val view = state.viewport.firstVisibleLine..state.viewport.lastVisibleLine
+            assertTrue(later.first() in view, "what is on screen goes first, ahead of the screen above it: $later in $view")
         } finally {
             connection.close()
         }
@@ -335,6 +343,112 @@ class LspCodeLensUiTest {
             waitUntil { connection.server.methods.count { it == method } == 2 }
             waitUntil { connection.server.resolved.size == first * 2 }
             waitUntil { state.codeLenses.first().title.isNotEmpty() }
+        } finally {
+            connection.close()
+        }
+    }
+
+    // ── A server that is slow to resolve ─────────────────────────────────────
+
+    private fun CodeEditorState.titles() = codeLenses.map { it.title }
+
+    @Test
+    fun `a resolve never answered holds back neither the rows, nor lenses with a command, nor what did resolve`() = runComposeUiTest {
+        val connection = Connection(neverResolving = 2) { "[${lens(0, "came with it")},${unresolved(2)},${unresolved(4)}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
+            connection.service.attach(state)
+            show(state, connection.service)
+            pause()
+
+            waitUntil(timeoutMillis = 5_000) { state.codeLenses.size == 3 }
+
+            assertEquals(listOf("came with it", "", "4 references"), state.titles())
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `a server stuck on every resolve still shows every row, and a lens with a command`() = runComposeUiTest {
+        val connection = Connection(holding = resolve) { "[${lens(0, "came with it")},${unresolved(2)},${unresolved(4)}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
+            connection.service.attach(state)
+            show(state, connection.service)
+            pause()
+
+            waitUntil(timeoutMillis = 5_000) { state.codeLenses.size == 3 }
+
+            assertEquals(listOf("came with it", "", ""), state.titles())
+        } finally {
+            connection.server.released.complete(Unit)
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `a resolve past the patience gets its title all the same, with no edit or scroll`() = runComposeUiTest {
+        val connection = Connection(holding = resolve) { "[${unresolved(2)}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
+            connection.service.attach(state)
+            show(state, connection.service)
+            pause()
+            waitUntil(timeoutMillis = 5_000) { state.codeLenses.size == 1 }
+            assertEquals(listOf(""), state.titles())
+
+            outwait()
+            connection.server.released.complete(Unit)
+
+            waitUntil(timeoutMillis = 5_000) { state.titles() == listOf("2 references") }
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `an edit on a slow server asks again for lines that were waiting before it too`() = runComposeUiTest {
+        val connection = Connection(holding = resolve) { "[${unresolved(2)}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
+            connection.service.attach(state)
+            show(state, connection.service)
+            pause()
+            waitUntil(timeoutMillis = 5_000) { state.codeLenses.size == 1 }
+
+            state.selection = TextRange(0)
+            onNodeWithTag(EditorTestTags.EDITOR).performTextInput("x")
+            waitForIdle()
+            pause()
+            waitUntil(timeoutMillis = 5_000) { connection.server.methods.count { it == method } == 1 }
+            connection.server.released.complete(Unit)
+
+            waitUntil(timeoutMillis = 5_000) { state.titles() == listOf("2 references") }
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun `waiting on a resolve takes neither a server's rows nor a host's off the screen`() = runComposeUiTest {
+        val connection = Connection(neverResolving = 2) { "[${unresolved(2)},${lens(4, "server")}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState((0 until 10).joinToString("\n") { "line $it" })
+            connection.service.attach(state)
+            show(state, CompositeLanguageService(dialect(1, "own"), connection.service))
+            pause()
+            waitUntil(timeoutMillis = 5_000) { state.codeLenses.size == 3 }
+
+            repeat(3) {
+                outwait()
+                assertEquals(listOf("own", "", "server"), state.titles())
+            }
         } finally {
             connection.close()
         }

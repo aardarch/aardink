@@ -784,9 +784,12 @@ private fun CodeEditorLayoutContent(
         state.publishCodeLenses(emptyList())
         val service = languageService.takeIf { options.codeLens } ?: return@LaunchedEffect
         var answered: Int? = null
+        // A first answer may leave the same lines waiting as before it, which alone asks nothing.
+        var firstAnswers by mutableIntStateOf(0)
         snapshotFlow {
             state.codeLenses
-            state.textVersion to view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
+            val waiting = view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
+            Triple(state.textVersion, waiting, firstAnswers)
         }.collectLatest { (version, waiting) ->
             if (version == answered && waiting.isEmpty()) return@collectLatest
             delay(CODE_LENSES_DEBOUNCE_MS)
@@ -800,8 +803,12 @@ private fun CodeEditorLayoutContent(
                     state.publishCodeLenses(lenses.filter { it.offset in 0..document.length })
                 }
             }
-            show(InlineContent.askForLenses(service, document, state.computeDispatcher, showEarly = show))
+            // Asked again about the same text, all its rows are up, and part of an answer would
+            // take off those of whoever is slow: this may go on until something more is known.
+            val first = version != answered
+            show(InlineContent.askForLenses(service, document, state.computeDispatcher, showEarly = if (first) show else { _ -> }))
             answered = version
+            if (first) firstAnswers++
         }
     }
 

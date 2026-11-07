@@ -174,10 +174,15 @@ A `CodeLens` with a blank title is not an error: it keeps its row and the editor
 `codeLenses` again when it is on screen. That is how a service leaves out what costs a lot until it
 can be seen. `LspLanguageService` does it for a server's `codeLens/resolve`, so a server that resolves
 lenses is asked only about those around the view, once the service is attached to the editor's state.
+Rows do not wait on that: what has not resolved within half a second stays blank until the editor asks
+again, so `LspLanguageService.codeLenses` can return blank titles even with no view. Asking again about
+the same text then waits for the first resolve to answer, for as long as that takes.
 
 A click on a lens from a server sends `workspace/executeCommand` only for a command the server listed
-in `executeCommandProvider`. Anything else is its client's own, as VS Code's "show references" is, and
-the lens is then only something to read.
+in `executeCommandProvider`, or in what it registered through `client/registerCapability`. Anything
+else is its client's own, as VS Code's "show references" is, and the lens is then only something to
+read. A registration of `textDocument/codeLens` counts as resolving lenses only if its options say
+`resolveProvider: true`.
 
 ## Inline text and inlay hints
 

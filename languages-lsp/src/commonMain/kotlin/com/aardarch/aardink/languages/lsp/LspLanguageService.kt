@@ -49,12 +49,15 @@ import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.Token
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
@@ -855,11 +858,19 @@ class LspLanguageService(
      *
      * A lens the server sends without a command it fills in on `codeLens/resolve`, which can cost it
      * a search of the project. So that is only asked about lenses around the view of the state given
-     * to [attach], or about all of them without one: the rest come back with a blank title, which
-     * keeps their rows, and the editor asks again when one comes on screen. Asked again about the
-     * same text, this goes on from the same answer rather than the server's being asked for it. A
-     * lens that the server does not resolve (`resolveProvider`), or that comes back without a
-     * command, is left out. One that failed in a way that may pass stays blank.
+     * to [attach], those on screen first, or about all of them without one: the rest come back with
+     * a blank title, which keeps their rows, and the editor asks again when one comes on screen.
+     * Asked again about the same text, this goes on from the same answer rather than the server's
+     * being asked for it. A lens that the server does not resolve (`resolveProvider`), or that comes
+     * back without a command, is left out. One that failed in a way that may pass stays blank.
+     *
+     * No resolve holds the rows back, as `codeLens/resolve` has no time limit and one that is never
+     * answered would hold them for good: what has not come after [LENS_PATIENCE_MILLIS] stays blank
+     * for now, and its request is called off. That patience keeps a titled row from going blank
+     * after each edit, on a server that answers in time. Once a text's rows have been given, a
+     * blank title has cost nothing more, so asking again waits for as long as the first resolve
+     * takes, and gives the rest the same patience from there. It may never return, then, if the
+     * server never answers, which the editor calls off with the next edit or scroll.
      *
      * The editor may ask once and then not again until an edit, so a request that comes too soon
      * waits and asks again as [semanticTokens] does.
@@ -871,13 +882,27 @@ class LspLanguageService(
         if (supports("codeLensProvider") && !sync.awaitOpen()) return emptyList()
         if (!supports("codeLensProvider")) return emptyList()
         val served = lensesOf(document) ?: return emptyList()
-        val lines = linesToResolve()
-        val wanted = served.lenses.filter { it.isPending && it.line in lines }
-        if (wanted.isNotEmpty()) {
-            val turns = Semaphore(MAX_LENSES_RESOLVING)
-            coroutineScope { wanted.forEach { lens -> launch { turns.withPermit { resolve(lens) } } } }
-        }
+        val screen = linesOnScreen()
+        val around = screen?.let { (it.first - (it.last - it.first + 1))..(it.last + (it.last - it.first + 1)) } ?: 0..Int.MAX_VALUE
+        val wanted = served.lenses.filter { it.isPending && it.line in around }.sortedBy { screen != null && it.line !in screen }
+        if (wanted.isNotEmpty()) resolvePatiently(wanted, untilOneAnswers = served.given)
+        served.given = true
         return served.lenses.mapNotNull { it.toCodeLens() }
+    }
+
+    /** [lenses], in that order, for as long as [codeLenses] says. What is not back by then is called off. */
+    private suspend fun resolvePatiently(lenses: List<ServedLens>, untilOneAnswers: Boolean) = coroutineScope {
+        val turns = Semaphore(MAX_LENSES_RESOLVING)
+        val oneAnswered = CompletableDeferred<Unit>()
+        val resolving = lenses.map { lens ->
+            launch {
+                turns.withPermit { resolve(lens) }
+                oneAnswered.complete(Unit)
+            }
+        }
+        if (untilOneAnswers) oneAnswered.await()
+        withTimeoutOrNull(LENS_PATIENCE_MILLIS) { resolving.joinAll() }
+        resolving.forEach { it.cancel() }
     }
 
     /** The server's lenses for [document], from the last answer if that was about the same text. */
@@ -889,20 +914,18 @@ class LspLanguageService(
         return ServedLenses(text, lenses.filterIsInstance<JsonObject>().mapNotNull { it.toServedLens(document) }).also { servedLenses = it }
     }
 
-    /** Whether the server fills lenses in: what it declared, or registered, or not known. */
+    /** Whether the server fills lenses in: what it declared or registered, by LSP's default of no, or not known. */
     private val resolvesLenses: Boolean
         get() {
             val capabilities = client.serverCapabilities as? JsonObject ?: return true
             val declared = capabilities["codeLensProvider"] as? JsonObject
-            return declared?.boolean("resolveProvider") == true || isRegistered("codeLensProvider")
+            val method = methodOf("codeLensProvider")
+            return declared?.boolean("resolveProvider") == true ||
+                client.registrations.any { it.method == method && it.options?.boolean("resolveProvider") == true }
         }
 
-    /** The lines a lens is resolved on: those on screen and a screen either side, or all with no view to go by. */
-    private fun linesToResolve(): IntRange {
-        val view = sync.viewport?.takeIf { it.height > 0f } ?: return 0..Int.MAX_VALUE
-        val screen = view.lastVisibleLine - view.firstVisibleLine + 1
-        return (view.firstVisibleLine - screen)..(view.lastVisibleLine + screen)
-    }
+    /** The lines on screen, or null with no view to go by. */
+    private fun linesOnScreen(): IntRange? = sync.viewport?.takeIf { it.height > 0f }?.let { it.firstVisibleLine..it.lastVisibleLine }
 
     private suspend fun resolve(lens: ServedLens) {
         when (val outcome = requestPatiently("codeLens/resolve", lens.raw)) {
@@ -928,12 +951,17 @@ class LspLanguageService(
         client.launchUntilClosed { requestOrFailure("workspace/executeCommand", params) }
     }
 
+    /** Whether what the server declared or registered lists [name]. One that gives no list, and none at all, runs anything. */
     private fun runsCommand(name: String): Boolean {
         if (!supports("executeCommandProvider")) return false
-        if (isRegistered("executeCommandProvider")) return true
         val declared = (client.serverCapabilities as? JsonObject)?.get("executeCommandProvider") as? JsonObject
-        val commands = declared?.get("commands") as? JsonArray ?: return true
-        return commands.any { (it as? JsonPrimitive)?.contentOrNull == name }
+        val method = methodOf("executeCommandProvider")
+        val offers = listOfNotNull(declared).plus(client.registrations.filter { it.method == method }.map { it.options })
+        if (offers.isEmpty()) return true
+        return offers.any { offer ->
+            val commands = offer?.get("commands") as? JsonArray
+            commands == null || commands.any { (it as? JsonPrimitive)?.contentOrNull == name }
+        }
     }
 
     /** What the server's numbers mean, from what it declared or else registered; null when it does not say. */
@@ -1276,7 +1304,11 @@ class LspLanguageService(
     private class OfferedCompletion(val item: CompletionItem, val raw: JsonElement)
 
     /** What the server said about [text]: its lenses, with what has been resolved of them since. */
-    private class ServedLenses(val text: String, val lenses: List<ServedLens>)
+    private class ServedLenses(val text: String, val lenses: List<ServedLens>) {
+        /** Whether these have been answered with, so that the editor has their rows. */
+        @Volatile
+        var given = false
+    }
 
     /** A lens as the server sent it, [raw], `data` and all, at [offset] on [line]. */
     private class ServedLens(val raw: JsonObject, val offset: Int, val line: Int, command: JsonObject?) {
@@ -1300,6 +1332,12 @@ class LspLanguageService(
 
         /** Most `codeLens/resolve` requests out at once: without a view to go by, that could be a whole document's. */
         private const val MAX_LENSES_RESOLVING = 16
+
+        /**
+         * How long [codeLenses] waits for what it resolves. Shorter than the editor waits for a
+         * server behind a host's own lenses, so that a resolve cannot cost it those it has.
+         */
+        private const val LENS_PATIENCE_MILLIS = 500L
 
         /** How long the text has to stand still for its diagnostics to be pulled. */
         private const val DIAGNOSTICS_PULL_DEBOUNCE_MILLIS = 400L

@@ -245,7 +245,9 @@ interface LanguageService {
      * The answer is about the whole document. The editor asks after a pause in typing, calls off a
      * question it no longer needs answered, and moves what it has with each edit until the next
      * answer. A service for which a lens's title costs a lot can leave it blank
-     * ([CodeLens.title]), and the editor asks again when such a lens comes on screen.
+     * ([CodeLens.title]), and the editor asks again when such a lens comes on screen, and whenever
+     * an answer leaves fewer blank there. Those rows being up, it waits as long as that question
+     * takes, and a service may take its time over the next title.
      */
     suspend fun codeLenses(document: CodeDocument): List<CodeLens> = emptyList()
 
