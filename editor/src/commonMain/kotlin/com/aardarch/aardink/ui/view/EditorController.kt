@@ -185,7 +185,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             contextMenuAt = null
             showToolbarAtCaret = false
             preferredX = null
-            requestFocus()
+            if (typing) requestFocus()
             if (touch && typing && !readOnly) ime.keyboardRequests++
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }

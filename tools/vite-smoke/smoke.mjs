@@ -388,6 +388,32 @@ async function serverCodeLensCheck(page) {
   }
 }
 
+/**
+ * A host's provider with a language server behind it that declares lenses and never answers the
+ * request: the provider's lens still has to reach the screen, and a click on it the host.
+ */
+async function stuckServerLensCheck(page) {
+  setPhase('code lenses: a server stuck on the request');
+  const server = await startLoopbackLsp('', { capabilities: { codeLensProvider: {} }, unanswered: ['textDocument/codeLens'] });
+  try {
+    await lensEditor(page);
+    await page.evaluate(async (serverUrl) => {
+      window.__stuck = await window.__aardink.connectLanguageServer(serverUrl, 'toy-lens');
+    }, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+    const asked = await server.until(() => server.count('textDocument/codeLens') >= 1);
+    await sleep(1800);
+    await page.mouse.click(150, 12);
+    await sleep(300);
+    const runs = await page.evaluate(() => window.__lensRuns.slice());
+    await page.evaluate(() => window.__stuck.dispose());
+    return { 'a provider\'s lens reaches the screen and takes a click past a server stuck on the request': asked && runs.length === 1 };
+  } finally {
+    await server.close();
+  }
+}
+
 /** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
 async function linkPixel(page) {
   const png = await page.screenshot({ encoding: 'base64' });
@@ -872,6 +898,7 @@ try {
     ...(await stuckServerHintCheck(desktop)),
     ...(await codeLensCheck(desktop)),
     ...(await serverCodeLensCheck(desktop)),
+    ...(await stuckServerLensCheck(desktop)),
     ...(await languageServerCheck(desktop)),
     ...(await linkCheck(desktop)),
   };

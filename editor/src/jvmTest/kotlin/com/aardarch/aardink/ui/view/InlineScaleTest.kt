@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.ui.view.InlineFixture.viewOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,5 +69,25 @@ class InlineScaleTest {
         view.state.applyEdit(first.start, 0, "\n", TextRange(first.start + 1))
         view.prepare(600, height)
         assertTrue(asked < 100, "a new line asked $asked times")
+    }
+
+    @Test
+    fun `real lenses are counted without laying their lines out, and an edit keeps them all`() {
+        val view = viewOf((0 until lines).joinToString("\n") { "line $it" }, height = height)
+        val lenses = (0 until lines step 20).map { CodeLens(view.state.document.lineStart(it), "3 references") }
+
+        view.state.publishCodeLenses(lenses)
+        view.prepare(600, height)
+
+        assertEquals(lines + lines / 20, view.lineMap.totalRows)
+        assertTrue(view.frame.lines.size <= 30, "only what fits is laid out: ${view.frame.lines.size}")
+
+        val first = view.frame.lines.first()
+        view.state.applyEdit(first.start + 2, 0, "x", TextRange(first.start + 3))
+        view.prepare(600, height)
+
+        assertEquals(lines + lines / 20, view.lineMap.totalRows)
+        assertEquals(lenses.size, view.state.codeLenses.size)
+        assertTrue(view.frame.lines.size <= 30, "only what fits is laid out: ${view.frame.lines.size}")
     }
 }

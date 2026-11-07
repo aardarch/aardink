@@ -58,7 +58,11 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** Runs [block] with the selection changes it makes reported as the pointer's. */
     fun <T> pointer(block: EditorPointerHandler.() -> T): T = view.state.withSelectionReason(SelectionChangeReason.Pointer) { block() }
 
-    /** Called on every press in the text, before it moves the selection: focus and the keyboard. */
+    /**
+     * Called on every press in the text, before it moves the selection: focus and the keyboard. With
+     * [typing] false it is on something a click runs, which wants neither: on Android, focus alone
+     * can bring up the keyboard.
+     */
     var onPress: (touch: Boolean, typing: Boolean) -> Unit = { _, _ -> }
 
     /** A single tap (touch), after it placed the caret at an offset. */

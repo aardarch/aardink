@@ -320,7 +320,7 @@ class CodeLensViewTest {
         val narrow = 200
         val view = viewOf(lines(200), softWrap = true, width = narrow, height = 200)
         val line = 150
-        view.state.publishCodeLenses(listOf(CodeLens(view.state.document.lineStart(line), "w".repeat(100))))
+        view.state.publishCodeLenses(listOf(CodeLens(view.state.document.lineStart(line), "0".repeat(100))))
         view.prepare(narrow, 200)
         val estimated = view.lineMap.rowsOf(line)
         assertTrue(estimated > 2, "it wraps: $estimated")

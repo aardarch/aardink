@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
@@ -461,6 +462,25 @@ class EditorSceneScreenshotTest {
             languageService = hinted,
             focused = { state.selection = TextRange(count, count + "count = Gr".length) },
         )
+    }
+
+    @Test
+    fun codeLens() {
+        // A lens on its own, two sharing a row above an indented line, one whose title has yet to
+        // come, holding its row, and a hint on a line under a lens.
+        val lensed = object : LanguageService by kotlin.languageService!! {
+            override suspend fun codeLenses(document: CodeDocument) = listOf(
+                CodeLens(code.indexOf("class Greeter"), "2 references"),
+                CodeLens(code.indexOf("fun greetAll"), "1 reference"),
+                CodeLens(code.indexOf("fun greetAll"), "Run"),
+                CodeLens(code.indexOf("fun main"), ""),
+            )
+
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) =
+                listOf(InlayHint(code.indexOf("names)") + 5, ": List<String>"))
+        }
+        val state = stateOf(code)
+        capture("code-lens", state, editorOptions = EditorOptions(codeLens = true, inlayHints = true), languageService = lensed)
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
