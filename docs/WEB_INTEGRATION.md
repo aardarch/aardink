@@ -86,16 +86,19 @@ There are two ways in:
 | `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. A grammar's comments and strings, being the editor's own, come back as `comment` and `string`, and the built-in languages' tokens under Monaco's standard names. |
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
-| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, and `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary, and `configuration` (VS Code's `language-configuration.json`) gives it closing pairs, surrounding and Enter indentation. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover, diagnostics, document symbols, colours, inlay hints and code lenses as JSON, and runs a lens's command. Editors mounted with the default registry see it. |
 | `registerLanguage(definitionJson, dispatcher)` | The same with one function answering for every provider, as the [export template](#the-export-template) has it. |
 | `connectLanguageServer(url, languageId)` | Has the language server at a WebSocket URL follow every editor of a language; see [Language servers](#language-servers). Returns a `DisposableHandle`. |
+| `registerInlineCompletionsProvider(languageId, provider)` | Ghost text from `provider(text, line, column)`, answering Monaco's `{ items }` as JSON, in every editor of a language; see [Inline completions](#inline-completions). Returns a `DisposableHandle`. |
+| `getDocumentSymbolsJson`, `getSymbolPathAtJson`, `setDecorationsJson`, `getDecorationRangesJson`, `setDiagnosticsForOwner`, `getVisibleRangesJson`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onScrollChange`, `layout` | The Kotlin side of the npm package's symbols, decorations, owners' markers and scrolling, in Monaco's shapes. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
 `showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`,
 `bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`, `renderWhitespace`,
-`quickSuggestions`. An unknown `language` falls back to plain
+`quickSuggestions`, `overviewRuler`, `occurrencesHighlight`, `linkedEditing`, `colorDecorators`,
+`breadcrumbs`, `fontLigatures`, `semanticHighlighting`, `inlayHints`, `codeLens`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
 `AardinkWeb.builtInThemes`. Changing `language` keeps the text, the selection and the undo history.
 
@@ -157,8 +160,11 @@ const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
-`createEditor` is async: the first call loads the WebAssembly module (~13 MB of `.wasm`, ~4.7 MB
-gzipped), and `preloadAardink()` starts that early. The package depends on `@js-joda/core`, which
+`createEditor` is async: the first call loads the WebAssembly module (~14 MB of `.wasm`, ~5 MB
+gzipped: `aardink-web.wasm` 5.5 MB, 1.7 MB gzipped, and `skiko.wasm` 8.6 MB, 3.3 MB gzipped, as
+built for 0.9), and `preloadAardink()` starts that early. `connectLanguageServer`, with the language
+server bridge behind it, made `aardink-web.wasm` 222 KB larger (4.3%), 63 KB gzipped, for every page
+whether or not it connects a server. The package depends on `@js-joda/core`, which
 Compose's date/time support imports. Its dependency list is copied from the one Kotlin generates
 for the module, so it stays accurate.
 
@@ -369,6 +375,11 @@ What the server knows joins what the language has:
 
 Connecting a second server to a language adds to the first, which answers first.
 
+Because a registered language's own answers come first, so do those of the language it extends. A
+language registered with `extends: 'json'` therefore keeps JSON's formatter and outline ahead of a
+real JSON server's, which answers only where JSON has nothing. See
+[Known limitations](#known-limitations).
+
 Diagnostics a server pushes show after the same pause in typing as any others. A push never cuts
 that pause short, so `provideDiagnostics` runs no more often for having a server connected.
 
@@ -429,7 +440,7 @@ files to apply them to.
 | `overviewRulerLanes` | `overviewRulerLanes` | Above 0 shows the ruler; off by default. |
 | `occurrencesHighlight`, `linkedEditing`, `colorDecorators` | The same | Off by default. |
 | `fontLigatures` | The same | On by default. |
-| `'semanticHighlighting.enabled'` | `semanticHighlighting` | Off by default. Colours from a language server over the syntax's; there is no JS provider for them. |
+| `'semanticHighlighting.enabled'` | `semanticHighlighting` | A boolean under this plain key, off by default. Monaco's dotted `'semanticHighlighting.enabled'` key is not read, so rename it when moving options over. Colours from a language server over the syntax's; there is no JS provider for them. Token types come named as a theme colours them (`type.class`, `variable.parameter`, `function.method`), so a theme rule named `class` does not match. |
 | `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
 | `codeLens` | The same | Off by default, where Monaco's is on. |
 | `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
@@ -527,6 +538,14 @@ CI runs `perf.mjs --gate` on every push; a measurement past its gate fails the b
 (400 ms to mount, 50 ms p95 per key, no lost keys, 2 ms per frame for the minimap) are looser
 than the targets above to absorb shared-runner noise.
 
+The layout behind 0.9's inline text was measured on its own before the features using it were built:
+key-to-idle p95 with it switched off was within 3% of 0.8.0 on the same machine, and with three hints
+a line and a lens every 20 lines within 1% of that again
+([the spike's report](spikes/0.9-inline-layout.md#s2-and-s9-results) has the figures and what they
+do not settle). `perf.mjs --hints` measures the reference document with real hints and lenses from a
+registered language's providers, and `perf.mjs --semantic` with semantic tokens from a language
+server on a local WebSocket, each to a file of its own; neither is part of `--gate` yet.
+
 ## Verification checklist
 
 Automated items run against the production build: `pnpm checklist` in `tools/vite-smoke/`
@@ -559,4 +578,18 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
 - A language server connection does not reconnect, and the host hears of its end only on the
   console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
-- The items marked **manual** in the checklist above wait for real devices before 0.6.0.
+- A language from `registerLanguage` answers before a language server, and so does the built-in
+  language it extends. With `extends: 'json'` (or `xml`, `toml`, `kotlin`), that language's formatter
+  and outline come ahead of a connected server's, which fills in only what they leave empty. A
+  server's formatter and outline win only for a built-in language used as it is.
+- The page has no save, so a server is never sent `willSave` or `didSave`. A server that reports
+  only when a file is saved shows nothing.
+- Of the keys that type a character with Alt held, only Alt+] and Alt+[ reach the editor's bindings:
+  the browser input Compose uses takes any other as typing. So `addCommand('Alt+K', ...)` never runs,
+  and neither do the default Shift+Alt+A (block comment) and Shift+Alt+I (carets at line ends). Bind
+  such commands to a key with Ctrl or Cmd, or run them with `trigger`
+  (`editor.action.blockComment`, `editor.action.insertCursorAtEndOfEachLineSelected`).
+- Inlay hints, code lenses and semantic tokens are not asked for again when a server says they are
+  out of date (`workspace/inlayHint/refresh` and the like). The editor asks again only for reasons of
+  its own: an edit; for hints, scrolling or a fold; for lenses, one without a title coming on screen.
+- The items marked **manual** in the checklist above still wait for real devices.
