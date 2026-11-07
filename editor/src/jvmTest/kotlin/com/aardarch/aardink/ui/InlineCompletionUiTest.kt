@@ -95,6 +95,9 @@ class InlineCompletionUiTest {
         }
     }
 
+    /** [to], under a new instance each time one is built. */
+    private class Passing(to: InlineCompletionProvider) : InlineCompletionProvider by to
+
     private fun ComposeUiTest.show(
         state: CodeEditorState,
         provider: InlineCompletionProvider?,
@@ -300,6 +303,60 @@ class InlineCompletionUiTest {
     }
 
     @Test
+    fun `a provider built in composition leaves what is on offer alone, so a host's accept button stays`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        state.computeDispatcher = Dispatchers.Unconfined
+        var canAccept = false
+        setContent {
+            // The accept button a phone needs: this scope runs again as ghost text comes.
+            canAccept = EditorCommand.AcceptInlineCompletion in state.availableCommands
+            CodeEditorLayout(state = state, inlineCompletionProvider = Ready("one"), modifier = Modifier.size(600.dp, 400.dp))
+        }
+        waitForIdle()
+        typeAndPause("a")
+        assertEquals("one", state.ghost)
+        assertTrue(canAccept)
+    }
+
+    @Test
+    fun `a recomposition leaves a provider at work alone`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        state.computeDispatcher = Dispatchers.Unconfined
+        val held = Held()
+        var caretShown by mutableStateOf(0)
+        setContent {
+            caretShown
+            CodeEditorLayout(state = state, inlineCompletionProvider = Passing(held), modifier = Modifier.size(600.dp, 400.dp))
+        }
+        waitForIdle()
+        typeAndPause("a")
+        caretShown++
+        waitForIdle()
+        val request = held.requests.single()
+        assertFalse(request.cancelled)
+        request.answer.complete(listOf(InlineCompletion("one")))
+        waitForIdle()
+        assertEquals("one", state.ghost)
+    }
+
+    @Test
+    fun `a provider put in its place answers from the next ask`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        state.computeDispatcher = Dispatchers.Unconfined
+        var provider by mutableStateOf<InlineCompletionProvider?>(Ready("one"))
+        setContent {
+            CodeEditorLayout(state = state, inlineCompletionProvider = provider, modifier = Modifier.size(600.dp, 400.dp))
+        }
+        waitForIdle()
+        typeAndPause("a")
+        assertEquals("one", state.ghost)
+        provider = Ready("two")
+        waitForIdle()
+        typeAndPause("z")
+        assertEquals("two", state.ghost)
+    }
+
+    @Test
     fun `an editor that leaves the screen takes it with it`() = runComposeUiTest {
         val state = stateAtEnd("")
         state.computeDispatcher = Dispatchers.Unconfined
@@ -355,6 +412,38 @@ class InlineCompletionUiTest {
         assertEquals("a,\n    b", state.ghost)
         keys { pressKey(Key.DirectionDown) }
         assertEquals(1, state.document.offsetToLineCol(state.selection.end).first)
+        assertNull(state.ghost)
+    }
+
+    /** The caret in `foo(|)` with `next` below it, and rows of ghost text showing. */
+    private fun ComposeUiTest.showRows(): CodeEditorState {
+        val state = CodeEditorState("foo()\nnext").apply { selection = TextRange(4) }
+        show(state, InlineCompletionProvider { _, _ -> listOf(InlineCompletion("a,\n    b)")) })
+        keys { withKeyDown(Key.AltLeft) { pressKey(Key.RightBracket) } }
+        assertEquals("a,\n    b", state.ghost)
+        return state
+    }
+
+    private val CodeEditorState.caretLines: List<Int>
+        get() = currentSelections().ranges.map { document.offsetToLineCol(it.end).first }.sorted()
+
+    @Test
+    fun `a caret added below goes to the next line, past rows of it and the text they push down`() = runComposeUiTest {
+        val state = showRows()
+        keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) } } }
+        assertEquals(listOf(0, 1), state.caretLines)
+        assertNull(state.ghost)
+    }
+
+    @Test
+    fun `a column selection goes down to the next line, past rows of it`() = runComposeUiTest {
+        val state = showRows()
+        keys {
+            withKeyDown(Key.CtrlLeft) {
+                withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionDown) } }
+            }
+        }
+        assertEquals(listOf(0, 1), state.caretLines)
         assertNull(state.ghost)
     }
 
@@ -466,6 +555,19 @@ class InlineCompletionUiTest {
         assertEquals("two", state.ghost)
         assertTrue(state.execute(EditorCommand.AcceptInlineCompletion))
         assertEquals("atwo", state.document.text)
+    }
+
+    @Test
+    fun `accepting through the command shows the caret, as the key does`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        val lines = (1..60).joinToString("\n") { "line $it" }
+        show(state, InlineCompletionProvider { document, _ -> if (document.length == 1) listOf(InlineCompletion(lines)) else emptyList() })
+        typeAndPause("a")
+        assertTrue(state.execute(EditorCommand.AcceptInlineCompletion))
+        waitForIdle()
+        val caretLine = state.document.offsetToLineCol(state.selection.end).first
+        assertEquals(59, caretLine)
+        assertTrue(caretLine in state.viewport.firstVisibleLine..state.viewport.lastVisibleLine, "at ${state.viewport.firstVisibleLine}")
     }
 
     @Test

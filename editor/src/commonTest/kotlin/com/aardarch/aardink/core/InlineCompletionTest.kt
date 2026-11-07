@@ -163,6 +163,50 @@ class InlineCompletionTest {
     }
 
     @Test
+    fun `text that only repeats what follows the caret shows nothing, after a word too`() {
+        for ((line, text) in listOf(
+            "println(count|)" to ")",
+            "call(arg|);" to ");",
+            "co|unt" to "unt",
+            "co|unt)" to "unt",
+            "foo(|)" to ")",
+        )) {
+            val state = stateAt(line)
+            state.offer(text)
+            assertNull(state.inlineCompletions.shown, "$text at $line")
+            assertFalse(state.canExecute(EditorCommand.AcceptInlineCompletion))
+        }
+    }
+
+    @Test
+    fun `text that repeats the lines after the caret shows nothing, whatever their line ending`() {
+        for (line in listOf("a|\nb", "a|\r\nb")) {
+            val state = stateAt(line)
+            state.offer("\nb")
+            assertNull(state.inlineCompletions.shown, line)
+        }
+    }
+
+    @Test
+    fun `text that stops short of the caret is new, though the word starts with it`() {
+        val state = stateAt("test_|")
+        state.offer("test")
+        assertEquals("test_[test]", state.drawn)
+        state.accept()
+        assertEquals("test_test", state.document.text)
+        val shorter = stateAt("tes|")
+        shorter.offer("t")
+        assertEquals("tes[t]", shorter.drawn)
+    }
+
+    @Test
+    fun `text that is the word so far shows nothing`() {
+        val state = stateAt("fo|o")
+        state.offer("fo")
+        assertNull(state.inlineCompletions.shown)
+    }
+
+    @Test
     fun `ghost text never shows before the caret`() {
         val state = stateAt("foo()|")
         val start = state.document.lineStart(0)
@@ -468,7 +512,7 @@ class InlineCompletionTest {
     }
 
     @Test
-    fun `a composition ends what is on offer, asks nothing, and asks when it is over`() {
+    fun `a composition ends what is on offer and asks nothing, and its end asks nothing by itself`() {
         val state = stateAt("val x = |")
         state.offer("compute()")
         state.inlineCompletions.setComposing(true)
@@ -477,6 +521,8 @@ class InlineCompletionTest {
         assertNull(state.inlineCompletions.ask, "nothing during composition")
         assertFalse(state.inlineCompletions.canCycle)
         state.inlineCompletions.setComposing(false)
+        assertNull(state.inlineCompletions.ask, "the adapter knows how it ended, and asks if it was typing")
+        state.inlineCompletions.askAgain()
         assertNotNull(state.inlineCompletions.ask)
     }
 

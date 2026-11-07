@@ -39,8 +39,9 @@ import kotlin.math.min
  *   Null is the word at the caret and the rest of the line, Monaco's default, or if [text] does not
  *   hold that, the rest of the line alone, and if it does not hold that either, it goes in at the
  *   caret and replaces nothing, where Monaco would show nothing. So a provider that only knows what
- *   comes next leaves this null, and a closing bracket it repeats is still not doubled. An empty
- *   range is a plain insertion: a bracket [text] repeats there is meant, and doubled.
+ *   comes next leaves this null, and a closing bracket it repeats is still not doubled. Text the
+ *   document has already, from the caret on or from the word's start to the caret or past it, shows
+ *   nothing. An empty range is a plain insertion: a bracket [text] repeats there is meant, and doubled.
  */
 @Immutable
 data class InlineCompletion(val text: String, val range: IntRange? = null)
@@ -225,13 +226,14 @@ internal class GhostTextTracker(
 
     /**
      * An input method started or ended a composition. What it composes is not the text yet, and may
-     * yet turn into something else, so nothing shows or is asked for until it ends, and then the
-     * provider is asked about what it left.
+     * yet turn into something else, so nothing shows or is asked for until it ends. Ending asks
+     * nothing: the caret leaving, an undo and losing focus end one too. The input adapter, which can
+     * tell, calls [askAgain] when it was committed at the caret, which is typing.
      */
     fun setComposing(active: Boolean) {
         if (active == composing) return
         composing = active
-        if (active) clear() else askAgain()
+        if (active) clear()
     }
 
     /** Ends what is on offer and anything being asked. */
@@ -265,7 +267,7 @@ internal class GhostTextTracker(
 
     private fun ghostNow(at: Int?): GhostText? = if (hiddenByList) null else current?.let { ghostOf(it, at) }
 
-    /** [completion] for the caret [at], if its range can be one. Not yet whether it shows anything. */
+    /** [completion] for the caret [at], if its range can be one and it has something to add. Not yet whether it shows anything. */
     private fun offerOf(completion: InlineCompletion, at: Int): Offer? {
         val text = TypingRules.normalizeLineEndings(completion.text)
         val range = completion.range
@@ -276,10 +278,22 @@ internal class GhostTextTracker(
         val lineEnd = document.lineEnd(lineOf(at))
         val end = if (lineEnd > at && document[lineEnd - 1] == '\r') lineEnd - 1 else lineEnd
         val wordStart = TextNavigator.wordAt(document, at).first
-        // Text that is all there already has nothing to add, here or at the caret.
-        if (document.startsWith(text, wordStart)) return Offer(text, wordStart, end)
+        // Text that is all there already has nothing to add. From the word's start it has to reach
+        // the caret to be that: short of it, it says what comes next, and only happens to match.
+        if (repeats(text, at) || (wordStart + text.length >= at && repeats(text, wordStart))) return null
         // Most text does not start with the word, as a provider asked what comes next says only that.
         return listOf(Offer(text, wordStart, end), Offer(text, at, end)).firstOrNull { ghostOf(it, at) != null } ?: Offer(text, at, at)
+    }
+
+    /** Whether the document has [text] at [offset], where each of its line breaks may be CR LF. */
+    private fun repeats(text: String, offset: Int): Boolean {
+        var from = offset
+        for (char in text) {
+            if (char == '\n' && from + 1 < document.length && document[from] == '\r') from++
+            if (from >= document.length || document[from] != char) return false
+            from++
+        }
+        return true
     }
 
     /** What [offer] shows, with the caret [at], or just by the text when that is not known yet; null for nothing. */

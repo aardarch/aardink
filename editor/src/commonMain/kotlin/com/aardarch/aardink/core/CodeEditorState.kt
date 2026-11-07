@@ -721,13 +721,17 @@ class CodeEditorState(
     /**
      * Puts the ghost text showing in the document: what it shows and nothing else, so that text it
      * repeats stays as it is, along with what is anchored to it. Then asks for what might come next
-     * without waiting, as Monaco does.
+     * without waiting, as Monaco does. The caret can end up lines below where the view stops, and a
+     * host's button has no key to show it, so this does.
      */
     private fun acceptInlineCompletion(): Boolean {
         val pieces = inlineCompletions.settled?.pieces ?: return false
         val changes = pieces.map { TextChange(it.offset, it.offset, TypingRules.withLineEnding(it.text, lineEnding)) }
         val caret = changes.last().start + changes.sumOf { it.text.length }
-        return applyChanges(changes, EditKind.Other) { SelectionSet.caret(caret) }.also { inlineCompletions.askAgain(now = true) }
+        return applyChanges(changes, EditKind.Other) { SelectionSet.caret(caret) }.also {
+            uiCommandHandler?.invoke(EditorCommand.Reveal(caret))
+            inlineCompletions.askAgain(now = true)
+        }
     }
 
     // ── Convenience reads ─────────────────────────────────────────────────────

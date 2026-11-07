@@ -162,7 +162,9 @@ import kotlin.math.roundToInt
  *   it, Alt+] and Alt+[ go through what is on offer, Escape dismisses it, and typing what it says
  *   keeps it. Nothing shows in a read-only editor, with a selection or several carets, in a snippet,
  *   or while an input method composes. An open completion list at the caret hides it, as in Monaco,
- *   and takes Tab; the touch strip does not, as a phone would otherwise never show any.
+ *   and takes Tab; the touch strip does not, as a phone would otherwise never show any. A new
+ *   instance needs no [remember]: it answers from the next ask, and what shows stays until then. Only
+ *   null ends what is on offer.
  */
 @Composable
 fun CodeEditorLayout(
@@ -823,18 +825,22 @@ private fun CodeEditorLayoutContent(
     }
 
     // ── Inline completions: what the provider offers at the caret, once typing pauses ─
-    LaunchedEffect(state, inlineCompletionProvider, options.readOnly) {
+    // Not keyed on the provider: a host may well build one in composition, and each recomposition
+    // would then end what shows, and what ghost text showing recomposes is a host's accept button.
+    val currentInlineProvider = rememberUpdatedState(inlineCompletionProvider)
+    val offersInlineCompletions = inlineCompletionProvider != null && !options.readOnly
+    LaunchedEffect(state, offersInlineCompletions) {
         val completions = state.inlineCompletions
-        // What is on offer came from a provider, and a change of either ends it.
+        // What is on offer came from a provider, and losing it, or being read-only, ends it.
         completions.clear()
-        val provider = inlineCompletionProvider.takeUnless { options.readOnly }
-        completions.provided = provider != null
-        if (provider == null) return@LaunchedEffect
+        completions.provided = offersInlineCompletions
+        if (!offersInlineCompletions) return@LaunchedEffect
         // Latest: a newer ask, or none, calls off the pause and a provider still at work.
         snapshotFlow { completions.ask }.collectLatest { ask ->
             if (ask == null) return@collectLatest
             if (!ask.now) delay(INLINE_COMPLETIONS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) return@collectLatest
+            val provider = currentInlineProvider.value ?: return@collectLatest
             val document = state.document.snapshot()
             completions.answer(ask, document.version, askForInlineCompletions(provider, document, ask.caret, state))
         }

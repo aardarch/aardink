@@ -31,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -159,6 +160,77 @@ class EditorImeAdapterTest {
         assertEquals("你", state.text)
         state.undo()
         assertEquals("", state.text)
+    }
+
+    /** An adapter composing [word] at the end of [text], with a provider standing by. */
+    private fun composing(text: String, word: String): Pair<CodeEditorState, EditorImeAdapter> {
+        val state = stateOf(text)
+        state.selection = TextRange(text.length)
+        state.inlineCompletions.provided = true
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(SetComposingTextCommand(word, 1)))
+        assertNotNull(adapter.composition)
+        assertNull(state.inlineCompletions.ask, "nothing while it composes")
+        return state to adapter
+    }
+
+    @Test
+    fun `a composition committed at the caret asks for ghost text, whatever it turned into`() {
+        val (state, adapter) = composing("one\n", "teh")
+        adapter.apply(listOf(CommitTextCommand("the ", 1)))
+        assertEquals("one\nthe ", state.text)
+        assertEquals(state.selection.end, state.inlineCompletions.ask?.caret)
+    }
+
+    @Test
+    fun `a composition left as it stands at the caret asks for ghost text`() {
+        val (state, adapter) = composing("one\n", "two")
+        adapter.apply(listOf(FinishComposingTextCommand()))
+        assertEquals(state.selection.end, state.inlineCompletions.ask?.caret)
+    }
+
+    @Test
+    fun `a composition the caret leaves asks nothing`() {
+        val (state, adapter) = composing("one\n", "two")
+        state.selection = TextRange(1)
+        adapter.onEditorChanged()
+        assertNull(adapter.composition)
+        assertNull(state.inlineCompletions.ask)
+    }
+
+    @Test
+    fun `a composition the input method moves the caret out of asks nothing`() {
+        val (state, adapter) = composing("one\n", "two")
+        adapter.apply(listOf(FinishComposingTextCommand(), SetSelectionCommand(1, 1)))
+        assertNull(adapter.composition)
+        assertEquals(TextRange(1), state.selection)
+        assertNull(state.inlineCompletions.ask)
+    }
+
+    @Test
+    fun `a composition an undo ends asks nothing`() {
+        val (state, adapter) = composing("one\n", "two")
+        state.undo()
+        adapter.onEditorChanged()
+        assertNull(adapter.composition)
+        assertNull(state.inlineCompletions.ask)
+    }
+
+    @Test
+    fun `a composition an outside edit ends asks nothing`() {
+        val (state, adapter) = composing("one\n", "two")
+        state.loadText("other")
+        adapter.onEditorChanged()
+        assertNull(adapter.composition)
+        assertNull(state.inlineCompletions.ask)
+    }
+
+    @Test
+    fun `a composition that loses focus asks nothing`() {
+        val (state, adapter) = composing("one\n", "two")
+        adapter.finishComposition()
+        assertNull(adapter.composition)
+        assertNull(state.inlineCompletions.ask)
     }
 
     @Test

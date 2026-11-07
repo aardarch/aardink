@@ -412,13 +412,19 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         return true
     }
 
-    private fun vertical(select: Boolean, rows: Int): Boolean {
-        // Going anywhere ends ghost text, and its rows are not rows to go to: text it pushes down
-        // is on the caret's own line, and Down would stop there. So it goes first.
+    /**
+     * Ends ghost text ahead of going by rows. Going anywhere ends it, and its rows are not rows to go
+     * to: text it pushes down is on the caret's own line, and Down would stop there.
+     */
+    private fun dropGhostRows() {
         state.inlineCompletions.shown?.let { ghost ->
             state.inlineCompletions.clear()
             view.measureRows(ghost.line)
         }
+    }
+
+    private fun vertical(select: Boolean, rows: Int): Boolean {
+        dropGhostRows()
         val primary = state.selection
         val x = preferredX ?: view.caretX(primary.end)
         state.moveSelections(select) { range -> view.verticalMove(range.end, rows, if (range == primary) x else null) }
@@ -436,6 +442,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     /** A caret on the row above (or below) each caret, keeping their x. */
     private fun addCursor(direction: Int): Boolean {
+        dropGhostRows()
         val current = state.currentSelections()
         val added = current.ranges.map { TextRange(view.verticalMove(it.end, direction, view.caretX(it.end))) }
         state.replaceSelections(SelectionSet.of(current.ranges + added))
@@ -448,6 +455,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
      * corner; the first press starts one from the primary selection.
      */
     private fun columnSelect(rows: Int, columns: Int): Boolean {
+        dropGhostRows()
         val charWidth = view.style?.metrics?.charWidth ?: return true
         if (view.totalRows == 0) return true
         val box = this.columns.current()
