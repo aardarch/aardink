@@ -20,8 +20,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
@@ -37,6 +39,7 @@ import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -46,7 +49,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -144,6 +149,25 @@ class SemanticHighlightingUiTest {
         waitUntil { state.semanticStore != null }
 
         assertEquals(listOf(Token(0, 4, type)), state.semanticStore!!.tokensForLine(0))
+    }
+
+    private fun ComposeUiTest.pixels(): IntArray = onNodeWithTag(EditorTestTags.EDITOR).captureToImage().toPixelMap().buffer.copyOf()
+
+    @Test
+    fun `an answer repaints the text, with nothing else happening`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val service = HeldTokens()
+        show(state, service)
+        pause()
+        waitUntil { service.requests.size == 1 }
+        val before = pixels()
+        assertContentEquals(before, pixels(), "nothing else is moving")
+
+        service.requests[0].answer.complete(listOf(Token(0, 4, TokenType.Keyword)))
+        waitUntil { state.semanticStore != null }
+        waitForIdle()
+
+        assertFalse(before.contentEquals(pixels()))
     }
 
     @Test
