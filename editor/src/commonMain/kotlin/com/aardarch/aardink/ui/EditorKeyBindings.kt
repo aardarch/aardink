@@ -118,7 +118,9 @@ data class EditorKeyBinding(val chord: List<KeyChord>, val command: EditorComman
  * whose command cannot run now leaves its key to them: Tab runs
  * [EditorCommand.AcceptInlineCompletion] only while ghost text shows, and indents otherwise, and
  * Escape runs [EditorCommand.DismissInlineCompletion] only while ghost text shows, and otherwise
- * closes what else is open. A null binding of Escape takes away that dismissal and no more.
+ * closes what else is open. A null binding of Tab or Escape takes the key away whole, as it did
+ * before either had a binding: Tab no longer indents, and every Escape goes to the host. To dismiss
+ * with another key, bind it to [EditorCommand.DismissInlineCompletion] beside Escape.
  */
 object EditorKeyBindings {
 

@@ -638,18 +638,18 @@ class InlineCompletionUiTest {
     private val noDismissingKey = listOf(EditorKeyBinding(KeyChord(Key.Escape), null))
 
     @Test
-    fun `a host can move dismissing, and Escape keeps the rest of what it does`() = runComposeUiTest {
+    fun `a host's own key dismisses beside Escape, which keeps the rest of what it does`() = runComposeUiTest {
         val state = stateAtEnd("")
         val find = FindReplaceState().apply { show() }
-        val bindings = noDismissingKey + EditorKeyBinding(KeyChord(Key.J, ctrlCmd = true), EditorCommand.DismissInlineCompletion)
+        val bindings = listOf(EditorKeyBinding(KeyChord(Key.J, ctrlCmd = true), EditorCommand.DismissInlineCompletion))
         show(state, Ready("bcd"), options = { EditorOptions(keyBindings = bindings) }, find = find)
         typeAndPause("a")
-        keys { pressKey(Key.Escape) }
-        assertEquals("bcd", state.ghost, "Escape no longer dismisses")
-        assertFalse(find.visible, "and it still closes the find panel")
         keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.J) } }
         assertNull(state.ghost)
         assertEquals("a", state.document.text)
+        assertTrue(find.visible, "the host's key dismisses and no more")
+        keys { pressKey(Key.Escape) }
+        assertFalse(find.visible, "and Escape goes on to the find panel")
     }
 
     @Test
@@ -663,19 +663,24 @@ class InlineCompletionUiTest {
         assertEquals(1, reached, "nothing else was open, so the key is the host's")
     }
 
+    /** As before 0.9, when Escape had no binding to remove: a host that unbinds it gets every one. */
     @Test
-    fun `removing dismissing leaves Escape ending a snippet and extra carets`() = runComposeUiTest {
+    fun `a null binding of Escape takes the editor's Escape away whole`() = runComposeUiTest {
         val state = stateAtEnd("one\ntwo")
-        show(state, null, options = { EditorOptions(keyBindings = noDismissingKey) })
+        val find = FindReplaceState().apply { show() }
+        show(state, null, options = { EditorOptions(keyBindings = noDismissingKey) }, find = find)
         keys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionUp) } } }
         assertEquals(2, state.selections.size)
         keys { pressKey(Key.Escape) }
-        assertEquals(1, state.selections.size)
+        assertEquals(2, state.selections.size, "the extra caret stays")
+        assertTrue(find.visible, "and so does the find panel")
+        state.selection = TextRange(state.document.length)
         assertTrue(state.execute(EditorCommand.InsertSnippet("<$1>$0")))
         waitForIdle()
         assertNotNull(state.snippet)
         keys { pressKey(Key.Escape) }
-        assertNull(state.snippet)
+        assertNotNull(state.snippet, "and the snippet")
+        assertTrue(find.visible)
     }
 
     @Test

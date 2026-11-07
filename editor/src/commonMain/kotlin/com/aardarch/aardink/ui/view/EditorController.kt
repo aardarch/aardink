@@ -251,8 +251,8 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             }
 
             // Unbound by the host: no binding of the editor's own, so the key types if it types.
-            // Escape's binding is only its dismissal of ghost text, and the rest of it stays.
-            KeyBindingMatch.Unbound -> if (event.key != Key.Escape) return typeKey(event)
+            // Escape too, which types nothing: the host gets every one, as before 0.9.
+            KeyBindingMatch.Unbound -> return typeKey(event)
 
             null -> {}
         }

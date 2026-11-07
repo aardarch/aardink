@@ -175,12 +175,13 @@ shows: a binding whose command cannot run leaves its key alone. A host with its 
 or Alt+[ keeps it, as yours come first, and has no key for going through what is on offer until it
 binds one. Unbinding Tab with a null command takes away indenting too, as it already did.
 
-Escape is in that list too, and does what it did unless ghost text shows. Unbinding it is different
-from Tab: a null command takes away dismissing and no more, so that a host can move dismissing to
-another key and keep the rest. Escape still ends a snippet and extra carets and closes the find panel
-and the hover, where before 0.9 a null binding took all of that away. A list that is open takes its
-Escape first either way. With your own command on Escape, ghost text stays up unless you run
-`DismissInlineCompletion`, even when your command cannot run.
+Escape is in that list too, and does what it did unless ghost text shows. Unbinding it with a null
+command takes the editor's Escape away whole, as it already did, so your own handler still gets
+every Escape: nothing is dismissed, and no snippet, extra carets, find panel or hover is closed by
+it. A list that is open takes its Escape first either way. To dismiss from a key of your own as
+well, bind that key to `DismissInlineCompletion` and leave Escape as it is. With your own command on
+Escape, ghost text stays up unless you run `DismissInlineCompletion`, even when your command cannot
+run.
 
 On the web, `registerInlineCompletionsProvider` is new, with
 `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` and `hide` for `trigger` and `getAction`. A wasm
