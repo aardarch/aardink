@@ -46,6 +46,7 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.Token
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.serialization.KSerializer
@@ -783,6 +784,38 @@ class LspLanguageService(
             ColorPresentation(label, edit?.let { TextEdit(offsetRangeOf(document, it.range), it.newText) })
         }
     }
+
+    /**
+     * The server's `textDocument/semanticTokens/full` answer for [document], which should be what it
+     * was last sent, read through the legend it declared in `semanticTokensProvider` or registered.
+     * A server that declared neither, or none that answers a `full` request, is not asked, and neither
+     * is one whose capabilities are not known, since its numbers could not be read.
+     *
+     * The editor asks once per edit, so a request that comes too soon may be the only one an unedited
+     * document gets, as with [LspFoldingProvider]: this waits for the document to open, and asks a few
+     * more times if the server says to. The editor's cancellation ends either wait.
+     *
+     * A token's type is a [NamedTokenType][com.aardarch.aardink.core.NamedTokenType] under the part of
+     * a name a theme colours: `type.class`, `variable.parameter`, `function.method`, then its
+     * modifiers, `function.method.static`. A theme can colour any of those by name.
+     */
+    override suspend fun semanticTokens(document: CodeDocument): List<Token> {
+        if (supports("semanticTokensProvider")) sync.awaitOpen()
+        val legend = semanticLegend ?: return emptyList()
+        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
+        val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
+        return decodeSemanticTokens(data, legend, document)
+    }
+
+    /** What the server's numbers mean, from what it declared or else registered; null when it does not say. */
+    private val semanticLegend: LspSemanticLegend?
+        get() {
+            if (!supports("semanticTokensProvider")) return null
+            val declared = (client.serverCapabilities as? JsonObject)?.get("semanticTokensProvider") as? JsonObject
+            val method = methodOf("semanticTokensProvider")
+            val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
+            return (listOfNotNull(declared) + registered).firstNotNullOfOrNull(LspSemanticLegend::from)
+        }
 
     /**
      * The server's folds in order, one per first line, or null when it gave no answer: an empty list

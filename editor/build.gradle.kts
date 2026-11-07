@@ -95,6 +95,9 @@ kotlin {
                 // The real tokenizers, for what the editor does to their scan caches: this
                 // module's fakes have none. Test only: :languages depends on :editor, not back.
                 implementation(project(":languages"))
+                // The real adapter and the real layout together, in the order the editor calls
+                // it: a fake service here passes whatever the adapter does.
+                implementation(project(":languages-lsp"))
             }
         }
     }
