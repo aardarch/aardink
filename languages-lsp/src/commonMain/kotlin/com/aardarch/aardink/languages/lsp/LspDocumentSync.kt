@@ -240,8 +240,20 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     /** How [Batch]es are sent, from what the server has declared so far. */
     private var changeSync = LspChangeSync.None
 
+    /**
+     * Moves with every change to the text [textAt] reads. Written by the queue only, so an
+     * [inOrder] block, which the queue waits for, can read it to name the text it is asking about.
+     */
+    @Volatile
+    var textRevision: Long = 0
+        private set
+
     /** The text the server has while no listener is following it, to catch up from at [attach]. */
     private var lastText: String? = null
+        set(value) {
+            field = value
+            textRevision += 1
+        }
 
     /** What the server should have while a state is followed. */
     private var mirror: TextMirror? = null
@@ -433,14 +445,14 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
     }
 
     /**
-     * The text the server has been given, after every edit reported so far, or null when it has been
-     * given none: what the positions in its answers are about. Whole-document work, so only for
-     * answers that need it.
+     * The text at [revision], which is what the positions in an answer to a request of that revision
+     * are about, or null when it has moved on since, or the server was given none. Whole-document
+     * work, so only for answers that need it.
      */
-    suspend fun currentText(): String? {
+    suspend fun textAt(revision: Long): String? {
         if (queue == null) return null
         var text: String? = null
-        submit(Send { text = mirror?.text ?: lastText })
+        submit(Send { if (textRevision == revision) text = mirror?.text ?: lastText })
         return text
     }
 
@@ -534,6 +546,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
             addressable = text.canAddress(change) && addressable
             text.apply(change)
         }
+        textRevision += 1
         when {
             changeSync == LspChangeSync.None -> Unit
 

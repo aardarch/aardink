@@ -633,6 +633,84 @@ class LspFeaturesTest {
         after.await()
     }
 
+    /** The server is asked to resolve [item], [edit] happens while it answers, and it answers with an edit for the old text. */
+    private suspend fun Harness.resolvedAcross(item: CompletionItem, edit: suspend () -> Unit): CompletionItem {
+        val resolving = async { service.resolveCompletion(item) }
+        val asked = nextSent()
+        assertEquals(RESOLVE, asked.method)
+        edit()
+        val answer = """{"label":"a","detail":"d","additionalTextEdits":[{"range":${range(1, 0, 1, 0)},"newText":"y"}]}"""
+        serverSends("""{"jsonrpc":"2.0","id":${asked["id"]},"result":$answer}""")
+        return resolving.await()
+    }
+
+    @Test
+    fun `an answer to text that has moved on keeps the item's own edits`() = withServer("") {
+        serverDeclares("""{"textDocumentSync":2,"completionProvider":{"resolveProvider":true}}""")
+        val state = editorState("ab\ncd")
+        service.attach(state)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val own = """{"range":${range(0, 0, 0, 0)},"newText":"own"}"""
+        val item = offered("""[{"label":"a","additionalTextEdits":[$own]}]""", state.document.snapshot()).single()
+
+        val resolved = resolvedAcross(item) {
+            state.applyTextEdits(listOf(TextEdit(0 until 0, "x\n")))
+            assertEquals("textDocument/didChange", nextSent().method)
+        }
+
+        assertEquals(item.additionalEdits, resolved.additionalEdits, "line 1 is another line now")
+        assertEquals("d", resolved.detail)
+    }
+
+    @Test
+    fun `a whole-text server's pending edit moves the text on too`() = withServer("") {
+        serverDeclares("""{"textDocumentSync":1,"completionProvider":{"resolveProvider":true}}""")
+        val state = editorState("ab\ncd")
+        service.attach(state)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val item = offered("""[{"label":"a"}]""", state.document.snapshot()).single()
+
+        val resolved = resolvedAcross(item) {
+            state.applyTextEdits(listOf(TextEdit(0 until 0, "x\n")))
+            assertNothingSent("waiting for typing to pause")
+        }
+
+        assertTrue(resolved.additionalEdits.isEmpty())
+    }
+
+    @Test
+    fun `a host's didChange during the answer moves the text on too`() = withServer("ab\ncd") {
+        service.didOpen(doc)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val item = offered("""[{"label":"a"}]""").single()
+
+        val resolved = resolvedAcross(item) {
+            service.didChange(CodeDocument("x\nab\ncd"), 2)
+            assertEquals("textDocument/didChange", nextSent().method)
+        }
+
+        assertTrue(resolved.additionalEdits.isEmpty())
+    }
+
+    @Test
+    fun `an edit before the turn of the request does not count as moving on`() = withServer("") {
+        serverDeclares("""{"textDocumentSync":1,"completionProvider":{"resolveProvider":true}}""")
+        val state = editorState("ab\ncd")
+        service.attach(state)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val item = offered("""[{"label":"a"}]""", state.document.snapshot()).single()
+
+        state.applyTextEdits(listOf(TextEdit(0 until 0, "x\n")))
+        val resolving = async { service.resolveCompletion(item) }
+        assertEquals("textDocument/didChange", nextSent().method, "the request flushes it")
+        val answer = """{"label":"a","additionalTextEdits":[{"range":${range(1, 0, 1, 0)},"newText":"y"}]}"""
+        val server = async { respond(RESOLVE, answer) }
+        val resolved = resolving.await()
+        server.await()
+
+        assertEquals(listOf(TextEdit(2 until 2, "y")), resolved.additionalEdits)
+    }
+
     @Test
     fun `with no text to place them in, resolved edits are dropped and the rest kept`() = withServer("ab") {
         val own = """{"range":${range(0, 0, 0, 0)},"newText":"own"}"""
