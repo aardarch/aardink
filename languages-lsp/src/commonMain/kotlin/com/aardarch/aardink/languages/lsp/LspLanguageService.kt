@@ -37,6 +37,7 @@ import com.aardarch.aardink.core.FoldKind
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LinkedEditingRanges
 import com.aardarch.aardink.core.Location
@@ -810,6 +811,30 @@ class LspLanguageService(
         return decodeSemanticTokens(data, legend, document)
     }
 
+    /**
+     * The server's `textDocument/inlayHint` answer for [range] of [document], which should be what it
+     * was last sent. A label is a string, or parts whose values are joined: their commands, locations
+     * and tooltips are not read. `paddingLeft` and `paddingRight` become a space on that side of it.
+     *
+     * The editor may ask once and then not again until an edit or a scroll, so a request that comes
+     * too soon waits and asks again as [semanticTokens] does, and is over as that one is.
+     *
+     * A `workspace/inlayHint/refresh` from the server is not honoured, and `refreshSupport` is not
+     * declared: nothing in a language service can tell the editor to ask again. Hints come back with
+     * the next edit or scroll.
+     */
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+        if (supports("inlayHintProvider") && !sync.awaitOpen()) return emptyList()
+        if (!supports("inlayHintProvider")) return emptyList()
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            put("range", encode(LspRange.serializer(), lspRangeOf(document, range)))
+        }
+        val answer = requestPatiently("textDocument/inlayHint", params)
+        val hints = (answer as? LspResult.Value)?.element as? JsonArray ?: return emptyList()
+        return hints.filterIsInstance<JsonObject>().mapNotNull { it.toInlayHint(document) }
+    }
+
     /** What the server's numbers mean, from what it declared or else registered; null when it does not say. */
     private val semanticLegend: LspSemanticLegend?
         get() {
@@ -1055,6 +1080,19 @@ class LspLanguageService(
 
     /** Member by member, for the reason [LspClient] gives: these wire types would be public ABI as `@Serializable`. */
     private fun JsonObject.range(name: String): LspRange? = this[name]?.let { decodeOrNull(LspRange.serializer(), it) }
+
+    private fun JsonObject.toInlayHint(document: CodeDocument): InlayHint? {
+        val position = this["position"]?.let { decodeOrNull(LspPosition.serializer(), it) } ?: return null
+        val label = when (val given = this["label"]) {
+            is JsonPrimitive -> given.contentOrNull
+            is JsonArray -> given.joinToString("") { (it as? JsonObject)?.string("value").orEmpty() }
+            else -> null
+        }
+        if (label.isNullOrEmpty()) return null
+        val left = if (boolean("paddingLeft") == true) " " else ""
+        val right = if (boolean("paddingRight") == true) " " else ""
+        return InlayHint(offsetOf(document, position), left + label + right)
+    }
 
     private fun JsonObject.toDocumentSymbol(document: CodeDocument): DocumentSymbol? {
         val name = string("name") ?: return null
