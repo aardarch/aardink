@@ -17,10 +17,12 @@ package com.aardarch.aardink.web
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompositeLanguageService
+import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.languages.lsp.DiagnosticsListener
 import com.aardarch.aardink.languages.lsp.LspClient
 import com.aardarch.aardink.languages.lsp.LspFoldingProvider
@@ -33,8 +35,12 @@ import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+
+/** As long as the layout waits after an edit, and no longer: see [WebLanguageServer.showWhenSettled]. */
+private const val TYPING_PAUSE_MS = 500L
 
 /**
  * One connection to a language server, for [AardinkWeb.connectLanguageServer]: a client of its own,
@@ -54,7 +60,10 @@ internal class WebLanguageServer(
 ) : DisposableHandle {
 
     /** An editor being followed: its [document], and what tells it that the server has published. */
-    private class Followed(val document: ServerDocument, val onPublished: DiagnosticsListener)
+    private class Followed(val document: ServerDocument, val onPublished: DiagnosticsListener) {
+        /** What is waiting to show a push, while one is. */
+        var settling: Job? = null
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val followed = HashMap<AardinkEditorHandle, Followed>()
@@ -71,7 +80,11 @@ internal class WebLanguageServer(
             try {
                 val connected = LspClient(WatchedTransport(connect(url), ::lost), scope)
                 client = connected
-                triggerCharacters = LspLanguageService.triggerCharactersFrom(connected.initialize(rootUri = null))
+                val capabilities = connected.initialize(rootUri = null)
+                // A socket gone by the time `initialized` is sent ends the connection inside that
+                // call without failing it, and with nothing left to take any editors back.
+                if (ended) return@launch
+                triggerCharacters = LspLanguageService.triggerCharactersFrom(capabilities)
                 initialized = true
                 editors().forEach(::follow)
             } catch (e: CancellationException) {
@@ -102,10 +115,10 @@ internal class WebLanguageServer(
             documentUri = "file:///aardink/editor-${nextDocument++}.$extension",
             languageId = languageId,
         )
-        // The service holds only what was pushed, and the editor asks it after a pause in typing, so
-        // what comes in between waits for the next edit unless the editor is told. This listener
-        // comes after the service's own, which has the list by the time this runs.
-        val onPublished: DiagnosticsListener = { uri, _, _ -> if (uri == service.documentUri) AardinkWeb.revalidate(handle) }
+        // This listener comes after the service's own, which has the list by the time this runs.
+        val onPublished: DiagnosticsListener = { uri, _, _ ->
+            if (uri == service.documentUri) followed[handle]?.let { showWhenSettled(handle, it) }
+        }
         connected.addDiagnosticsListener(onPublished)
         service.attach(handle.state.value)
         val document = ServerDocument(service, triggerCharacters.orEmpty())
@@ -113,10 +126,31 @@ internal class WebLanguageServer(
         handle.languageServers += document
     }
 
+    /**
+     * Gets what the server just pushed on screen. The service only holds it, and the editor asks
+     * after a pause in typing, so without this it would wait for the next edit.
+     *
+     * Not by revalidating at once: that ends the pause the layout is in, and with a server that
+     * publishes after every change, each keystroke would pay for a pass over the whole document. So
+     * this waits as long as that pause. If the text has moved by then, a pass is still to come and
+     * will read the newest list; pushes in the meantime need no wait of their own for the same
+     * reason. If a pass has read the list, there is nothing left to show.
+     */
+    private fun showWhenSettled(handle: AardinkEditorHandle, one: Followed) {
+        one.document.unread = true
+        if (one.settling?.isActive == true) return
+        val version = handle.state.value.textVersion
+        one.settling = scope.launch {
+            delay(TYPING_PAUSE_MS)
+            if (one.document.unread && handle.state.value.textVersion == version) AardinkWeb.revalidate(handle)
+        }
+    }
+
     /** Returns what closes the document on the server, if [handle] was being followed. */
     private fun stopFollowing(handle: AardinkEditorHandle): Job? {
         val one = followed.remove(handle) ?: return null
         val service = one.document.service
+        one.settling?.cancel()
         handle.languageServers -= one.document
         service.client.removeDiagnosticsListener(one.onPublished)
         service.detach()
@@ -165,7 +199,15 @@ internal class WebLanguageServer(
  * server declared and no others: without any, the adapter would offer the editor's generic set, and
  * they would open the list for a language that never asked for them.
  */
-internal class ServerDocument(val service: LspLanguageService, override val triggerCharacters: Set<Char>) : LanguageService by service
+internal class ServerDocument(val service: LspLanguageService, override val triggerCharacters: Set<Char>) : LanguageService by service {
+    /** True from a push until the editor next reads the list. */
+    var unread = false
+
+    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
+        unread = false
+        return service.diagnostics(document)
+    }
+}
 
 /** [transport], saying when [LspClient] closes it: the one thing every end of a connection does. */
 private class WatchedTransport(private val transport: LspTransport, private val onClosed: () -> Unit) : LspTransport by transport {
@@ -179,36 +221,47 @@ private class WatchedTransport(private val transport: LspTransport, private val 
  * What an editor of a language gets with [servers] following it, more than one taken in the order
  * they connected. A registered language's service stays first, so the host's providers keep their
  * word and the server fills in what they leave ([CompositeLanguageService]'s rules). A built-in
- * language's goes after the server, as a real server knows more than its service does, except for
- * what it does as text is typed ([ServerOverLanguage]).
+ * language's goes after the server, as a real server knows more than its service does. Either way
+ * what happens as text is typed stays the language's ([TypedByLanguage]).
  */
 internal fun servedLanguage(own: LanguageService?, servers: List<LanguageService>): LanguageService? {
     val server =
         servers.reduceOrNull<LanguageService, LanguageService> { first, next -> CompositeLanguageService(first, next) } ?: return own
     return when (own) {
         null -> server
-        is WebLanguageService -> CompositeLanguageService(own, server)
-        else -> ServerOverLanguage(server, own)
+        is WebLanguageService -> TypedByLanguage(primary = own, fallback = server, language = own)
+        else -> TypedByLanguage(primary = server, fallback = own, language = own)
     }
 }
 
 /**
- * [server] with what a language does as text is typed left to [language]: indentation on Enter and
- * closing pairs are the language's rules, where [LspLanguageService] has only generic ones.
+ * [primary] and [fallback] with what happens as text is typed answered by [language] alone:
+ * indentation on Enter, closing pairs and surrounding a selection. Its "nothing" here is a rule, as
+ * no pair for `'` in a comment is, so nothing falls through to the generic table that
+ * [LspLanguageService] has for an editor with no language service at all.
  */
-private class ServerOverLanguage(server: LanguageService, language: LanguageService) : CompositeLanguageService(server, language) {
+private class TypedByLanguage(primary: LanguageService, fallback: LanguageService, private val language: LanguageService) :
+    CompositeLanguageService(primary, fallback) {
+
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String =
-        fallback.smartIndent(document, lineIndex, options).ifEmpty { primary.smartIndent(document, lineIndex, options) }
+        language.smartIndent(document, lineIndex, options)
 
-    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? =
-        fallback.autoClose(document, offset, charTyped) ?: primary.autoClose(document, offset, charTyped)
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = language.autoClose(document, offset, charTyped)
 
-    override fun surroundingClose(typed: Char): String? = fallback.surroundingClose(typed) ?: primary.surroundingClose(typed)
+    override fun surroundingClose(typed: Char): String? = language.surroundingClose(typed)
 }
 
-/** The first of [servers] that folds, asked when the editor asks, or else [own]. */
-internal fun servedFolding(own: FoldingProvider, servers: List<ServerDocument>): FoldingProvider =
-    if (servers.isEmpty()) own else ServedFoldingProvider(own, servers.map { it.service })
+/**
+ * The first of [servers] that folds, asked when the editor asks, or else [own]. [own] itself when
+ * it is [NoOpFoldingProvider] and none folds, as the editor keeps a lane for any other provider and
+ * the text would move over for folds that cannot come. What a server folds is settled by then:
+ * [LspClient] offers no dynamic registration of it.
+ */
+internal fun servedFolding(own: FoldingProvider, servers: List<ServerDocument>): FoldingProvider {
+    val services = servers.map { it.service }
+    val nothingToFold = own === NoOpFoldingProvider && services.none { it.supports("foldingRangeProvider") }
+    return if (services.isEmpty() || nothingToFold) own else ServedFoldingProvider(own, services)
+}
 
 private class ServedFoldingProvider(private val own: FoldingProvider, private val servers: List<LspLanguageService>) : FoldingProvider {
     override fun foldableRanges(document: CodeDocument): List<FoldRange> = own.foldableRanges(document)

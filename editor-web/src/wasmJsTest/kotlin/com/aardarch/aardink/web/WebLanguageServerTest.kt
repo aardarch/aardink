@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.languages.lsp.ChannelLspTransport
 import com.aardarch.aardink.languages.lsp.LspLanguageService
@@ -51,9 +52,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 private const val EVERYTHING = """{
   "textDocumentSync": 2,
@@ -154,6 +159,9 @@ class WebLanguageServerTest {
             while (!condition()) delay(16)
         }
     }
+
+    /** Real time, which `delay` in a test's own body is not. */
+    private suspend fun pause(milliseconds: Long) = withContext(Dispatchers.Main) { delay(milliseconds) }
 
     private suspend fun served(handle: AardinkEditorHandle): LspLanguageService {
         awaitUntil { handle.languageServers.isNotEmpty() }
@@ -397,6 +405,78 @@ class WebLanguageServerTest {
     }
 
     @Test
+    fun `what a built-in language leaves alone as text is typed stays alone, with a real server behind it`() = runTest {
+        for (id in listOf("json", "kotlin", "markdown")) {
+            val handle = mount("it's", id)
+            connect(id, FakeServer())
+            val adapter = served(handle)
+            val service = assertNotNull(handle.languageService)
+            val text = CodeDocument("it's")
+
+            assertEquals("'", adapter.autoClose(text, 2, '\''), "the generic rule this must not fall through to")
+            assertNull(service.autoClose(text, 2, '\''), id)
+        }
+    }
+
+    @Test
+    fun `a language's empty indentation on Enter stands, with a real server behind it`() = runTest {
+        val kotlin = mount("  foo\n}", "kotlin")
+        val markdown = mount("    code\n", "markdown")
+        connect("kotlin", FakeServer())
+        connect("markdown", FakeServer())
+        val kotlinAdapter = served(kotlin)
+        val markdownAdapter = served(markdown)
+        val closing = CodeDocument("  foo\n}")
+        val code = CodeDocument("    code\n")
+
+        assertEquals("  ", kotlinAdapter.smartIndent(closing, 1, FormattingOptions()))
+        assertEquals("    ", markdownAdapter.smartIndent(code, 1, FormattingOptions()))
+        assertEquals("", kotlin.languageService!!.smartIndent(closing, 1, FormattingOptions()))
+        assertEquals("", markdown.languageService!!.smartIndent(code, 1, FormattingOptions()))
+    }
+
+    @Test
+    fun `a registered language decides what is closed as text is typed, whatever it is built on`() = runTest {
+        language("toy-bare")
+        language("toy-kotlin", extends = "kotlin")
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-configured", "configuration": { "autoClosingPairs": [["'", "'"], ["(", ")"]] },
+                 "grammar": { "tokenizer": { "root": [ ["\\w+", "text"] ] } } }""",
+            WebLanguageProviders(),
+        )
+        val bare = mount("x", "toy-bare")
+        val extending = mount("x", "toy-kotlin")
+        val configured = mount("x", "toy-configured")
+        connect("toy-bare", FakeServer())
+        connect("toy-kotlin", FakeServer())
+        connect("toy-configured", FakeServer())
+        served(bare)
+        served(extending)
+        served(configured)
+        val text = CodeDocument("don't")
+        val paren = CodeDocument("(")
+
+        assertNull(bare.languageService!!.autoClose(paren, 0, '('), "a language with no pairs closes nothing")
+        assertEquals("", bare.languageService!!.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
+        assertNull(extending.languageService!!.autoClose(text, 3, '\''), "kotlin has no pair for it")
+        assertEquals(")", extending.languageService!!.autoClose(paren, 0, '('))
+        assertNull(configured.languageService!!.autoClose(text, 3, '\''), "refused in the middle of a word")
+        assertEquals(")", configured.languageService!!.autoClose(paren, 0, '('))
+    }
+
+    @Test
+    fun `an editor with no language service takes the server's generic rules for typing`() = runTest {
+        val handle = mount("  a\n", "toy-no-rules")
+        assertNull(handle.languageService)
+        connect("toy-no-rules", FakeServer())
+        served(handle)
+        val service = assertNotNull(handle.languageService)
+
+        assertEquals(")", service.autoClose(CodeDocument("("), 0, '('))
+        assertEquals("  ", service.smartIndent(CodeDocument("  a\n"), 1, FormattingOptions()))
+    }
+
+    @Test
     fun `a server with no trigger characters adds none to the language's`() = runTest {
         language("toy-triggers")
         val handle = mount("name", "toy-triggers")
@@ -440,6 +520,114 @@ class WebLanguageServerTest {
 
         awaitUntil { reported.any { "pushed later" in it } }
         assertTrue(handle.languageDiagnostics.value.any { it.message == "pushed later" })
+    }
+
+    /** A language whose provider notes each time it is asked, on an editor with a server settled behind it. */
+    private suspend fun settledWithProvider(id: String, asked: MutableList<TimeMark>): Pair<AardinkEditorHandle, FakeServer> {
+        language(
+            id,
+            WebLanguageProviders(
+                diagnostics = { _ ->
+                    asked += TimeSource.Monotonic.markNow()
+                    "[]"
+                },
+            ),
+        )
+        val handle = mount("name", id)
+        val server = FakeServer()
+        connect(id, server)
+        served(handle)
+        // Past the pass that a new service sets off.
+        awaitUntil { asked.isNotEmpty() }
+        pause(700)
+        return handle to server
+    }
+
+    @Test
+    fun `a push during the pause in typing does not end the pause, and the pass that follows reads it`() = runTest {
+        val asked = mutableListOf<TimeMark>()
+        val (handle, server) = settledWithProvider("toy-paused", asked)
+        val uri = handle.languageServers.single().service.documentUri
+        val reported = mutableListOf<String>()
+        AardinkWeb.onDiagnosticsChange(handle) { reported += it }
+        val before = asked.size
+
+        val typed = TimeSource.Monotonic.markNow()
+        edit(handle, 0, "x")
+        // Apart from the edit, or the layout would see the two as one change.
+        pause(100)
+        server.pushDiagnostics(uri, "pushed")
+        awaitUntil { asked.size > before }
+
+        assertTrue(typed.elapsedNow() >= 450.milliseconds, "asked ${typed.elapsedNow()} after the edit")
+        awaitUntil { reported.any { "pushed" in it } }
+        // That pass read the push, so nothing is left to ask about.
+        pause(700)
+        assertEquals(before + 1, asked.size)
+    }
+
+    @Test
+    fun `a push is left to the pass of an edit made while it waits`() = runTest {
+        val asked = mutableListOf<TimeMark>()
+        val (handle, server) = settledWithProvider("toy-still-typing", asked)
+        val uri = handle.languageServers.single().service.documentUri
+
+        edit(handle, 0, "x")
+        pause(100)
+        server.pushDiagnostics(uri, "pushed")
+        pause(300)
+        val before = asked.size
+        val typed = TimeSource.Monotonic.markNow()
+        edit(handle, 0, "y")
+        awaitUntil { asked.size > before }
+
+        assertTrue(typed.elapsedNow() >= 450.milliseconds, "asked ${typed.elapsedNow()} after the last edit")
+    }
+
+    @Test
+    fun `pushes in a burst are shown by one pass`() = runTest {
+        val asked = mutableListOf<TimeMark>()
+        val (handle, server) = settledWithProvider("toy-burst", asked)
+        val uri = handle.languageServers.single().service.documentUri
+        val before = asked.size
+
+        repeat(5) { server.pushDiagnostics(uri, "pushed $it") }
+        awaitUntil { asked.size > before }
+        pause(700)
+
+        assertEquals(before + 1, asked.size)
+    }
+
+    @Test
+    fun `a server gone takes its diagnostics with it from a language with no service, beside an owner's markers`() = runTest {
+        val handle = mount("name", "toy-no-service")
+        assertNull(handle.languageService)
+        AardinkWeb.setDiagnosticsForOwner(handle, "host", listOf(WebDiagnostic(1, 1, 2, "owned", "error")))
+        val reported = mutableListOf<String>()
+        AardinkWeb.onDiagnosticsChange(handle) { reported += it }
+        val server = FakeServer()
+        connect("toy-no-service", server)
+        val adapter = served(handle)
+        server.pushDiagnostics(adapter.documentUri, "from the server")
+        awaitUntil { handle.languageDiagnostics.value.any { it.message == "from the server" } }
+
+        server.drop()
+
+        awaitUntil { handle.languageDiagnostics.value.isEmpty() }
+        assertEquals("[]", reported.last())
+    }
+
+    @Test
+    fun `a server that folds gets a plain editor a fold lane, and one that does not leaves it without`() = runTest {
+        val unfolded = mount("name", "toy-plain-unfolded")
+        val folded = mount("name", "toy-plain-folded")
+        connect("toy-plain-unfolded", FakeServer(capabilities = """{ "textDocumentSync": 2 }"""))
+        connect("toy-plain-folded", FakeServer())
+        served(unfolded)
+        served(folded)
+
+        assertSame(NoOpFoldingProvider, unfolded.foldingProvider)
+        assertNotSame(NoOpFoldingProvider, folded.foldingProvider)
     }
 
     @Test
@@ -580,6 +768,26 @@ class WebLanguageServerTest {
         connect("toy-handshake", server)
 
         awaitUntil { AardinkWeb.languageServers.isEmpty() }
+        assertTrue(handle.languageServers.isEmpty())
+    }
+
+    @Test
+    fun `a socket gone just as the handshake finishes follows no editor`() = runTest {
+        language("toy-gone-at-once")
+        val handle = mount("name", "toy-gone-at-once")
+        val server = FakeServer().also { servers += it }
+        val transport = object : LspTransport by server.transport {
+            override suspend fun sendPayload(jsonPayload: String) {
+                // What the real WebSocket transport does once the socket is closing.
+                check("\"initialized\"" !in jsonPayload) { "WebSocket is not open" }
+                server.transport.sendPayload(jsonPayload)
+            }
+        }
+        connectTo("toy-gone-at-once") { transport }
+
+        awaitUntil { AardinkWeb.languageServers.isEmpty() }
+        pause(50)
+
         assertTrue(handle.languageServers.isEmpty())
     }
 

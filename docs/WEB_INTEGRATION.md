@@ -305,12 +305,16 @@ What the server knows joins what the language has:
 | | Who answers |
 | --- | --- |
 | A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
-| A built-in language | The server first, then the language, except that Enter and closing pairs stay the language's. |
+| A built-in language | The server first, then the language. |
+| Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. An editor with no language service, such as plain text, gets the server's generic rules. |
 | Completions, diagnostics, code actions, references, links, colours | Both, as above. |
 | Folding | The server, if it folds; otherwise the language. |
 | Trigger characters | Both. A server that declares none adds none. |
 
 Connecting a second server to a language adds to the first, which answers first.
+
+Diagnostics a server pushes show after the same pause in typing as any others. A push never cuts
+that pause short, so `provideDiagnostics` runs no more often for having a server connected.
 
 `connectLanguageServer` resolves once the connection has been asked for, not once it is up, so a
 server that is slow to start holds nothing up. It never rejects on the server's account. A server

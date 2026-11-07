@@ -1329,7 +1329,15 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     val owners = handle.ownerDiagnostics.toMap()
     val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
     LaunchedEffect(state, service, collectLanguage) {
-        if (!collectLanguage || service == null) return@LaunchedEffect
+        if (!collectLanguage) return@LaunchedEffect
+        if (service == null) {
+            // A language server gone, or a language with no service: nothing here will ask again.
+            if (handle.languageDiagnostics.value.isNotEmpty()) {
+                handle.languageDiagnostics.value = emptyList()
+                AardinkWeb.reportDiagnostics(handle, emptyList())
+            }
+            return@LaunchedEffect
+        }
         snapshotFlow { state.textVersion to handle.revalidations.intValue }.collectLatest { (asked, _) ->
             delay(500)
             val document = state.document.snapshot()
