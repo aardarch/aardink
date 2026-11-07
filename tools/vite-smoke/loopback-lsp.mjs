@@ -28,13 +28,16 @@ const CAPABILITIES = {
   definitionProvider: true,
 };
 
-/** `hoverLink` is where the link in every hover goes. */
-export async function startLoopbackLsp(hoverLink) {
+/**
+ * `hoverLink` is where the link in every hover goes. `capabilities` adds to what it declares, and
+ * requests for the `unanswered` methods get no answer at all, as from a server stuck on them.
+ */
+export async function startLoopbackLsp(hoverLink, { capabilities = {}, unanswered = [] } = {}) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(server, 'listening');
   const heard = [];
   const answers = {
-    initialize: () => ({ capabilities: CAPABILITIES }),
+    initialize: () => ({ capabilities: { ...CAPABILITIES, ...capabilities } }),
     'textDocument/completion': () => ({ isIncomplete: false, items: [{ label: 'served', insertText: 'served' }] }),
     'textDocument/hover': () => ({ contents: { kind: 'markdown', value: `from the [server](${hoverLink})` } }),
     shutdown: () => null,
@@ -44,7 +47,9 @@ export async function startLoopbackLsp(hoverLink) {
     socket.on('message', (data) => {
       const message = JSON.parse(data.toString());
       heard.push(message);
-      if (message.id !== undefined) send({ id: message.id, result: answers[message.method]?.(message.params) ?? null });
+      if (message.id !== undefined && !unanswered.includes(message.method)) {
+        send({ id: message.id, result: answers[message.method]?.(message.params) ?? null });
+      }
       if (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange') {
         const { uri, version } = message.params.textDocument;
         const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };

@@ -220,6 +220,44 @@ async function inlayHintCheck(page) {
   };
 }
 
+/**
+ * A host's provider with a language server behind it that declares inlay hints and never answers
+ * the request: the provider's hint still has to reach the screen. The picture to compare with is
+ * taken with the server connected, as what it publishes is on screen too.
+ */
+async function stuckServerHintCheck(page) {
+  setPhase('inlay hints: a server stuck on the request');
+  const server = await startLoopbackLsp('', { capabilities: { inlayHintProvider: true }, unanswered: ['textDocument/inlayHint'] });
+  try {
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage(
+        { id: 'toy-stuck', grammar: { tokenizer: { root: [] } } },
+        { provideInlayHints: () => [{ position: { lineNumber: 1, column: 5 }, label: ': WWWWWW' }] },
+      );
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'val x = 1', language: 'toy-stuck' });
+      window.__stuck = await connectLanguageServer(serverUrl, 'toy-stuck');
+    }, MOUNT, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await sleep(800);
+    const plain = await page.screenshot({ encoding: 'base64' });
+
+    await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: true }));
+    const asked = await server.until(() => server.count('textDocument/inlayHint') >= 1);
+    await sleep(1800);
+    const hinted = await page.screenshot({ encoding: 'base64' });
+    await page.evaluate(() => window.__stuck.dispose());
+
+    return {
+      'a provider\'s hint reaches the screen past a server stuck on the request': asked && hinted !== plain,
+    };
+  } finally {
+    await server.close();
+  }
+}
+
 /** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
 async function linkPixel(page) {
   const png = await page.screenshot({ encoding: 'base64' });
@@ -696,6 +734,7 @@ try {
   const editorChecks = {
     ...(await dispatcherCheck(desktop)),
     ...(await inlayHintCheck(desktop)),
+    ...(await stuckServerHintCheck(desktop)),
     ...(await languageServerCheck(desktop)),
     ...(await linkCheck(desktop)),
   };
