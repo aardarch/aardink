@@ -18,6 +18,7 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
@@ -46,6 +47,10 @@ import com.aardarch.aardink.languages.XmlSchemaLanguageService
 import com.aardarch.aardink.ui.EditorThemeParser
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -88,6 +93,11 @@ import kotlinx.serialization.json.jsonObject
  *   picked colour back as CSS hex.
  * - [inlayHints]: asked about a range, as a [WebRange] in JSON: an array of `{ position: { lineNumber,
  *   column }, label }`, 1-based as Monaco's, for what `inlayHints` shows among the characters.
+ * - [codeLenses]: an array of Monaco's `CodeLens`, `{ range, command: { id, title, arguments? } }`,
+ *   for what `codeLens` shows in a row above the line `range` starts on.
+ * - [runCodeLensCommand]: a lens was clicked. It gets the command's `id` and its `arguments` as a
+ *   JSON array, `[]` for none, and what it answers is not read. A click comes back here because an
+ *   answer is JSON, and a language's service has no hold of any one editor.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -102,6 +112,8 @@ class WebLanguageProviders(
     val documentSymbols: (suspend (text: String) -> String?)? = null,
     val documentColors: (suspend (text: String) -> String?)? = null,
     val inlayHints: (suspend (text: String, rangeJson: String) -> String?)? = null,
+    val codeLenses: (suspend (text: String) -> String?)? = null,
+    val runCodeLensCommand: (suspend (id: String, argsJson: String) -> Unit)? = null,
 )
 
 /**
@@ -117,6 +129,11 @@ internal fun dispatchedProviders(dispatcher: suspend (method: String, text: Stri
     documentSymbols = { text -> dispatcher("documentSymbols", text, "[]") },
     documentColors = { text -> dispatcher("documentColors", text, "[]") },
     inlayHints = { text, rangeJson -> dispatcher("inlayHints", text, "[$rangeJson]") },
+    codeLenses = { text -> dispatcher("codeLenses", text, "[]") },
+    // No text: a click is about a command, and the document may have moved on since the answer.
+    runCodeLensCommand = { id, argsJson ->
+        dispatcher("runCodeLensCommand", "", "[${JsonPrimitive(id)},$argsJson]")
+    },
 )
 
 /**
@@ -173,6 +190,8 @@ private object NoLanguageService : LanguageService {
  */
 private class JsProviderService(private val providers: WebLanguageProviders, override val triggerCharacters: Set<Char>) : LanguageService {
 
+    private val commands = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     /** False only after an answer of `{ suggestions, incomplete: false }`: asked once per word then. */
     var lastIncomplete = true
         private set
@@ -215,6 +234,20 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = asked {
         providers.inlayHints?.invoke(document.text, AardinkWeb.rangeJson(document, range))
     }?.let { AardinkWeb.parseInlayHints(document, it) }.orEmpty()
+
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> = asked {
+        providers.codeLenses?.invoke(document.text)
+    }?.let { json -> AardinkWeb.parseCodeLenses(document, json, ::runCommand) }.orEmpty()
+
+    /** A click on a lens, for the host. It has been asked for: nothing here calls it off. */
+    private fun runCommand(id: String, argsJson: String) {
+        commands.launch {
+            asked {
+                providers.runCodeLensCommand?.invoke(id, argsJson)
+                null
+            }
+        }
+    }
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 

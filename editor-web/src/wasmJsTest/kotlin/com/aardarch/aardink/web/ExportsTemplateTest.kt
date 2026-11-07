@@ -155,6 +155,7 @@ class ExportsTemplateTest {
             assertTrue(service.documentSymbols(document).isEmpty())
             assertTrue(service.documentColors(document).isEmpty())
             assertTrue(service.inlayHints(document, 3..4).isEmpty())
+            assertTrue(service.codeLenses(document).isEmpty())
             items
         }
         assertEquals(listOf("from-completions"), items.map { it.label })
@@ -168,9 +169,34 @@ class ExportsTemplateTest {
                 """inlayHints [{"startLineNumber":2,"startColumn":1,"endLineNumber":2,"endColumn":3}] ab
                 |cd
                 """.trimMargin(),
+                "codeLenses [] ab\ncd",
             ),
             asked,
         )
+    }
+
+    @Test
+    fun `a click on a lens reaches the dispatcher as runCodeLensCommand, with no text`() = runTest {
+        val asked = mutableListOf<String>()
+        val dispatcher: (String, String, String) -> Promise<JsString?> = { method, text, argsJson ->
+            asked += "$method [$text] $argsJson"
+            val range = """{ "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 }"""
+            val command = """{ "id": "a \"quoted\" id", "title": "Run", "arguments": [1, "two"] }"""
+            val answer = if (method == "codeLenses") """[{ "range": $range, "command": $command }]""" else null
+            Promise.resolve<JsString?>(answer?.toJsString())
+        }
+        val definition = """{ "id": "dispatched-lens", "grammar": { "tokenizer": { "root": [] } } }"""
+        assertEquals("", aardinkRegisterLanguage(definition, dispatcher))
+        val service = AardinkWeb.registry.byId("dispatched-lens")!!.languageService!!
+
+        withContext(Dispatchers.Main) {
+            service.codeLenses(CodeDocument("ab")).single().onClick()
+            withTimeout(5_000) {
+                while (asked.size < 2) delay(16)
+            }
+        }
+
+        assertEquals("""runCodeLensCommand [] ["a \"quoted\" id",[1,"two"]]""", asked.last())
     }
 
     @Test

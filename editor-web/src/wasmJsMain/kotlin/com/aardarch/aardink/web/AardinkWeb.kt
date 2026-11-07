@@ -51,6 +51,7 @@ import androidx.compose.ui.window.ComposeViewport
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ContentChange
 import com.aardarch.aardink.core.Decoration
@@ -1024,6 +1025,25 @@ object AardinkWeb {
             InlayHint(offsetOf(document, position.lineNumber, position.column), label)
         }
 
+    /**
+     * A JSON array of Monaco's `CodeLens`, `{ range, command: { id, title, arguments? } }`, as lenses
+     * in [document], each at the start of its range; those it cannot read, or with nothing to show,
+     * are left out. A click calls [run] with the command's `id` and its `arguments` in JSON, `[]` when
+     * it has none.
+     */
+    internal fun parseCodeLenses(document: CodeDocument, lensesJson: String, run: (id: String, argsJson: String) -> Unit): List<CodeLens> =
+        (parsedJson(lensesJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range = item["range"]?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val command = item["command"] as? JsonObject ?: return@mapNotNull null
+            val title = (command["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val id = (command["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
+            val arguments = (command["arguments"] as? JsonArray)?.toString() ?: "[]"
+            CodeLens(offsetOf(document, range.startLineNumber, range.startColumn), title) { run(id, arguments) }
+        }
+
     /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
     internal fun parseSymbols(document: CodeDocument, symbolsJson: String): List<DocumentSymbol> = runCatching {
         json.decodeFromString(symbolsJsonSerializer, symbolsJson)
@@ -1452,6 +1472,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     fontLigatures = options.fontLigatures,
                     semanticHighlighting = options.semanticHighlighting,
                     inlayHints = options.inlayHints,
+                    codeLens = options.codeLens,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },

@@ -83,6 +83,15 @@ private const val INLAY_HINT_METHOD = "textDocument/inlayHint"
 
 private const val INLAY_HINT_SERVER = """{ "textDocumentSync": 2, "inlayHintProvider": true }"""
 
+private const val CODE_LENS_METHOD = "textDocument/codeLens"
+
+private const val CODE_LENS_RESOLVE = "codeLens/resolve"
+
+private const val EXECUTE_COMMAND = "workspace/executeCommand"
+
+private const val CODE_LENS_SERVER =
+    """{ "textDocumentSync": 2, "codeLensProvider": { "resolveProvider": true }, "executeCommandProvider": { "commands": ["server.run"] } }"""
+
 private fun range(startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int): String =
     """{"start":{"line":$startLine,"character":$startCharacter},"end":{"line":$endLine,"character":$endCharacter}}"""
 
@@ -1040,5 +1049,97 @@ class WebLanguageServerTest {
         pause(600)
 
         assertFalse(INLAY_HINT_METHOD in server.methods)
+    }
+
+    /** A server with one lens, at the third character, that it fills in when asked. */
+    private fun servingCodeLenses() = FakeServer(CODE_LENS_SERVER) { method ->
+        when (method) {
+            CODE_LENS_METHOD -> """[{"range":${range(0, 2, 0, 3)},"data":1}]"""
+
+            CODE_LENS_RESOLVE ->
+                """{"range":${range(0, 2, 0, 3)},"command":{"title":"Run","command":"server.run","arguments":["a"]}}"""
+
+            else -> null
+        }
+    }
+
+    /** The layout asks by itself, once the server has the document, and shows what it resolved. */
+    private suspend fun assertCodeLensesServed(handle: AardinkEditorHandle, server: FakeServer) {
+        awaitUntil { CODE_LENS_RESOLVE in server.methods }
+        assertTrue(server.methods.indexOf("textDocument/didOpen") in 0 until server.methods.indexOf(CODE_LENS_METHOD))
+
+        val document = handle.state.value.document.snapshot()
+        val shown = withContext(Dispatchers.Main) { handle.languageService!!.codeLenses(document) }
+
+        assertEquals(listOf(2 to "Run"), shown.map { it.offset to it.title })
+        assertEquals(1, server.methods.count { it == CODE_LENS_METHOD }, "what the layout asked is the answer this is")
+        withContext(Dispatchers.Main) { shown.single().onClick() }
+        awaitUntil { EXECUTE_COMMAND in server.methods }
+        val sent = server.params(EXECUTE_COMMAND).single()
+        assertEquals("server.run", sent["command"]!!.jsonPrimitive.content)
+        assertEquals("""["a"]""", sent["arguments"].toString())
+    }
+
+    @Test
+    fun `code lenses reach a server through a registered language, which has none of its own`() = runTest {
+        language("toy-lensed")
+        val handle = mount("name", "toy-lensed")
+        AardinkWeb.patchOptions(handle, """{"codeLens": true}""")
+        val server = servingCodeLenses()
+
+        connect("toy-lensed", server)
+
+        assertCodeLensesServed(handle, server)
+    }
+
+    @Test
+    fun `code lenses reach a server ahead of a built-in language`() = runTest {
+        val handle = mount("true", "json")
+        AardinkWeb.patchOptions(handle, """{"codeLens": true}""")
+        val server = servingCodeLenses()
+
+        connect("json", server)
+
+        assertCodeLensesServed(handle, server)
+    }
+
+    @Test
+    fun `a host's lens and a server's are both shown, the host's first, each with its own click`() = runTest {
+        val ran = mutableListOf<String>()
+        val range = """{ "startLineNumber": 1, "startColumn": 2, "endLineNumber": 1, "endColumn": 2 }"""
+        language(
+            "toy-both-lenses",
+            WebLanguageProviders(
+                codeLenses = { """[{ "range": $range, "command": { "id": "host.run", "title": "Host" } }]""" },
+                runCodeLensCommand = { id, _ -> ran += id },
+            ),
+        )
+        val handle = mount("name", "toy-both-lenses")
+        AardinkWeb.patchOptions(handle, """{"codeLens": true}""")
+        val server = servingCodeLenses()
+        connect("toy-both-lenses", server)
+        served(handle)
+
+        awaitUntil { CODE_LENS_RESOLVE in server.methods }
+        val document = handle.state.value.document.snapshot()
+        val shown = withContext(Dispatchers.Main) { handle.languageService!!.codeLenses(document) }
+
+        assertEquals(listOf(1 to "Host", 2 to "Run"), shown.map { it.offset to it.title })
+        withContext(Dispatchers.Main) { shown.forEach { it.onClick() } }
+        awaitUntil { EXECUTE_COMMAND in server.methods && ran.isNotEmpty() }
+        assertEquals(listOf("host.run"), ran)
+    }
+
+    @Test
+    fun `with code lenses off, a server is not asked`() = runTest {
+        language("toy-lenses-off")
+        val handle = mount("name", "toy-lenses-off")
+        val server = servingCodeLenses()
+        connect("toy-lenses-off", server)
+        served(handle)
+
+        pause(600)
+
+        assertFalse(CODE_LENS_METHOD in server.methods)
     }
 }

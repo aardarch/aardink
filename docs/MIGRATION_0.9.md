@@ -122,9 +122,11 @@ fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String,
 // 0.8
 k.aardinkRegisterLanguage(json, completions, hover, diagnostics, documentSymbols, documentColors);
 
-// 0.9: method is 'completions', 'hover', 'diagnostics', 'documentSymbols', 'documentColors' or 'inlayHints'
+// 0.9: method is 'completions', 'hover', 'diagnostics', 'documentSymbols', 'documentColors', 'inlayHints',
+// 'codeLenses' or 'runCodeLensCommand'
 k.aardinkRegisterLanguage(json, (method, text, argsJson) => {
-  const args = JSON.parse(argsJson); // [line, column] for completions and hover, [range] for inlayHints, else []
+  // [line, column] for completions and hover, [range] for inlayHints, [id, args] for runCodeLensCommand, else []
+  const args = JSON.parse(argsJson);
   // answer with a Promise of JSON, or of null for nothing, as for a method you do not know
 });
 ```
@@ -160,6 +162,22 @@ follows a target must check it first. To go back to no links opening at all, lis
   package's `aardink-web.wasm` grew by about 217 KB, or 61 KB gzipped, for everyone.
 - With a server connected, a built-in language's answers come after the server's, and a formatter or
   outline the language has gives way to the server's.
+
+## Code lenses
+
+`EditorOptions` and `WebEditorOptions` gain `codeLens`, and `WebLanguageProviders` gains `codeLenses`
+and `runCodeLensCommand`, all at the end and off by default, so code calling their constructors by
+position, or their `copy`, needs a recompile. `LanguageService.codeLenses` has a default, so a service
+of your own needs no change.
+
+A `CodeLens` with a blank title is not an error: it keeps its row and the editor asks
+`codeLenses` again when it is on screen. That is how a service leaves out what costs a lot until it
+can be seen. `LspLanguageService` does it for a server's `codeLens/resolve`, so a server that resolves
+lenses is asked only about those around the view, once the service is attached to the editor's state.
+
+A click on a lens from a server sends `workspace/executeCommand` only for a command the server listed
+in `executeCommandProvider`. Anything else is its client's own, as VS Code's "show references" is, and
+the lens is then only something to read.
 
 ## Inline text and inlay hints
 

@@ -159,6 +159,9 @@ const PROVIDERS = new Map([
   ['documentSymbols', (providers) => providers.provideDocumentSymbols],
   ['documentColors', (providers) => providers.provideDocumentColors],
   ['inlayHints', (providers) => providers.provideInlayHints],
+  ['codeLenses', (providers) => providers.provideCodeLenses],
+  // A click is about a command, so no text comes with it.
+  ['runCodeLensCommand', (providers) => providers.runCodeLensCommand && ((_text, id, args) => providers.runCodeLensCommand(id, args))],
 ]);
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
@@ -257,7 +260,7 @@ function toKotlinOptions(options) {
   if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
   if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
-  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting']) {
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens']) {
     if (options[key] !== undefined) out[key] = !!options[key];
   }
   if (options.inlayHints !== undefined) {

@@ -68,6 +68,11 @@ export interface AardinkOptions {
    * `'offUnlessPressed'` no key is watched, so they mean on and off.
    */
   inlayHints?: boolean | { enabled?: boolean | 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' };
+  /**
+   * Shows what `provideCodeLenses` or a language server says, in a row above its lines. Off by
+   * default, where Monaco's is on.
+   */
+  codeLens?: boolean;
 }
 
 /**
@@ -694,6 +699,27 @@ export interface AardinkLanguageProviders {
    * server these are shown after a second if it has not answered by then.
    */
   provideInlayHints?(text: string, range: AardinkRange): AardinkInlayHint[] | null | Promise<AardinkInlayHint[] | null>;
+  /**
+   * What is shown in a row above the line each `range` starts on, as Monaco's `provideCodeLenses`,
+   * with the `codeLens` option on. It is about the whole text, and asked after a pause in typing;
+   * between answers each lens moves with its text. Lenses on one line share a row. An array, with no
+   * `{ lenses }` around it, and each lens with its `command`: there is no `resolveCodeLens`. With
+   * `extends`, the base language's are added, less any with this one's position and title. With a
+   * language server these are shown after a second if it has not answered by then.
+   */
+  provideCodeLenses?(text: string): AardinkCodeLens[] | null | Promise<AardinkCodeLens[] | null>;
+  /**
+   * A lens from `provideCodeLenses` was clicked or tapped: its command's `id`, and its `arguments`,
+   * `[]` when it has none. As they passed through JSON, they hold only what JSON can. There is no
+   * command registry behind this: a lens does what this does with its `id`.
+   */
+  runCodeLensCommand?(id: string, args: unknown[]): void | Promise<void>;
+}
+
+/** Monaco's `CodeLens`, with the command it must have here: a title in a row above the line `range` starts on. */
+export interface AardinkCodeLens {
+  range: AardinkRange;
+  command: { id: string; title: string; arguments?: unknown[] };
 }
 
 /** Monaco's `InlayHint`, as far as the editor draws it: a label at a position, in front of the character there. */

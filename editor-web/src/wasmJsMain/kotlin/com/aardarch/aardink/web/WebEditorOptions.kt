@@ -48,6 +48,9 @@ import kotlinx.serialization.Serializable
  *   the syntax's. Off by default. Those come from a language server, with no JS provider for them.
  * @property inlayHints What `provideInlayHints` or a language server says, shown among the
  *   characters of the lines around the view. Off by default, and nothing is asked for while off.
+ * @property codeLens What `provideCodeLenses` or a language server says, in a row above its lines,
+ *   each a click or a tap away from what it does. Off by default, where Monaco's is on, and nothing
+ *   is asked for while off.
  */
 @Serializable
 data class WebEditorOptions(
@@ -75,6 +78,7 @@ data class WebEditorOptions(
     val fontLigatures: Boolean = true,
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
+    val codeLens: Boolean = false,
 )
 
 /**

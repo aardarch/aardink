@@ -16,6 +16,7 @@
 package com.aardarch.aardink.web
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
@@ -268,6 +269,7 @@ class AardinkWebTest {
     private class CountingTokens : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
         var asked = 0
         var askedForHints = 0
+        var askedForLenses = 0
 
         override suspend fun semanticTokens(document: CodeDocument): List<Token> {
             asked++
@@ -276,6 +278,11 @@ class AardinkWebTest {
 
         override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
             askedForHints++
+            return emptyList()
+        }
+
+        override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+            askedForLenses++
             return emptyList()
         }
     }
@@ -326,6 +333,24 @@ class AardinkWebTest {
         AardinkWeb.patchOptions(handle, """{"inlayHints": true}""")
 
         awaitUntil { service.askedForHints > 0 }
+    }
+
+    @Test
+    fun `code lenses are off by default`() {
+        assertFalse(AardinkWeb.parseOptions("{}").codeLens)
+        assertTrue(AardinkWeb.parseOptions("""{"codeLens": true}""").codeLens)
+    }
+
+    @Test
+    fun `the code lens option reaches the editor, which asks the language's service`() = runTest {
+        val service = CountingTokens()
+        val handle = mountCounting(service, WebEditorOptions())
+        withContext(Dispatchers.Main) { delay(600) }
+        assertEquals(0, service.askedForLenses, "nothing is asked for with it off")
+
+        AardinkWeb.patchOptions(handle, """{"codeLens": true}""")
+
+        awaitUntil { service.askedForLenses > 0 }
     }
 
     @Test

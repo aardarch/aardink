@@ -81,6 +81,36 @@ test('a provider answers by its name, with its arguments after the text, and any
   assert.equal(await dispatcher('constructor', 'the text', '[]'), null, "nor one on an object's prototype");
 });
 
+test('a click on a lens reaches runCodeLensCommand with its id and arguments, and no text', async () => {
+  const { registerLanguage } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  const ran = [];
+  await registerLanguage({ id: 'lensed' }, {
+    provideCodeLenses: (text) => [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, command: { id: text, title: 'Run' } }],
+    runCodeLensCommand: (...args) => {
+      ran.push(args);
+    },
+  });
+  const { dispatcher } = globalThis;
+
+  assert.equal(JSON.parse(await dispatcher('codeLenses', 'the text', '[]'))[0].command.id, 'the text');
+  assert.equal(await dispatcher('runCodeLensCommand', '', '["run",[1,"two"]]'), null);
+  assert.deepEqual(ran, [['run', [1, 'two']]]);
+
+  await registerLanguage({ id: 'unlensed' }, {});
+  assert.equal(await globalThis.dispatcher('runCodeLensCommand', '', '["run",[]]'), null, 'no provider to run it');
+});
+
+test('codeLens is on for what says so, and off by default', async () => {
+  const { createEditor } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  globalThis.optionsSent = [];
+  const editor = await createEditor({ id: 'lenses' }, undefined, {});
+  assert.equal(globalThis.optionsSent[0].codeLens, undefined, 'left to the default, which is off');
+  editor.updateOptions({ codeLens: true });
+  assert.equal(globalThis.optionsSent.at(-1).codeLens, true);
+  editor.updateOptions({ codeLens: false });
+  assert.equal(globalThis.optionsSent.at(-1).codeLens, false);
+});
+
 test('inlayHints is on for what says so, and off for anything else, as its neighbours are', async () => {
   const { createEditor } = await import(pathToFileURL(join(dir, 'index.js')).href);
   globalThis.optionsSent = [];

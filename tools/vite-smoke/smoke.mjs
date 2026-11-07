@@ -258,6 +258,136 @@ async function stuckServerHintCheck(page) {
   }
 }
 
+/** Long enough for a click at x 150 or 450 to land on the first or the second of two lenses on the top row. */
+const LENS_TITLE = 'W'.repeat(30);
+
+/** A language with two lenses over its first line, whose runs land in `window.__lensRuns`. */
+async function lensEditor(page) {
+  await page.evaluate(async (mount, title) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__lensesAsked = [];
+    window.__lensRuns = [];
+    const range = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 };
+    await registerLanguage(
+      { id: 'toy-lens', grammar: { tokenizer: { root: [] } } },
+      {
+        provideCodeLenses: async (text) => {
+          window.__lensesAsked.push(text);
+          return [
+            { range, command: { id: 'first', title, arguments: [1, 'two'] } },
+            { range, command: { id: 'second', title } },
+          ];
+        },
+        runCodeLensCommand: (id, args) => {
+          window.__lensRuns.push({ id, args });
+        },
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'fun main() {}\nsecond', language: 'toy-lens' });
+  }, MOUNT, LENS_TITLE);
+}
+
+/**
+ * provideCodeLenses through the dispatcher, a row on screen and not in the document, and a real
+ * click on each lens of the row coming back through runCodeLensCommand with the caret left alone.
+ */
+async function codeLensCheck(page) {
+  setPhase('code lenses');
+  await lensEditor(page);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  await sleep(800);
+  const plain = await shot();
+  const askedWhileOff = await page.evaluate(() => window.__lensesAsked.length);
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await page.waitForFunction(() => window.__lensesAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(800);
+  const lensed = await shot();
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: false }));
+  await sleep(800);
+  const gone = await shot();
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await sleep(800);
+  const state = () => page.evaluate(() => ({
+    value: window.__smokeEditor.getValue(),
+    caret: window.__smokeEditor.getPosition(),
+    runs: window.__lensRuns.slice(),
+  }));
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 2, column: 3 }));
+  await page.mouse.click(150, 12);
+  await sleep(300);
+  await page.mouse.click(450, 12);
+  await sleep(300);
+  const clicked = await state();
+
+  return {
+    'code lenses are not asked for with the option off': askedWhileOff === 0,
+    'provideCodeLenses gets the text through the dispatcher': (await page.evaluate(() => window.__lensesAsked[0])) === 'fun main() {}\nsecond',
+    'a lens is on screen and not in the document': lensed !== plain && clicked.value === 'fun main() {}\nsecond',
+    'a click on each lens of a row runs its own command, with its arguments':
+      JSON.stringify(clicked.runs) === JSON.stringify([{ id: 'first', args: [1, 'two'] }, { id: 'second', args: [] }]),
+    'a click on a lens leaves the caret where it was': clicked.caret?.lineNumber === 2 && clicked.caret?.column === 3,
+    'turning the option off takes the row away': gone === plain,
+  };
+}
+
+/** A tap on a page with a touch screen runs a lens as a click does. */
+async function codeLensTapCheck(page) {
+  setPhase('code lenses by touch');
+  await lensEditor(page);
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await page.waitForFunction(() => window.__lensesAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(800);
+  await page.touchscreen.tap(150, 12);
+  await sleep(500);
+  const runs = await page.evaluate(() => window.__lensRuns.slice());
+  return { 'a tap on a lens runs it': runs.length === 1 && runs[0].id === 'first' };
+}
+
+/**
+ * A language server's lenses through a real WebSocket: asked for, resolved, on screen, and a click
+ * going back as workspace/executeCommand.
+ */
+async function serverCodeLensCheck(page) {
+  setPhase('code lenses: a language server');
+  const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } };
+  const server = await startLoopbackLsp('', {
+    capabilities: { codeLensProvider: { resolveProvider: true }, executeCommandProvider: { commands: ['server.run'] } },
+    answers: {
+      'textDocument/codeLens': () => [{ range, data: 7 }],
+      'codeLens/resolve': (lens) => ({ ...lens, command: { title: LENS_TITLE, command: 'server.run', arguments: [lens.data] } }),
+    },
+  });
+  try {
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage({ id: 'toy-served-lens', grammar: { tokenizer: { root: [] } } });
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'fun main() {}', language: 'toy-served-lens', codeLens: true });
+      window.__servedLens = await connectLanguageServer(serverUrl, 'toy-served-lens');
+    }, MOUNT, server.url);
+    const resolved = await server.until(() => server.count('codeLens/resolve') === 1);
+    await sleep(800);
+    await page.mouse.click(150, 12);
+    const ran = await server.until(() => server.count('workspace/executeCommand') === 1);
+    const sent = server.heard.find((message) => message.method === 'workspace/executeCommand')?.params;
+    const heard = server.methods();
+    await page.evaluate(() => window.__servedLens.dispose());
+    return {
+      'a server\'s lens is asked for after the document opens, and resolved with its data':
+        resolved && heard.indexOf('textDocument/didOpen') < heard.indexOf('textDocument/codeLens') &&
+        server.heard.find((message) => message.method === 'codeLens/resolve')?.params?.data === 7,
+      'a click on a server\'s lens runs its command there': ran && sent?.command === 'server.run' && sent?.arguments?.[0] === 7,
+    };
+  } finally {
+    await server.close();
+  }
+}
+
 /** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
 async function linkPixel(page) {
   const png = await page.screenshot({ encoding: 'base64' });
@@ -726,7 +856,12 @@ try {
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
   const interactions = await interactionChecks(page);
   for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
-  const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)), ...(await configurationCheck(page)) };
+  const grammar = {
+    ...(await triggerCheck(page)),
+    ...(await grammarCheck(page)),
+    ...(await configurationCheck(page)),
+    ...(await codeLensTapCheck(page)),
+  };
   Object.assign(interactions, grammar);
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   setPhase('a page with no touch screen');
@@ -735,6 +870,8 @@ try {
     ...(await dispatcherCheck(desktop)),
     ...(await inlayHintCheck(desktop)),
     ...(await stuckServerHintCheck(desktop)),
+    ...(await codeLensCheck(desktop)),
+    ...(await serverCodeLensCheck(desktop)),
     ...(await languageServerCheck(desktop)),
     ...(await linkCheck(desktop)),
   };

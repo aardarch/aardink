@@ -29,10 +29,11 @@ const CAPABILITIES = {
 };
 
 /**
- * `hoverLink` is where the link in every hover goes. `capabilities` adds to what it declares, and
- * requests for the `unanswered` methods get no answer at all, as from a server stuck on them.
+ * `hoverLink` is where the link in every hover goes. `capabilities` adds to what it declares,
+ * `answers` to what it answers, by method, and requests for the `unanswered` methods get no answer
+ * at all, as from a server stuck on them.
  */
-export async function startLoopbackLsp(hoverLink, { capabilities = {}, unanswered = [] } = {}) {
+export async function startLoopbackLsp(hoverLink, { capabilities = {}, answers: more = {}, unanswered = [] } = {}) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(server, 'listening');
   const heard = [];
@@ -41,6 +42,7 @@ export async function startLoopbackLsp(hoverLink, { capabilities = {}, unanswere
     'textDocument/completion': () => ({ isIncomplete: false, items: [{ label: 'served', insertText: 'served' }] }),
     'textDocument/hover': () => ({ contents: { kind: 'markdown', value: `from the [server](${hoverLink})` } }),
     shutdown: () => null,
+    ...more,
   };
   server.on('connection', (socket) => {
     const send = (message) => socket.send(JSON.stringify({ jsonrpc: '2.0', ...message }));

@@ -120,9 +120,10 @@ prefixed `aardink` so it cannot collide with your module's own exports.
 `aardinkRegisterLanguage` takes one dispatcher for all of a language's providers: a function of
 `(method, text, argsJson)` answering with JSON through a Promise, or null for nothing. `method` is a
 member of `WebLanguageProviders` (`completions`, `hover`, `diagnostics`, `documentSymbols`,
-`documentColors`, `inlayHints`), and `argsJson` the provider's other arguments as a JSON array:
-`[line, column]`, 1-based, for `completions` and `hover`, `[range]`, Monaco's `IRange`, for
-`inlayHints`, and `[]` for the rest. Answer null to a name you do not know.
+`documentColors`, `inlayHints`, `codeLenses`, `runCodeLensCommand`), and `argsJson` the provider's
+other arguments as a JSON array: `[line, column]`, 1-based, for `completions` and `hover`, `[range]`,
+Monaco's `IRange`, for `inlayHints`, `[id, args]` for `runCodeLensCommand`, whose `text` is empty and
+whose answer is not read, and `[]` for the rest. Answer null to a name you do not know.
 That means no provider, and it is how a later version adds one with no change to your copy.
 
 > With Kotlin 2.4.20, `@JsExport` functions declared in a *dependency* klib do end up in the
@@ -376,6 +377,8 @@ files to apply them to.
 | `fontLigatures` | The same | On by default. |
 | `'semanticHighlighting.enabled'` | `semanticHighlighting` | Off by default. Colours from a language server over the syntax's; there is no JS provider for them. |
 | `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
+| `codeLens` | The same | Off by default, where Monaco's is on. |
+| `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and its click goes to the server as `workspace/executeCommand`, if it listed that command. |
 | `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing, in scrolling past what it last asked about, or after a fold opens or closes; a long closed fold on screen makes that a few calls at once, one for the lines on either side of it. With `extends` or a language server, every source's hints are shown, the first's where two are at one position; a server that has not answered within a second does not hold yours back. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
