@@ -16,7 +16,7 @@
 
 # Aardink roadmap: 0.6.3 to 1.0
 
-Status: **in progress**, drafted 2026-10-22; the table below is current. Continues
+Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-07. Continues
 [`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §10, facts
 about the code are as of `v0.6.2` (commit `3fbaef6`) and facts about the aardflex apps are as of
 the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 0.6.2 open).
@@ -28,8 +28,8 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
-| 0.9 | In progress (branch `feat/0.9`, ledger in §15) | §7: LSP completeness, Markdown hover, the inline-layout spike, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. |
-| 0.10 | Planned | §8: more built-in languages, web provider parity, view options, find extras, the perf thread. |
+| 0.9 | Built on branch `feat/0.9`, not yet released | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Open before release: the full gate on the merged branch, and the Android device check (§15.1). |
+| 0.10 | Planned | §8: more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
 ## 1. Where 0.6.2 stands
@@ -443,7 +443,7 @@ that changes line layout, and it gets a spike first, as the 0.6 renderer did.
   wordPattern, folding markers, comments, indentationRules) parsed from VS Code's
   `language-configuration.json`, giving every grammar-only language auto-close, surround and
   Enter indentation.
-- TypeScript regexp literals by a lookbehind-free heuristic.
+- TypeScript regexp literals by a lookbehind-free heuristic. Not built in 0.9: moved to §8.1.
 - The aardflex expression language becomes an embedded grammar with its own catalog.
 
 ## 8. 0.10: languages, web parity, performance
@@ -458,6 +458,9 @@ About fifteen PRs.
   Shell, Python, SQL, Java, Groovy and Gradle, Dockerfile, diff, SCSS and LESS.
 - CSS and JavaScript embedded in HTML needs the CSS and TypeScript grammars as data first, so it
   lands here, after §7.4.
+- TypeScript regexp literals, moved from §7.4: the scanner's only state is its position, so telling
+  `/` after a value from a regexp needs a hook in `RegexTokenizer` that sees the token before, and a
+  measurement on wasm of what it adds to each rescan. The `regexp` theme key exists already.
 
 ### 8.2 Web provider parity (`:editor-web`; 2 PRs)
 
@@ -471,6 +474,14 @@ About fifteen PRs.
 - Theme keys for the minimap, scrollbar, guides and widgets; high-contrast built-in themes; a
   Monaco rule's `background` drawn (§11.1).
 - `wordWrap` defaults to off as in Monaco (breaking on the web only, flagged).
+- A host, then a language server, then the base language. In 0.9 a registered language's providers
+  and the built-in language it `extends` both answer before a server (§15.1), so a language with
+  `extends: 'json'` keeps JSON's formatter and outline ahead of a real server's. A true order needs
+  `WebLanguageService`'s completion logic to tell the host's answers from the base language's.
+- Alt+character keys on the web. Compose's web input takes any key that makes a character without
+  Ctrl or Cmd as typing, so Alt+K in `addCommand`, and the default Shift+Alt+A and Shift+Alt+I, never
+  reach the bindings; 0.9 catches only Alt+] and Alt+[ before it. Catch every Alt+character that has
+  a binding, leaving AltGr (Ctrl+Alt) to typing.
 
 ### 8.3 View options and find extras (`:editor`; 3 PRs)
 
@@ -624,6 +635,28 @@ Found during the audits; none of them is Aardink's to fix.
   `diagnostics.ts`.
 - **aardflex specs:** `specs/index.md` still lists the syntax highlighter as in progress and the
   Monaco web editor as built; `specs/roadmap.md` row 0.6 still says "regex-based highlighting".
+
+On 0.9, from its Markdown documentation and embedded grammars:
+
+- **Web app, hover:** `src/editor/aardflex/hover.ts` says in its header that Aardink shows hover
+  text as written, and `hover.test.ts` asserts there is no Markdown. Hover `contents` are Markdown
+  now: lines joined with a single newline (`problems.join('\n')`) run into one paragraph and need a
+  blank line or a trailing backslash, and text built from the document or sample data, such as an
+  expression's preview, needs `*`, `_`, `` ` ``, `[`, `<` and line-start `#`, `-` and `1.` escaped.
+- **Both apps, schema documentation:** schema `doc` strings and the catalogue descriptions are
+  Markdown on hover and in the completion list. A scan on 2026-11-07 of `shared/generated/reference.json`
+  (960 documentation strings) and the web app's `reference.json` (896) found no emphasis, no line
+  that starts a heading or list, and no single newline; backticks now show as code, which is
+  intended. Strings built at run time, and any added later, need the same check.
+- **Template copies:** neither app copies `ExportsTemplate.kt` (both use the published npm package or
+  the Kotlin API), so `aardinkRegisterLanguage`'s dispatcher needs nothing there. Check again before
+  either builds its own wasm module.
+- **`tokenNames`:** the Android app's `AardflexXmlTokenizerTest.everyGrammarTokenHasAColour` reads
+  `AardflexXmlGrammar.grammar.tokenNames`. When the expression language moves into a grammar of its
+  own through `nextEmbedded`, that set loses the expression names (`function.transform.xml`,
+  `variable.module.xml`, `operator.pipe.xml`), and the test goes on passing while it checks less.
+  It must read the union of both grammars' `tokenNames`, and the expression grammar needs
+  `tokenPostfix: '.xml'` to keep today's names. The web app has no such test.
 
 ## 14. API ledger for 0.8
 
@@ -825,6 +858,148 @@ These need no public symbol, and are kept here so they are not worked out twice:
   test fixture and its goldens change.
 - Kotlin symbols behind an npm line, and types behind `LspClientHost`, go in §15.1 as they land,
   as §11.1 and §14.1 did.
+
+### 15.1 As built
+
+The 0.9 work follows the ledger above, with these differences and additions, each forced by the
+design or found while building it. Everything not listed is internal: the Markdown renderer, the
+detail pane, `LineLayout` and `OffsetMap`, the inline content behind hints, lenses and ghost text,
+the semantic token store, the LSP sync queue and wire types. The klib dumps also gain compiler
+`$stableprop` entries for some internal classes, and `ComposableSingletons` lambdas are renamed;
+neither is API.
+
+#### `:editor`
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `LanguageService.resolveCompletion(item)` | Asked for the item the detail pane shows, and on accepting an item with no `additionalEdits`. Edits the answer adds are about the text at the call, and go in after the item as an undo step of their own, unless the text has moved on. `CompositeLanguageService`: the primary's when it changes the item, else the fallback's | A server places edits in the text it was asked about, which accepting has changed |
+| `FoldingProvider.requestFoldableRanges(document)` | Throwing means no answer this time and the editor keeps its ranges; an empty list opens every fold. Asked after a 200 ms pause in typing. `withRegionMarkers` forwards it | A server's `ContentModified` during typing would otherwise open every fold. The contract is in the KDoc only, with no symbol for it |
+| `LanguageService.inlayHints(document, range)` | `range` is whole lines: the view and a screen of rows either side, asked 300 ms after typing pauses, and again when scrolling leaves it or a fold opens or closes. A closed fold hiding more than a screen parts it into runs, one call each, at most 8 | Scrolling inside the window asks nothing, and hidden lines are not asked about |
+| `InlayHint(offset, label)` | One row: a line break or control character shows as a space. Drawn faint, with a faint background, from the theme's text colour; `EditorTheme` has no field for it | Monaco's hints are single-line too |
+| `CompositeLanguageService` rule for `inlayHints` | Both, less any of the fallback's at an offset the primary has one at. The primary's show after 1 s if the fallback has not answered | A server that is starting or stuck would otherwise hold a host's hints back |
+| `CodeLens(offset, title, onClick)` | `onClick: () -> Unit = {}`. A blank `title` means not known yet: the lens keeps its row, cannot be clicked, and the editor asks `codeLenses` again when it comes on screen (agreed 2026-11-07). Rows start at the line's indentation, at most 40 columns, with tabs to their stops, and are cut at 1,000 characters. A press on a lens takes no focus and opens no keyboard | `EditorMenuItem`'s shape. The blank title keeps every lens's row from the first answer, so the height is steady while titles resolve near the view, as in VS Code |
+| `CompositeLanguageService` rule for `codeLenses` | Both, less any of the fallback's with the same offset and title, shown without waiting for ever on the fallback | As for hints |
+| `LanguageService.semanticTokens(document)` | Drawn in line layouts only: the minimap, `tokensForLine` and `tokenVersion` stay the syntax's. An empty or failed answer clears the layer. Bracket colours stay over semantic ones. Composite: the primary's, or the fallback's when the primary has none | An empty list is all the return type can say |
+| `DecorationStyle.before`, `after`, `inlineColor` | `inlineColor` colours the range's own characters and its `before` and `after`; without it they are faint (the text colour at 0.6 alpha). The caret goes in front of a hint and of `before`, behind `after` on a range that is not empty | Read from the ledger's "in place of Monaco's `inlineClassName`". Injected text must not read as document text |
+| `fun interface InlineCompletionProvider` | `suspend fun provideInlineCompletions(document: CodeDocument, cursorOffset: Int): List<InlineCompletion>`. Cancellation stands in for Monaco's token; Monaco's context argument is left out | The context would be one more public type |
+| `InlineCompletion(text, range)` | `range: IntRange? = null`. Without a range, the word at the caret to the line's end as in Monaco, then the rest of the line alone, then a plain insertion at the caret, where Monaco shows nothing. Text the document already has at the caret shows nothing. Accepting inserts only what shows, and leaves the caret at the end of what it added | An assistant often knows only what comes next, and a bracket after the caret is not doubled |
+| `EditorCommand.AcceptInlineCompletion`, `CycleInlineCompletion(forward)` | `forward = true` by default. Tab, Alt+] and Alt+[ in `EditorKeyBindings.Default`; a binding whose command cannot run leaves its key alone, so Tab indents when no ghost text shows | Keys as data, as 0.8's |
+| `EditorCommand.DismissInlineCompletion` | Added to the ledger 2026-11-07, after review. Escape is its default binding. A null binding of Escape takes the editor's Escape away whole, as in 0.8; another dismiss key is bound beside Escape. Run by key it closes an open list first and does not reveal the caret | A soft keyboard has no Escape, and a host's button needs a command |
+| `LocalCodeFenceTokenizers` | `ProvidableCompositionLocal<(String) -> IncrementalTokenizer?>`, in `ui/CodeBlock.kt`. An untagged fence takes the state's tokenizer. Fences use `tokenizeLines` with an empty `previousTokens`, so they never enter a tokenizer's scan cache | The ledger named the type only |
+| `LanguageService.surroundingClose(typed)` | Composite: the primary's, or else the fallback's | |
+| `CodeEditorLayout(onOpenLink)` | Its default is now a no-op the layout recognises: with it, links in documentation show as text. The public `HoverDocPopup` and `SignatureHelpPopup` take no handler, so their links are text | A link that looks live and does nothing is worse than text |
+
+Also changed without new API: the hover card stays 300 ms after the mouse leaves and while it is
+over the card; folding is asked after a pause in typing; an empty or collapsed decoration follows
+edits, as its KDoc said; with an inline completion provider, Up and Down end ghost text before
+moving; `estimateRows` counts a wrapped lens row before the line is laid out.
+
+#### `:languages`
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `LanguageConfiguration` with its rule types | `LanguageConfiguration(comments, brackets, autoClosingPairs, surroundingPairs, onEnterRules, indentationRules, foldingMarkers)`, with nested `CharacterPair(open, close)`, `AutoClosingPair(open, close, notInString, notInComment)`, `OnEnterRule(action, beforeText, afterText, previousLineText)`, `EnterAction(indent, appendText, removeText)`, `IndentAction` (`None`, `Indent`, `Outdent`, `IndentOutdent`) and `IndentationRules(increase, decrease, indentNextLine, unIndentedLine)` | The ledger left the rule types unnamed |
+| `IndentAction.IndentOutdent` | Adds no second line: the closer stays at the opener's indentation with the caret before it, and `appendText` is ignored | As §15's choice: `smartIndent` cannot put the caret between two lines |
+| `wordPattern` | Left out, as decided; `colorizedBracketPairs` is also ignored | Nothing reads them |
+| `LanguageConfiguration.parse(json)` | JSONC; JavaScript regexes translated, `\p{...}` kept, only the `i` flag honoured, lookbehind refused. Enter tries `onEnterRules`, then `brackets`, then `indentationRules`, then the language's own service, then keeps the line's indentation; a rule that decides is final. A rule's regex skips lines over 256 characters. Closing pairs know strings and comments from a scan of the caret's line, and `autoCloseBefore` is not read | Julia's `increaseIndentPattern` took 1.4 s on a 512-character line on wasm; the cost is roughly cubic |
+| `LanguageDefinition.withConfiguration` | The configuration decides over the language's service for Enter, closing and surround; completions are the service's. On the web it sits under the JS providers | A language with no `extends` lost Enter indentation under its providers |
+| `DeclarativeTokenizer(grammar, embedded)` | As named. `DeclarativeGrammar.tokenNames` is the grammar's own, never what it embeds | Embedded grammars are known by id only until tokenizing |
+| Grammar data | `$` is refused in `defaultToken` and `tokenPostfix` as well as token names, and in a bracket's token only in a grammar with a `@brackets` action, which is the only one that reads `brackets`. A non-string or empty `nextEmbedded` is refused. `@name` attributes expand as `(?:value)` | Names are fixed when the grammar is read; a `brackets` key nothing uses stays an ordinary key, as in 0.8 |
+| TypeScript regexp literals (§7.4) | Not built; moved to §8.1, first on the overrun list | The scanner's only state is its position, so a rule cannot see the token before; it needs a hook in `RegexTokenizer` and a measurement on wasm |
+
+**Monarch, where this differs from Monaco.** Checked against Monaco's `monarchCompile`,
+`monarchCommon` and `monarchLexer` sources:
+
+- A state named in `next` or `switchTo` that does not exist at run time leaves the stack as it is,
+  where Monarch throws, since typed text can make the name anything. A literal unknown state in
+  `switchTo` is refused at parse.
+- `@brackets` on text that is no bracket gets the default token; Monarch throws. `brackets` is read
+  only for a `@brackets` action; Monarch validates it always.
+- `goBack` never goes back past the start of the match, and is refused in a capture group's action.
+- A `!~` guard with a substitution is negated, which Monarch's dynamic branch loses. A guard's
+  regex is wrapped as `^(?:...)$`, so an alternation tests all of it. Text filled into a guard's
+  regex is escaped. `==` and `!=` compare case-insensitively under `ignoreCase`.
+- Not supported: `$1`-style groups in guards, `next` and `nextEmbedded`, `$Sn` in a rule's regex,
+  `$@attr`, and `@@`. They stay literal text. An unknown `@name` in a regex stays literal, where
+  Monarch throws. A rule's third element still applies to array and `cases` actions, which Monarch
+  drops.
+- Embedding: an unknown id stays on the parent's rules; `@pop` outside an embedded grammar does
+  nothing, and a state with no leaving rule stays embedded to the end, where Monarch throws. While
+  embedded, only the parent's leaving rules run, and one whose whole-match `cases` do not leave for
+  that match is looked past. A rule whose capture groups can leave counts as leaving for any match;
+  if its groups then do not leave, the parent reads that text and the embedded language carries on
+  after it in the state it was in. A group's `nextEmbedded` takes effect after the whole match, and
+  its id reads the group's text and the state at that group. Languages nest up to 16 deep
+  (`MAX_EMBEDDING_DEPTH`, internal), past which an id counts as unknown, so a grammar can embed
+  itself. If every level closes on the same text, the outermost searches first and one closer leaves
+  them all. Ids match exactly: Monaco's MIME-style ids are not resolved.
+
+#### `:languages-lsp`
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `LspClientHost` | `suspend fun applyWorkspaceEdit(edit: LspWorkspaceEdit, label: String?): Boolean = false`; `suspend fun showMessageRequest(type: Int, message: String, actions: List<String>): String? = null`; `fun showMessage(type: Int, message: String)`; `fun logMessage(type: Int, message: String)`; `fun progress(token: JsonElement, value: JsonElement)` | LSP's `MessageType` as an `Int` and actions by title, so no new public types. `window/workDoneProgress/create` is acknowledged with no host member; the token first reaches the host in `progress` |
+| `LspClient(host)` | `LspClient(transport, scope, host: LspClientHost = NoLspClientHost)`, the default internal. Server requests run concurrently as children of the receive loop; a host callback that throws gets a `-32603` reply. Diagnostics reach listeners one at a time, under their own lock, not always from the receive loop | A suspending host callback inside the loop would block every answer |
+| `LspClient.shutdown()` | Sends `shutdown` and `exit` on the client's scope, at most 5 s for the answer and 11 s in all; a server that stopped reading is closed without `exit` | A blocking write that ignores cancellation must not hang the caller |
+| `DefaultClientCapabilities` | A top-level `JsonObject` (JVM facade `LspClientCapabilitiesKt`), `dynamicRegistration: false` throughout. Declares Markdown for hover, signature help and documentation, completion resolve, `textDocument.diagnostic`, semantic tokens with `multilineTokenSupport`, `augmentsSyntaxTokens` and no overlapping tokens, folding `collapsedText`, and UTF-16 positions only. No `refreshSupport` for inlay hints, code lens or semantic tokens | Nothing in `:editor` can tell the editor to ask again without a new symbol |
+| `LspLanguageService.willSave(reason)` | `enum class LspSaveReason { Manual, AfterDelay, FocusOut }`, with its wire value internal | Not named by the ledger; an enum, as `LspRenameSupport` is, so no invalid reason reaches the wire |
+| `attach(state)`, `detach()` | Not suspend: called after `initialize`, on the thread that edits the state, so no edit falls between reading the text and listening. A private mirror of the text, updated from each batch, is what whole-text sync reads, never `document.text` off the editing thread. `textDocumentSync` decides what `attach`, `willSave` and `didSave` send, with registrations for sync merged in (their `documentSelector` is not read). A host's own `didOpen` and `didChange` go as in 0.8 and throw while attached; a second `didOpen` of an open document becomes a whole-text `didChange`, or nothing. Whole-text sync waits 400 ms, and any request, save or close flushes at once. A lone CR, or an edit splitting a CR LF, sends whole text until it is gone | `CodeDocument.text` is an unsynchronised read of the gap buffer |
+| Every request in order behind the edits | All of `LspLanguageService`'s requests go through the same queue as the edits | A completion typed after `.` could overtake its own `didChange` |
+| `supports(provider)` | Unknown capabilities count as supported. `supports("textDocumentSync")` reads the number form and `did*` registrations; an empty `{}` is false | |
+| `typeDefinition`, `implementation`, `declaration` | `suspend fun (document: CodeDocument, offset: Int): List<Location>`, every target | A host's menu needs all of them, unlike `definition`'s one |
+| `LspFoldingProvider(service)` | Waits for the document to open, then throws on a server error or a null answer, so the editor keeps its folds; `ContentModified`-style errors are retried after 1, 2 and 4 s. A server that will not fold, or `[]`, is empty. Its synchronous `foldableRanges` is always empty | A request sent before the handshake would fail, and an empty answer would open every fold |
+| Overrides of the existing features | A flat `SymbolInformation` answer is nested by range, other files dropped. Links with no target are left out (`documentLink/resolve` is not used). Colour presentations with `additionalTextEdits` are left out. Selection ranges whose count differs from the offsets give none | What `:editor`'s types can carry |
+| `resolveCompletion` | Matches the item by instance, or a copy differing only in `replaceRange` and `additionalEdits` when exactly one offered item fits. Merges `documentation`, `detail` and `additionalTextEdits`. Gated on `resolveProvider`, a registration without the flag counting | The editor re-addresses items as the user types |
+| `semanticTokens` | `textDocument/semanticTokens/full` only. With capabilities unknown nothing is sent, unlike the note above: there is no legend to decode with. It waits for the document to open, and gives up with nothing sent if the handshake fails or the connection ends. Token types become theme names: `namespace`, `class`, `enum`, `interface`, `struct`, `typeParameter` go under `type.`, `parameter`, `property`, `enumMember`, `event` under `variable.`, `method`, `macro` under `function.`, `modifier` is `keyword.modifier` and `decorator` `annotation.decorator`; modifiers follow in legend order. Out-of-range tokens are dropped; malformed data empties the answer. The decode runs in 8 ms slices | A theme colours `type` and `variable` already; a Monaco rule named `class` does not match `type.class` |
+| `inlayHints` | `paddingLeft` and `paddingRight` become a space. Label parts' tooltips, locations and commands are not read, and `inlayHint/resolve` is not used | |
+| `codeLenses` | A lens is blank until `codeLens/resolve` answers, and only lenses within a screen of the view are resolved, read through the attached state's public `viewport` (all of them, 16 at once, with no state or no layout yet). Resolves get 500 ms, then blank lenses are returned and the rest cancelled; asking again about the same text waits for the first resolve without limit. Kept answers are compared by text | `CodeDocument.version` is internal. A slow resolve must not cost a host's lenses, which show after 1 s |
+| An LSP lens's `onClick` sends `workspace/executeCommand` | Only for a command the server lists in `executeCommandProvider` or registered, or when capabilities are unknown. Other commands are its client's own, and that lens only reads. A registration counts as resolving lenses only with `resolveProvider: true` | Narrower than the note above: VS Code's "show references" is not the server's to run |
+| Pull diagnostics | Driven by `LspLanguageService`, 400 ms after `didOpen` or any `didChange`; a newer edit cancels the pull in flight. With capabilities unknown it pulls until the first `MethodNotFound`. `previousResultId`, `unchanged` reports, `relatedDocuments` and `workspace/diagnostic/refresh` are not used. `diagnostics(document)` still reads only the cache | A host that re-reads diagnostics from a listener would loop if `diagnostics` pulled |
+| `workspace/applyEdit` and rename | The whole edit goes to the host, which alone knows each state's thread. A rename reaching other files asks the host first, with this document's edits removed and a null label, in the caller's coroutine, and applies its own only if the host returned true; it is given up if the text moved while the server worked. A file operation on this document, or `documentChanges` that cannot be read, refuses the rename or code action. Multi-file code actions stay left out | Nothing hears when a code action is chosen, so sending one to the host would apply it unchosen |
+| `positionEncoding` | A server answering anything but `utf-16` is kept to whole-text sync and pushed diagnostics; the host gets `logMessage(1, ...)`, `supports` is false for everything else, and its `workspace/applyEdit` is refused | |
+
+Known limits: a pending change with no net change in length, delivered across `detach` and
+`attach`, is not detected, since `CodeDocument.version` is internal; a host that does its handshake
+through `sendRequest("initialize")` leaves `serverCapabilities` null; a server that never answers
+`initialize`, with a host that never times it out, keeps folding and semantic tokens waiting.
+
+#### `:editor-web` and the npm package
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `connectLanguageServer(url, languageId)` | npm: `Promise<{ dispose(): void }>`, resolved once asked and never rejected on the server's account. `AardinkWeb.connectLanguageServer` returns `kotlinx.coroutines.DisposableHandle`. Template exports `aardinkConnectLanguageServer(url, languageId): Int` and `aardinkDisconnectLanguageServer(id)`. One client per connection, one `LspLanguageService` per editor, under `file:///aardink/editor-N.<ext>` with a null `rootUri`. An editor counts as the language if its option or its resolved language is that id | It needs the wasm loaded; a hung server must not withhold the disposable |
+| Who answers first (agreed 2026-11-07) | A registered language: its providers and the language it extends, then the server. A built-in language: the server, then the language. Enter, closing pairs and surround are always the language's, and an editor with no language service types as it does without a server. A second server adds to the first. Pushed diagnostics show after a 500 ms pause in typing | Built-in languages come second so a real server's formatter and outline are not hidden by JSON's, TOML's, Kotlin's or XML's. A registered language extending one keeps that language's ahead: a true host, server, base order is §8.2 |
+| `registerInlineCompletionsProvider(languageId, provider)` | Its own call, not a dispatcher method. `AardinkWeb.registerInlineCompletionsProvider(languageId, provider: suspend (text, line, column) -> String?)` returning `DisposableHandle`; exports `aardinkRegisterInlineCompletionsProvider` and `aardinkDisposeInlineCompletionsProvider`; npm types `AardinkInlineCompletions`, `AardinkInlineCompletion`, `AardinkInlineCompletionsProvider`, and a `Promise<{ dispose(): void }>`. Several for a language are all asked, oldest first. `{ snippet }` items are skipped; `additionalTextEdits`, `command`, the `handle*` callbacks, `context` and cancellation are left out | As Monaco's: works for built-in languages and ones registered later |
+| `editor.action.inlineSuggest.*` | `hide` labelled "Hide Inline Suggestion", as Monaco 0.55.1. A capturing key listener on the editor's viewport takes Alt+] and Alt+[ to the bindings, a host's `addCommand` first | Compose's web input treats every Alt+character as typing; other Alt+character bindings still never fire (§8.2) |
+| `provideInlayHints`, `provideCodeLenses`, `runCodeLensCommand` | `WebLanguageProviders.inlayHints: suspend (text, rangeJson) -> String?`, `codeLenses: suspend (text) -> String?`, `runCodeLensCommand: suspend (id, argsJson) -> Unit`; the dispatcher sends `[range]` and `[id, args]`, the latter with empty text. npm `AardinkInlayHint { position, label }`, `AardinkCodeLens { range, command }`. No `resolveCodeLens`, so each lens has its command | One dispatcher, so the template does not change |
+| `AardinkWeb.registerLanguage` with the dispatcher | `registerLanguage(definitionJson, dispatcher: suspend (method, text, argsJson) -> String?)`; an unknown method answers null | A new provider is one line, with no template change |
+| `editor.onOpenLink(listener)` | `aardinkOnOpenLink` takes a nullable callback, null removing it. Ctrl/Cmd+click opens in the pointer-down task, a card's link in pointer-up, both with user activation; checked in Chrome with its popup blocker on | |
+| `configuration` | Also the file's text as a string. npm types `AardinkLanguageConfiguration`, `AardinkOnEnterRule`, `AardinkCharacterPair`, `AardinkConfigurationRegExp`; a RegExp literal becomes `{ pattern, flags }` | |
+| `nextEmbedded` resolved from registered grammars | Looked up by id as text is tokenized, so a grammar registered before or after works and one registered again is followed. An open editor is not recoloured by a registration; text already scanned changes on its next read | |
+| `WebEditorOptions.semanticHighlighting` and the npm option | The plain key `semanticHighlighting`; Monaco's `'semanticHighlighting.enabled'` is not read | |
+| `WebEditorOptions.inlayHints` and the npm option | Also Monaco's `{ enabled }`, where `'onUnlessPressed'` and `'offUnlessPressed'` read as on and off, as no key is watched; `null` is off | |
+
+Also changed without new API: `AardinkWeb.revalidate` also reaches the language's diagnostics
+collected beside owners' markers; the npm package's `before` and `after` decoration options, ignored
+until now, are drawn.
+
+The web bundle: `aardink-web.wasm` went from 5,201,007 to 5,422,720 bytes with
+`connectLanguageServer` (+221,713, 4.3%), 1,585,294 to 1,648,018 gzipped (+62,724, 4.0%), nearly
+all of it `:languages-lsp`; `skiko.wasm` did not change. As built for 0.9,
+`aardink-web.wasm` is 5,537,300 bytes (1.7 MB gzipped) and `skiko.wasm` 8,648,883 (3.3 MB).
+
+#### Still open
+
+- **Android on a device.** Code lens rows and multi-line ghost text rest on hard breaks inside a
+  line's layout. They pass under Robolectric with native graphics, but the spike's device check
+  (`docs/spikes/0.9-inline-layout.md`) has not been done: the `rowShift` branch, Gboard and Samsung
+  Keyboard on a line with a hint, and ghost text while a keyboard composes, which on Android may be
+  every word.
+- **Timing with real hosts.** `perf.mjs --hints` and `--semantic` exist but have been run only to
+  prove they work. The spike's 100,000-line run with a lens every 20 lines is still to repeat with
+  the real hosts, and `InlineContent` still maps over the lens list on each edit. One `--semantic`
+  run showed key-to-idle p95 of 513 ms while each answer landed, with an 81 ms long task: unverified,
+  and worth a look before 0.9 ships.
 
 ## 13. Verification
 
