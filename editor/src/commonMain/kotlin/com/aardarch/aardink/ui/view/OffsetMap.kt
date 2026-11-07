@@ -48,10 +48,11 @@ internal data class Injection(
 
 /**
  * Everything injected into one line, in layout order: by column, and at one column the text that
- * comes before the caret first. Compared by value: it is part of what a cached layout shows.
+ * comes before the caret first, with the [colors] its own text is drawn in. Compared by value: it
+ * is part of what a cached layout shows.
  */
 @Immutable
-internal class LineInjections private constructor(val items: List<Injection>) {
+internal class LineInjections private constructor(val items: List<Injection>, val colors: List<ColumnColor>) {
 
     /** Rows the line breaks in the text add to the line. */
     val addedRows: Int = items.sumOf { injection -> injection.text.count { it == '\n' } }
@@ -62,7 +63,7 @@ internal class LineInjections private constructor(val items: List<Injection>) {
     /** Characters that share rows with the line's text, for estimating how it wraps. */
     val inlineChars: Int = items.sumOf { if (it.isRowAbove) 0 else it.text.length }
 
-    private val hash = items.hashCode()
+    private val hash = items.hashCode() * 31 + colors.hashCode()
 
     /**
      * These injections as a line of [text] can show them, whose first [indent] characters are
@@ -88,8 +89,8 @@ internal class LineInjections private constructor(val items: List<Injection>) {
         }
         return when {
             !changed -> this
-            kept.isEmpty() -> null
-            else -> of(kept)
+            kept.isEmpty() && colors.isEmpty() -> null
+            else -> of(kept, colors)
         }
     }
 
@@ -104,13 +105,14 @@ internal class LineInjections private constructor(val items: List<Injection>) {
         }
     }
 
-    override fun equals(other: Any?): Boolean = other is LineInjections && other.hash == hash && other.items == items
+    override fun equals(other: Any?): Boolean =
+        other is LineInjections && other.hash == hash && other.items == items && other.colors == colors
 
     override fun hashCode(): Int = hash
 
     companion object {
-        fun of(items: List<Injection>): LineInjections =
-            LineInjections(items.sortedWith(compareBy<Injection> { it.column }.thenBy { if (it.caretAfter) 0 else 1 }))
+        fun of(items: List<Injection>, colors: List<ColumnColor> = emptyList()): LineInjections =
+            LineInjections(items.sortedWith(compareBy<Injection> { it.column }.thenBy { if (it.caretAfter) 0 else 1 }), colors)
 
         fun of(vararg items: Injection): LineInjections = of(items.asList())
     }

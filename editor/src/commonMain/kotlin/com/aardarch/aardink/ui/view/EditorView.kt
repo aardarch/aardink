@@ -277,6 +277,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             injectionVersion++
         }
 
+    /** The decorations' text and colours and the inlay hints, which [injections] answers from once there are any. */
+    val inline = InlineContent(state, ::inlineChanged)
+
+    private val decorationsChanged: () -> Unit = inline::decorationsChanged
+
     /** A click on injected text with an [Injection.id], on a line. */
     var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = null
 
@@ -302,17 +307,33 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     fun attach() {
         document.addChangeListener(this)
+        state.inlineDecorationListeners += decorationsChanged
+        inline.decorationsChanged()
         structureDirty = true
     }
 
     fun detach() {
         document.removeChangeListener(this)
+        state.inlineDecorationListeners -= decorationsChanged
+    }
+
+    /**
+     * What [inline] answers for [lines] changed. A view with nothing inline has no [injections], and
+     * so costs what one without the feature does, until the first thing to show arrives.
+     */
+    private fun inlineChanged(lines: List<Int>) {
+        when {
+            injections != null -> injectionsChanged(lines)
+            !inline.isEmpty -> injections = inline.lookup
+        }
     }
 
     /** The folds the view is showing, for the gutter. */
     val foldLayout: FoldLayout get() = folds
 
     override fun onDocumentChange(change: DocumentChange) {
+        // First: the rows below are estimated from what it answers.
+        inline.onDocumentChange(change)
         if (change.lineDelta != 0 && !change.isReset) {
             foldState?.onLinesChanged(change.startLine, change.removedLines, change.addedLines)
             folds = FoldLayout.of(foldState?.foldedRanges().orEmpty(), document.lineCount)
@@ -349,7 +370,10 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
      * lands between a scroll and its layout pass, or just before the next tick of a fling, and
      * neither should be undone by what the last pass saw.
      */
-    fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) {
+    fun injectionsChanged(firstLine: Int = 0, lastLine: Int = document.lineCount - 1) = injectionsChanged(firstLine..lastLine)
+
+    /** As above, for [lines] that need not be next to each other. With none, only what is on screen is laid out again. */
+    fun injectionsChanged(lines: Iterable<Int>) {
         injectionVersion++
         if (structureDirty || lineMap.lineCount == 0) return
         val metrics = style?.metrics ?: return
@@ -357,8 +381,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         if (keepInPlace) captureAnchor(scroll.scrollY, metrics)
         // A scroll since the last pass has left its frame: what that showed will not be measured.
         val measured = if (frame.scrollY == scroll.scrollY) frame else ViewFrame.Empty
-        for (line in firstLine.coerceAtLeast(0)..lastLine.coerceAtMost(lineMap.lineCount - 1)) {
-            if (measured.find(line) == null) lineMap.setRows(line, estimateRows(line))
+        for (line in lines) {
+            if (line in 0 until lineMap.lineCount && measured.find(line) == null) lineMap.setRows(line, estimateRows(line))
         }
         if (keepInPlace) {
             scroll.contentHeight = rowsHeight(metrics)
@@ -623,7 +647,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val builder = AnnotatedString.Builder(text.length + 4)
         val indent = if (style.softWrap && style.joinIndentation) indentationLength(text) else 0
         val shownInjections = injected?.fitted(text, indent, MAX_RENDERED_LINE_CHARS)
-        val map = if (shownInjections == null) OffsetMap.Identity else OffsetMap.of(shownInjections, text.length)
+        val map = if (shownInjections == null || shownInjections.items.isEmpty()) {
+            OffsetMap.Identity
+        } else {
+            OffsetMap.of(shownInjections, text.length)
+        }
         var appended = 0
         shownInjections?.items?.forEach { injection ->
             appendText(builder, text, appended, injection.column, indent)
@@ -643,6 +671,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             }
         }
         if (semantic != null && tokens != null) builder.addSemanticStyles(map, style, semantic, tokens, text)
+        val colors = shownInjections?.colors.orEmpty()
+        val bracketColumns = if (colors.isEmpty()) null else ArrayList<Int>()
         if (bracketStyles != null) {
             // A pair shares a colour: an opening bracket takes the colour of the depth it opens,
             // its closing one the colour of the depth it closes. Only the depth modulo the
@@ -651,6 +681,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             var depth = startDepth
             state.brackets.forEachBracket(line) { column, open ->
                 if (column >= text.length) return@forEachBracket
+                bracketColumns?.add(column)
                 if (open) {
                     builder.addColumnStyle(map, bracketStyles[depth], column, column + 1)
                     depth = (depth + 1) % colours
@@ -660,6 +691,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 }
             }
         }
+        if (colors.isNotEmpty()) builder.addInlineColors(map, colors, text.length, indent, spanStarts(tokens, semantic, bracketColumns))
         if (fold != null) {
             builder.pushStyle(style.placeholderStyle)
             builder.append(" ")
@@ -711,6 +743,41 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                     addColumnStyle(map, spanStyle, from, cut)
                     from = cut
                 }
+            }
+            if (to > from) addColumnStyle(map, spanStyle, from, to)
+        }
+    }
+
+    /** Where every span the line already has starts, in order. */
+    private fun spanStarts(tokens: TokenStore.LineTokens?, semantic: TokenStore.LineTokens?, brackets: List<Int>?): List<Int> {
+        val starts = ArrayList<Int>(brackets.orEmpty())
+        if (tokens != null) for (i in 0 until tokens.size) starts += tokens.start(i)
+        if (semantic != null) for (i in 0 until semantic.size) starts += semantic.start(i)
+        starts.sort()
+        return starts
+    }
+
+    /**
+     * Each of [colors] over the text of a line [length] long, over every span there is: cut at each
+     * of [spanStarts], for the reason [addSemanticStyles] gives. Not over the first [indent]
+     * columns, whose glyphs must stay hidden.
+     */
+    private fun AnnotatedString.Builder.addInlineColors(
+        map: OffsetMap,
+        colors: List<ColumnColor>,
+        length: Int,
+        indent: Int,
+        spanStarts: List<Int>,
+    ) {
+        for (color in colors) {
+            val spanStyle = SpanStyle(color = color.color)
+            var from = color.from.coerceIn(indent, length)
+            val to = color.to.coerceIn(from, length)
+            for (cut in spanStarts) {
+                if (cut >= to) break
+                if (cut <= from) continue
+                addColumnStyle(map, spanStyle, from, cut)
+                from = cut
             }
             if (to > from) addColumnStyle(map, spanStyle, from, to)
         }

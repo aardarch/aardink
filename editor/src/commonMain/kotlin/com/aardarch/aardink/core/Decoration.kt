@@ -33,9 +33,13 @@ data class Decoration(val range: IntRange, val style: DecorationStyle)
 
 /**
  * How a [Decoration] is drawn. Every part is optional: [Color.Unspecified] (or null) draws
- * nothing of that part. None of them changes the text's layout, so a decoration costs no
- * relayout; text before or after a range (Monaco's `before` and `after`) is not here for that
- * reason.
+ * nothing of that part.
+ *
+ * Most parts are drawn over the laid-out text, so setting them lays nothing out again. [before],
+ * [after] and [inlineColor] are part of a line's layout: the lines they touch are laid out again
+ * when they change, and only those. Text from [before] and [after] is shown among the characters
+ * and is not in the document, so a caret, a selection, find and the clipboard pass over it. It
+ * stays with the range as the text is edited, and goes with it.
  *
  * @property background Behind the characters, as a selection is drawn; behind the whole width of
  *   the lines with [wholeLine].
@@ -48,6 +52,14 @@ data class Decoration(val range: IntRange, val style: DecorationStyle)
  * @property overviewRulerColor A mark in the overview ruler beside the scrollbar, where its lines are.
  * @property hoverMessage Shown when the mouse rests on the characters, above any diagnostics and
  *   documentation.
+ * @property before Text shown in front of the range's first character, as Monaco's `before`, on one
+ *   row: a line break in it shows as a space. A caret at the range's start is in front of it, where
+ *   typing goes, as text typed there moves the range along.
+ * @property after Text shown behind the range's last character, as Monaco's `after`, on one row. A
+ *   caret at the range's end is behind it, where typing goes, as text typed there stays out of the
+ *   range. An empty range shows [before] then [after] at its place, with a caret in front of both.
+ * @property inlineColor The colour of the range's characters, over their syntax colour, and of
+ *   [before] and [after], which are faint without it.
  */
 @Immutable
 data class DecorationStyle(
@@ -59,7 +71,14 @@ data class DecorationStyle(
     val minimapColor: Color = Color.Unspecified,
     val overviewRulerColor: Color = Color.Unspecified,
     val hoverMessage: String? = null,
+    val before: String? = null,
+    val after: String? = null,
+    val inlineColor: Color = Color.Unspecified,
 )
+
+/** Whether this is part of a line's layout, not only drawn over it. */
+internal val DecorationStyle.isInline: Boolean
+    get() = !before.isNullOrEmpty() || !after.isNullOrEmpty() || inlineColor != Color.Unspecified
 
 /** One owner's decorations, moved along with each edit; a deleted range collapses where it was. */
 internal class DecorationTracker :
@@ -67,7 +86,10 @@ internal class DecorationTracker :
         rangeOf = { it.range },
         withRange = { decoration, range -> decoration.copy(range = range) },
         keepsOneCharacter = false,
-    )
+    ) {
+    /** Whether any of them is part of a line's layout; see [isInline]. */
+    var hasInline = false
+}
 
 /** A line the decorations mark in the gutter, the minimap or the overview ruler, from [firstLine] to [lastLine]. */
 @Immutable

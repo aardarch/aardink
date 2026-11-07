@@ -178,10 +178,15 @@ internal fun VirtualizedEditorBody(
         columnWidthEm = columnWidthEm,
         joinIndentation = joinIndentation,
     )
+    // Faint, so that it does not read as the document's text; a hint gets a ground as well, as VS
+    // Code's, to tell it from what surrounds it.
+    val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
+    val hintStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f), background = textColor.copy(alpha = 0.08f)) }
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
+        view.inline.setStyles(hintStyle, decorationTextStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
         controller.clipboard = clipboard

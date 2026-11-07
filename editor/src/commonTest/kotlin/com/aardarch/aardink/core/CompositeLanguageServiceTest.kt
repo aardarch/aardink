@@ -37,6 +37,7 @@ class CompositeLanguageServiceTest {
         val renameTo: String = "",
         override val completionsAreIncomplete: Boolean = true,
         val tokens: List<Token> = emptyList(),
+        val hints: List<InlayHint> = emptyList(),
     ) : LanguageService {
         override suspend fun completions(document: CodeDocument, cursorOffset: Int) = items
 
@@ -55,6 +56,8 @@ class CompositeLanguageServiceTest {
         override suspend fun rename(document: CodeDocument, offset: Int, newName: String) = listOf(TextEdit(0..0, renameTo))
 
         override suspend fun semanticTokens(document: CodeDocument) = tokens
+
+        override suspend fun inlayHints(document: CodeDocument, range: IntRange) = hints
     }
 
     private fun item(label: String, kind: CompletionKind = CompletionKind.Element) = CompletionItem(label, kind, label)
@@ -193,5 +196,33 @@ class CompositeLanguageServiceTest {
         assertEquals(own, CompositeLanguageService(Fake(tokens = own), Fake(tokens = inherited)).semanticTokens(doc))
         assertEquals(inherited, CompositeLanguageService(Fake(), Fake(tokens = inherited)).semanticTokens(doc))
         assertEquals(emptyList(), CompositeLanguageService(Fake(), Fake()).semanticTokens(doc))
+    }
+
+    @Test
+    fun `inlay hints are both's, less the fallback's at an offset the primary has one at`() = runTest {
+        val own = listOf(InlayHint(1, "own"), InlayHint(1, "also own"))
+        val inherited = listOf(InlayHint(0, "inherited"), InlayHint(1, "taken"), InlayHint(2, "inherited too"))
+
+        assertEquals(
+            own + listOf(InlayHint(0, "inherited"), InlayHint(2, "inherited too")),
+            CompositeLanguageService(Fake(hints = own), Fake(hints = inherited)).inlayHints(doc, 0..2),
+        )
+        assertEquals(inherited, CompositeLanguageService(Fake(), Fake(hints = inherited)).inlayHints(doc, 0..2))
+        assertEquals(own, CompositeLanguageService(Fake(hints = own), Fake()).inlayHints(doc, 0..2))
+    }
+
+    @Test
+    fun `both are asked about the same range`() = runTest {
+        val asked = mutableListOf<IntRange>()
+        val recording = object : LanguageService by Fake() {
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+                asked += range
+                return emptyList()
+            }
+        }
+
+        CompositeLanguageService(recording, recording).inlayHints(doc, 1..2)
+
+        assertEquals(listOf(1..2, 1..2), asked)
     }
 }

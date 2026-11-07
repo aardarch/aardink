@@ -106,6 +106,7 @@ import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
+import com.aardarch.aardink.ui.view.InlineContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -114,6 +115,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -737,6 +739,33 @@ private fun CodeEditorLayoutContent(
             val document = state.document.snapshot()
             val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
             state.applySemanticTokens(tokens, document)
+        }
+    }
+
+    // ── Inlay hints: asked for around the view after a pause, moved with edits between answers ─
+    LaunchedEffect(view, languageService, options.inlayHints) {
+        val inline = view.inline
+        // What is here came from a service, and a change of either the service or the switch ends that.
+        inline.setHints(emptyList())
+        val service = languageService.takeIf { options.inlayHints } ?: return@LaunchedEffect
+        var asked: IntRange? = null
+        snapshotFlow {
+            val shown = view.frame.lines
+            if (shown.isEmpty()) return@snapshotFlow null
+            val lines = InlineContent.hintWindow(asked, shown.first().line..shown.last().line)
+            asked = lines
+            state.textVersion to lines
+        }.filterNotNull().collectLatest { (_, lines) ->
+            delay(INLAY_HINTS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                inline.setHints(emptyList())
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val hints = withContext(state.computeDispatcher) {
+                service.inlayHints(document, InlineContent.hintRange(document, lines))
+            }
+            if (state.document.version == document.version) inline.setHints(InlineContent.usableHints(hints, document, lines))
         }
     }
 
@@ -1974,6 +2003,9 @@ private const val COLORS_DEBOUNCE_MS = 300L
 
 /** How long typing has to pause before the language service is asked for semantic tokens. */
 private const val SEMANTIC_TOKENS_DEBOUNCE_MS = 300L
+
+/** How long typing, or scrolling past what was asked about, has to pause before asking for inlay hints. */
+private const val INLAY_HINTS_DEBOUNCE_MS = 300L
 
 /** The smallest and largest font size zooming goes to, in sp. */
 private const val MIN_FONT_SIZE = 6f

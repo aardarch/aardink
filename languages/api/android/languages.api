@@ -358,6 +358,7 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun inlayHints (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun linkedEditingRanges (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;

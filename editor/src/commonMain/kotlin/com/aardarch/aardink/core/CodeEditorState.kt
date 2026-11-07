@@ -509,10 +509,12 @@ class CodeEditorState(
         }
         val tracker = decorationOwners[owner] ?: DecorationTracker().also {
             decorationOwners[owner] = it
-            document.addChangeListener(it)
             decorationOwnersVersion++
         }
         tracker.replace(clamped)
+        val hadInline = tracker.hasInline
+        tracker.hasInline = clamped.any { it.style.isInline }
+        if (hadInline || tracker.hasInline) inlineDecorationListeners.forEach { it() }
     }
 
     /** [owner]'s decorations as they are now, moved along with the edits since they were set. */
@@ -524,8 +526,31 @@ class CodeEditorState(
     /** Removes [owner]'s decorations. */
     fun clearDecorations(owner: String) {
         val tracker = decorationOwners.remove(owner) ?: return
-        document.removeChangeListener(tracker)
         decorationOwnersVersion++
+        if (tracker.hasInline) inlineDecorationListeners.forEach { it() }
+    }
+
+    /**
+     * Moves every owner's decorations with an edit. One listener, added before any view can be, so
+     * that what a view asks of [forEachInlineDecoration] while it splices its rows is already moved.
+     */
+    private val decorationMover = DocumentChangeListener { change ->
+        for (tracker in decorationOwners.values) tracker.onDocumentChange(change)
+    }
+
+    /** Told when what [forEachInlineDecoration] goes through changes, other than by an edit moving it. */
+    internal var inlineDecorationListeners: List<() -> Unit> = emptyList()
+
+    /** Whether any decoration is part of a line's layout. */
+    internal val hasInlineDecorations: Boolean
+        get() = decorationOwners.values.any { it.hasInline }
+
+    /** Calls [action] with every decoration that is part of a line's layout, as they are now. */
+    internal fun forEachInlineDecoration(action: (Decoration) -> Unit) {
+        for (tracker in decorationOwners.values) {
+            if (!tracker.hasInline) continue
+            for (decoration in tracker.items) if (decoration.style.isInline) action(decoration)
+        }
     }
 
     /** Every owner's decorations, in order of where they start: what the view draws. */
@@ -1520,6 +1545,7 @@ class CodeEditorState(
     init {
         document.addChangeListener(contentRecorder)
         document.addChangeListener(symbolTracker)
+        document.addChangeListener(decorationMover)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)

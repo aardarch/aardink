@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
  *   fallback's when the primary has none. **Linked editing ranges:** likewise.
  * - **Document links and colours:** both, without two for the same range. **Colour
  *   presentations:** the primary's, or else the fallback's.
+ * - **Inlay hints:** both, less any of the fallback's at an offset the primary has one at.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -137,6 +138,12 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun semanticTokens(document: CodeDocument): List<Token> =
         primary.semanticTokens(document).ifEmpty { fallback.semanticTokens(document) }
+
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+        val own = primary.inlayHints(document, range)
+        val taken = own.mapTo(HashSet()) { it.offset }
+        return own + fallback.inlayHints(document, range).filterNot { it.offset in taken }
+    }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)
 

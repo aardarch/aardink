@@ -226,6 +226,16 @@ interface LanguageService {
     suspend fun semanticTokens(document: CodeDocument): List<Token> = emptyList()
 
     /**
+     * Short labels the editor shows among the characters of [range] of [document], such as a
+     * parameter's name or an inferred type, with
+     * [EditorOptions.inlayHints][com.aardarch.aardink.ui.EditorOptions] on. [range] runs from the
+     * start of a line to the end of a later one, first to last (inclusive), and holds the lines around
+     * the view: the editor asks again after a pause in typing, or in scrolling past what it asked
+     * about, and calls off a question it no longer needs answered.
+     */
+    suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */

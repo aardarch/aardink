@@ -1,0 +1,220 @@
+/*
+ * Copyright 2026 Aardarch
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.aardarch.aardink.ui.view
+
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.TrackedRanges
+import com.aardarch.aardink.core.text.DocumentChange
+import kotlin.math.max
+import kotlin.math.min
+
+/** Columns [from, to) of a line's own text, drawn in [color]. */
+@Immutable
+internal data class ColumnColor(val from: Int, val to: Int, val color: Color)
+
+/**
+ * The one answer to what a line shows besides its document text, for [EditorView.injections],
+ * merged from everything that has something to show: the text and colours of the host's
+ * decorations, and the language service's inlay hints. [build] is where a new source adds to it.
+ *
+ * Each line is a lookup. The lines are worked out again after a change, in time proportional to
+ * what there is to show and not to the document, and only when next asked: an edit marks them stale.
+ *
+ * [EditorView] calls [onDocumentChange] first, before it splices its rows, because the rows are
+ * estimated from this answer. Decorations have moved by then, as the state's listener comes first.
+ *
+ * @param onChanged told which lines' answers changed, sorted, other than by an edit moving them.
+ *   Empty when only colours across several lines did, which no row count depends on.
+ */
+internal class InlineContent(private val state: CodeEditorState, private val onChanged: (lines: List<Int>) -> Unit) {
+
+    private class Answer(val lines: Map<Int, LineInjections>, val wide: List<WideColor>)
+
+    /** A colour over several lines, kept whole: an edit must not cost a walk over all of them. */
+    private data class WideColor(val firstLine: Int, val lastLine: Int, val start: Int, val end: Int, val color: Color)
+
+    private val document: CodeDocument get() = state.document
+
+    private val hints = TrackedRanges<InlayHint>(
+        rangeOf = { it.offset until it.offset },
+        withRange = { hint, range -> hint.copy(offset = range.first) },
+        keepsOneCharacter = false,
+    )
+
+    private var answer = Answer(emptyMap(), emptyList())
+    private var stale = false
+
+    private var hintStyle: SpanStyle? = null
+    private var decorationStyle: SpanStyle? = null
+
+    /** Whether no line has anything to show. */
+    val isEmpty: Boolean
+        get() = current().let { it.lines.isEmpty() && it.wide.isEmpty() }
+
+    /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
+    val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
+
+    /** The hints on screen, as they are now. */
+    val shownHints: List<InlayHint> get() = hints.items
+
+    /** Shows [list] in place of the hints before, at offsets of the document as it is now. */
+    fun setHints(list: List<InlayHint>) {
+        if (list == hints.items) return
+        val before = current()
+        hints.replace(list)
+        publish(before)
+    }
+
+    /** How a hint's label, and a decoration's text with no colour of its own, are drawn. */
+    fun setStyles(hint: SpanStyle?, decoration: SpanStyle?) {
+        if (hint == hintStyle && decoration == decorationStyle) return
+        val before = current()
+        hintStyle = hint
+        decorationStyle = decoration
+        publish(before)
+    }
+
+    /** The decorations in the state changed. */
+    fun decorationsChanged() = publish(current())
+
+    /**
+     * Moves what is here with [change]. A hint on text that went goes with it: what it said about
+     * that text no longer applies, and a block deleted would leave them all at one column.
+     */
+    fun onDocumentChange(change: DocumentChange) {
+        if (hints.items.isEmpty() && !state.hasInlineDecorations) return
+        if (change.deletedLength > 0 && !change.isReset) {
+            val inside = (change.offset + 1) until (change.offset + change.deletedLength)
+            if (hints.items.any { it.offset in inside }) hints.replace(hints.items.filterNot { it.offset in inside })
+        }
+        hints.onDocumentChange(change)
+        stale = true
+    }
+
+    private fun publish(before: Answer) {
+        val after = build()
+        answer = after
+        stale = false
+        val changed = ArrayList<Int>()
+        for ((line, shown) in after.lines) if (before.lines[line] != shown) changed += line
+        for (line in before.lines.keys) if (line !in after.lines) changed += line
+        if (changed.isNotEmpty() || before.wide != after.wide) onChanged(changed.sorted())
+    }
+
+    private fun current(): Answer {
+        if (stale) {
+            answer = build()
+            stale = false
+        }
+        return answer
+    }
+
+    private fun lineAnswer(line: Int): LineInjections? {
+        val shown = current()
+        val own = shown.lines[line]
+        if (shown.wide.isEmpty()) return own
+        val lineStart = document.lineStart(line)
+        val lineEnd = document.lineEnd(line)
+        val colors = shown.wide
+            .filter { line in it.firstLine..it.lastLine }
+            .map { ColumnColor(max(it.start, lineStart) - lineStart, min(it.end, lineEnd) - lineStart, it.color) }
+            .filter { it.to > it.from }
+        if (colors.isEmpty()) return own
+        return LineInjections.of(own?.items.orEmpty(), own?.colors.orEmpty() + colors)
+    }
+
+    private class Pending {
+        val items = ArrayList<Injection>()
+        val colors = ArrayList<ColumnColor>()
+    }
+
+    /** Every source's contribution, by line. The order at one column is this order. */
+    private fun build(): Answer {
+        val lines = HashMap<Int, Pending>()
+        val wide = ArrayList<WideColor>()
+        state.forEachInlineDecoration { addDecoration(it, lines, wide) }
+        for (hint in hints.items) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
+        return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
+    }
+
+    private fun addDecoration(decoration: Decoration, lines: HashMap<Int, Pending>, wide: ArrayList<WideColor>) {
+        val style = decoration.style
+        val range = decoration.range
+        val start = range.first
+        val end = if (range.isEmpty()) start else range.last + 1
+        val color = style.inlineColor
+        val textStyle = if (color != Color.Unspecified) SpanStyle(color = color) else decorationStyle
+        // Text typed at a range's start moves it along, and at its end stays out of it, so each
+        // text has the caret on the side where what is typed will land. An empty range moves along
+        // as a whole, with both texts in front of the caret's place.
+        style.before?.let { inject(lines, start, it, textStyle, caretAfter = false) }
+        style.after?.let { inject(lines, end, it, textStyle, caretAfter = !range.isEmpty()) }
+        if (color == Color.Unspecified || end <= start) return
+        val (firstLine, firstColumn) = document.offsetToLineCol(start)
+        val (lastLine, lastColumn) = document.offsetToLineCol(end)
+        if (firstLine == lastLine) {
+            lines.getOrPut(firstLine) { Pending() }.colors += ColumnColor(firstColumn, lastColumn, color)
+        } else {
+            wide += WideColor(firstLine, lastLine, start, end, color)
+        }
+    }
+
+    /**
+     * [text] at [offset], on one row. Columns come from offsets, so none is past its line's end, and
+     * what is past the column a long line is cut at is dropped here, for the row estimates.
+     */
+    private fun inject(lines: HashMap<Int, Pending>, offset: Int, text: String, style: SpanStyle?, caretAfter: Boolean) {
+        if (text.isEmpty()) return
+        val (line, column) = document.offsetToLineCol(offset)
+        if (column > EditorView.MAX_RENDERED_LINE_CHARS) return
+        lines.getOrPut(line) { Pending() }.items += Injection(column, oneRow(text), style, caretAfter)
+    }
+
+    private fun oneRow(text: String): String = if (text.none { it < ' ' }) {
+        text
+    } else {
+        buildString(text.length) {
+            for (char in text) append(if (char < ' ') ' ' else char)
+        }
+    }
+
+    companion object {
+        /**
+         * The lines to ask about, with [visible] on screen: [asked] while it holds them, so that
+         * scrolling within what was asked about asks nothing, or else them and a screen either side.
+         */
+        fun hintWindow(asked: IntRange?, visible: IntRange): IntRange {
+            if (asked != null && visible.first >= asked.first && visible.last <= asked.last) return asked
+            val margin = visible.last - visible.first + 1
+            return (visible.first - margin).coerceAtLeast(0)..(visible.last + margin)
+        }
+
+        /** Lines [lines] of [document] as the range a language service is asked about. */
+        fun hintRange(document: CodeDocument, lines: IntRange): IntRange =
+            document.lineStart(lines.first) until document.lineEnd(lines.last)
+
+        /** What of [answer] a window of [lines] of [document] can show: not what is outside it, or nothing to see. */
+        fun usableHints(answer: List<InlayHint>, document: CodeDocument, lines: IntRange): List<InlayHint> = answer.filter {
+            it.label.isNotBlank() && it.offset in 0..document.length && document.offsetToLineCol(it.offset).first in lines
+        }
+    }
+}
