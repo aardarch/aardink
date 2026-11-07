@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages.lsp
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.ContentChange
+import com.aardarch.aardink.core.ViewportInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -246,6 +247,10 @@ internal class LspDocumentSync(
 
     val isAttached: Boolean
         get() = attached != null
+
+    /** Where the view of the attached state is, read from any thread; null when no state is attached. */
+    val viewport: ViewportInfo?
+        get() = attached?.viewport
 
     /** Open as far as the host is concerned, whether or not the server was told. */
     private val opened = MutableStateFlow(false)

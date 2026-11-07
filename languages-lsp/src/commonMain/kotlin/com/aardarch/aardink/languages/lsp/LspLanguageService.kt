@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CodeActionKind
 import com.aardarch.aardink.core.CodeDescription
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ColorPresentation
 import com.aardarch.aardink.core.CompletionItem
@@ -49,7 +50,11 @@ import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.Token
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
@@ -230,6 +235,10 @@ class LspLanguageService(
     @Volatile
     private var offeredCompletions: List<OfferedCompletion> = emptyList()
 
+    /** The last code lens answer, kept for what is still to be resolved of it. */
+    @Volatile
+    private var servedLenses: ServedLenses? = null
+
     private val diagnosticsListener: DiagnosticsListener = { uri, version, diagnostics ->
         if (uri == documentUri && !isStale(version)) {
             lspDiagnostics = diagnostics
@@ -368,6 +377,7 @@ class LspLanguageService(
         lspDiagnostics = emptyList()
         diagnosticsVersion = null
         offeredCompletions = emptyList()
+        servedLenses = null
         sync.close()
     }
 
@@ -835,6 +845,97 @@ class LspLanguageService(
         return hints.filterIsInstance<JsonObject>().mapNotNull { it.toInlayHint(document) }
     }
 
+    /**
+     * The server's `textDocument/codeLens` answer about [document], which should be what it was last
+     * sent. Clicking a lens sends its command with `workspace/executeCommand`, in the document's
+     * order, unless the server did not say it runs that command: such a command is its client's own
+     * (VS Code's "show references", say), and here the lens is only something to read. The answer to
+     * the request is not read: what a command changes comes back as a `workspace/applyEdit`, for
+     * [LspClientHost.applyWorkspaceEdit].
+     *
+     * A lens the server sends without a command it fills in on `codeLens/resolve`, which can cost it
+     * a search of the project. So that is only asked about lenses around the view of the state given
+     * to [attach], or about all of them without one: the rest come back with a blank title, which
+     * keeps their rows, and the editor asks again when one comes on screen. Asked again about the
+     * same text, this goes on from the same answer rather than the server's being asked for it. A
+     * lens that the server does not resolve (`resolveProvider`), or that comes back without a
+     * command, is left out. One that failed in a way that may pass stays blank.
+     *
+     * The editor may ask once and then not again until an edit, so a request that comes too soon
+     * waits and asks again as [semanticTokens] does.
+     *
+     * A `workspace/codeLens/refresh` from the server is not honoured, and `refreshSupport` is not
+     * declared, for the reason [inlayHints] gives. Lenses come back with the next edit.
+     */
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+        if (supports("codeLensProvider") && !sync.awaitOpen()) return emptyList()
+        if (!supports("codeLensProvider")) return emptyList()
+        val served = lensesOf(document) ?: return emptyList()
+        val lines = linesToResolve()
+        val wanted = served.lenses.filter { it.isPending && it.line in lines }
+        if (wanted.isNotEmpty()) {
+            val turns = Semaphore(MAX_LENSES_RESOLVING)
+            coroutineScope { wanted.forEach { lens -> launch { turns.withPermit { resolve(lens) } } } }
+        }
+        return served.lenses.mapNotNull { it.toCodeLens() }
+    }
+
+    /** The server's lenses for [document], from the last answer if that was about the same text. */
+    private suspend fun lensesOf(document: CodeDocument): ServedLenses? {
+        val text = document.text
+        servedLenses?.takeIf { it.text == text }?.let { return it }
+        val answer = requestPatiently("textDocument/codeLens", documentParams())
+        val lenses = (answer as? LspResult.Value)?.element as? JsonArray ?: return null
+        return ServedLenses(text, lenses.filterIsInstance<JsonObject>().mapNotNull { it.toServedLens(document) }).also { servedLenses = it }
+    }
+
+    /** Whether the server fills lenses in: what it declared, or registered, or not known. */
+    private val resolvesLenses: Boolean
+        get() {
+            val capabilities = client.serverCapabilities as? JsonObject ?: return true
+            val declared = capabilities["codeLensProvider"] as? JsonObject
+            return declared?.boolean("resolveProvider") == true || isRegistered("codeLensProvider")
+        }
+
+    /** The lines a lens is resolved on: those on screen and a screen either side, or all with no view to go by. */
+    private fun linesToResolve(): IntRange {
+        val view = sync.viewport?.takeIf { it.height > 0f } ?: return 0..Int.MAX_VALUE
+        val screen = view.lastVisibleLine - view.firstVisibleLine + 1
+        return (view.firstVisibleLine - screen)..(view.lastVisibleLine + screen)
+    }
+
+    private suspend fun resolve(lens: ServedLens) {
+        when (val outcome = requestPatiently("codeLens/resolve", lens.raw)) {
+            is LspResult.Value -> {
+                lens.command = (outcome.element as? JsonObject)?.lensCommand()
+                lens.gone = lens.command == null
+            }
+
+            is LspResult.Unsupported -> lens.gone = true
+
+            is LspResult.Failed -> lens.gone = !outcome.tryAgain
+        }
+    }
+
+    /** [command] on the server, if it runs it; see [codeLenses]. Off the caller's thread, and past the life of its screen. */
+    private fun runCommand(command: JsonObject) {
+        val name = command.string("command")?.takeIf { it.isNotEmpty() } ?: return
+        if (!runsCommand(name)) return
+        val params = buildJsonObject {
+            put("command", name)
+            command["arguments"]?.let { put("arguments", it) }
+        }
+        client.launchUntilClosed { requestOrFailure("workspace/executeCommand", params) }
+    }
+
+    private fun runsCommand(name: String): Boolean {
+        if (!supports("executeCommandProvider")) return false
+        if (isRegistered("executeCommandProvider")) return true
+        val declared = (client.serverCapabilities as? JsonObject)?.get("executeCommandProvider") as? JsonObject
+        val commands = declared?.get("commands") as? JsonArray ?: return true
+        return commands.any { (it as? JsonPrimitive)?.contentOrNull == name }
+    }
+
     /** What the server's numbers mean, from what it declared or else registered; null when it does not say. */
     private val semanticLegend: LspSemanticLegend?
         get() {
@@ -1094,6 +1195,23 @@ class LspLanguageService(
         return InlayHint(offsetOf(document, position), left + label + right)
     }
 
+    private fun JsonObject.toServedLens(document: CodeDocument): ServedLens? {
+        val start = range("range")?.start ?: return null
+        val command = lensCommand()
+        if (command == null && !resolvesLenses) return null
+        val offset = offsetOf(document, start)
+        return ServedLens(this, offset, document.offsetToLineCol(offset).first, command)
+    }
+
+    /** A lens's `command`, or null if it has none with a title to show. */
+    private fun JsonObject.lensCommand(): JsonObject? = (this["command"] as? JsonObject)?.takeIf { !it.string("title").isNullOrBlank() }
+
+    private fun ServedLens.toCodeLens(): CodeLens? {
+        if (gone) return null
+        val shown = command ?: return CodeLens(offset, "")
+        return CodeLens(offset, shown.string("title").orEmpty()) { runCommand(shown) }
+    }
+
     private fun JsonObject.toDocumentSymbol(document: CodeDocument): DocumentSymbol? {
         val name = string("name") ?: return null
         val range = offsetRangeOf(document, range("range") ?: return null)
@@ -1157,12 +1275,31 @@ class LspLanguageService(
     /** An item of the last completion answer, and that item as the server sent it. */
     private class OfferedCompletion(val item: CompletionItem, val raw: JsonElement)
 
+    /** What the server said about [text]: its lenses, with what has been resolved of them since. */
+    private class ServedLenses(val text: String, val lenses: List<ServedLens>)
+
+    /** A lens as the server sent it, [raw], `data` and all, at [offset] on [line]. */
+    private class ServedLens(val raw: JsonObject, val offset: Int, val line: Int, command: JsonObject?) {
+        /** What it shows and runs; null while it is to be resolved. */
+        @Volatile
+        var command: JsonObject? = command
+
+        /** The server has said this lens has no command. */
+        @Volatile
+        var gone = false
+
+        val isPending: Boolean get() = command == null && !gone
+    }
+
     companion object {
         /** LSP's `ServerNotInitialized`, `ContentModified` and `ServerCancelled`: nothing wrong with the request. */
         private val TRY_AGAIN_ERRORS = setOf(-32002, -32801, -32802)
 
         /** The pauses before each further request of [requestPatiently]. An edit asks anew after those. */
         private val RETRY_MILLIS = listOf(1_000L, 2_000L, 4_000L)
+
+        /** Most `codeLens/resolve` requests out at once: without a view to go by, that could be a whole document's. */
+        private const val MAX_LENSES_RESOLVING = 16
 
         /** How long the text has to stand still for its diagnostics to be pulled. */
         private const val DIAGNOSTICS_PULL_DEBOUNCE_MILLIS = 400L
