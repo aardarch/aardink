@@ -556,14 +556,24 @@ async function linkPixel(page) {
  */
 async function serverTypingCheck(page) {
   const checks = {};
-  const typedIn = async (language, serverUrl) => {
-    setPhase(`typing in ${language} ${serverUrl ? 'with' : 'without'} a server`);
+  // With [server], null unless the server has opened the document before the first key: the
+  // promise connectLanguageServer gives is kept once the connection is asked for, not once it is up.
+  const typedIn = async (language, server) => {
+    setPhase(`typing in ${language} ${server ? 'with' : 'without'} a server`);
+    const opened = server?.count('textDocument/didOpen');
     await page.evaluate(async (mount, language, serverUrl) => {
       window.__smokeEditor?.dispose();
       document.getElementById('check')?.remove();
       window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: '  word', language });
       window.__typingServer = serverUrl ? await window.__aardink.connectLanguageServer(serverUrl, language) : null;
-    }, MOUNT, language, serverUrl);
+    }, MOUNT, language, server?.url ?? null);
+    if (server && !(await server.until(() => server.count('textDocument/didOpen') === opened + 1))) {
+      await page.evaluate(() => {
+        window.__typingServer?.dispose();
+        window.__typingServer = null;
+      });
+      return null;
+    }
     await sleep(500);
     await page.mouse.click(300, 12);
     await sleep(300);
@@ -595,10 +605,10 @@ async function serverTypingCheck(page) {
     for (const language of ['python', 'plaintext']) {
       const without = await typedIn(language, null);
       const opened = server.count('textDocument/didOpen');
-      const served = await typedIn(language, server.url);
+      const served = await typedIn(language, server);
       checks[`typing in ${language} is as it says, with no server`] = without === expected;
-      checks[`typing in ${language} is the same with a server, which did follow it`] =
-        served === without && server.count('textDocument/didOpen') === opened + 1;
+      checks[`typing in ${language} is the same with a server, which had opened it before the first key`] =
+        served !== null && served === without && server.count('textDocument/didOpen') === opened + 1;
     }
   } finally {
     await server.close();
