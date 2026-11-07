@@ -179,14 +179,14 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             actions.onInput(typed)
             revealCaret()
         }
-        pointer.onPress = { touch ->
+        pointer.onPress = { touch, typing ->
             touchMode = touch
             hoverAt = null
             contextMenuAt = null
             showToolbarAtCaret = false
             preferredX = null
             requestFocus()
-            if (touch && !readOnly) ime.keyboardRequests++
+            if (touch && typing && !readOnly) ime.keyboardRequests++
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
         pointer.onLinkClick = { actions.onOpenLink(state.selection.end) || actions.onGoToDefinition() }

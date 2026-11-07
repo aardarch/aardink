@@ -46,16 +46,19 @@ internal class EarlyInlayHints(val offer: (List<InlayHint>) -> Unit) : AbstractC
  * The hints on show, moved with each edit until the next answer. A hint on text that went goes with
  * it: what it said no longer applies, and a block deleted would leave them all at one column.
  */
-internal class InlayHintTracker :
-    TrackedRanges<InlayHint>(
-        rangeOf = { it.offset until it.offset },
-        withRange = { hint, range -> hint.copy(offset = range.first) },
+internal class InlayHintTracker : OffsetTracker<InlayHint>({ it.offset }, { hint, offset -> hint.copy(offset = offset) })
+
+/** Items that each stand at an offset, moved with each edit. One on text that went goes with it. */
+internal open class OffsetTracker<T>(private val offsetOf: (T) -> Int, withOffset: (T, Int) -> T) :
+    TrackedRanges<T>(
+        rangeOf = { offsetOf(it).let { offset -> offset until offset } },
+        withRange = { item, range -> withOffset(item, range.first) },
         keepsOneCharacter = false,
     ) {
     override fun onDocumentChange(change: DocumentChange) {
         if (change.deletedLength > 0 && !change.isReset) {
             val inside = (change.offset + 1) until (change.offset + change.deletedLength)
-            if (items.any { it.offset in inside }) replace(items.filterNot { it.offset in inside })
+            if (items.any { offsetOf(it) in inside }) replace(items.filterNot { offsetOf(it) in inside })
         }
         super.onDocumentChange(change)
     }

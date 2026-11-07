@@ -286,13 +286,13 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             injectionVersion++
         }
 
-    /** The decorations' text and colours and the inlay hints, which [injections] answers from once there are any. */
+    /** The decorations' text and colours, the inlay hints and the code lenses, which [injections] answers from once there are any. */
     val inline = InlineContent(state, ::inlineChanged)
 
     private val inlineSourceChanged: () -> Unit = inline::changed
 
     /** A click on injected text with an [Injection.id], on a line. */
-    var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = null
+    var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = inline::clicked
 
     private var folds = FoldLayout.None
     private var wrapWidth = 0
@@ -611,7 +611,9 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         if (style == null || !style.softWrap || wrapWidth <= 0) return 1 + added
         val placeholder = folds.startingAt(line)?.let { it.placeholder.length + 1 } ?: 0
         val chars = min(lineLength(line), MAX_RENDERED_LINE_CHARS) + placeholder + (injected?.inlineChars ?: 0)
-        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added
+        // A row above that is wider than the view takes more rows than the break that makes it.
+        val wrappedAbove = ceil((injected?.charsAbove ?: 0) * style.metrics.charWidth / wrapWidth).toInt() - (injected?.rowsAbove ?: 0)
+        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added + max(0, wrappedAbove)
     }
 
     /** The characters of [line] that are laid out: its text, cut at [MAX_RENDERED_LINE_CHARS]. */

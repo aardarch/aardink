@@ -59,7 +59,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     fun <T> pointer(block: EditorPointerHandler.() -> T): T = view.state.withSelectionReason(SelectionChangeReason.Pointer) { block() }
 
     /** Called on every press in the text, before it moves the selection: focus and the keyboard. */
-    var onPress: (touch: Boolean) -> Unit = {}
+    var onPress: (touch: Boolean, typing: Boolean) -> Unit = { _, _ -> }
 
     /** A single tap (touch), after it placed the caret at an offset. */
     var onTap: (offset: Int) -> Unit = {}
@@ -89,22 +89,24 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     private val state get() = view.state
 
     fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false, link: Boolean = false) {
-        onPress(touch)
-        if (clicks == 1 && !shift && !alt) {
-            val sticky = stickyLineAt(position)
-            if (sticky != null) {
-                view.openStickyLine(sticky)
-                origin = null
-                kept = null
-                box = null
-                return
-            }
-        }
+        val sticky = if (clicks == 1 && !shift && !alt) stickyLineAt(position) else null
         val hit = view.offsetAt(position)
-        val injection = hit.injection
-        if (injection?.id != null && clicks == 1 && !shift) {
-            view.onInjectionClick?.invoke(hit.line, injection)
+        // Text a click does something on, unless a pinned line is over it. It has no place to type.
+        val clickable = hit.injection?.takeIf { it.id != null && sticky == null && !shift }
+        onPress(touch, clickable == null)
+        if (sticky != null) {
+            view.openStickyLine(sticky)
             origin = null
+            kept = null
+            box = null
+            return
+        }
+        if (clickable != null) {
+            // The second click of a double click is not a click on the text under it.
+            if (clicks == 1) view.onInjectionClick?.invoke(hit.line, clickable)
+            origin = null
+            kept = null
+            box = null
             return
         }
         if (hit.onFoldPlaceholder && clicks == 1 && !shift) {
@@ -173,7 +175,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** A press with the middle button: a column selection starting where it was pressed. */
     fun columnPress(position: Offset) {
-        onPress(false)
+        onPress(false, true)
         unit = SelectionUnit.Column
         origin = null
         kept = null
@@ -221,7 +223,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** A right click: the caret moves there unless it is inside a selection, then the menu opens. */
     fun secondaryPress(position: Offset) {
-        onPress(false)
+        onPress(false, true)
         val hit = view.offsetAt(position)
         val inside = state.currentSelections().ranges.any { !it.collapsed && hit.offset in it.min..it.max }
         if (!inside) state.replaceSelections(SelectionSet.caret(hit.offset))

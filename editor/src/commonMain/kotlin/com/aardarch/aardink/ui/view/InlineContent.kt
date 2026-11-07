@@ -20,7 +20,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.Decoration
+import com.aardarch.aardink.core.EarlyCodeLenses
 import com.aardarch.aardink.core.EarlyInlayHints
 import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
@@ -53,7 +56,8 @@ internal data class HintWindow(val runs: List<IntRange>, val folds: FoldLayout =
 /**
  * The one answer to what a line shows besides its document text, for [EditorView.injections],
  * merged from everything that has something to show: the text and colours of the host's
- * decorations, and the language service's inlay hints. [build] is where a new source adds to it.
+ * decorations, and the language service's inlay hints and code lenses. [build] is where a new source
+ * adds to it.
  *
  * Each line is a lookup. The lines are worked out again after a change, in time proportional to
  * what there is to show and not to the document, and only when next asked: an edit marks them stale.
@@ -67,7 +71,17 @@ internal data class HintWindow(val runs: List<IntRange>, val folds: FoldLayout =
  */
 internal class InlineContent(private val state: CodeEditorState, private val onChanged: (lines: List<Int>) -> Unit) {
 
-    private class Answer(val lines: Map<Int, LineInjections>, val wide: List<WideColor>)
+    private class Answer(
+        val lines: Map<Int, LineInjections>,
+        val wide: List<WideColor>,
+        /** By line, those with a title, in the order of their rows' [LensSlot]s. */
+        val lenses: Map<Int, List<CodeLens>> = emptyMap(),
+        /** The lines with a lens that has no title yet. */
+        val waiting: Set<Int> = emptySet(),
+    )
+
+    /** What a click on a lens is reported with: which of its line's lenses it is. By value, as the row is part of what a layout shows. */
+    private data class LensSlot(val index: Int)
 
     /** A colour over several lines, kept whole: an edit must not cost a walk over all of them. */
     private data class WideColor(val firstLine: Int, val lastLine: Int, val start: Int, val end: Int, val color: Color)
@@ -79,6 +93,7 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
 
     private var hintStyle: SpanStyle? = null
     private var decorationStyle: SpanStyle? = null
+    private var lensStyle: SpanStyle? = null
 
     /** Whether no line has anything to show. */
     val isEmpty: Boolean
@@ -87,12 +102,22 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
     val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
 
-    /** How a hint's label, and a decoration's text with no colour of its own, are drawn. */
-    fun setStyles(hint: SpanStyle?, decoration: SpanStyle?) {
-        if (hint == hintStyle && decoration == decorationStyle) return
+    /** How a hint's label, a decoration's text with no colour of its own, and a lens's row are drawn. */
+    fun setStyles(hint: SpanStyle?, decoration: SpanStyle?, lens: SpanStyle? = null) {
+        if (hint == hintStyle && decoration == decorationStyle && lens == lensStyle) return
         hintStyle = hint
         decorationStyle = decoration
+        lensStyle = lens
         changed()
+    }
+
+    /** Whether [line] has a lens that has no title yet. */
+    fun isWaiting(line: Int): Boolean = line in current().waiting
+
+    /** Injected text on [line] was clicked: what the lens it is part of does, if it is one. */
+    fun clicked(line: Int, injection: Injection) {
+        val slot = injection.id as? LensSlot ?: return
+        current().lenses[line]?.getOrNull(slot.index)?.onClick?.invoke()
     }
 
     /** An edit moved what is shown, or dropped it all: it is worked out again when next asked for. */
@@ -147,9 +172,53 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     private fun build(): Answer {
         val lines = HashMap<Int, Pending>()
         val wide = ArrayList<WideColor>()
+        // First: a row above is at column 0, ahead of anything else at that column, and first to
+        // what a line can show, so that no piece of the row is dropped from it.
+        val lenses = HashMap<Int, ArrayList<CodeLens>>()
+        for (lens in state.codeLenses) lenses.getOrPut(document.offsetToLineCol(lens.offset).first) { ArrayList() } += lens
+        val titled = HashMap<Int, List<CodeLens>>()
+        val waiting = HashSet<Int>()
+        for ((line, onLine) in lenses) {
+            val shown = onLine.filter { it.title.isNotBlank() }
+            lines.getOrPut(line) { Pending() }.items += lensRow(line, shown)
+            if (shown.isNotEmpty()) titled[line] = shown
+            if (shown.size < onLine.size) waiting += line
+        }
         state.forEachInlineDecoration { addDecoration(it, lines, wide) }
         for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
-        return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
+        return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide, titled, waiting)
+    }
+
+    /**
+     * The row above [line], with [lenses] on it side by side as VS Code has them, and starting where
+     * the line's text does. The titles fill what a row may hold. None at all is an empty row, which
+     * holds the place of lenses that have no title yet.
+     */
+    private fun lensRow(line: Int, lenses: List<CodeLens>): List<Injection> {
+        val row = ArrayList<Injection>(lenses.size * 2 + 1)
+        val indent = lensIndent(line)
+        var room = MAX_LENS_ROW_CHARS - indent.length
+        if (indent.isNotEmpty()) row += Injection.leadingRowAbove(indent, lensStyle)
+        for ((index, lens) in lenses.withIndex()) {
+            val separator = if (index > 0) LENS_SEPARATOR else ""
+            if (room <= separator.length) break
+            if (index > 0) row += Injection.leadingRowAbove(separator, lensStyle)
+            val title = oneRow(lens.title).take(room - separator.length)
+            row += Injection.leadingRowAbove(title, lensStyle, LensSlot(index))
+            room -= separator.length + title.length
+        }
+        if (lenses.isEmpty()) return listOf(Injection.rowAbove("", lensStyle))
+        row[row.lastIndex] = row.last().copy(text = row.last().text + "\n")
+        return row
+    }
+
+    /** The whitespace [line] starts with, for a row above it to start where its text does. */
+    private fun lensIndent(line: Int): String {
+        val start = document.lineStart(line)
+        val end = min(document.lineEnd(line), start + MAX_LENS_INDENT)
+        var at = start
+        while (at < end && (document[at] == ' ' || document[at] == '\t')) at++
+        return document.subSequence(start, at).toString()
     }
 
     private fun addDecoration(decoration: Decoration, lines: HashMap<Int, Pending>, wide: ArrayList<WideColor>) {
@@ -199,6 +268,15 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
 
         /** How long an answer in part waits for the rest before it is shown, which takes off what the rest would have kept. */
         private const val HINT_PATIENCE_MS = 1_000L
+
+        /** Between two lenses on a row, as VS Code has it. */
+        private const val LENS_SEPARATOR = " | "
+
+        /** Most of a row of lenses, so that one row can never take all a line may show. */
+        private const val MAX_LENS_ROW_CHARS = 1_000
+
+        /** Most of a line's indentation that a row of lenses keeps: past that it would mostly wrap, on a phone. */
+        private const val MAX_LENS_INDENT = 40
 
         /**
          * The lines to ask about, with [visible] on screen, [rows] of them shown, [folds] closed and
@@ -291,6 +369,30 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
             }.awaitAll()
             showing.cancel()
             answers.flatten().distinct()
+        }
+
+        /**
+         * [service]'s answer about [document], on [dispatcher]. What it offers early
+         * ([EarlyCodeLenses]) goes to [showEarly] as with hints: only if the rest is still not in
+         * after [HINT_PATIENCE_MS].
+         */
+        suspend fun askForLenses(
+            service: LanguageService,
+            document: CodeDocument,
+            dispatcher: CoroutineContext,
+            showEarly: (List<CodeLens>) -> Unit,
+        ): List<CodeLens> = coroutineScope {
+            val offered = MutableStateFlow<List<CodeLens>?>(null)
+            val showing = launch {
+                offered.collectLatest { soFar ->
+                    if (soFar == null) return@collectLatest
+                    delay(HINT_PATIENCE_MS)
+                    showEarly(soFar)
+                }
+            }
+            val answer = withContext(dispatcher + EarlyCodeLenses { offered.value = it }) { service.codeLenses(document) }
+            showing.cancel()
+            answer
         }
     }
 }

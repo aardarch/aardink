@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.takeOrElse
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionFilter
 import com.aardarch.aardink.core.CompletionItem
@@ -777,6 +778,33 @@ private fun CodeEditorLayoutContent(
         }
     }
 
+    // ── Code lenses: asked for after a pause, and again when one still to be worked out comes on screen ─
+    LaunchedEffect(state, view, languageService, options.codeLens) {
+        // As with hints: what is here came from a service, and a change of either ends that.
+        state.publishCodeLenses(emptyList())
+        val service = languageService.takeIf { options.codeLens } ?: return@LaunchedEffect
+        var answered: Int? = null
+        snapshotFlow {
+            state.codeLenses
+            state.textVersion to view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
+        }.collectLatest { (version, waiting) ->
+            if (version == answered && waiting.isEmpty()) return@collectLatest
+            delay(CODE_LENSES_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) {
+                state.publishCodeLenses(emptyList())
+                return@collectLatest
+            }
+            val document = state.document.snapshot()
+            val show: (List<CodeLens>) -> Unit = { lenses ->
+                if (state.document.version == document.version) {
+                    state.publishCodeLenses(lenses.filter { it.offset in 0..document.length })
+                }
+            }
+            show(InlineContent.askForLenses(service, document, state.computeDispatcher, showEarly = show))
+            answered = version
+        }
+    }
+
     // ── Colours: swatches under the colours the language service finds, and their picker ─
     val colorTracker = remember(state) {
         TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
@@ -867,7 +895,9 @@ private fun CodeEditorLayoutContent(
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
-            if (hover?.holding != true) showHover(view.offsetAt(at).offset, at)
+            val hit = view.offsetAt(at)
+            // What a click does something on says it itself, and is not the text of the line under it.
+            if (hover?.holding != true && hit.injection?.id == null) showHover(hit.offset, at)
         }
     }
     // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
@@ -2014,6 +2044,9 @@ private const val SEMANTIC_TOKENS_DEBOUNCE_MS = 300L
 
 /** How long typing, or scrolling past what was asked about, has to pause before asking for inlay hints. */
 private const val INLAY_HINTS_DEBOUNCE_MS = 300L
+
+/** How long typing, or scrolling to a lens still to be worked out, has to pause before asking for code lenses. */
+private const val CODE_LENSES_DEBOUNCE_MS = 300L
 
 /** The smallest and largest font size zooming goes to, in sp. */
 private const val MIN_FONT_SIZE = 6f

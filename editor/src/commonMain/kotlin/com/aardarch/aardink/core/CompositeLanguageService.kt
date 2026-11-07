@@ -42,6 +42,8 @@ import kotlinx.coroutines.withContext
  * - **Inlay hints:** both, less any of the fallback's at an offset the primary has one at. The
  *   editor shows the primary's without waiting for ever on the fallback, which may be a language
  *   server that is starting up or not answering.
+ * - **Code lenses:** both, less any of the fallback's with the same offset and title as one of the
+ *   primary's, and shown without waiting for ever on the fallback, as inlay hints are.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -155,6 +157,20 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
     private fun withHints(own: List<InlayHint>, inherited: List<InlayHint>): List<InlayHint> {
         val taken = own.mapTo(HashSet()) { it.offset }
         return own + inherited.filterNot { it.offset in taken }
+    }
+
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+        val own = primary.codeLenses(document)
+        val early = currentCoroutineContext()[EarlyCodeLenses] ?: return withLenses(own, fallback.codeLenses(document))
+        // As with hints, none to offer is not an offer of none.
+        if (own.isNotEmpty()) early.offer(own)
+        val inherited = withContext(EarlyCodeLenses { early.offer(withLenses(own, it)) }) { fallback.codeLenses(document) }
+        return withLenses(own, inherited)
+    }
+
+    private fun withLenses(own: List<CodeLens>, inherited: List<CodeLens>): List<CodeLens> {
+        val taken = own.mapTo(HashSet()) { it.offset to it.title }
+        return own + inherited.filterNot { (it.offset to it.title) in taken }
     }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)

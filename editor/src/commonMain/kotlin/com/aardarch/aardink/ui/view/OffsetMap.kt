@@ -35,14 +35,20 @@ internal data class Injection(
     val caretAfter: Boolean = false,
     /** What a click on this text is reported with; null when a click goes to the text under it. */
     val id: Any? = null,
+    /** Whether this is a piece of a row above the line, one that the piece with the row's line break ends. */
+    val leadsRowAbove: Boolean = false,
 ) {
-    /** Whether this is whole rows above the line's text, as a code lens is. */
-    val isRowAbove: Boolean get() = column == 0 && caretAfter && text.endsWith('\n')
+    /** Whether this is whole rows above the line's text, as a code lens is, or a piece of such a row. */
+    val isRowAbove: Boolean get() = leadsRowAbove || (column == 0 && caretAfter && text.endsWith('\n'))
 
     companion object {
         /** A row of [text] above a line. */
         fun rowAbove(text: String, style: SpanStyle? = null, id: Any? = null): Injection =
             Injection(0, text + "\n", style, caretAfter = true, id = id)
+
+        /** A piece of a row above a line, with more of the row to its right, so that each piece can have its own [id]. */
+        fun leadingRowAbove(text: String, style: SpanStyle? = null, id: Any? = null): Injection =
+            Injection(0, text, style, caretAfter = true, id = id, leadsRowAbove = true)
     }
 }
 
@@ -62,6 +68,9 @@ internal class LineInjections private constructor(val items: List<Injection>, va
 
     /** Characters that share rows with the line's text, for estimating how it wraps. */
     val inlineChars: Int = items.sumOf { if (it.isRowAbove) 0 else it.text.length }
+
+    /** Characters on the rows above the line's text, for estimating how they wrap. */
+    val charsAbove: Int = items.sumOf { injection -> if (injection.isRowAbove) injection.text.count { it != '\n' } else 0 }
 
     private val hash = items.hashCode() * 31 + colors.hashCode()
 

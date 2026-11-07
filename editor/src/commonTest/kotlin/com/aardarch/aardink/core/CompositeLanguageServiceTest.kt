@@ -353,4 +353,118 @@ class CompositeLanguageServiceTest {
             answer.await(),
         )
     }
+
+    // ── Code lenses ──────────────────────────────────────────────────────────
+
+    private class HeldLenses : LanguageService by Fake() {
+        val answer = CompletableDeferred<List<CodeLens>>()
+        var asked = 0
+
+        override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+            asked++
+            return answer.await()
+        }
+    }
+
+    private fun lensService(vararg lenses: CodeLens) = object : LanguageService by Fake() {
+        override suspend fun codeLenses(document: CodeDocument) = lenses.toList()
+    }
+
+    private val run = {}
+    private val ownLens = CodeLens(1, "own", run)
+    private val takenLens = CodeLens(1, "own", {})
+    private val otherLens = CodeLens(1, "other", run)
+    private val laterLens = CodeLens(2, "later", run)
+
+    @Test
+    fun `code lenses are both's, less the fallback's with an offset and title the primary has`() = runTest {
+        assertEquals(
+            listOf(ownLens, otherLens, laterLens),
+            CompositeLanguageService(lensService(ownLens), lensService(takenLens, otherLens, laterLens)).codeLenses(doc),
+        )
+        assertEquals(listOf(laterLens), CompositeLanguageService(Fake(), lensService(laterLens)).codeLenses(doc))
+        assertEquals(listOf(ownLens), CompositeLanguageService(lensService(ownLens), Fake()).codeLenses(doc))
+    }
+
+    @Test
+    fun `a service that says nothing of code lenses has none`() = runTest {
+        assertEquals(emptyList(), Fake().codeLenses(doc))
+    }
+
+    @Test
+    fun `a primary's lenses are offered while the fallback has yet to answer`() = runTest {
+        val held = HeldLenses()
+        val offers = mutableListOf<List<CodeLens>>()
+
+        val answer = async(EarlyCodeLenses { offers += it }) { CompositeLanguageService(lensService(ownLens), held).codeLenses(doc) }
+        runCurrent()
+
+        assertEquals(listOf(listOf(ownLens)), offers)
+        assertEquals(1, held.asked, "the fallback still gets its turn")
+        held.answer.complete(listOf(takenLens, laterLens))
+        assertEquals(listOf(ownLens, laterLens), answer.await())
+    }
+
+    @Test
+    fun `a primary with no lenses offers nothing, which would take a fallback's off the screen`() = runTest {
+        val held = HeldLenses()
+        val offers = mutableListOf<List<CodeLens>>()
+
+        val answer = async(EarlyCodeLenses { offers += it }) { CompositeLanguageService(Fake(), held).codeLenses(doc) }
+        runCurrent()
+        held.answer.complete(listOf(laterLens))
+
+        assertEquals(listOf(laterLens), answer.await())
+        assertTrue(offers.isEmpty())
+    }
+
+    @Test
+    fun `a composite behind another offers lenses on top of what is there`() = runTest {
+        val held = HeldLenses()
+        val offers = mutableListOf<List<CodeLens>>()
+        val behind = CompositeLanguageService(lensService(otherLens), held)
+
+        val answer = async(EarlyCodeLenses { offers += it }) { CompositeLanguageService(lensService(ownLens), behind).codeLenses(doc) }
+        runCurrent()
+        held.answer.complete(listOf(laterLens))
+
+        assertEquals(listOf(listOf(ownLens), listOf(ownLens, otherLens)), offers.take(2))
+        assertEquals(listOf(ownLens, otherLens, laterLens), answer.await())
+    }
+
+    @Test
+    fun `the editor shows the primary's lenses once the fallback has kept it waiting, then the whole answer`() = runTest {
+        val held = HeldLenses()
+        val shown = mutableListOf<List<CodeLens>>()
+        val service = CompositeLanguageService(lensService(ownLens), held)
+
+        val answer = async { InlineContent.askForLenses(service, doc, EmptyCoroutineContext) { shown += it } }
+        advanceTimeBy(900)
+        runCurrent()
+        assertTrue(shown.isEmpty(), "the rest may be about to come")
+
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(listOf(listOf(ownLens)), shown)
+
+        held.answer.complete(listOf(laterLens))
+        assertEquals(listOf(ownLens, laterLens), answer.await())
+    }
+
+    @Test
+    fun `an answer in time is one answer, with nothing shown early`() = runTest {
+        val held = HeldLenses()
+        val shown = mutableListOf<List<CodeLens>>()
+        val service = CompositeLanguageService(lensService(ownLens), held)
+
+        val answer = async { InlineContent.askForLenses(service, doc, EmptyCoroutineContext) { shown += it } }
+        advanceTimeBy(500)
+        runCurrent()
+        held.answer.complete(emptyList())
+        answer.await()
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertTrue(shown.isEmpty())
+    }
 }

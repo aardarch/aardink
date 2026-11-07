@@ -238,6 +238,18 @@ interface LanguageService {
     suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = emptyList()
 
     /**
+     * What the editor shows in a row above lines of [document], such as a reference count or a way
+     * to run a test, with [EditorOptions.codeLens][com.aardarch.aardink.ui.EditorOptions] on. Lenses
+     * on one line share its row, each clicked on its own.
+     *
+     * The answer is about the whole document. The editor asks after a pause in typing, calls off a
+     * question it no longer needs answered, and moves what it has with each edit until the next
+     * answer. A service for which a lens's title costs a lot can leave it blank
+     * ([CodeLens.title]), and the editor asks again when such a lens comes on screen.
+     */
+    suspend fun codeLenses(document: CodeDocument): List<CodeLens> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */

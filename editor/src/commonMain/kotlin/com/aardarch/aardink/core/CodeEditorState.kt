@@ -543,9 +543,9 @@ class CodeEditorState(
 
     private fun inlineChanged() = inlineListeners.forEach { it() }
 
-    /** Whether anything from the decorations or the hints is part of a line's layout. */
+    /** Whether anything from the decorations, the hints or the lenses is part of a line's layout. */
     internal val hasInlineContent: Boolean
-        get() = hintTracker.items.isNotEmpty() || decorationOwners.values.any { it.hasInline }
+        get() = hintTracker.items.isNotEmpty() || lensTracker.items.isNotEmpty() || decorationOwners.values.any { it.hasInline }
 
     /** Calls [action] with every decoration that is part of a line's layout, as they are now. */
     internal fun forEachInlineDecoration(action: (Decoration) -> Unit) {
@@ -564,6 +564,18 @@ class CodeEditorState(
     internal fun publishInlayHints(hints: List<InlayHint>) {
         if (hints == hintTracker.items) return
         hintTracker.replace(hints)
+        inlineChanged()
+    }
+
+    private val lensTracker = OffsetTracker<CodeLens>({ it.offset }, { lens, offset -> lens.copy(offset = offset) })
+
+    /** The language service's newest code lenses, moved along with the edits since. */
+    internal val codeLenses: List<CodeLens> get() = lensTracker.items
+
+    /** Shows [lenses] in place of those before, at offsets of the document as it is now. */
+    internal fun publishCodeLenses(lenses: List<CodeLens>) {
+        if (lenses == lensTracker.items) return
+        lensTracker.replace(lenses)
         inlineChanged()
     }
 
@@ -1561,6 +1573,7 @@ class CodeEditorState(
         document.addChangeListener(symbolTracker)
         document.addChangeListener(decorationMover)
         document.addChangeListener(hintTracker)
+        document.addChangeListener(lensTracker)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)

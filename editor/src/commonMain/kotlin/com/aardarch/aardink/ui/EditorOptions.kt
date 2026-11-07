@@ -93,6 +93,10 @@ import com.aardarch.aardink.core.LineEnding
  * @property inlayHints The language service's `inlayHints` are shown among the characters, in faint
  *   text that is not part of the document, for the lines around the view: asked for after each
  *   pause in typing, and in scrolling past them. Off by default, and nothing is asked for while off.
+ * @property codeLens The language service's `codeLenses` are shown in a row above their lines, each
+ *   a click or a tap away from what it does, and asked for after each pause in typing. The row is
+ *   not part of the document: a caret passes over it. Off by default, and nothing is asked for
+ *   while off.
  */
 @Immutable
 data class EditorOptions(
@@ -125,6 +129,7 @@ data class EditorOptions(
     val fontLigatures: Boolean = true,
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
+    val codeLens: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
