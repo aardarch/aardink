@@ -169,7 +169,7 @@ class EditorViewTest {
         val view = viewOf("$palette\n\t\tx\ty\n        ", softWrap = true)
         view.prepare((32 * charWidth).toInt() + 16, 400)
         val layout = view.layoutFor(0)
-        assertEquals(palette.length, layout.layoutInput.text.length)
+        assertEquals(palette.length, layout.result.layoutInput.text.length)
         assertTrue(layout.lineCount > 1, "the palette line wraps")
         assertTrue(layout.getLineStart(1) > 7, "the first row holds more than the indentation: ${layout.getLineStart(1)}")
         assertEquals(1, view.layoutFor(2).lineCount, "a line of only spaces is one row")
@@ -246,6 +246,6 @@ class EditorViewTest {
         view.prepare(400, 200)
         val line = view.frame.lines.single()
         assertEquals(EditorView.MAX_RENDERED_LINE_CHARS, line.shownLength)
-        assertEquals(EditorView.MAX_RENDERED_LINE_CHARS, line.layout.layoutInput.text.length)
+        assertEquals(EditorView.MAX_RENDERED_LINE_CHARS, line.layout.result.layoutInput.text.length)
     }
 }

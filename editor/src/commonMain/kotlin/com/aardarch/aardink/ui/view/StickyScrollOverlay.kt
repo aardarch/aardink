@@ -63,6 +63,8 @@ internal fun EditorView.stickyLines(ranges: List<FoldRange>, max: Int = MAX_STIC
         val bottom = contentTop(last, metrics) + lineMap.rowsOf(last) * lineHeight - scrollY
         // Scrolled past already: a later range at this depth may be the one.
         if (bottom <= slot) continue
+        // Rows injected above its text scroll away first: the text is what gets pinned.
+        if (textTop(range.startLine, metrics) - scrollY >= slot) break
         sticky += StickyLine(range.startLine, min(slot, bottom - lineHeight))
         parent = range
     }
@@ -81,7 +83,7 @@ internal fun EditorView.stickyLineAt(ranges: List<FoldRange>, position: Offset):
  */
 internal fun EditorView.openStickyLine(sticky: StickyLine) {
     val metrics = style?.metrics ?: return
-    scroll.scrollToY(contentTop(sticky.line, metrics) - sticky.top.coerceAtLeast(0f))
+    scroll.scrollToY(textTop(sticky.line, metrics) - sticky.top.coerceAtLeast(0f))
     val document = state.document
     val caret = TextNavigator.smartHome(document, document.lineStart(sticky.line))
     state.withSelectionReason(SelectionChangeReason.Pointer) { state.replaceSelections(SelectionSet.single(TextRange(caret))) }
@@ -100,7 +102,9 @@ internal fun DrawScope.drawStickyLines(view: EditorView, sticky: List<StickyLine
         drawRect(background, Offset(0f, line.top), Size(size.width, lineHeight))
         val layout = view.layoutFor(line.line)
         clipRect(0f, line.top, size.width, line.top + lineHeight) {
-            drawText(layout, topLeft = Offset(frame.textLeft, line.top))
+            // The first row of the line's text, wherever injected rows put it in the layout.
+            val y = line.top + layout.getLineTop(0) - layout.getLineTop(layout.textRow)
+            drawText(layout.result, topLeft = Offset(frame.textLeft, y))
         }
     }
     val bottom = sticky.maxOf { it.top } + lineHeight

@@ -55,6 +55,7 @@ import com.aardarch.aardink.ui.input.EditorImeGeometry
 import com.aardarch.aardink.ui.resolveKeyBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.sign
 
 /** What the host layout does for commands that are not about the text: panels, dialogs, popups. */
 internal class EditorHostActions(
@@ -446,7 +447,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         val box = this.columns.current()
         this.columns.select(
             box.copy(
-                activeRow = (box.activeRow + rows).coerceIn(0, view.totalRows - 1),
+                activeRow = view.textRowFrom((box.activeRow + rows).coerceIn(0, view.totalRows - 1), rows.sign),
                 activeX = (box.activeX + columns * charWidth).coerceAtLeast(0f),
             ),
         )
@@ -544,8 +545,8 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         val column = offset - line.start
         if (column >= line.shownLength) return null
         val layout = line.layout
-        val box = layout.getBoundingBox(column)
-        val shift = layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
+        val box = layout.charBox(column)
+        val shift = layout.rowShift(layout.charRow(column), frame.metrics.lineHeight)
         return box.translate(Offset(frame.textLeft, line.top - frame.scrollY + shift) + coordinates.localToRoot(Offset.Zero))
     }
 }
