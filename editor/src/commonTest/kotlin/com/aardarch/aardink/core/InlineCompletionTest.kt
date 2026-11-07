@@ -523,6 +523,16 @@ class InlineCompletionTest {
     }
 
     @Test
+    fun `what follows the caret is matched as late as it can be, so the caret ends where Monaco leaves it`() {
+        val state = stateAt("foo(|)")
+        state.offer("a)b)")
+        assertEquals("foo([a)b])", state.drawn)
+        state.accept()
+        assertEquals("foo(a)b)", state.document.text)
+        assertEquals(TextRange("foo(a)b".length), state.selection)
+    }
+
+    @Test
     fun `accepting text in several pieces ends after the last of them`() {
         val state = stateAt("if (|)")
         val caret = state.selection.end

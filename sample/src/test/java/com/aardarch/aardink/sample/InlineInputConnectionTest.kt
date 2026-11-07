@@ -31,6 +31,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.text.SpanStyle
@@ -39,9 +40,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
+import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CompletionItem
+import com.aardarch.aardink.core.CompletionKind
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.languages.BuiltInLanguages
+import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorInputElement
 import com.aardarch.aardink.ui.view.EditorMetrics
@@ -221,6 +229,36 @@ class InlineInputConnectionTest {
         assertEquals("val = 1", state.document.text)
     }
 
+    /**
+     * A phone's list is a strip above the keyboard that takes no keys and is not at the caret. It is
+     * up for most of a word, so if it hid ghost text as a list at the caret does, none would show.
+     */
+    @Test
+    fun `the strip above a keyboard leaves ghost text showing`() {
+        val state = stateOf("a")
+        val words = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+            override suspend fun completions(document: CodeDocument, cursorOffset: Int) =
+                listOf(CompletionItem("listed", CompletionKind.Value, "listed"))
+        }
+        rule.setContent {
+            CodeEditorLayout(
+                state = state,
+                languageService = words,
+                inlineCompletionProvider = { _, _ -> listOf(InlineCompletion("ghost")) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        rule.runOnIdle {
+            state.selection = TextRange(1)
+            state.execute(EditorCommand.TriggerSuggest)
+        }
+        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(hasText("listed")).fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.CycleInlineCompletion())) }
+        rule.waitUntil(timeoutMillis = 5_000) { state.inlineCompletions.shown != null }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.AcceptInlineCompletion)) }
+        assertEquals("aghost", state.document.text)
+    }
+
     /** Ghost text, through what a layout does with an answer, on the view [connect] made. */
     private fun offer(state: CodeEditorState, text: String) {
         rule.runOnIdle {
@@ -261,7 +299,7 @@ class InlineInputConnectionTest {
         connection.run { finishComposingText() }
         rule.runOnIdle { assertEquals(10, state.inlineCompletions.ask?.caret) }
         offer(state, "mpute()")
-        rule.runOnIdle { assertTrue(state.execute(com.aardarch.aardink.core.EditorCommand.AcceptInlineCompletion)) }
+        rule.runOnIdle { assertTrue(state.execute(EditorCommand.AcceptInlineCompletion)) }
         assertEquals("val x = compute()", state.document.text)
     }
 }
