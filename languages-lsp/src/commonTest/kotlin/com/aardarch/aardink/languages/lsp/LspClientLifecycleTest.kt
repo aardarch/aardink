@@ -635,6 +635,7 @@ class LspClientLifecycleTest {
         assertEquals(listOf("utf-16"), general["positionEncodings"]!!.jsonArray.map { it.jsonPrimitive.content })
         assertTrue(window["workDoneProgress"]!!.jsonPrimitive.boolean)
         assertTrue(workspace["applyEdit"]!!.jsonPrimitive.boolean)
+        assertFalse(textDocument["diagnostic"]!!.jsonObject["relatedDocumentSupport"]!!.jsonPrimitive.boolean)
         assertTrue(textDocument["documentSymbol"]!!.jsonObject["hierarchicalDocumentSymbolSupport"]!!.jsonPrimitive.boolean)
         assertEquals(
             listOf("markdown", "plaintext"),
@@ -655,7 +656,6 @@ class LspClientLifecycleTest {
         val resolved = completionItem["resolveSupport"]!!.jsonObject["properties"]!!.jsonArray.map { it.jsonPrimitive.content }
 
         assertFalse("additionalTextEdits" in resolved, "accepting an item does not wait for resolve, so the import would be lost")
-        assertFalse("diagnostic" in textDocument, "a server may stop pushing diagnostics to a client that says it pulls")
         assertFalse("willSaveWaitUntil" in textDocument["synchronization"]!!.jsonObject, "not in 0.9")
         assertFalse(
             "resourceOperations" in DefaultClientCapabilities["workspace"]!!.jsonObject["workspaceEdit"]!!.jsonObject,

@@ -16,6 +16,8 @@
 package com.aardarch.aardink.languages.lsp
 
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,6 +36,10 @@ import kotlinx.serialization.json.putJsonObject
  * `completionItem.resolveSupport` leaves out `additionalTextEdits` on purpose: a server would then
  * hold an auto-import's edit back until an item is resolved, and accepting one does not wait for
  * that.
+ *
+ * `textDocument.diagnostic` is what makes a server with pull diagnostics offer them, and it may stop
+ * pushing once it does: [LspLanguageService] pulls for its document, but a host driving [LspClient]
+ * without one, and relying on [LspClient.addDiagnosticsListener], should leave that member out.
  */
 val DefaultClientCapabilities: JsonObject = buildJsonObject {
     putJsonObject("general") {
@@ -73,6 +79,7 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
             }
             putJsonObject("completionItemKind") { put("valueSet", numbers(1..25)) }
         }
+        feature("diagnostic") { put("relatedDocumentSupport", false) }
         feature("hover") { put("contentFormat", MarkupKinds) }
         feature("signatureHelp") {
             putJsonObject("signatureInformation") {
@@ -135,6 +142,16 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
             put("tokenModifiers", SemanticTokenModifiers)
         }
     }
+}
+
+/**
+ * Whether what a server declared in [capabilities] leaves its positions in UTF-16, the only encoding
+ * this module can read: left out, it means that. Anything else is a server that did not keep to what
+ * it was offered, or a host's own capabilities offering more than this module can take.
+ */
+internal fun positionsAreUtf16(capabilities: JsonElement?): Boolean {
+    val encoding = (capabilities as? JsonObject)?.get("positionEncoding") ?: return true
+    return encoding is JsonNull || (encoding is JsonPrimitive && encoding.isString && encoding.content == "utf-16")
 }
 
 /** The order is the client's preference. */

@@ -46,6 +46,7 @@ import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
@@ -117,6 +118,16 @@ enum class LspSaveReason(internal val code: Int) {
  * characters in ([triggerCharactersFrom]), since they cannot wait for the handshake, and may do the
  * same for rename support ([renameSupportFrom]).
  *
+ * Diagnostics come the same way whichever way the server gives them. One that declared
+ * `diagnosticProvider` is asked with `textDocument/diagnostic` once the document opens and each time
+ * typing pauses, and its answer reaches every [DiagnosticsListener] as if it had been pushed, for
+ * the version the question was about. A server that declared nothing of the kind is left to push.
+ *
+ * A server that answered a `positionEncoding` other than `utf-16` has no feature here that needs a
+ * position, whatever else it declared or the host said: [supports] is false, and [supportsRename]
+ * too. Edits go as whole text, and pushed diagnostics stay, on the right lines but perhaps not the
+ * right columns.
+ *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
  * @param languageId LSP language identifier (e.g. `"kotlin"`, `"xml"`, `"json"`, `"toml"`).
@@ -160,6 +171,7 @@ class LspLanguageService(
     /** What is known about rename; null when nothing is, or the server registered it later. */
     private val renameSupport: LspRenameSupport?
         get() = when {
+            !positionsAreUtf16(client.serverCapabilities) -> LspRenameSupport.Unsupported
             serverRenameSupport != null -> serverRenameSupport
             isRegistered("renameProvider") -> null
             else -> renameSupportFrom(client.serverCapabilities)
@@ -174,11 +186,13 @@ class LspLanguageService(
      * and not taken back, whatever its `documentSelector` says.
      *
      * `textDocumentSync`, the one member that can be a number, counts when it asks to hear of the
-     * document at all, by that number or through the registrations of `didOpen` and the like.
+     * document at all, by that number or through the registrations of `didOpen` and the like. It is
+     * also the only member that counts for a server whose positions cannot be read.
      */
     fun supports(provider: String): Boolean {
         val capabilities = client.serverCapabilities as? JsonObject ?: return true
         if (provider == "textDocumentSync") return LspTextDocumentSync.from(capabilities, client.registrations) != LspTextDocumentSync()
+        if (!positionsAreUtf16(capabilities)) return false
         val declared = capabilities[provider]
         return declared is JsonObject || (declared as? JsonPrimitive)?.booleanOrNull == true || isRegistered(provider)
     }
@@ -202,7 +216,7 @@ class LspLanguageService(
         get() = lastCompletionsIncomplete
 
     /** Holds the version last sent to the server; diagnostics computed against an older one are stale. */
-    private val sync = LspDocumentSync(client, documentUri, languageId)
+    private val sync = LspDocumentSync(client, documentUri, languageId, onTextSent = ::pullDiagnosticsSoon)
 
     @Volatile
     private var diagnosticsVersion: Int? = null
@@ -226,6 +240,44 @@ class LspLanguageService(
     private fun isStale(version: Int?): Boolean {
         if (version == null) return false
         return version < sync.sentVersion || version < (diagnosticsVersion ?: Int.MIN_VALUE)
+    }
+
+    /** The pull waiting for typing to pause, or waiting for its answer. A newer text replaces it. */
+    @Volatile
+    private var diagnosticsPull: Job? = null
+
+    /**
+     * Asks for diagnostics once the text has stood still for a moment, unless the server pushes them.
+     * Unlike everywhere else, capabilities not known count as no: this is not something the host
+     * asked for, and pushing is the norm.
+     */
+    private fun pullDiagnosticsSoon() {
+        if (client.serverCapabilities !is JsonObject || !supports("diagnosticProvider")) return
+        diagnosticsPull?.cancel()
+        diagnosticsPull = client.launchUntilClosed {
+            delay(DIAGNOSTICS_PULL_DEBOUNCE_MILLIS)
+            pullDiagnostics()
+        }
+    }
+
+    /**
+     * The answer goes out as a push would, under the version asked about, so that [isStale] sees to
+     * it the same way. `previousResultId` is not sent: a report saying `unchanged` would save the
+     * server some work, but one dropped as stale would then leave nothing to compare with. A server
+     * that says it anyway changes nothing here.
+     */
+    private suspend fun pullDiagnostics() {
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            val provider = (client.serverCapabilities as? JsonObject)?.get("diagnosticProvider") as? JsonObject
+            provider?.string("identifier")?.let { put("identifier", it) }
+        }
+        var version = 0
+        val answer = requestPatiently("textDocument/diagnostic", params) { version = sync.sentVersion }
+        val report = (answer as? LspResult.Value)?.element as? JsonObject ?: return
+        if (report.string("kind") != "full") return
+        val items = report["items"]?.let { decodeOrNull(ListSerializer(LspDiagnostic.serializer()), it) } ?: return
+        client.deliverDiagnostics(documentUri, version, items)
     }
 
     private val textDocument: LspTextDocumentIdentifier
@@ -302,7 +354,11 @@ class LspLanguageService(
         lspDiagnostics = emptyList()
         diagnosticsVersion = null
         offeredCompletions = emptyList()
-        sync.close()
+        try {
+            sync.close()
+        } finally {
+            diagnosticsPull?.cancel()
+        }
     }
 
     /**
@@ -471,8 +527,9 @@ class LspLanguageService(
      * the action promises. Bare `Command`s have nothing this adapter can apply. An action carrying
      * *both* an edit and a `command` has the command run after the edit, and `core` has no way to
      * represent that half. An action whose edit reaches another file, or creates, renames or
-     * deletes one, cannot be applied whole through a single-document API. And an action the server
-     * marked `disabled` is one it has told us not to run at all.
+     * deletes one, cannot be applied whole through a single-document API: unlike a rename, nothing
+     * here hears when one is chosen, so its other files cannot go to [LspClientHost] at that moment.
+     * And an action the server marked `disabled` is one it has told us not to run at all.
      */
     override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> {
         val context = LspCodeActionContext(
@@ -485,13 +542,12 @@ class LspLanguageService(
         return actions.mapNotNull { action ->
             if (action.command != null) return@mapNotNull null
             if (action.disabled != null) return@mapNotNull null
-            if (reachesBeyondThisDocument(action.edit)) return@mapNotNull null
-            val edits = editsForThisDocument(action.edit)
-            if (edits.isEmpty()) return@mapNotNull null
+            val parts = action.edit?.let(::partsOf) ?: return@mapNotNull null
+            if (parts.elsewhere != null || parts.here.isEmpty()) return@mapNotNull null
             CodeAction(
                 title = action.title,
                 kind = mapCodeActionKind(action.kind),
-                edits = toTextEdits(document, edits),
+                edits = toTextEdits(document, parts.here),
                 isPreferred = action.isPreferred ?: false,
             )
         }
@@ -603,20 +659,27 @@ class LspLanguageService(
     }
 
     /**
-     * Text edits renaming the symbol at [offset], when the whole rename fits in this document.
+     * Text edits renaming the symbol at [offset] in this document.
      *
-     * A rename that also touches another file, or creates, renames or deletes one, returns empty:
-     * the editor can only edit the open document, and applying the local half of a cross-file
-     * rename leaves every reference elsewhere pointing at a name that no longer exists. Refusing
-     * is the honest answer until the editor gains a workspace-level edit API.
+     * What the rename does to other files, or creating, renaming or deleting one, goes to
+     * [LspClientHost.applyWorkspaceEdit] first, without this document's edits, and they are returned
+     * only if it says all of that was applied: the local half of a cross-file rename alone leaves
+     * every reference elsewhere pointing at a name that no longer exists. So a host that applies
+     * nothing, which is the default, gets empty here, and so does a rename that creates, renames or
+     * deletes this very document, whose edits cannot be put in order with that from here. The
+     * host is not asked if the text has changed since the server was: the editor would drop the
+     * edits for this document, for being about text that has moved on.
      */
     override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> {
         if (renameSupport == LspRenameSupport.Unsupported) return emptyList()
         val params = LspRenameParams(textDocument, positionOf(document, offset), newName)
-        val result = request("textDocument/rename", encode(LspRenameParams.serializer(), params)) ?: return emptyList()
+        var revision = 0L
+        val answer = requestOrFailure("textDocument/rename", encode(LspRenameParams.serializer(), params)) { revision = sync.textRevision }
+        val result = (answer as? LspResult.Value)?.element ?: return emptyList()
         val edit = decodeOrNull(LspWorkspaceEdit.serializer(), result) ?: return emptyList()
-        if (reachesBeyondThisDocument(edit)) return emptyList()
-        return toTextEdits(document, editsForThisDocument(edit))
+        val parts = partsOf(edit) ?: return emptyList()
+        if (parts.elsewhere != null && (sync.textRevision != revision || !client.applyThroughHost(parts.elsewhere))) return emptyList()
+        return toTextEdits(document, parts.here)
     }
 
     /**
@@ -725,7 +788,7 @@ class LspLanguageService(
     internal suspend fun foldingRanges(document: CodeDocument): List<FoldRange>? {
         if (supports("foldingRangeProvider")) sync.awaitOpen()
         if (!supports("foldingRangeProvider")) return emptyList()
-        val result = when (val outcome = foldingRangeAnswer()) {
+        val result = when (val outcome = requestPatiently("textDocument/foldingRange", documentParams())) {
             is LspResult.Unsupported -> return emptyList()
             is LspResult.Failed -> return null
             is LspResult.Value -> outcome.element as? JsonArray ?: return null
@@ -737,13 +800,16 @@ class LspLanguageService(
             .distinctBy { it.startLine }
     }
 
-    /** The server's answer, asking a few more times if it says to, as it may while it starts up. */
-    private suspend fun foldingRangeAnswer(): LspResult {
-        var outcome = requestOrFailure("textDocument/foldingRange", documentParams())
-        for (wait in FOLD_RETRY_MILLIS) {
+    /**
+     * [requestOrFailure], asking a few more times if the server says to, as it may while it starts
+     * up: for what is asked once per edit, where an unedited document gets no second chance.
+     */
+    private suspend fun requestPatiently(method: String, params: JsonElement, onTurn: () -> Unit = {}): LspResult {
+        var outcome = requestOrFailure(method, params, onTurn)
+        for (wait in RETRY_MILLIS) {
             if ((outcome as? LspResult.Failed)?.tryAgain != true) break
             delay(wait)
-            outcome = requestOrFailure("textDocument/foldingRange", documentParams())
+            outcome = requestOrFailure(method, params, onTurn)
         }
         return outcome
     }
@@ -903,42 +969,39 @@ class LspLanguageService(
         else -> emptyList()
     }
 
-    /** Collects the edits in [edit] that target [documentUri], from both `changes` and `documentChanges`. */
-    private fun editsForThisDocument(edit: LspWorkspaceEdit?): List<LspTextEdit> {
-        if (edit == null) return emptyList()
-        val result = mutableListOf<LspTextEdit>()
-        edit.changes?.get(documentUri)?.let { result.addAll(it) }
-        (edit.documentChanges as? JsonArray)?.forEach { entry ->
-            val obj = entry as? JsonObject ?: return@forEach
-            val uri = ((obj["textDocument"] as? JsonObject)?.get("uri") as? JsonPrimitive)?.contentOrNull
-            if (uri != documentUri) return@forEach
-            obj["edits"]?.let { edits ->
-                decodeOrNull(ListSerializer(LspTextEdit.serializer()), edits)?.let { result.addAll(it) }
-            }
-        }
-        return result
-    }
+    /** A workspace edit by who can carry it out: the editor [here], and the host [elsewhere], if anything is left for it. */
+    private class EditParts(val here: List<LspTextEdit>, val elsewhere: LspWorkspaceEdit?)
 
     /**
-     * Whether [edit] does anything this adapter cannot carry out: touch another file, or create,
-     * rename or delete one.
+     * [edit] divided between this document and everything else, from both `changes` and
+     * `documentChanges`. The editor applies text edits to one open document, and there is no honest
+     * way to perform half of a workspace edit, so a caller goes ahead only if every part is taken
+     * care of.
      *
-     * The editor applies text edits to one open document, so there is no honest way to perform
-     * half of a workspace edit. A rename that updates the declaration here and leaves every
-     * reference elsewhere untouched does not leave the project better off than not renaming at
-     * all — it leaves it broken — so callers reject the whole result instead of applying a part.
+     * Null when part of it cannot be: an entry too malformed to read, or a file operation on this
+     * document itself, which has to happen in order with its text edits.
      */
-    private fun reachesBeyondThisDocument(edit: LspWorkspaceEdit?): Boolean {
-        if (edit == null) return false
-        if (edit.changes?.keys?.any { it != documentUri } == true) return true
-        val changes = edit.documentChanges as? JsonArray ?: return false
-        return changes.any { entry ->
-            val obj = entry as? JsonObject ?: return@any true
-            val textDocument = obj["textDocument"] as? JsonObject
-                // No `textDocument` member means a CreateFile / RenameFile / DeleteFile operation.
-                ?: return@any true
-            (textDocument["uri"] as? JsonPrimitive)?.contentOrNull != documentUri
+    private fun partsOf(edit: LspWorkspaceEdit): EditParts? {
+        val here = edit.changes?.get(documentUri).orEmpty().toMutableList()
+        val otherChanges = edit.changes.orEmpty() - documentUri
+        val otherEntries = mutableListOf<JsonElement>()
+        for (entry in (edit.documentChanges as? JsonArray).orEmpty()) {
+            val change = entry as? JsonObject ?: return null
+            when {
+                (change["textDocument"] as? JsonObject)?.string("uri") == documentUri -> {
+                    val edits = change["edits"] ?: return null
+                    here += decodeOrNull(ListSerializer(LspTextEdit.serializer()), edits) ?: return null
+                }
+
+                // `uri` is a CreateFile's or a DeleteFile's, the others a RenameFile's.
+                listOf("uri", "oldUri", "newUri").any { change.string(it) == documentUri } -> return null
+
+                else -> otherEntries += entry
+            }
         }
+        if (otherChanges.isEmpty() && otherEntries.isEmpty()) return EditParts(here, elsewhere = null)
+        val elsewhere = LspWorkspaceEdit(otherChanges.ifEmpty { null }, JsonArray(otherEntries).takeIf { it.isNotEmpty() })
+        return EditParts(here, elsewhere)
     }
 
     /** Member by member, for the reason [LspClient] gives: these wire types would be public ABI as `@Serializable`. */
@@ -1011,8 +1074,11 @@ class LspLanguageService(
         /** LSP's `ServerNotInitialized`, `ContentModified` and `ServerCancelled`: nothing wrong with the request. */
         private val TRY_AGAIN_ERRORS = setOf(-32002, -32801, -32802)
 
-        /** The pauses before each further request for folds. An edit asks anew after those. */
-        private val FOLD_RETRY_MILLIS = listOf(1_000L, 2_000L, 4_000L)
+        /** The pauses before each further request of [requestPatiently]. An edit asks anew after those. */
+        private val RETRY_MILLIS = listOf(1_000L, 2_000L, 4_000L)
+
+        /** How long the text has to stand still for its diagnostics to be pulled. */
+        private const val DIAGNOSTICS_PULL_DEBOUNCE_MILLIS = 400L
 
         /**
          * The `completionProvider.triggerCharacters` a server declared, for

@@ -23,6 +23,7 @@ import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -299,6 +300,10 @@ class LspClient(
      * @return The server's reported `ServerCapabilities` (the `capabilities` member of the
      *   `InitializeResult`), or null if the response carried none. Also kept in
      *   [serverCapabilities].
+     *
+     * A server that answers with a `positionEncoding` other than `utf-16` stays connected, since
+     * text needs no positions, but [LspLanguageService] asks it nothing about a position: it is told
+     * of edits as whole text, and the host hears why through [LspClientHost.logMessage].
      */
     suspend fun initialize(rootUri: String?, capabilities: JsonElement = DefaultClientCapabilities): JsonElement? {
         val params = buildJsonObject {
@@ -310,6 +315,12 @@ class LspClient(
         // Before `initialized`: the server may ask the client something as soon as it reads that.
         val declared = (result as? JsonObject)?.get("capabilities")
         serverCapabilities = declared
+        if (!positionsAreUtf16(declared)) {
+            val encoding = (declared as? JsonObject)?.get("positionEncoding")
+            tellHost {
+                host.logMessage(MESSAGE_ERROR, "Positions in $encoding cannot be read: only whole-text sync and pushed diagnostics stay on")
+            }
+        }
         sendNotification("initialized", buildJsonObject { })
         return declared
     }
@@ -435,17 +446,36 @@ class LspClient(
     }
 
     /**
-     * Runs [block] on the client's scope, so that it ends with the connection's owner. A scope
-     * already cancelled gives back a job that has finished without running [block].
+     * Runs [block] on the client's scope until it finishes or the connection ends, so that it does
+     * not keep a host's scope from completing. A scope already cancelled gives back a job that has
+     * finished without running [block].
      */
-    internal fun launchOnScope(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
+    internal fun launchUntilClosed(block: suspend CoroutineScope.() -> Unit): Job {
+        val job = scope.launch(block = block)
+        val watching = invokeOnClosed { job.cancel() }
+        job.invokeOnCompletion { watching.dispose() }
+        return job
+    }
 
     /**
-     * Calls [handler] when the connection ends, at once if it already has, so that what was started
-     * with [launchOnScope] can end with it and not keep a host's scope from completing. Not called
-     * for a scope cancelled before there was a connection: that ends the coroutines by itself.
+     * Calls [handler] when the connection ends, at once if it already has. Not called for a scope
+     * cancelled before there was a connection: that ends the coroutines by itself.
      */
-    internal fun invokeOnClosed(handler: () -> Unit): DisposableHandle = connectionEnded.invokeOnCompletion { handler() }
+    private fun invokeOnClosed(handler: () -> Unit): DisposableHandle = connectionEnded.invokeOnCompletion { handler() }
+
+    /**
+     * Has the host carry out [edit], the part of a rename [LspLanguageService] cannot, in the caller's
+     * coroutine. The server is not waiting on this as it is for `workspace/applyEdit`, so a failure,
+     * or a cancellation of the host's own, can only mean the edit was not applied.
+     */
+    internal suspend fun applyThroughHost(edit: LspWorkspaceEdit): Boolean = try {
+        host.applyWorkspaceEdit(edit, label = null)
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+        false
+    } catch (_: Exception) {
+        false
+    }
 
     /**
      * Allocates a request id and registers [deferred] against it, unless the client is already
@@ -578,12 +608,52 @@ class LspClient(
         lock.withLock { pendingRequests.remove(id) }?.complete(response)
     }
 
-    private fun handleNotification(method: String, params: JsonElement?) {
-        if (method != "textDocument/publishDiagnostics" || params == null) return
-        val published = decodeOrNull(LspPublishDiagnosticsParams.serializer(), params) ?: return
+    /** Read member by member, for the reason [showMessageRequestResult] gives. Something malformed is dropped. */
+    private suspend fun handleNotification(method: String, params: JsonElement?) {
+        val notification = params as? JsonObject ?: return
+        when (method) {
+            "textDocument/publishDiagnostics" -> decodeOrNull(LspPublishDiagnosticsParams.serializer(), notification)?.let {
+                deliverDiagnostics(it.uri, it.version, it.diagnostics)
+            }
+
+            "window/showMessage" -> passMessage(notification, host::showMessage)
+
+            "window/logMessage" -> passMessage(notification, host::logMessage)
+
+            "\$/progress" -> {
+                val token = notification["token"]?.takeUnless { it is JsonNull } ?: return
+                val value = notification["value"] ?: return
+                tellHost { host.progress(token, value) }
+            }
+        }
+    }
+
+    private suspend fun passMessage(notification: JsonObject, pass: (type: Int, message: String) -> Unit) {
+        val type = (notification["type"] as? JsonPrimitive)?.intOrNull ?: return
+        val message = (notification["message"] as? JsonPrimitive)?.contentOrNull ?: return
+        tellHost { pass(type, message) }
+    }
+
+    /**
+     * Runs one of the host's notification members. A host that throws has only failed to hear
+     * something, and must not end the connection, nor must a cancellation that is not this
+     * coroutine's own: on the receive loop, that would end it too.
+     */
+    private suspend fun tellHost(notify: () -> Unit) {
+        try {
+            notify()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+        } catch (_: Exception) {
+            // As for a diagnostics listener, below.
+        }
+    }
+
+    /** Hands every listener diagnostics for [uri], pushed by the server or pulled from it. */
+    internal fun deliverDiagnostics(uri: String, version: Int?, diagnostics: List<LspDiagnostic>) {
         for (listener in diagnosticsListeners) {
             try {
-                listener(published.uri, published.version, published.diagnostics)
+                listener(uri, version, diagnostics)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -623,9 +693,11 @@ class LspClient(
      * - `client/registerCapability` / `client/unregisterCapability`: kept in [registrations] and
      *   acknowledged with a `null` result. [DefaultClientCapabilities] invites none, but a host may
      *   pass its own, and a server that registers text sync must then be sent the document.
-     * - `window/workDoneProgress/create`: acknowledged with a `null` result.
+     * - `window/workDoneProgress/create`: acknowledged with a `null` result. The host needs no word
+     *   of a token until the first `$/progress` for it, through [LspClientHost.progress].
      * - `window/showMessageRequest`: [LspClientHost.showMessageRequest]'s choice, or a `null` result
      *   for none.
+     * - `workspace/applyEdit`: [LspClientHost.applyWorkspaceEdit]'s answer.
      * - `workspace/configuration`: answered with one `null` per requested item, per spec, meaning
      *   "no configuration value for this scope".
      */
@@ -644,6 +716,8 @@ class LspClient(
             "window/workDoneProgress/create" -> JsonNull
 
             "window/showMessageRequest" -> showMessageRequestResult(params)
+
+            "workspace/applyEdit" -> applyEditResult(params)
 
             "workspace/configuration" -> workspaceConfigurationResult(params)
 
@@ -694,6 +768,18 @@ class LspClient(
         return buildJsonObject { put("title", choice) }
     }
 
+    /** Read member by member, for the reason [showMessageRequestResult] gives. An edit too malformed to read applies nothing. */
+    private suspend fun applyEditResult(params: JsonElement?): JsonElement {
+        val request = params as? JsonObject
+        val edit = request?.get("edit")?.let { decodeOrNull(LspWorkspaceEdit.serializer(), it) }
+        val label = (request?.get("label") as? JsonPrimitive)?.contentOrNull
+        val applied = edit != null && host.applyWorkspaceEdit(edit, label)
+        return buildJsonObject {
+            put("applied", applied)
+            if (!applied) put("failureReason", if (edit == null) "The edit could not be read" else "The edit was not applied in full")
+        }
+    }
+
     private fun workspaceConfigurationResult(params: JsonElement?): JsonElement {
         val itemCount = ((params as? JsonObject)?.get("items") as? JsonArray)?.size ?: 0
         return JsonArray(List(itemCount) { JsonNull })
@@ -718,6 +804,9 @@ class LspClient(
     private companion object {
         /** JSON-RPC: the receiver failed while handling the request. */
         const val INTERNAL_ERROR = -32603
+
+        /** LSP's `MessageType.Error`. */
+        const val MESSAGE_ERROR = 1
 
         /**
          * How long [shutdown] waits for the server's answer before going on to `exit`, and then

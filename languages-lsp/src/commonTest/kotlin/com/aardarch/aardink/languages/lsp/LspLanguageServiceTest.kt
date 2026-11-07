@@ -722,7 +722,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `rename refuses a workspace edit that reaches another file`() = withServer("val x = 1\nx.foo()") {
+    fun `rename refuses a workspace edit that reaches another file when no host takes it`() = withServer("val x = 1\nx.foo()") {
         val server = async {
             respond(
                 "textDocument/rename",
@@ -739,7 +739,7 @@ class LspLanguageServiceTest {
         server.await()
 
         // Renaming the declaration here and leaving the references in Other.kt alone would break
-        // the project; the editor cannot edit that file, so the whole rename is declined.
+        // the project; nothing here can edit that file, so the whole rename is declined.
         assertTrue(edits.isEmpty(), "a cross-file rename must not half-apply: was $edits")
     }
 

@@ -94,7 +94,10 @@ internal data class LspTextDocumentSync(
                 is JsonPrimitive -> fromKind(changeSyncOf(sync))
                 else -> LspTextDocumentSync()
             }
-            return registrations.fold(initial) { sync, registration -> sync.with(registration) }
+            val sync = registrations.fold(initial) { sync, registration -> sync.with(registration) }
+            // A range would mean something else to the server. A whole text means the same to any.
+            val readable = sync.change != LspChangeSync.Incremental || positionsAreUtf16(declared)
+            return if (readable) sync else sync.copy(change = LspChangeSync.Full)
         }
 
         private fun fromKind(kind: LspChangeSync): LspTextDocumentSync =
@@ -181,10 +184,18 @@ private class TextMirror(text: String) {
  * takes up, since a registration can arrive at any time. A host's own [open] and [sendWholeText] are
  * sent whatever it declared, as they always were: a host calling them has said what it wants.
  *
+ * [onTextSent] runs on the queue each time a text or a change of it has been written, and must
+ * return at once.
+ *
  * The queue lives from the first thing sent until [close] or the end of the client. A later session
  * gets a new queue, which starts once the last one has drained.
  */
-internal class LspDocumentSync(private val client: LspClient, private val documentUri: String, private val languageId: String) {
+internal class LspDocumentSync(
+    private val client: LspClient,
+    private val documentUri: String,
+    private val languageId: String,
+    private val onTextSent: () -> Unit = {},
+) {
 
     private sealed interface Item {
         /** The queue is gone and this will never run: release whoever is waiting for it. */
@@ -478,18 +489,14 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
         val channel = Channel<Item>(Channel.UNLIMITED, onUndeliveredElement = { it.dropped() })
         val previous = worker
         queue = channel
-        val job = client.launchOnScope {
+        // A worker waiting for more would outlive the client, and with it any scope a host gave it.
+        val job = client.launchUntilClosed {
             previous?.join()
             drain(channel)
         }
         worker = job
-        // A worker waiting for more would outlive the client, and with it any scope a host gave it.
-        val watching = client.invokeOnClosed { job.cancel() }
         // Not a `finally` in the coroutine: one launched into a cancelled scope never starts.
-        job.invokeOnCompletion {
-            watching.dispose()
-            channel.cancel()
-        }
+        job.invokeOnCompletion { channel.cancel() }
         return channel
     }
 
@@ -597,6 +604,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
                 ),
             ),
         )
+        onTextSent()
     }
 
     /** One version per batch, this adapter's own: `ContentChange.version` counts changes, as a Long. */
@@ -613,6 +621,7 @@ internal class LspDocumentSync(private val client: LspClient, private val docume
                 LspDidChangeTextDocumentParams(LspVersionedTextDocumentIdentifier(documentUri, version), events),
             ),
         )
+        onTextSent()
     }
 
     private companion object {

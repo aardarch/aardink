@@ -34,7 +34,14 @@ import kotlinx.serialization.json.JsonElement
 interface LspClientHost {
     /**
      * Applies [edit], which may reach several files, for `workspace/applyEdit`. [label] is the
-     * server's name for the change, for an undo stack.
+     * server's name for the change, for an undo stack. All of [edit] comes here, for documents with
+     * an attached [LspLanguageService] too: an editor state may only be edited on its own thread,
+     * and which that is, only the host knows.
+     *
+     * [LspLanguageService.rename] also comes here, with what its own document cannot carry out, so
+     * the [edit] leaves that document's text edits out and [label] is null. That call runs in the
+     * coroutine that asked for the rename, and on false, or an exception, the rename is given up:
+     * the edits for its own document are not applied either.
      *
      * @return True only if every part of [edit] was applied. The default applies nothing.
      */
