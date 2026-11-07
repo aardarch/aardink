@@ -25,7 +25,8 @@ public final class com/aardarch/aardink/languages/DeclarativeGrammar$Companion {
 
 public final class com/aardarch/aardink/languages/DeclarativeTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {
 	public static final field $stable I
-	public fun <init> (Lcom/aardarch/aardink/languages/DeclarativeGrammar;)V
+	public fun <init> (Lcom/aardarch/aardink/languages/DeclarativeGrammar;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/DeclarativeGrammar;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun canSpanLines (ILjava/util/List;)Z
 	public fun getCommentSyntax ()Lcom/aardarch/aardink/core/CommentSyntax;
 	public fun keyboardToolbarChars ()Ljava/util/List;

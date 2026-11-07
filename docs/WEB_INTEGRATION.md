@@ -204,14 +204,29 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 ```
 
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
-  `cases` with `@array`, `@default` and `@eos`, capture groups (each with a token name,
-  `{ token, next }` or `cases` of its own), `include`, `@rematch`, `defaultToken`, `ignoreCase`,
-  `tokenPostfix` and `@name` regex attributes. Not supported: `@brackets`, `nextEmbedded`,
-  `log`, `$1`-style substitutions in token names, and lookbehind, which is refused when the
-  language is registered because Kotlin/wasm's regex engine runs it at every position. The
-  grammar highlights a line at a time, so an edit rescans only until the lines below are back in
-  the state they were in. [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real
-  Monaco language over this way.
+  `cases`, capture groups (each with a token name, `{ token, next }` or `cases` of its own),
+  `include`, `@rematch`, `switchTo`, `goBack`, `@brackets` with a top-level `brackets`,
+  `defaultToken`, `ignoreCase`, `tokenPostfix` and `@name` regex attributes, each a group of its
+  own as in Monarch, in rules and in `~` guards. A `cases` guard is
+  `@default`, `@eos`, or a test as in Monarch: a subject of `$#` (the match, the default) or `$S0`,
+  `$S1` and so on (the state's name and its dotted parts), then `@array`, `~regex`, `==text` or
+  their opposites `!@`, `!~` and `!=`, so `$#==$S2` closes on the text that opened. `next` and
+  `switchTo` can use `$#` and `$Sn` as well, as in `@string.$#`; if the grammar has no state of
+  that name the stack stays as it is. `log` is accepted and ignored. A top-level `brackets` is
+  checked only when an action uses `@brackets`; otherwise it is an ordinary string or array.
+  Refused when the language is registered: lookbehind, because Kotlin/wasm's regex engine runs it
+  at every position, and `$` in a token name, because names are fixed when the grammar is read.
+  Choose between fixed names with `cases` where a Monaco grammar has `string.$S2`. `goBack` is
+  refused in a capture group's action, and never goes back further than the match began.
+  `nextEmbedded` hands the text to the grammar of the language registered with that id, before or
+  after this one, until a rule of the state with `nextEmbedded: '@pop'` matches. With no such
+  language the text stays on this grammar's rules, and a built-in language, having no grammar,
+  cannot be embedded. Each grammar's tokens carry its own `tokenPostfix`. Not supported:
+  `$1`-style capture groups in guards, `next` and `nextEmbedded`, and `$Sn` in a rule's regex,
+  which stay literal text. The grammar highlights a line at a time, so an edit
+  rescans only until the lines below are back in the state they were in.
+  [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco language over this
+  way.
 - **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.aardflex`
   takes the theme's `tag.aardflex` rule, else its `tag` rule, else the built-in themes' colour for
   Monaco's standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). A

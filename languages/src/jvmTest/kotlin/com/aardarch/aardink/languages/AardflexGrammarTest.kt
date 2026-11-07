@@ -32,6 +32,11 @@ import kotlin.test.assertTrue
  * (copied to `resources/aardflex/`), so a grammar feature they rely on cannot break without
  * Aardink noticing. The golden tokens are the ones the web app's Aardink browser test writes and
  * the Android app's unit test reads.
+ *
+ * The same grammar also runs with its expression state moved out into a grammar of its own, as the
+ * aardflex expression language will be: `aardflex-xml-embedding.grammar.json` is the shipped grammar
+ * with `nextEmbedded` where it entered `@expression`, and `aardflex-expression.grammar.json` is that
+ * state. Both have to find the same tokens.
  */
 class AardflexGrammarTest {
 
@@ -41,12 +46,17 @@ class AardflexGrammarTest {
             .use { it.readText() }
             .replace("\r\n", "\n")
 
-    private val aardflex = DeclarativeTokenizer(DeclarativeGrammar.parse(resource("aardflex-xml.grammar.json")))
+    private val shipped = DeclarativeGrammar.parse(resource("aardflex-xml.grammar.json"))
+    private val aardflex = DeclarativeTokenizer(shipped)
+
+    private val embedding = DeclarativeGrammar.parse(resource("aardflex-xml-embedding.grammar.json"))
+    private val expression = DeclarativeGrammar.parse(resource("aardflex-expression.grammar.json"))
+    private val embedded = DeclarativeTokenizer(embedding) { id -> expression.takeIf { id == "aardflex-expression" } }
 
     /** Per line, each named token as (name, text): the pairs aardflex's Monaco tests checked. */
-    private fun aardflexTokens(text: String): List<List<Pair<String, String>>> {
+    private fun aardflexTokens(text: String, tokenizer: DeclarativeTokenizer = aardflex): List<List<Pair<String, String>>> {
         val lineStarts = listOf(0) + text.indices.filter { text[it] == '\n' }.map { it + 1 }
-        val tokens = aardflex.tokenizeFull(text).filter { it.end > it.start }
+        val tokens = tokenizer.tokenizeFull(text).filter { it.end > it.start }
         return lineStarts.map { start ->
             val end = text.indexOf('\n', start).let { if (it < 0) text.length else it }
             tokens.filter { it.start >= start && it.end <= end }
@@ -104,6 +114,54 @@ class AardflexGrammarTest {
             val text = resource("fixtures/$file")
             assertEquals(expected(lines.jsonArray), golden(text, aardflex.tokenizeFull(text)), "tokens differ for $file")
         }
+    }
+
+    @Test
+    fun `the expression language as an embedded grammar finds the golden tokens`() {
+        val fixtures = Json.parseToJsonElement(resource("aardflex-xml.tokens.json")).jsonObject
+        assertTrue(fixtures.isNotEmpty(), "no fixtures in aardflex-xml.tokens.json")
+        for ((file, lines) in fixtures) {
+            val text = resource("fixtures/$file")
+            assertEquals(expected(lines.jsonArray), golden(text, embedded.tokenizeFull(text)), "tokens differ for $file")
+            // Not only the golden shape, which folds names together: the very same tokens.
+            assertEquals(aardflex.tokenizeFull(text), embedded.tokenizeFull(text), "tokens differ for $file")
+        }
+    }
+
+    @Test
+    fun `the expression language as an embedded grammar really is another grammar`() {
+        val line = "<text>{dt:hour | toWords}</text>"
+        // Without it, the tags still highlight and the expression has only its closing brace.
+        val alone = aardflexTokens(line, DeclarativeTokenizer(embedding)).single()
+        assertTrue("tag.aardflex.xml" to "text" in alone, "$alone")
+        assertEquals(listOf("delimiter.expression.xml" to "}"), alone.filter { it.first.contains("expression") })
+        assertTrue(alone.none { it.first == "function.transform.xml" }, "$alone")
+        assertTrue("function.transform.xml" to "toWords" in aardflexTokens(line, embedded).single())
+    }
+
+    @Test
+    fun `tokenNames stop at the grammar, so a colour check has to ask both`() {
+        assertTrue("function.transform.xml" in shipped.tokenNames)
+        assertTrue("function.transform.xml" !in embedding.tokenNames)
+        assertTrue("function.transform.xml" in expression.tokenNames)
+        assertEquals(shipped.tokenNames, embedding.tokenNames + expression.tokenNames)
+    }
+
+    @Test
+    fun `an edit inside an embedded expression rescans its own line`() {
+        val text = resource("fixtures/expressions.xml")
+        val lines = text.split('\n')
+        val line = lines.indexOfFirst { '{' in it }
+        val lineStart = lines.take(line).sumOf { it.length + 1 }
+        val at = lineStart + lines[line].indexOf('{') + 1
+        val edited = text.substring(0, at) + "x" + text.substring(at)
+        val lineEnd = edited.indexOf('\n', at).let { if (it < 0) edited.length else it }
+        val partial = embedded.tokenizeLines(edited, line..line, embedded.tokenizeFull(text))
+        assertTrue(partial.all { it.end <= lineEnd }, "stayed on line $line: ${partial.last()}")
+        assertEquals(
+            DeclarativeTokenizer(shipped).tokenizeFull(edited).filter { it.start >= lineStart && it.end <= lineEnd },
+            partial.filter { it.end > it.start },
+        )
     }
 
     // The cases of aardflex-web-app's former src/editor/setup.test.ts, which checked them against Monaco.

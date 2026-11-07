@@ -392,8 +392,17 @@ private fun JsonObject.int(key: String): Int? = (this[key] as? JsonPrimitive)?.t
 /** The value at [key], unless it is absent or `null`. */
 private fun JsonObject.given(key: String): JsonElement? = this[key]?.takeIf { it !is JsonNull }
 
-/** The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. */
-internal fun languageFrom(definitionJson: String, providers: WebLanguageProviders, registry: LanguageRegistry): LanguageDefinition {
+/**
+ * The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. Its grammar
+ * joins [grammars], by the language's id, for any grammar's `nextEmbedded` to find. Its tokenizer
+ * reads [grammars] each time it needs one, not now, so a language can embed one registered after it.
+ */
+internal fun languageFrom(
+    definitionJson: String,
+    providers: WebLanguageProviders,
+    registry: LanguageRegistry,
+    grammars: MutableMap<String, DeclarativeGrammar>,
+): LanguageDefinition {
     val root = parsed(definitionJson) as? JsonObject ?: throw IllegalArgumentException("a language is a JSON object")
     val id = root.string("id")?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("id: a language needs an id")
     val base = root.string("extends")?.let { registry.byId(it) ?: throw IllegalArgumentException("extends: no language with id '$it'") }
@@ -432,12 +441,13 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         id = id,
         displayName = root.string("displayName") ?: id,
         fileExtensions = extensions,
-        tokenizer = DeclarativeTokenizer(grammar),
+        tokenizer = DeclarativeTokenizer(grammar) { grammars[it] },
         // A language with no folding of its own folds by indentation, as VS Code does.
         foldingProvider =
         base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
         languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
     )
+    grammars[id] = grammar
     return definition
 }
 
