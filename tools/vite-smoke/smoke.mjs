@@ -244,6 +244,13 @@ async function languageServerCheck(page) {
     await sleep(300);
     checks['a host\'s provider still answers, ahead of the server'] = (await value()) === 'open before.served.hosted';
 
+    setPhase('language server: typing');
+    await page.keyboard.type('\'');
+    await sleep(100);
+    checks['a language that closes nothing keeps a server\'s generic pairs out of typing'] = (await value()) === 'open before.served.hosted\'';
+    await page.keyboard.press('Backspace');
+    await sleep(100);
+
     setPhase('language server: hover');
     const hovers = server.count('textDocument/hover');
     await page.mouse.move(120, 12);
