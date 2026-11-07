@@ -291,6 +291,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     val inline = InlineContent(state, ::inlineChanged)
 
     private val inlineSourceChanged: () -> Unit = inline::changed
+    private val ghostChanged: (List<Int>) -> Unit = ::inlineChanged
 
     /** A click on injected text with an [Injection.id], on a line. */
     var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = inline::clicked
@@ -318,6 +319,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     fun attach() {
         document.addChangeListener(this)
         state.inlineListeners += inlineSourceChanged
+        state.ghostListeners += ghostChanged
         inline.changed()
         structureDirty = true
     }
@@ -325,6 +327,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     fun detach() {
         document.removeChangeListener(this)
         state.inlineListeners -= inlineSourceChanged
+        state.ghostListeners -= ghostChanged
     }
 
     /**
@@ -403,6 +406,11 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             scroll.contentHeight = rowsHeight(metrics)
             scroll.placeY(anchorY(metrics))
         }
+    }
+
+    /** Counts [line]'s rows from its layout now, for a move that cannot wait for the layout pass to do so. */
+    fun measureRows(line: Int) {
+        if (style != null && line in 0 until lineMap.lineCount) lineMap.setRows(line, layoutFor(line).lineCount)
     }
 
     /**

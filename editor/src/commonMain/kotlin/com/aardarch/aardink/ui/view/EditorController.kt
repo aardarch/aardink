@@ -413,6 +413,12 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     }
 
     private fun vertical(select: Boolean, rows: Int): Boolean {
+        // Going anywhere ends ghost text, and its rows are not rows to go to: text it pushes down
+        // is on the caret's own line, and Down would stop there. So it goes first.
+        state.inlineCompletions.shown?.let { ghost ->
+            state.inlineCompletions.clear()
+            view.measureRows(ghost.line)
+        }
         val primary = state.selection
         val x = preferredX ?: view.caretX(primary.end)
         state.moveSelections(select) { range -> view.verticalMove(range.end, rows, if (range == primary) x else null) }

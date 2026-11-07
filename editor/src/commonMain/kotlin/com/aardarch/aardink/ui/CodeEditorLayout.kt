@@ -86,6 +86,8 @@ import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.Location
@@ -156,6 +158,11 @@ import kotlin.math.roundToInt
  * @param onOpenLink Called with the target of a link opened by Ctrl/Cmd+click in the text, or by a
  *   click in hover, signature help or a completion's detail pane. Nothing else opens one. Left
  *   out, a link in any of those shows as its text.
+ * @param inlineCompletionProvider What offers ghost text at the caret, once typing pauses: Tab accepts
+ *   it, Alt+] and Alt+[ go through what is on offer, Escape dismisses it, and typing what it says
+ *   keeps it. Nothing shows in a read-only editor, with a selection or several carets, in a snippet,
+ *   or while an input method composes. An open completion list at the caret hides it, as in Monaco,
+ *   and takes Tab; the touch strip does not, as a phone would otherwise never show any.
  */
 @Composable
 fun CodeEditorLayout(
@@ -179,6 +186,7 @@ fun CodeEditorLayout(
     contextMenuItems: List<EditorMenuItem> = emptyList(),
     onOpenLink: (target: String) -> Unit = NoOpenLink,
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
+    inlineCompletionProvider: InlineCompletionProvider? = null,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -230,6 +238,7 @@ fun CodeEditorLayout(
             touchMenuItems = touchMenuItems,
             contextMenuItems = contextMenuItems,
             onOpenLink = onOpenLink,
+            inlineCompletionProvider = inlineCompletionProvider,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -267,6 +276,7 @@ private fun CodeEditorLayoutContent(
     touchMenuItems: List<EditorMenuItem>,
     contextMenuItems: List<EditorMenuItem>,
     onOpenLink: (target: String) -> Unit,
+    inlineCompletionProvider: InlineCompletionProvider?,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
@@ -809,6 +819,30 @@ private fun CodeEditorLayoutContent(
             show(InlineContent.askForLenses(service, document, state.computeDispatcher, showEarly = if (first) show else { _ -> }))
             answered = version
             if (first) firstAnswers++
+        }
+    }
+
+    // ── Inline completions: what the provider offers at the caret, once typing pauses ─
+    LaunchedEffect(state, inlineCompletionProvider, options.readOnly) {
+        val completions = state.inlineCompletions
+        // What is on offer came from a provider, and a change of either ends it.
+        completions.clear()
+        val provider = inlineCompletionProvider.takeUnless { options.readOnly }
+        completions.provided = provider != null
+        if (provider == null) return@LaunchedEffect
+        // Latest: a newer ask, or none, calls off the pause and a provider still at work.
+        snapshotFlow { completions.ask }.collectLatest { ask ->
+            if (ask == null) return@collectLatest
+            if (!ask.now) delay(INLINE_COMPLETIONS_DEBOUNCE_MS)
+            if (state.exceedsAnalysisLimit) return@collectLatest
+            val document = state.document.snapshot()
+            completions.answer(ask, document.version, askForInlineCompletions(provider, document, ask.caret, state))
+        }
+    }
+    DisposableEffect(state) {
+        onDispose {
+            state.inlineCompletions.provided = false
+            state.inlineCompletions.clear()
         }
     }
 
@@ -1385,6 +1419,8 @@ private fun CodeEditorLayoutContent(
 
             is EditorCommand.Reveal -> true.also { view.requestReveal(command.offset.coerceIn(0, state.document.length), command.center) }
 
+            is EditorCommand.CycleInlineCompletion -> state.inlineCompletions.cycle(command.forward)
+
             else -> false
         }
     }
@@ -1411,8 +1447,12 @@ private fun CodeEditorLayoutContent(
             state.uiCommandsAvailable = emptySet()
         }
     }
+    // Ghost text gives way to the list at the caret. Derived, and read here and not in the side
+    // effect: this scope has to run when the list comes and goes, and for nothing else about it.
+    val listAtCaret = remember { derivedStateOf { completionAtCaret && showCompletion && completionItems.isNotEmpty() } }.value
     SideEffect {
         state.readOnly = options.readOnly
+        state.inlineCompletions.hideForList(listAtCaret)
         state.uiCommandHandler = runUiCommand
         if (state.uiCommandsAvailable != uiCommands) state.uiCommandsAvailable = uiCommands
         state.formattingOptions = FormattingOptions(options.tabSize, options.insertSpaces)
@@ -1443,6 +1483,11 @@ private fun CodeEditorLayoutContent(
                 when {
                     showCompletion -> {
                         showCompletion = false
+                        true
+                    }
+
+                    state.inlineCompletions.shown != null -> {
+                        state.inlineCompletions.clear()
                         true
                     }
 
@@ -1927,6 +1972,20 @@ private suspend fun currentFoldableRanges(state: CodeEditorState, provider: Fold
     return ranges.takeIf { state.document.version == document.version }
 }
 
+/** What [provider] offers at [caret] in [document]; nothing if it fails, which costs its answer and not the editor. */
+private suspend fun askForInlineCompletions(
+    provider: InlineCompletionProvider,
+    document: CodeDocument,
+    caret: Int,
+    state: CodeEditorState,
+): List<InlineCompletion> = try {
+    withContext(state.computeDispatcher) { provider.provideInlineCompletions(document, caret) }
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    emptyList()
+}
+
 // ── Completion acceptance ──────────────────────────────────────────────────────
 
 /** [item] as [service] resolves it, or as it is if that fails: the list works without an answer. */
@@ -2054,6 +2113,9 @@ private const val INLAY_HINTS_DEBOUNCE_MS = 300L
 
 /** How long typing, or scrolling to a lens still to be worked out, has to pause before asking for code lenses. */
 private const val CODE_LENSES_DEBOUNCE_MS = 300L
+
+/** How long typing has to pause before an inline completion provider is asked. */
+private const val INLINE_COMPLETIONS_DEBOUNCE_MS = 300L
 
 /** The smallest and largest font size zooming goes to, in sp. */
 private const val MIN_FONT_SIZE = 6f

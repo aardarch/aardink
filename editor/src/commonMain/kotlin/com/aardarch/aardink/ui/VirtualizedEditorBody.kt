@@ -182,6 +182,8 @@ internal fun VirtualizedEditorBody(
     // Code's, to tell it from what surrounds it.
     val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
     val hintStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f), background = textColor.copy(alpha = 0.08f)) }
+    // Fainter than either, as Monaco's `editorGhostText.foreground`, and with no ground: it is about to be text.
+    val ghostStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.45f)) }
     // Whether the mouse is on text a click does something on: asked as it moves, changing rarely.
     val onClickable by remember(controller, view) {
         derivedStateOf { controller.hoverAt?.let { view.offsetAt(it).injection?.id != null } == true }
@@ -190,7 +192,7 @@ internal fun VirtualizedEditorBody(
     val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
-        view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle)
+        view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle, ghostStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
         controller.clipboard = clipboard

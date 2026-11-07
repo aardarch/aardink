@@ -114,7 +114,9 @@ data class EditorKeyBinding(val chord: List<KeyChord>, val command: EditorComman
 /**
  * The editor's own keys for its commands, as data a host can show (a menu's shortcuts) and copy:
  * [EditorOptions.keyBindings] adds to them and overrides them. Moving the caret, typing, the
- * clipboard, Tab, Enter and Escape are the editor's fixed keys and not listed.
+ * clipboard, Enter, Escape and Tab's indenting are the editor's fixed keys and not listed. A binding
+ * whose command cannot run now leaves its key to them: Tab runs
+ * [EditorCommand.AcceptInlineCompletion] only while ghost text shows, and indents otherwise.
  */
 object EditorKeyBindings {
 
@@ -185,6 +187,9 @@ object EditorKeyBindings {
         add(bind(KeyChord(Key.Minus, ctrlCmd = true), EditorCommand.ZoomOut))
         add(bind(KeyChord(Key.NumPadSubtract, ctrlCmd = true), EditorCommand.ZoomOut))
         add(bind(KeyChord(Key.Zero, ctrlCmd = true), EditorCommand.ZoomReset))
+        add(bind(KeyChord(Key.Tab), EditorCommand.AcceptInlineCompletion))
+        add(bind(KeyChord(Key.RightBracket, alt = true), EditorCommand.CycleInlineCompletion(forward = true)))
+        add(bind(KeyChord(Key.LeftBracket, alt = true), EditorCommand.CycleInlineCompletion(forward = false)))
     }
 
     private val MAC = common(isMac = true)

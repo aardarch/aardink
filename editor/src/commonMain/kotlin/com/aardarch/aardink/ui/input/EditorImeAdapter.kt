@@ -89,8 +89,14 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     private var depth = 0
 
     /** The text being composed, in document offsets, or null. */
-    var composition by mutableStateOf<TextRange?>(null)
-        private set
+    var composition: TextRange?
+        get() = composed
+        private set(value) {
+            composed = value
+            state.inlineCompletions.setComposing(value != null)
+        }
+
+    private var composed by mutableStateOf<TextRange?>(null)
 
     /** The language service for the typing rules; read when an edit arrives. */
     var service: () -> LanguageService? = { null }

@@ -128,10 +128,11 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     private var hintStyle: SpanStyle? = null
     private var decorationStyle: SpanStyle? = null
     private var lensStyle: SpanStyle? = null
+    private var ghostStyle: SpanStyle? = null
 
     /** Whether no line has anything to show. */
     val isEmpty: Boolean
-        get() = lenses.all.isEmpty() && current().let { it.lines.isEmpty() && it.wide.isEmpty() }
+        get() = lenses.all.isEmpty() && state.inlineCompletions.shown == null && current().let { it.lines.isEmpty() && it.wide.isEmpty() }
 
     /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
     val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
@@ -148,8 +149,12 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
             forgetLensLines()
         }
 
-    /** How a hint's label, a decoration's text with no colour of its own, and a lens's row are drawn. */
-    fun setStyles(hint: SpanStyle?, decoration: SpanStyle?, lens: SpanStyle? = null) {
+    /** How a hint's label, a decoration's text with no colour of its own, a lens's row and ghost text are drawn. */
+    fun setStyles(hint: SpanStyle?, decoration: SpanStyle?, lens: SpanStyle? = null, ghost: SpanStyle? = null) {
+        if (ghost != ghostStyle) {
+            ghostStyle = ghost
+            state.inlineCompletions.shown?.let { onChanged(listOf(it.line)) }
+        }
         if (hint == hintStyle && decoration == decorationStyle && lens == lensStyle) return
         val restyled = lens != lensStyle
         hintStyle = hint
@@ -237,9 +242,53 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         return LineInjections.of(row + others?.items.orEmpty(), others?.colors.orEmpty()).also { lensLines[line] = it }
     }
 
+    /**
+     * What [line] shows, [others] being all but its ghost text. That comes first among what is at its
+     * column, so that it follows the caret straight away, with a hint there after it.
+     */
+    private fun withGhost(line: Int, others: LineInjections?): LineInjections? {
+        val ghost = state.inlineCompletions.shown?.takeIf { it.line == line } ?: return others
+        val lineStart = document.lineStart(line)
+        val items = ghost.pieces.map { piece ->
+            val column = piece.offset - lineStart
+            Injection(column, ghostRows(piece.text, column), ghostStyle)
+        }
+        return LineInjections.of(items + others?.items.orEmpty(), others?.colors.orEmpty())
+    }
+
+    /**
+     * [text] from [column] on as a layout can show it: an injected tab gets no stop of its own, so
+     * each is the spaces to its stop, and the line breaks stay, for the rows they add.
+     */
+    private fun ghostRows(text: String, column: Int): String {
+        if (text.none { it < ' ' && it != '\n' }) return text
+        return buildString(text.length) {
+            var at = column
+            for (char in text) {
+                when {
+                    char == '\n' -> {
+                        append(char)
+                        at = -1
+                    }
+
+                    char == '\t' && tabColumns > 0 -> {
+                        val width = tabColumns - at % tabColumns
+                        repeat(width) { append(' ') }
+                        at += width - 1
+                    }
+
+                    char == '\t' -> append(char)
+
+                    else -> append(if (char < ' ') ' ' else char)
+                }
+                at++
+            }
+        }
+    }
+
     private fun lineAnswer(line: Int): LineInjections? {
         val shown = current()
-        val own = withLenses(line, shown.lines[line])
+        val own = withGhost(line, withLenses(line, shown.lines[line]))
         if (shown.wide.isEmpty()) return own
         val lineStart = document.lineStart(line)
         val lineEnd = document.lineEnd(line)
