@@ -25,6 +25,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -137,6 +138,14 @@ class LspClient(
     /** Completes once [closed] is set, after [lock] is released; see [invokeOnClosed]. */
     private val connectionEnded = CompletableDeferred<Unit>()
 
+    /**
+     * True once nothing can come of this server: [initialize] did not get its answer and has not
+     * been tried again, or the connection ended. For what would otherwise wait for a document that
+     * only opens after the handshake. A server that never answers [initialize] is neither, until the
+     * host gives up on it.
+     */
+    internal val givenUp = MutableStateFlow(false)
+
     /** Guarded by [lock]; see [claimTransportClose]. */
     private var transportClosed = false
 
@@ -222,7 +231,10 @@ class LspClient(
      * close can block for as long as a hung server holds a write up.
      */
     private fun afterLock(mustClose: Boolean) {
-        if (closed) connectionEnded.complete(Unit)
+        if (closed) {
+            givenUp.value = true
+            connectionEnded.complete(Unit)
+        }
         if (mustClose) transport.close()
     }
 
@@ -326,7 +338,14 @@ class LspClient(
             put("rootUri", rootUri?.let { JsonPrimitive(it) } ?: JsonNull)
             put("capabilities", capabilities)
         }
-        val result = sendRequest("initialize", params)
+        givenUp.value = false
+        var answered = false
+        val result = try {
+            sendRequest("initialize", params).also { answered = true }
+        } finally {
+            // A refusal, a lost connection or a host's own timeout: no document will follow this.
+            if (!answered) givenUp.value = true
+        }
         // Before `initialized`: the server may ask the client something as soon as it reads that.
         val declared = (result as? JsonObject)?.get("capabilities")
         serverCapabilities = declared

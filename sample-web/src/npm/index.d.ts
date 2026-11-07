@@ -60,6 +60,8 @@ export interface AardinkOptions {
   breadcrumbs?: boolean;
   /** The font's ligatures; on by default. */
   fontLigatures?: boolean;
+  /** Colours what a language server's semantic tokens say over the syntax's. Off by default. */
+  semanticHighlighting?: boolean;
 }
 
 /**

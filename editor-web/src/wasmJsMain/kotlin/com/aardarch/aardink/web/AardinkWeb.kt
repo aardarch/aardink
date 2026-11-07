@@ -1427,6 +1427,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     colorDecorators = options.colorDecorators,
                     breadcrumbs = options.breadcrumbs,
                     fontLigatures = options.fontLigatures,
+                    semanticHighlighting = options.semanticHighlighting,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },

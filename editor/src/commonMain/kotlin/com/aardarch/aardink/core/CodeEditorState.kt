@@ -115,6 +115,44 @@ class CodeEditorState(
     }
 
     /**
+     * The language service's semantic tokens, a layer over [tokenStore] that a line's layout merges
+     * in. It moves with edits as that store does. Null while there is no answer to keep, and while
+     * [EditorOptions.semanticHighlighting][com.aardarch.aardink.ui.EditorOptions] is off, so that
+     * an edit then costs nothing more than it did without it.
+     */
+    internal var semanticStore: TokenStore? = null
+        private set
+
+    /** Bumped when [semanticStore] changes what any line shows, as [tokenVersion] is for [tokenStore]. */
+    internal var semanticVersion by mutableIntStateOf(0)
+        private set
+
+    /** The language service whose answers [semanticStore] holds, set by the layout. */
+    internal var semanticSource: LanguageService? = null
+
+    /**
+     * Shows [tokens], the language service's answer about [snapshot], unless an edit overtakes them.
+     * No tokens is no layer: most services have none to give, and an edit should not pay for that.
+     */
+    internal suspend fun applySemanticTokens(tokens: List<Token>, snapshot: CodeDocument) {
+        if (document.version != snapshot.version) return
+        if (tokens.isEmpty()) {
+            clearSemanticTokens()
+            return
+        }
+        val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
+        if (store.overlay(tokens, snapshot)) semanticVersion++
+    }
+
+    /** Back to the syntax colours alone. */
+    internal fun clearSemanticTokens() {
+        val store = semanticStore ?: return
+        store.close()
+        semanticStore = null
+        semanticVersion++
+    }
+
+    /**
      * How the editor indents, from [EditorOptions.tabSize][com.aardarch.aardink.ui.EditorOptions]
      * and `insertSpaces`; set by the layout from its options, and passed to the language service
      * for Enter and formatting.

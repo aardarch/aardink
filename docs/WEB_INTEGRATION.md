@@ -373,6 +373,7 @@ files to apply them to.
 | `overviewRulerLanes` | `overviewRulerLanes` | Above 0 shows the ruler; off by default. |
 | `occurrencesHighlight`, `linkedEditing`, `colorDecorators` | The same | Off by default. |
 | `fontLigatures` | The same | On by default. |
+| `'semanticHighlighting.enabled'` | `semanticHighlighting` | Off by default. Colours from a language server over the syntax's; there is no JS provider for them. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
 | `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |

@@ -395,6 +395,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         // Reads the pass depends on.
         state.textVersion
         state.tokenVersion
+        state.semanticVersion
         revealRequests
         injectionVersion
         val folded = foldState?.foldedRanges().orEmpty()
@@ -588,24 +589,32 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     private fun layoutFor(line: Int, text: String): LineLayout {
         val style = checkNotNull(style) { "layoutFor before the view has a style" }
         val tokens = if (state.exceedsAnalysisLimit) null else state.tokenStore.lineTokens(line)
+        // Nothing here and no layer at all are the same layout: turning the layer on costs none.
+        val semantic = if (tokens == null) null else state.semanticStore?.lineTokens(line)?.takeIf { it.size > 0 }
         val fold = folds.startingAt(line)
         // Bracket colours depend on the depth the line starts at: part of what the layout shows.
         val bracketStyles = style.bracketStyles?.takeIf { tokens != null && it.isNotEmpty() }
         val depth = if (bracketStyles != null) state.brackets.depthAtLineStart(line) % bracketStyles.size else -1
         val injected = injections?.invoke(line)
-        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth, injected))) {
-            measureLine(style, line, text, tokens, fold, bracketStyles, depth, injected)
+        return layouts.getOrPut(LineLayoutCache.Key(text, tokens, LineDecoration(fold?.placeholder, depth, injected, semantic))) {
+            measureLine(style, line, text, tokens, semantic, fold, bracketStyles, depth, injected)
         }
     }
 
-    /** What a line's layout shows besides its text and tokens. */
-    private data class LineDecoration(val placeholder: String?, val bracketDepth: Int, val injections: LineInjections?)
+    /** What a line's layout shows besides its text and tokens; [semantic] is by identity, as they are. */
+    private data class LineDecoration(
+        val placeholder: String?,
+        val bracketDepth: Int,
+        val injections: LineInjections?,
+        val semantic: TokenStore.LineTokens?,
+    )
 
     private fun measureLine(
         style: ViewStyle,
         line: Int,
         text: String,
         tokens: TokenStore.LineTokens?,
+        semantic: TokenStore.LineTokens?,
         fold: FoldRange?,
         bracketStyles: List<SpanStyle>?,
         startDepth: Int,
@@ -633,6 +642,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
                 if (to > from) builder.addColumnStyle(map, spanStyle, from, to)
             }
         }
+        if (semantic != null && tokens != null) builder.addSemanticStyles(map, style, semantic, tokens, text)
         if (bracketStyles != null) {
             // A pair shares a colour: an opening bracket takes the colour of the depth it opens,
             // its closing one the colour of the depth it closes. Only the depth modulo the
@@ -675,6 +685,35 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         for (i in from until glyphs) builder.append(INDENT_GLYPH)
         val start = max(from, glyphs)
         if (to > start) builder.append(text, start, to)
+    }
+
+    /**
+     * What [style] gives each run of [semantic], over the spans [syntax] already added on a line
+     * reading [text]. Where spans overlap, Skia's text takes the one that starts last, and only
+     * between spans that start together the one added last. So a run is cut at each syntax run
+     * that starts inside it: every piece starts with the syntax span under it, and comes after it.
+     */
+    private fun AnnotatedString.Builder.addSemanticStyles(
+        map: OffsetMap,
+        style: ViewStyle,
+        semantic: TokenStore.LineTokens,
+        syntax: TokenStore.LineTokens,
+        text: String,
+    ) {
+        var next = 0
+        for (i in 0 until semantic.size) {
+            val spanStyle = style.tokenStyle(semantic.types[i]) ?: continue
+            var from = semantic.start(i).coerceIn(0, text.length)
+            val to = semantic.end(i).coerceIn(from, text.length)
+            while (next < syntax.size && syntax.start(next) < to) {
+                val cut = syntax.start(next++)
+                if (cut > from) {
+                    addColumnStyle(map, spanStyle, from, cut)
+                    from = cut
+                }
+            }
+            if (to > from) addColumnStyle(map, spanStyle, from, to)
+        }
     }
 
     /** [spanStyle] over columns [from, to), leaving injected text between them its own style. */

@@ -30,6 +30,7 @@ import com.aardarch.aardink.core.FoldingProvider
  * This can go to the editor before the server is ready. The first request waits for the document
  * to open, through [LspLanguageService.attach] or [LspLanguageService.didOpen], and the editor asks
  * again only after an edit, so a host that opens the document some other way gets no folds. A
+ * document that will not open, because the handshake failed or the connection ended, is no answer. A
  * server that says to try later, as one still starting up may, is asked a few more times.
  */
 class LspFoldingProvider(private val service: LspLanguageService) : FoldingProvider {

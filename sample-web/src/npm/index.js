@@ -256,7 +256,7 @@ function toKotlinOptions(options) {
   if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
   if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
-  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs']) {
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting']) {
     if (options[key] !== undefined) out[key] = !!options[key];
   }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {

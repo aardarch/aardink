@@ -216,6 +216,16 @@ interface LanguageService {
     suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> = emptyList()
 
     /**
+     * What is known about the tokens of [document] beyond its syntax (that a name is a parameter, a
+     * type, a constant), for the editor to colour over its syntax tokens
+     * ([com.aardarch.aardink.ui.EditorOptions.semanticHighlighting]). Each token's type is looked up
+     * in the theme as a syntax token's is; where the theme has no colour for it, or no token covers
+     * a character, the syntax colour stays. The editor asks after a pause in typing, and moves
+     * the tokens with the text in between. The default is none.
+     */
+    suspend fun semanticTokens(document: CodeDocument): List<Token> = emptyList()
+
+    /**
      * Characters that should trigger a completion request when typed.
      * The UI calls [completions] when the character just typed is in this set.
      */
