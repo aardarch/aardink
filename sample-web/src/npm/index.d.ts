@@ -791,7 +791,8 @@ export interface AardinkInlineCompletions {
  * Without `range`, it replaces the word at the caret and the rest of the line, as in Monaco. Where
  * Monaco then shows nothing for text that does not hold them, this tries the rest of the line alone,
  * and then puts the text in at the caret, so a provider that only knows what comes next can leave
- * `range` out.
+ * `range` out. Text the document has already, from the caret on or from the word's start to the caret
+ * or past it, shows nothing.
  */
 export interface AardinkInlineCompletion {
   insertText: string;

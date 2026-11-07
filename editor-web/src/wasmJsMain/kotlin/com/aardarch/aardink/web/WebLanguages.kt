@@ -351,14 +351,17 @@ internal class WebInlineCompletions(private val providers: List<suspend (text: S
 
 /**
  * Monaco's `InlineCompletions`, `{ items: [{ insertText, range? }] }`, or the bare array of items. An
- * `insertText` that is a snippet is left out: ghost text cannot fill in its stops.
+ * `insertText` that is a snippet is left out: ghost text cannot fill in its stops. So is an item
+ * whose `range` is not one in [document], which would otherwise read as no range given.
  */
 internal fun parseInlineCompletions(document: CodeDocument, json: String): List<InlineCompletion> {
     val root = parsed(json)
     val items = ((root as? JsonObject)?.get("items") ?: root) as? JsonArray ?: return emptyList()
     return items.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
-        InlineCompletion(item.string("insertText") ?: return@mapNotNull null, rangeIn(document, item["range"]))
+        val text = item.string("insertText") ?: return@mapNotNull null
+        val range = item["range"].takeUnless { it is JsonNull } ?: return@mapNotNull InlineCompletion(text)
+        rangeIn(document, range)?.let { InlineCompletion(text, it) }
     }
 }
 

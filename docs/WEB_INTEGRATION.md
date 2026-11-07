@@ -309,11 +309,13 @@ moved on is dropped. There is no cancellation token, so your work behind it goes
 cut short.
 
 Leave out `range` if all you know is what comes next. Text that repeats what follows the caret is not
-doubled: with `foo(|)`, `bar)` shows `bar` in front of the bracket. Monaco's default range is the word
+doubled: with `foo(|)`, `bar)` shows `bar` in front of the bracket, and `)` alone shows nothing, as
+does anything else the document has already from the caret on. Monaco's default range is the word
 at the caret and the rest of the line, and it shows nothing for text that does not hold them; here,
 the rest of the line alone is tried, and then the text goes in at the caret. With a `range`, this is
 as Monaco has it: `insertText` must hold all the range, in order, and an empty one is a plain
-insertion, so a bracket it repeats there is meant, and doubled.
+insertion, so a bracket it repeats there is meant, and doubled. An item whose `range` is not one in
+the text, past its last line or reversed, is left out.
 
 | Key | Action id | Does |
 | --- | --- | --- |
@@ -323,7 +325,8 @@ insertion, so a bracket it repeats there is meant, and doubled.
 | Escape | none | Dismisses, ahead of closing the find panel |
 
 Tab indents as usual when nothing shows. A phone has no Tab, so give it a button that runs
-`trigger(null, 'editor.action.inlineSuggest.commit')`, enabled by `getAction(...).isSupported()`.
+`trigger(null, 'editor.action.inlineSuggest.commit')`, enabled by `getAction(...).isSupported()`. It
+scrolls to the caret, as Tab does.
 
 Nothing shows in a read-only editor, with a selection or several carets, while a snippet is being
 filled in, or while an input method composes: on Android that can be each word as it is typed,

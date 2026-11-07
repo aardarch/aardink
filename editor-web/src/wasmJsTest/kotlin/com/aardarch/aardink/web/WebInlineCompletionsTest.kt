@@ -224,6 +224,33 @@ class WebInlineCompletionsTest {
     }
 
     @Test
+    fun `an item whose range is not one in the text is left out, and a null range is none given`() {
+        val document = CodeDocument("one\ntwo")
+        val past = """{ "startLineNumber": 9, "startColumn": 1, "endLineNumber": 9, "endColumn": 1 }"""
+        val reversed = """{ "startLineNumber": 2, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 }"""
+        for (range in listOf(past, reversed, """{ "startLineNumber": 1 }""", "3")) {
+            val items = """[{ "insertText": "x", "range": $range }, { "insertText": "y" }]"""
+            assertEquals(listOf(InlineCompletion("y")), parseInlineCompletions(document, items), range)
+        }
+        assertEquals(listOf(InlineCompletion("x")), parseInlineCompletions(document, """[{ "insertText": "x", "range": null }]"""))
+    }
+
+    @Test
+    fun `commit from a host's button shows the caret, as Tab does`() = runTest {
+        val lines = (1..100).joinToString("\\n") { "line" }
+        register("xml") { text, _, _ -> if (text == "a") """[{ "insertText": "$lines" }]""" else null }
+        val handle = mount("a", "xml")
+        withContext(Dispatchers.Main) {
+            until { AardinkWeb.canTrigger(handle, showNext) }
+            onPlace("a", 1, handle)
+            assertTrue(AardinkWeb.trigger(handle, showNext))
+            until { AardinkWeb.canTrigger(handle, commit) }
+            assertTrue(AardinkWeb.trigger(handle, commit))
+            until { handle.state.value.viewport.let { 99 in it.firstVisibleLine..it.lastVisibleLine } }
+        }
+    }
+
+    @Test
     fun `an empty range is kept as a plain insertion`() {
         val range = """{ "startLineNumber": 1, "startColumn": 3, "endLineNumber": 1, "endColumn": 3 }"""
         val item = parseInlineCompletions(CodeDocument("abc"), """[{ "insertText": "x", "range": $range }]""").single()
