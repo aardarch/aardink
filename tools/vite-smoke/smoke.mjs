@@ -155,6 +155,71 @@ async function dispatcherCheck(page) {
   };
 }
 
+/**
+ * provideInlayHints through the dispatcher, and text from it and from a decoration that is on screen
+ * and not in the document. What is on screen is compared whole: nothing else moves on an editor
+ * without focus, so an equal picture after it goes says the difference was that text.
+ */
+async function inlayHintCheck(page) {
+  setPhase('inlay hints and decoration text');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__hintsAsked = [];
+    await registerLanguage(
+      { id: 'toy-hints', grammar: { tokenizer: { root: [] } } },
+      {
+        provideInlayHints: async (text, range) => {
+          window.__hintsAsked.push({ text, range });
+          return [{ position: { lineNumber: 1, column: 5 }, label: ': WWWWWW' }];
+        },
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'val x = 1\nsecond', language: 'toy-hints' });
+  }, MOUNT);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  const settle = () => sleep(800);
+  await settle();
+  const plain = await shot();
+  const stable = plain === await shot();
+  const askedWhileOff = await page.evaluate(() => window.__hintsAsked.length);
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: { enabled: 'on' } }));
+  await page.waitForFunction(() => window.__hintsAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await settle();
+  const hinted = await shot();
+  const asked = await page.evaluate(() => window.__hintsAsked[0] ?? null);
+  const hintedValue = await page.evaluate(() => window.__smokeEditor.getValue());
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: false }));
+  await settle();
+  const hintGone = await shot();
+
+  await page.evaluate(() => {
+    const range = { startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 6 };
+    const options = { before: { content: '<' }, after: { content: '>' }, inlineColor: '#ff0000' };
+    window.__smokeIds = window.__smokeEditor.deltaDecorations([], [{ range, options }]);
+  });
+  await settle();
+  const decorated = await shot();
+  const decoratedValue = await page.evaluate(() => window.__smokeEditor.getValue());
+  await page.evaluate(() => window.__smokeEditor.deltaDecorations(window.__smokeIds, []));
+  await settle();
+  const decorationGone = await shot();
+
+  return {
+    'nothing moves on screen by itself, so the pictures below can be compared': stable,
+    'inlay hints are not asked for with the option off': askedWhileOff === 0,
+    'provideInlayHints gets the text and a range through the dispatcher':
+      asked?.text === 'val x = 1\nsecond' && asked?.range?.startLineNumber === 1 && asked?.range?.startColumn === 1 &&
+      asked?.range?.endLineNumber === 2 && asked?.range?.endColumn === 7,
+    'a hint is on screen and not in the document': hinted !== plain && hintedValue === 'val x = 1\nsecond',
+    'turning the option off takes the hint away': hintGone === plain,
+    'before and after are on screen and not in the document': decorated !== plain && decoratedValue === 'val x = 1\nsecond',
+    'removing the decoration takes its text away': decorationGone === plain,
+  };
+}
+
 /** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
 async function linkPixel(page) {
   const png = await page.screenshot({ encoding: 'base64' });
@@ -628,7 +693,12 @@ try {
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   setPhase('a page with no touch screen');
   const desktop = await desktopPage();
-  const editorChecks = { ...(await dispatcherCheck(desktop)), ...(await languageServerCheck(desktop)), ...(await linkCheck(desktop)) };
+  const editorChecks = {
+    ...(await dispatcherCheck(desktop)),
+    ...(await inlayHintCheck(desktop)),
+    ...(await languageServerCheck(desktop)),
+    ...(await linkCheck(desktop)),
+  };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);

@@ -154,6 +154,7 @@ class ExportsTemplateTest {
             assertTrue(service.diagnostics(document).isEmpty())
             assertTrue(service.documentSymbols(document).isEmpty())
             assertTrue(service.documentColors(document).isEmpty())
+            assertTrue(service.inlayHints(document, 3..4).isEmpty())
             items
         }
         assertEquals(listOf("from-completions"), items.map { it.label })
@@ -164,6 +165,9 @@ class ExportsTemplateTest {
                 "diagnostics [] ab\ncd",
                 "documentSymbols [] ab\ncd",
                 "documentColors [] ab\ncd",
+                """inlayHints [{"startLineNumber":2,"startColumn":1,"endLineNumber":2,"endColumn":3}] ab
+                |cd
+                """.trimMargin(),
             ),
             asked,
         )

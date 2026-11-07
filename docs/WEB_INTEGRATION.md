@@ -120,8 +120,9 @@ prefixed `aardink` so it cannot collide with your module's own exports.
 `aardinkRegisterLanguage` takes one dispatcher for all of a language's providers: a function of
 `(method, text, argsJson)` answering with JSON through a Promise, or null for nothing. `method` is a
 member of `WebLanguageProviders` (`completions`, `hover`, `diagnostics`, `documentSymbols`,
-`documentColors`), and `argsJson` the provider's other arguments as a JSON array: `[line, column]`,
-1-based, for `completions` and `hover`, and `[]` for the rest. Answer null to a name you do not know.
+`documentColors`, `inlayHints`), and `argsJson` the provider's other arguments as a JSON array:
+`[line, column]`, 1-based, for `completions` and `hover`, `[range]`, Monaco's `IRange`, for
+`inlayHints`, and `[]` for the rest. Answer null to a name you do not know.
 That means no provider, and it is how a later version adds one with no change to your copy.
 
 > With Kotlin 2.4.20, `@JsExport` functions declared in a *dependency* klib do end up in the
@@ -369,11 +370,13 @@ files to apply them to.
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
 | `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`, `detail`, `commitCharacters` and Monaco's `kind` names or numbers. Answer `{ suggestions, incomplete: false }` to be asked once per word, Monaco's behaviour; without it your provider is asked on each letter, as in 0.6. |
 | Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
-| `deltaDecorations`, `createDecorationsCollection` | The same | `isWholeLine`, `hoverMessage`, `overviewRuler.color` and `minimap.color` as Monaco's; colours (`backgroundColor`, `borderColor`, `underlineColor`, `gutterColor`, CSS hex) where Monaco takes a CSS class. Nothing that changes the text's layout (`before`, `after`). |
+| `deltaDecorations`, `createDecorationsCollection` | The same | `isWholeLine`, `hoverMessage`, `overviewRuler.color`, `minimap.color`, and `before` and `after` (`{ content }`, on one row, and nothing else of them) as Monaco's; colours (`backgroundColor`, `borderColor`, `underlineColor`, `gutterColor`, `inlineColor`, CSS hex) where Monaco takes a CSS class. `inlineColor` stands for `inlineClassName`: it colours the range's characters, and `before` and `after`, which are faint without it. That text is not in the document, and moves with the range. |
 | `overviewRulerLanes` | `overviewRulerLanes` | Above 0 shows the ruler; off by default. |
 | `occurrencesHighlight`, `linkedEditing`, `colorDecorators` | The same | Off by default. |
 | `fontLigatures` | The same | On by default. |
 | `'semanticHighlighting.enabled'` | `semanticHighlighting` | Off by default. Colours from a language server over the syntax's; there is no JS provider for them. |
+| `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
+| `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing or in scrolling past what it last asked about. With `extends` or a language server, every source's hints are shown, the first's where two are at one position. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
 | `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |

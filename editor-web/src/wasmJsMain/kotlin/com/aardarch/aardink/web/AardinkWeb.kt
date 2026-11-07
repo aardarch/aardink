@@ -67,6 +67,7 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
@@ -892,10 +893,11 @@ object AardinkWeb {
      * Shows [decorationsJson], a JSON array of Monaco's `IModelDeltaDecoration` (`{ range, options }`),
      * as [owner]'s decorations, in place of what that owner had; other owners' stay. The options
      * read are Monaco's `isWholeLine`, `hoverMessage` (a string, `{ value }` or an array of them),
-     * `overviewRuler.color` and `minimap.color`, and, where Monaco takes a CSS class instead,
-     * `backgroundColor`, `borderColor`, `underlineColor` and `gutterColor` as CSS hex colours
-     * (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after. The npm
-     * package's `deltaDecorations` and `createDecorationsCollection` are built on this.
+     * `overviewRuler.color`, `minimap.color`, and `before` and `after` (`{ content }`, of which only
+     * `content` is read), and, where Monaco takes a CSS class instead, `backgroundColor`,
+     * `borderColor`, `underlineColor`, `gutterColor` and `inlineColor` as CSS hex colours (`#rgb`,
+     * `#rgba`, `#rrggbb`, `#rrggbbaa`). The ranges follow the edits made after, and the text with
+     * them. The npm package's `deltaDecorations` and `createDecorationsCollection` are built on this.
      */
     fun setDecorationsJson(handle: AardinkEditorHandle, owner: String, decorationsJson: String) {
         val state = handle.state.value
@@ -922,6 +924,7 @@ object AardinkWeb {
         fun color(key: String): Color = (options[key] as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
         fun nestedColor(key: String): Color =
             ((options[key] as? JsonObject)?.get("color") as? JsonPrimitive)?.contentOrNull?.let(::cssHexColor) ?: Color.Unspecified
+        fun content(key: String): String? = ((options[key] as? JsonObject)?.get("content") as? JsonPrimitive)?.contentOrNull
         val hover = options["hoverMessage"]
         val message = when (hover) {
             is JsonPrimitive -> hover.contentOrNull
@@ -948,6 +951,9 @@ object AardinkWeb {
             minimapColor = nestedColor("minimap"),
             overviewRulerColor = nestedColor("overviewRuler"),
             hoverMessage = message,
+            before = content("before"),
+            after = content("after"),
+            inlineColor = color("inlineColor"),
         )
     }
 
@@ -999,6 +1005,23 @@ object AardinkWeb {
             val offsets = rangeOf(document, range)
             if (offsets.isEmpty()) return@mapNotNull null
             ColorInfo(offsets, Color(red, green, blue, alpha))
+        }
+
+    /** An inclusive [range] of [document] as a [WebRange] in JSON, for a provider asked about one. */
+    internal fun rangeJson(document: CodeDocument, range: IntRange): String =
+        json.encodeToString(WebRange.serializer(), webRange(document, range))
+
+    /**
+     * A JSON array of `{ position: { lineNumber, column }, label }` (Monaco's position, 1-based) as
+     * hints in [document]; those it cannot read are left out.
+     */
+    internal fun parseInlayHints(document: CodeDocument, hintsJson: String): List<InlayHint> =
+        (parsedJson(hintsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val position = item["position"]?.let { runCatching { json.decodeFromJsonElement(WebPosition.serializer(), it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val label = (item["label"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
+            InlayHint(offsetOf(document, position.lineNumber, position.column), label)
         }
 
     /** A JSON array of [WebDocumentSymbol] as symbols of [document]; empty when it is not one. */
@@ -1428,6 +1451,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     breadcrumbs = options.breadcrumbs,
                     fontLigatures = options.fontLigatures,
                     semanticHighlighting = options.semanticHighlighting,
+                    inlayHints = options.inlayHints,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },

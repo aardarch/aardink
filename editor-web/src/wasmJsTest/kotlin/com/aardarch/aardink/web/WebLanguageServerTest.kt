@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.TextEdit
@@ -77,6 +78,10 @@ private const val SEMANTIC_TOKENS_SERVER = """{
   "textDocumentSync": 2,
   "semanticTokensProvider": { "legend": { "tokenTypes": ["variable"], "tokenModifiers": [] }, "full": true }
 }"""
+
+private const val INLAY_HINT_METHOD = "textDocument/inlayHint"
+
+private const val INLAY_HINT_SERVER = """{ "textDocumentSync": 2, "inlayHintProvider": true }"""
 
 private fun range(startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int): String =
     """{"start":{"line":$startLine,"character":$startCharacter},"end":{"line":$endLine,"character":$endCharacter}}"""
@@ -967,5 +972,73 @@ class WebLanguageServerTest {
         pause(600)
 
         assertFalse(SEMANTIC_TOKENS_METHOD in server.methods)
+    }
+
+    /** A server with one hint, at the third character. */
+    private fun servingInlayHints() = FakeServer(INLAY_HINT_SERVER) { method ->
+        if (method == INLAY_HINT_METHOD) """[{"position":{"line":0,"character":2},"label":"hint"}]""" else null
+    }
+
+    /** The layout asks by itself, once the server has the document, and the server's answer comes back. */
+    private suspend fun assertInlayHintsServed(handle: AardinkEditorHandle, server: FakeServer) {
+        awaitUntil { INLAY_HINT_METHOD in server.methods }
+        assertTrue(server.methods.indexOf("textDocument/didOpen") in 0 until server.methods.indexOf(INLAY_HINT_METHOD))
+
+        val document = handle.state.value.document.snapshot()
+        val hints = withContext(Dispatchers.Main) { handle.languageService!!.inlayHints(document, 0 until document.length) }
+
+        assertEquals(listOf(InlayHint(2, "hint")), hints)
+    }
+
+    @Test
+    fun `inlay hints reach a server through a registered language, which has none of its own`() = runTest {
+        language("toy-hinted")
+        val handle = mount("name", "toy-hinted")
+        AardinkWeb.patchOptions(handle, """{"inlayHints": true}""")
+        val server = servingInlayHints()
+
+        connect("toy-hinted", server)
+
+        assertInlayHintsServed(handle, server)
+    }
+
+    @Test
+    fun `inlay hints reach a server ahead of a built-in language`() = runTest {
+        val handle = mount("true", "json")
+        AardinkWeb.patchOptions(handle, """{"inlayHints": true}""")
+        val server = servingInlayHints()
+
+        connect("json", server)
+
+        assertInlayHintsServed(handle, server)
+    }
+
+    @Test
+    fun `a host's hint and a server's, at different places, are both shown, the host's first`() = runTest {
+        language(
+            "toy-both-hints",
+            WebLanguageProviders(inlayHints = { _, _ -> """[{ "position": { "lineNumber": 1, "column": 2 }, "label": "host" }]""" }),
+        )
+        val handle = mount("name", "toy-both-hints")
+        connect("toy-both-hints", servingInlayHints())
+        served(handle)
+
+        val document = handle.state.value.document.snapshot()
+        val hints = withContext(Dispatchers.Main) { handle.languageService!!.inlayHints(document, 0 until document.length) }
+
+        assertEquals(listOf(InlayHint(1, "host"), InlayHint(2, "hint")), hints)
+    }
+
+    @Test
+    fun `with inlay hints off, a server is not asked`() = runTest {
+        language("toy-hints-off")
+        val handle = mount("name", "toy-hints-off")
+        val server = servingInlayHints()
+        connect("toy-hints-off", server)
+        served(handle)
+
+        pause(600)
+
+        assertFalse(INLAY_HINT_METHOD in server.methods)
     }
 }

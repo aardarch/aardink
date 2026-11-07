@@ -19,6 +19,7 @@ import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.TextEdit
@@ -266,9 +267,15 @@ class AardinkWebTest {
     /** A language whose service counts how often it is asked for semantic tokens. */
     private class CountingTokens : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
         var asked = 0
+        var askedForHints = 0
 
         override suspend fun semanticTokens(document: CodeDocument): List<Token> {
             asked++
+            return emptyList()
+        }
+
+        override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+            askedForHints++
             return emptyList()
         }
     }
@@ -301,6 +308,24 @@ class AardinkWebTest {
         AardinkWeb.patchOptions(handle, """{"semanticHighlighting": true}""")
 
         awaitUntil { service.asked > 0 }
+    }
+
+    @Test
+    fun `inlay hints are off by default`() {
+        assertFalse(AardinkWeb.parseOptions("{}").inlayHints)
+        assertTrue(AardinkWeb.parseOptions("""{"inlayHints": true}""").inlayHints)
+    }
+
+    @Test
+    fun `the inlay hints option reaches the editor, which asks the language's service`() = runTest {
+        val service = CountingTokens()
+        val handle = mountCounting(service, WebEditorOptions())
+        withContext(Dispatchers.Main) { delay(600) }
+        assertEquals(0, service.askedForHints, "nothing is asked for with it off")
+
+        AardinkWeb.patchOptions(handle, """{"inlayHints": true}""")
+
+        awaitUntil { service.askedForHints > 0 }
     }
 
     @Test

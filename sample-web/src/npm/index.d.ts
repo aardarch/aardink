@@ -62,6 +62,12 @@ export interface AardinkOptions {
   fontLigatures?: boolean;
   /** Colours what a language server's semantic tokens say over the syntax's. Off by default. */
   semanticHighlighting?: boolean;
+  /**
+   * Shows what `provideInlayHints` or a language server says, among the characters of the lines
+   * around the view. Off by default. Takes Monaco's `{ enabled }` too; with `'onUnlessPressed'` and
+   * `'offUnlessPressed'` no key is watched, so they mean on and off.
+   */
+  inlayHints?: boolean | { enabled?: boolean | 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' };
 }
 
 /**
@@ -543,8 +549,7 @@ export interface AardinkModelDeltaDecoration {
 /**
  * Monaco's `IModelDecorationOptions`, as far as the editor draws them. Where Monaco takes a CSS
  * class (`className`, `inlineClassName`, `linesDecorationsClassName`), give a colour instead: CSS
- * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`. Nothing here changes the text's layout, so
- * Monaco's `before` and `after` are not read.
+ * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`.
  */
 export interface AardinkDecorationOptions {
   /** Behind the characters; behind whole lines with `isWholeLine`. */
@@ -555,6 +560,15 @@ export interface AardinkDecorationOptions {
   underlineColor?: string;
   /** A bar at the gutter's text edge on each line, as Monaco's `linesDecorationsClassName` places one. */
   gutterColor?: string;
+  /** The colour of the range's characters, in place of Monaco's `inlineClassName`, and of `before` and `after`. */
+  inlineColor?: string;
+  /**
+   * Text in front of the range, as Monaco's `before`. It is not in the document, moves with the range,
+   * and is drawn in `inlineColor`, or faintly without it. `content` is all that is read, on one row.
+   */
+  before?: { content: string };
+  /** Text behind the range, as Monaco's `after`, by the same rules as `before`. */
+  after?: { content: string };
   isWholeLine?: boolean;
   hoverMessage?: string | { value: string } | Array<string | { value: string }>;
   overviewRuler?: { color: string; position?: number };
@@ -671,6 +685,19 @@ export interface AardinkLanguageProviders {
    * picked in the editor's picker is written back as CSS hex (`#rrggbb`, `#rrggbbaa`).
    */
   provideDocumentColors?(text: string): AardinkColorInformation[] | null | Promise<AardinkColorInformation[] | null>;
+  /**
+   * Labels shown among the characters of `range`, as Monaco's `provideInlayHints`, with the
+   * `inlayHints` option on. `range` holds whole lines around the view: it is asked after a pause in
+   * typing, or in scrolling past what it last asked about. With `extends`, the base language's are
+   * added, less any at a position this has one at.
+   */
+  provideInlayHints?(text: string, range: AardinkRange): AardinkInlayHint[] | null | Promise<AardinkInlayHint[] | null>;
+}
+
+/** Monaco's `InlayHint`, as far as the editor draws it: a label at a position, in front of the character there. */
+export interface AardinkInlayHint {
+  position: AardinkPosition;
+  label: string;
 }
 
 /** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */

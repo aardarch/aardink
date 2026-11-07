@@ -46,6 +46,8 @@ import kotlinx.serialization.Serializable
  * @property fontLigatures The font's ligatures; on by default.
  * @property semanticHighlighting What the language service's `semanticTokens` say, coloured over
  *   the syntax's. Off by default. Those come from a language server, with no JS provider for them.
+ * @property inlayHints What `provideInlayHints` or a language server says, shown among the
+ *   characters of the lines around the view. Off by default, and nothing is asked for while off.
  */
 @Serializable
 data class WebEditorOptions(
@@ -72,6 +74,7 @@ data class WebEditorOptions(
     val breadcrumbs: Boolean = false,
     val fontLigatures: Boolean = true,
     val semanticHighlighting: Boolean = false,
+    val inlayHints: Boolean = false,
 )
 
 /**

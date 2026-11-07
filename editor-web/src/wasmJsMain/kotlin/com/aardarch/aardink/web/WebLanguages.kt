@@ -27,6 +27,7 @@ import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
@@ -85,6 +86,8 @@ import kotlinx.serialization.json.jsonObject
  * - [documentColors]: an array of Monaco's `IColorInformation`, `{ range, color: { red, green,
  *   blue, alpha } }` with each channel from 0 to 1, for the colour swatches. The picker writes a
  *   picked colour back as CSS hex.
+ * - [inlayHints]: asked about a range, as a [WebRange] in JSON: an array of `{ position: { lineNumber,
+ *   column }, label }`, 1-based as Monaco's, for what `inlayHints` shows among the characters.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -98,6 +101,7 @@ class WebLanguageProviders(
     val diagnostics: (suspend (text: String) -> String?)? = null,
     val documentSymbols: (suspend (text: String) -> String?)? = null,
     val documentColors: (suspend (text: String) -> String?)? = null,
+    val inlayHints: (suspend (text: String, rangeJson: String) -> String?)? = null,
 )
 
 /**
@@ -112,6 +116,7 @@ internal fun dispatchedProviders(dispatcher: suspend (method: String, text: Stri
     diagnostics = { text -> dispatcher("diagnostics", text, "[]") },
     documentSymbols = { text -> dispatcher("documentSymbols", text, "[]") },
     documentColors = { text -> dispatcher("documentColors", text, "[]") },
+    inlayHints = { text, rangeJson -> dispatcher("inlayHints", text, "[$rangeJson]") },
 )
 
 /**
@@ -206,6 +211,10 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = asked {
         providers.documentColors?.invoke(document.text)
     }?.let { AardinkWeb.parseColors(document, it) }.orEmpty()
+
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = asked {
+        providers.inlayHints?.invoke(document.text, AardinkWeb.rangeJson(document, range))
+    }?.let { AardinkWeb.parseInlayHints(document, it) }.orEmpty()
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 

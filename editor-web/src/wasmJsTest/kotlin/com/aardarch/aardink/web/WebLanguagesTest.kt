@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SymbolKind
@@ -569,5 +570,51 @@ class WebLanguagesTest {
         val colors = service.documentColors(CodeDocument("bg: red;"))
         assertEquals(listOf(4..6), colors.map { it.range })
         assertEquals(Color(1f, 0f, 0f, 0.5f), colors.single().color)
+    }
+
+    @Test
+    fun `a host's inlay hints in Monaco's shape, asked about a range`() = runTest {
+        var asked: Pair<String, String>? = null
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                inlayHints = { text, range ->
+                    asked = text to range
+                    """[{ "position": { "lineNumber": 2, "column": 3 }, "label": ": Int" },
+                        { "position": { "lineNumber": 9, "column": 1 }, "label": "at the end" },
+                        { "position": { "lineNumber": 1, "column": 99 }, "label": "at its line's end" },
+                        { "position": "not a position", "label": "lost" },
+                        { "position": { "lineNumber": 1, "column": 1 } },
+                        { "position": { "lineNumber": 1, "column": 1 }, "label": 7 }]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-hints")!!.languageService!!
+        val document = CodeDocument("ab\ncd")
+
+        val hints = service.inlayHints(document, 0 until document.length)
+
+        assertEquals(listOf(InlayHint(5, ": Int"), InlayHint(5, "at the end"), InlayHint(2, "at its line's end")), hints)
+        assertEquals("ab\ncd", asked?.first)
+        assertEquals("""{"startLineNumber":1,"startColumn":1,"endLineNumber":2,"endColumn":3}""", asked?.second)
+    }
+
+    @Test
+    fun `no inlay hint provider, or one that gives nothing or fails, is no hints`() = runTest {
+        val document = CodeDocument("ab")
+        AardinkWeb.registerLanguage("""{ "id": "toy-no-hints", "grammar": { "tokenizer": { "root": [] } } }""", WebLanguageProviders())
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-no-hints")!!.languageService!!.inlayHints(document, 0..1))
+
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-null-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(inlayHints = { _, _ -> null }),
+        )
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-null-hints")!!.languageService!!.inlayHints(document, 0..1))
+
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-bad-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(inlayHints = { _, _ -> error("no hints here") }),
+        )
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-bad-hints")!!.languageService!!.inlayHints(document, 0..1))
     }
 }

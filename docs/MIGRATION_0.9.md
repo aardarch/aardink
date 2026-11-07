@@ -122,9 +122,9 @@ fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String,
 // 0.8
 k.aardinkRegisterLanguage(json, completions, hover, diagnostics, documentSymbols, documentColors);
 
-// 0.9: method is 'completions', 'hover', 'diagnostics', 'documentSymbols' or 'documentColors'
+// 0.9: method is 'completions', 'hover', 'diagnostics', 'documentSymbols', 'documentColors' or 'inlayHints'
 k.aardinkRegisterLanguage(json, (method, text, argsJson) => {
-  const args = JSON.parse(argsJson); // [line, column] for completions and hover, else []
+  const args = JSON.parse(argsJson); // [line, column] for completions and hover, [range] for inlayHints, else []
   // answer with a Promise of JSON, or of null for nothing, as for a method you do not know
 });
 ```
@@ -160,3 +160,27 @@ follows a target must check it first. To go back to no links opening at all, lis
   package's `aardink-web.wasm` grew by about 217 KB, or 61 KB gzipped, for everyone.
 - With a server connected, a built-in language's answers come after the server's, and a formatter or
   outline the language has gives way to the server's.
+
+## Inline text and inlay hints
+
+`DecorationStyle`, `EditorOptions` and `WebEditorOptions` gain fields, and `WebLanguageProviders` a
+parameter, so code calling their constructors by position, or their `copy`, needs a recompile:
+
+| Class | New, all at the end and all off by default |
+| --- | --- |
+| `DecorationStyle` | `before`, `after`, `inlineColor` |
+| `EditorOptions`, `WebEditorOptions` | `inlayHints` |
+| `WebLanguageProviders` | `inlayHints` |
+
+`LanguageService.inlayHints` has a default, so a service of your own needs no change.
+
+`DecorationStyle` used to promise that a decoration costs no relayout. That still holds for what it
+had; `before`, `after` and `inlineColor` are part of the line's layout, and the lines they touch are
+laid out again when they change.
+
+Two things behave differently with no change on your side:
+
+- **The npm package's `before` and `after` are read.** Monaco's options passed as they are used to
+  leave these out, and now show. Only `content` is read.
+- **An empty decoration follows the edits**, as its documentation always said. One that was set
+  empty, or whose text was deleted, used to stay at its offset while the text around it moved.

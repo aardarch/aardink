@@ -158,6 +158,7 @@ const PROVIDERS = new Map([
     ((text) => Promise.resolve(providers.provideDiagnostics(text)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic))))],
   ['documentSymbols', (providers) => providers.provideDocumentSymbols],
   ['documentColors', (providers) => providers.provideDocumentColors],
+  ['inlayHints', (providers) => providers.provideInlayHints],
 ]);
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
@@ -258,6 +259,13 @@ function toKotlinOptions(options) {
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
   for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting']) {
     if (options[key] !== undefined) out[key] = !!options[key];
+  }
+  if (options.inlayHints !== undefined) {
+    // Monaco's { enabled: 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' }; a key held down is not
+    // read, so those two are their first word. A plain boolean works too.
+    const value = options.inlayHints;
+    const enabled = typeof value === 'object' && value !== null ? value.enabled ?? 'on' : value;
+    out.inlayHints = enabled !== false && enabled !== 'off' && enabled !== 'offUnlessPressed';
   }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];

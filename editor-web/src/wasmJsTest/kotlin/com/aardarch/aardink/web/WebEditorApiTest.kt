@@ -38,6 +38,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The Monaco-shaped surface around the editor: selections, undo, format, the change events, tokenize. */
@@ -362,6 +363,33 @@ class WebEditorApiTest {
         )
         AardinkWeb.setDecorationsJson(handle, "delta", "[]")
         assertEquals("[]", AardinkWeb.getDecorationRangesJson(handle, "delta"))
+    }
+
+    @Test
+    fun `before, after and inlineColor come in Monaco's shape, and text follows its range`() {
+        val handle = mount("one two\nthree")
+        AardinkWeb.setDecorationsJson(
+            handle,
+            "delta",
+            """[{ "range": { "startLineNumber": 1, "startColumn": 5, "endLineNumber": 1, "endColumn": 8 },
+                 "options": { "before": { "content": "<", "inlineClassName": "not read" }, "after": { "content": ">" },
+                              "inlineColor": "#ff0000" } },
+                { "range": { "startLineNumber": 2, "startColumn": 1, "endLineNumber": 2, "endColumn": 2 },
+                  "options": { "before": "not Monaco's shape", "after": { "notContent": "x" }, "inlineColor": "red" } }]""",
+        )
+        val state = handle.state.value
+        val (first, second) = state.decorations("delta")
+
+        assertEquals("<", first.style.before)
+        assertEquals(">", first.style.after)
+        assertEquals(Color(0xFFFF0000), first.style.inlineColor)
+        assertNull(second.style.before)
+        assertNull(second.style.after)
+        assertEquals(Color.Unspecified, second.style.inlineColor)
+
+        state.applyTextEdits(listOf(TextEdit(IntRange(0, -1), ">> ")))
+        assertEquals(7..9, state.decorations("delta").first().range)
+        assertEquals("<", state.decorations("delta").first().style.before)
     }
 
     @Test
