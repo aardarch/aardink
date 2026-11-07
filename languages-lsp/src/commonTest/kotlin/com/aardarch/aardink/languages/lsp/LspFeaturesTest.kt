@@ -33,6 +33,7 @@ import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.SelectionRange
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -647,25 +648,43 @@ class LspFeaturesTest {
     }
 
     @Test
-    fun `an answer to text that has moved on keeps the item's own edits`() = withServer("") {
+    fun `an answer to text that has moved on is placed in the text it was about`() = withServer("") {
         serverDeclares("""{"textDocumentSync":2,"completionProvider":{"resolveProvider":true}}""")
         val state = editorState("ab\ncd")
         service.attach(state)
         assertEquals("textDocument/didOpen", nextSent().method)
-        val own = """{"range":${range(0, 0, 0, 0)},"newText":"own"}"""
-        val item = offered("""[{"label":"a","additionalTextEdits":[$own]}]""", state.document.snapshot()).single()
+        val item = offered("""[{"label":"a"}]""", state.document.snapshot()).single()
 
         val resolved = resolvedAcross(item) {
             state.applyTextEdits(listOf(TextEdit(0 until 0, "x\n")))
             assertEquals("textDocument/didChange", nextSent().method)
         }
 
-        assertEquals(item.additionalEdits, resolved.additionalEdits, "line 1 is another line now")
+        assertEquals(listOf(TextEdit(3 until 3, "y")), resolved.additionalEdits, "line 1 of the text asked about, not of this one")
         assertEquals("d", resolved.detail)
     }
 
     @Test
-    fun `a whole-text server's pending edit moves the text on too`() = withServer("") {
+    fun `resolving when an item is accepted goes ahead of the edit accepting it`() = withServer("") {
+        serverDeclares("""{"textDocumentSync":2,"completionProvider":{"resolveProvider":true}}""")
+        val state = editorState("ab\ncd")
+        service.attach(state)
+        assertEquals("textDocument/didOpen", nextSent().method)
+        val item = offered("""[{"label":"a"}]""", state.document.snapshot()).single()
+
+        val resolving = async(start = CoroutineStart.UNDISPATCHED) { service.resolveCompletion(item) }
+        state.applyTextEdits(listOf(TextEdit(0 until 0, "word")))
+
+        val asked = nextSent()
+        assertEquals(RESOLVE, asked.method, "a server that checks the document's version still answers")
+        assertEquals("textDocument/didChange", nextSent().method)
+        val answer = """{"label":"a","additionalTextEdits":[{"range":${range(1, 0, 1, 0)},"newText":"y"}]}"""
+        serverSends("""{"jsonrpc":"2.0","id":${asked["id"]},"result":$answer}""")
+        assertEquals(listOf(TextEdit(3 until 3, "y")), resolving.await().additionalEdits)
+    }
+
+    @Test
+    fun `a whole-text server's pending edit is not in the text it was asked about`() = withServer("") {
         serverDeclares("""{"textDocumentSync":1,"completionProvider":{"resolveProvider":true}}""")
         val state = editorState("ab\ncd")
         service.attach(state)
@@ -677,11 +696,11 @@ class LspFeaturesTest {
             assertNothingSent("waiting for typing to pause")
         }
 
-        assertTrue(resolved.additionalEdits.isEmpty())
+        assertEquals(listOf(TextEdit(3 until 3, "y")), resolved.additionalEdits)
     }
 
     @Test
-    fun `a host's didChange during the answer moves the text on too`() = withServer("ab\ncd") {
+    fun `a host's didChange during the answer is not in the text it was asked about`() = withServer("ab\ncd") {
         service.didOpen(doc)
         assertEquals("textDocument/didOpen", nextSent().method)
         val item = offered("""[{"label":"a"}]""").single()
@@ -691,7 +710,7 @@ class LspFeaturesTest {
             assertEquals("textDocument/didChange", nextSent().method)
         }
 
-        assertTrue(resolved.additionalEdits.isEmpty())
+        assertEquals(listOf(TextEdit(3 until 3, "y")), resolved.additionalEdits)
     }
 
     @Test

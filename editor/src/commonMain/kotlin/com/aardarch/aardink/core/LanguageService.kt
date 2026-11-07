@@ -44,6 +44,12 @@ interface LanguageService {
      * [item] with what it left out of the list for being slow to work out, its
      * [documentation][CompletionItem.documentation] say, for the item the user is looking at. [item] is one this
      * service returned from [completions]. The default is [item] as it is.
+     *
+     * Asked for when the detail pane shows [item], and when [item] is accepted without
+     * [additionalEdits][CompletionItem.additionalEdits]. Those the answer adds are about the text as
+     * it is at the call: the editor applies them after inserting the item, as an undo step of their
+     * own, unless the text has moved on by then. On acceptance this runs on the UI thread up to its
+     * first suspension, so it must not block.
      */
     suspend fun resolveCompletion(item: CompletionItem): CompletionItem = item
 

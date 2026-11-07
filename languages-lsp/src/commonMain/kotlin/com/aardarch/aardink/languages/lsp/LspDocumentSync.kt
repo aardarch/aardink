@@ -256,7 +256,7 @@ internal class LspDocumentSync(
     private var changeSync = LspChangeSync.None
 
     /**
-     * Moves with every change to the text [textAt] reads. Written by the queue only, so an
+     * Moves with every change to the text the server has. Written by the queue only, so an
      * [inOrder] block, which the queue waits for, can read it to name the text it is asking about.
      */
     @Volatile
@@ -461,16 +461,13 @@ internal class LspDocumentSync(
     }
 
     /**
-     * The text at [revision], which is what the positions in an answer to a request of that revision
-     * are about, or null when it has moved on since, or the server was given none. Whole-document
-     * work, so only for answers that need it.
+     * The text the server has, or null if it was given none. Read in an [inOrder] block, while the
+     * queue waits for it, this is what the positions in the answer to that request are about, however
+     * far the text has moved on when the answer comes. Whole-document work, so only for answers that
+     * need it.
      */
-    suspend fun textAt(revision: Long): String? {
-        if (queue == null) return null
-        var text: String? = null
-        submit(Send { if (textRevision == revision) text = mirror?.text ?: lastText })
-        return text
-    }
+    val textAtTurn: String?
+        get() = mirror?.text ?: lastText
 
     /**
      * Returns once the document is open, through [attach] or [open], whether or not the server

@@ -107,7 +107,10 @@ import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -1043,7 +1046,7 @@ private fun CodeEditorLayoutContent(
         if (committed != null) {
             var item = committed.shiftedForInsert(insertedAt, 1, absorbing = false)
             if (autoCloseLength > 0) item = item.shiftedForInsert(insertedAt + 1, autoCloseLength, absorbing = false)
-            applyCompletion(state, item, cursor = insertedAt)
+            acceptCompletion(state, service, coroutineScope, item, cursor = insertedAt)
             state.withSelectionReason(SelectionChangeReason.Edit) {
                 state.selection = TextRange((state.selection.end + 1).coerceAtMost(state.document.length))
             }
@@ -1169,7 +1172,7 @@ private fun CodeEditorLayoutContent(
             Key.DirectionUp -> completionSelected = (completionSelected - 1).mod(completionItems.size)
 
             Key.Enter, Key.NumPadEnter, Key.Tab -> {
-                completionItems.getOrNull(completionSelected)?.let { applyCompletion(state, it) }
+                completionItems.getOrNull(completionSelected)?.let { acceptCompletion(state, languageService, coroutineScope, it) }
                 showCompletion = false
                 completionItems = emptyList()
             }
@@ -1606,15 +1609,16 @@ private fun CodeEditorLayoutContent(
                         items = completionItems,
                         selected = completionSelected,
                         onAccept = { item ->
-                            applyCompletion(state, item)
+                            acceptCompletion(state, languageService, coroutineScope, item)
                             showCompletion = false
                             completionItems = emptyList()
                         },
                         onDismiss = { showCompletion = false },
-                        // SEAM(resolveCompletion): the one place the pane's item comes from, for
-                        // wiring LanguageService.resolveCompletion when it lands:
-                        // `{ item -> languageService?.let { withContext(state.computeDispatcher) { it.resolveCompletion(item) } } ?: item }`
-                        resolve = { it },
+                        resolve = { item ->
+                            languageService?.let { service ->
+                                withContext(state.computeDispatcher) { resolvedCompletion(service, item) }
+                            } ?: item
+                        },
                         onOpenLink = openCardLink?.let { open ->
                             { target: String ->
                                 showCompletion = false
@@ -1741,7 +1745,7 @@ private fun CodeEditorLayoutContent(
                 items = completionItems,
                 visible = showCompletion,
                 onAccept = { item ->
-                    applyCompletion(state, item)
+                    acceptCompletion(state, languageService, coroutineScope, item)
                     showCompletion = false
                     completionItems = emptyList()
                 },
@@ -1830,6 +1834,60 @@ private suspend fun currentFoldableRanges(state: CodeEditorState, provider: Fold
 }
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
+
+/** [item] as [service] resolves it, or as it is if that fails: the list works without an answer. */
+private suspend fun resolvedCompletion(service: LanguageService, item: CompletionItem): CompletionItem = try {
+    service.resolveCompletion(item)
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    item
+}
+
+/**
+ * Applies [item] now, and what resolving it adds when that arrives, as Monaco does: an auto-import a
+ * server only works out on resolve must not hold up the word being typed. Resolving is asked for
+ * before the edit, on this thread, so that [service] answers about the text the edit has not touched,
+ * and a language server gets the request ahead of the edit's `didChange`.
+ *
+ * Text that moved on by the time the answer comes keeps the word and goes without the rest: the
+ * answer's ranges no longer say where it goes.
+ */
+private fun acceptCompletion(
+    state: CodeEditorState,
+    service: LanguageService?,
+    scope: CoroutineScope,
+    item: CompletionItem,
+    cursor: Int = state.selection.start,
+) {
+    if (service == null || item.additionalEdits.isNotEmpty()) {
+        applyCompletion(state, item, cursor)
+        return
+    }
+    val answer = scope.async(start = CoroutineStart.UNDISPATCHED) { resolvedCompletion(service, item) }
+    val target = completionReplaceRange(state.document, cursor, item)
+    val lengthBefore = state.document.length
+    applyCompletion(state, item, cursor)
+    val grown = state.document.length - lengthBefore
+    val version = state.document.version
+    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        val edits = answer.await().additionalEdits
+        if (edits.isEmpty() || state.document.version != version) return@launch
+        editsPast(edits, target, grown)?.let(state::applyTextEdits)
+    }
+}
+
+/**
+ * [edits], made for the text before [target] was replaced, moved for the text after, which [grown]
+ * characters longer; null if one of them is in what was replaced, and so has nothing left to edit.
+ */
+private fun editsPast(edits: List<TextEdit>, target: IntRange, grown: Int): List<TextEdit>? = edits.map { edit ->
+    when {
+        edit.range.last < target.first -> edit
+        edit.range.first > target.last -> edit.copy(range = edit.range.first + grown..edit.range.last + grown)
+        else -> return null
+    }
+}
 
 private fun applyCompletion(state: CodeEditorState, item: CompletionItem, cursor: Int = state.selection.start) {
     val target = completionReplaceRange(state.document, cursor, item)

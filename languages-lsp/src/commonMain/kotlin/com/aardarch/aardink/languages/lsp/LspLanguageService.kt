@@ -407,26 +407,25 @@ class LspLanguageService(
      * that does not resolve, or fails to.
      *
      * The resolved edits are placed in the text the server had when it was asked, through [attach],
-     * or [didOpen] and [didChange]. With neither, or if that text has changed by the time it answers,
-     * there is no telling where they go, and [item] keeps its own.
+     * or [didOpen] and [didChange], even if that text has changed by the time it answers: accepting
+     * an item changes it, and the editor moves them past its own edit. With neither there is no
+     * telling where they go, and [item] keeps its own.
      */
     override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
         if (!resolvesCompletions) return item
         val raw = rawCompletionOf(item) ?: return item
-        var revision = 0L
-        val answer = requestOrFailure("completionItem/resolve", raw) { revision = sync.textRevision }
+        var asked: String? = null
+        val answer = requestOrFailure("completionItem/resolve", raw) { asked = sync.textAtTurn }
         val result = (answer as? LspResult.Value)?.element ?: return item
         val resolved = decodeOrNull(LspCompletionItem.serializer(), result) ?: return item
         return item.copy(
             documentation = documentationMarkdown(resolved.documentation) ?: item.documentation,
             detail = resolved.detail ?: item.detail,
-            additionalEdits = resolved.additionalTextEdits.orEmpty().takeIf { it.isNotEmpty() }?.let { toTextEditsAt(revision, it) }
-                ?: item.additionalEdits,
+            additionalEdits = asked?.let { text ->
+                resolved.additionalTextEdits.orEmpty().takeIf { it.isNotEmpty() }?.let { toTextEdits(CodeDocument(text), it) }
+            } ?: item.additionalEdits,
         )
     }
-
-    private suspend fun toTextEditsAt(revision: Long, edits: List<LspTextEdit>): List<TextEdit>? =
-        sync.textAt(revision)?.let { text -> toTextEdits(CodeDocument(text), edits) }
 
     /**
      * What the server sent for [item]. Two items can be equal, and only their `data` tell them apart,

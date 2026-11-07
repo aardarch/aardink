@@ -58,6 +58,7 @@ import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.Token
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -137,6 +138,29 @@ class CompletionDetailUiTest {
         return state
     }
 
+    /** Answers resolve with [answer], which may wait; what it was asked about is in [asked]. */
+    private class Resolving(val items: List<CompletionItem>, val answer: suspend (CompletionItem) -> CompletionItem) :
+        LanguageService by Words(items, completionsAreIncomplete = false) {
+        val asked = mutableListOf<String>()
+
+        override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
+            asked += item.label
+            return answer(item)
+        }
+    }
+
+    private fun ComposeUiTest.showResolving(service: Resolving, text: String, caret: Int = text.length): CodeEditorState {
+        val state = CodeEditorState(text)
+        state.selection = TextRange(caret)
+        setContent {
+            MaterialTheme { CodeEditorLayout(state = state, languageService = service, modifier = Modifier.size(900.dp, 600.dp)) }
+        }
+        waitForIdle()
+        keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
+        onNodeWithTag(EditorTestTags.COMPLETION_LIST).assertExists()
+        return state
+    }
+
     private fun ComposeUiTest.keys(block: androidx.compose.ui.test.KeyInjectionScope.() -> Unit) {
         onNodeWithTag(EditorTestTags.EDITOR).requestFocus()
         onNodeWithTag(EditorTestTags.EDITOR).performKeyInput(block)
@@ -154,6 +178,69 @@ class CompletionDetailUiTest {
         onNodeWithText("The first letter.").assertExists()
         onNodeWithText("with").assertExists()
         onNodeWithText("a list").assertExists()
+    }
+
+    @Test
+    fun `the language service's answer reaches the pane`() = runComposeUiTest {
+        showResolving(Resolving(listOf(gamma)) { it.copy(documentation = "Known once *resolved*.") }, "")
+        onNodeWithText("Known once resolved.").assertExists()
+    }
+
+    @Test
+    fun `a service that fails to resolve leaves the item as it is`() = runComposeUiTest {
+        val state = showResolving(Resolving(listOf(alpha)) { error("no answer") }, "")
+        inPane("val alpha: Int").assertExists()
+        keys { pressKey(Key.Enter) }
+        assertEquals("alpha", state.text)
+    }
+
+    @Test
+    fun `an import known only once resolved goes in with the word accepted`() = runComposeUiTest {
+        val import = TextEdit(0..-1, "import a\n")
+        val state = showResolving(Resolving(listOf(gamma)) { it.copy(additionalEdits = listOf(import)) }, "x ")
+        keys { pressKey(Key.Enter) }
+        assertEquals("import a\nx gamma", state.text)
+        assertEquals(TextRange("import a\nx gamma".length), state.selection, "the caret stays after the word")
+    }
+
+    @Test
+    fun `the word does not wait for the answer, and an edit past it moves with it`() = runComposeUiTest {
+        val answer = CompletableDeferred<CompletionItem>()
+        val state = showResolving(Resolving(listOf(gamma)) { answer.await() }, "x \nend", caret = 2)
+        keys { pressKey(Key.Enter) }
+        assertEquals("x gamma\nend", state.text, "the word went in without the answer")
+        answer.complete(gamma.copy(additionalEdits = listOf(TextEdit(3..2, "// "))))
+        waitForIdle()
+        assertEquals("x gamma\n// end", state.text)
+    }
+
+    @Test
+    fun `text that moved on goes without the late edit`() = runComposeUiTest {
+        val answer = CompletableDeferred<CompletionItem>()
+        val state = showResolving(Resolving(listOf(gamma)) { answer.await() }, "x ")
+        keys { pressKey(Key.Enter) }
+        state.applyEdit(0, 0, "y", TextRange(1))
+        answer.complete(gamma.copy(additionalEdits = listOf(TextEdit(0..-1, "import a\n"))))
+        waitForIdle()
+        assertEquals("yx gamma", state.text)
+    }
+
+    @Test
+    fun `an edit inside the word replaced has nothing left to edit`() = runComposeUiTest {
+        val state = showResolving(Resolving(listOf(gamma)) { it.copy(additionalEdits = listOf(TextEdit(2..3, "z"))) }, "x ga")
+        keys { pressKey(Key.Enter) }
+        assertEquals("x gamma", state.text)
+    }
+
+    @Test
+    fun `an item with edits of its own is not asked about on accepting`() = runComposeUiTest {
+        val own = gamma.copy(additionalEdits = listOf(TextEdit(0..-1, "own\n")))
+        val service = Resolving(listOf(own)) { it }
+        val state = showResolving(service, "")
+        val before = service.asked.size
+        keys { pressKey(Key.Enter) }
+        assertEquals("own\ngamma", state.text)
+        assertEquals(before, service.asked.size)
     }
 
     @Test
