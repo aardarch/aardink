@@ -90,7 +90,93 @@ class CodeLensViewTest {
         view.lens(CodeLens(6, "spaces"), CodeLens(17, "a tab"))
 
         assertEquals("    spaces\n    second", view.laidOut(1))
-        assertEquals("\ta tab\n\tthird", view.laidOut(2))
+        assertEquals("    a tab\n\tthird", view.laidOut(2))
+    }
+
+    @Test
+    fun `a tab in a line's indentation is the columns to its stop`() {
+        val view = viewOf("  \t \tmixed\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\tdeep")
+
+        view.lens(CodeLens(0, "mixed"), CodeLens(11, "deep"))
+
+        assertEquals("        mixed\n  \t \tmixed", view.laidOut(0))
+        assertTrue(view.laidOut(1).startsWith(" ".repeat(40) + "deep\n"), "as much as a row keeps: ${view.laidOut(1)}")
+    }
+
+    @Test
+    fun `where tabs have no stops a row keeps the line's tabs, as narrow as they are`() {
+        val view = viewOf("\tfirst")
+        view.style = view.style!!.copy(columnWidthEm = 0f)
+
+        view.lens(CodeLens(0, "lens"))
+
+        assertEquals("\tlens\n\tfirst", view.laidOut(0))
+    }
+
+    @Test
+    fun `a new tab size moves a row that is on show`() {
+        val view = viewOf("\tfirst")
+        view.lens(CodeLens(0, "lens"))
+
+        view.style = view.style!!.copy(tabSize = 2)
+        view.prepare(width, height)
+
+        assertEquals("  lens\n\tfirst", view.laidOut(0))
+    }
+
+    @Test
+    fun `a line's lenses keep the order given, whatever columns they are at`() {
+        val view = viewOf("first\nsecond")
+
+        view.lens(CodeLens(9, "later"), CodeLens(2, "ahead"), CodeLens(7, "earlier"), CodeLens(0, "top"))
+        view.edit(0, 0, "x")
+
+        assertEquals("ahead | top\nxfirst", view.laidOut(0))
+        assertEquals("later | earlier\nsecond", view.laidOut(1))
+    }
+
+    @Test
+    fun `lenses are found at the ends of their line, and an edit that joins two lines shares their row`() {
+        val view = viewOf("ab\ncd\nef")
+
+        view.lens(CodeLens(2, "at the end"), CodeLens(3, "at the start"), CodeLens(8, "last"))
+        assertEquals("at the end\nab", view.laidOut(0))
+        assertEquals("at the start\ncd", view.laidOut(1))
+        assertEquals("last\nef", view.laidOut(2))
+
+        view.edit(2, 1, "")
+
+        assertEquals("at the end | at the start\nabcd", view.laidOut(0))
+        assertEquals("last\nef", view.laidOut(1))
+    }
+
+    @Test
+    fun `a row follows an edit to its line's indentation`() {
+        val view = viewOf("first")
+        view.lens(CodeLens(0, "lens"))
+
+        view.edit(0, 0, "  ")
+
+        assertEquals("  lens\n  first", view.laidOut(0))
+    }
+
+    @Test
+    fun `an edit that takes a lens leaves the others found and clicked`() {
+        var clicked = ""
+        val view = viewOf("one\ntwo\nthree\nfour")
+
+        view.lens(
+            CodeLens(0, "first") { clicked = "first" },
+            CodeLens(5, "gone") { clicked = "gone" },
+            CodeLens(8, "third") { clicked = "third" },
+            CodeLens(14, "fourth") { clicked = "fourth" },
+        )
+        view.edit(3, 5, "")
+
+        assertEquals("first | third\nonethree", view.laidOut(0))
+        assertEquals("fourth\nfour", view.laidOut(1))
+        view.clickOn(1, "fourth")
+        assertEquals("fourth", clicked)
     }
 
     @Test

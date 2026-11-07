@@ -262,6 +262,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         set(value) {
             if (value == styleState) return
             styleState = value
+            inline.tabColumns = if (value != null && value.columnWidthEm > 0f) value.tabSize else 0
             layouts.clear()
             structureDirty = true
         }

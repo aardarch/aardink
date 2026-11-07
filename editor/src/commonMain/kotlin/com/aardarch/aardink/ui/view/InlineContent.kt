@@ -59,8 +59,10 @@ internal data class HintWindow(val runs: List<IntRange>, val folds: FoldLayout =
  * decorations, and the language service's inlay hints and code lenses. [build] is where a new source
  * adds to it.
  *
- * Each line is a lookup. The lines are worked out again after a change, in time proportional to
- * what there is to show and not to the document, and only when next asked: an edit marks them stale.
+ * Each line is a lookup. The hints and decorations are worked out again after a change, in time
+ * proportional to what there is to show and not to the document, and only when next asked: an edit
+ * marks them stale. Lenses are about the whole document, so no edit works them all out: a line's row
+ * is built when that line is asked about, from what [ShownLenses] finds on it.
  *
  * The state holds what is shown, and moves it with an edit through listeners it adds before any
  * view can add one. So when [EditorView] calls [onDocumentChange], first thing, it has all moved,
@@ -71,14 +73,37 @@ internal data class HintWindow(val runs: List<IntRange>, val folds: FoldLayout =
  */
 internal class InlineContent(private val state: CodeEditorState, private val onChanged: (lines: List<Int>) -> Unit) {
 
-    private class Answer(
-        val lines: Map<Int, LineInjections>,
-        val wide: List<WideColor>,
-        /** By line, those with a title, in the order of their rows' [LensSlot]s. */
-        val lenses: Map<Int, List<CodeLens>> = emptyMap(),
-        /** The lines with a lens that has no title yet. */
-        val waiting: Set<Int> = emptySet(),
-    )
+    private class Answer(val lines: Map<Int, LineInjections>, val wide: List<WideColor>)
+
+    /**
+     * The lenses as the last edit left them, and [order], their indices by offset. An edit moves
+     * offsets but never past each other, so that order outlasts it: a line's lenses are a search,
+     * and an edit costs this nothing however many there are.
+     */
+    private class ShownLenses(val all: List<CodeLens>, val order: IntArray) {
+        constructor(all: List<CodeLens>) : this(all, all.indices.sortedBy { all[it].offset }.toIntArray())
+
+        /** Those at offsets [start] to [end], in the order they were given. */
+        fun within(start: Int, end: Int): List<CodeLens> {
+            var first = 0
+            var past = order.size
+            while (first < past) {
+                val middle = (first + past) / 2
+                if (all[order[middle]].offset < start) first = middle + 1 else past = middle
+            }
+            past = first
+            while (past < order.size && all[order[past]].offset <= end) past++
+            if (past == first) return emptyList()
+            return order.copyOfRange(first, past).sorted().map { all[it] }
+        }
+
+        /** What each line's row is made of: for what an answer changed, not for an edit. */
+        fun titlesByLine(document: CodeDocument): Map<Int, List<String>> {
+            val titles = HashMap<Int, ArrayList<String>>()
+            for (lens in all) titles.getOrPut(document.offsetToLineCol(lens.offset).first) { ArrayList() } += lens.title
+            return titles
+        }
+    }
 
     /** What a click on a lens is reported with: which of its line's lenses it is. By value, as the row is part of what a layout shows. */
     private data class LensSlot(val index: Int)
@@ -91,38 +116,65 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     private var answer = Answer(emptyMap(), emptyList())
     private var stale = false
 
+    private var lenses = ShownLenses(emptyList())
+
+    /** The lines with a lens that were asked about since the last change, with all they show. */
+    private var lensLines = HashMap<Int, LineInjections>()
+
+    /** Lines with a lens worked out so far, for tests. */
+    var lensLinesBuilt = 0
+        private set
+
     private var hintStyle: SpanStyle? = null
     private var decorationStyle: SpanStyle? = null
     private var lensStyle: SpanStyle? = null
 
     /** Whether no line has anything to show. */
     val isEmpty: Boolean
-        get() = current().let { it.lines.isEmpty() && it.wide.isEmpty() }
+        get() = lenses.all.isEmpty() && current().let { it.lines.isEmpty() && it.wide.isEmpty() }
 
     /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
     val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
 
+    /**
+     * Columns between the tab stops a document's tabs are drawn at, or 0 where a tab is as wide as
+     * the font draws it. Setting it does not say any line changed: the view measures all of them
+     * anew when its style changes.
+     */
+    var tabColumns = 0
+        set(value) {
+            if (value == field) return
+            field = value
+            forgetLensLines()
+        }
+
     /** How a hint's label, a decoration's text with no colour of its own, and a lens's row are drawn. */
     fun setStyles(hint: SpanStyle?, decoration: SpanStyle?, lens: SpanStyle? = null) {
         if (hint == hintStyle && decoration == decorationStyle && lens == lensStyle) return
+        val restyled = lens != lensStyle
         hintStyle = hint
         decorationStyle = decoration
         lensStyle = lens
-        changed()
+        refresh(restyled)
     }
 
     /** Whether [line] has a lens that has no title yet. */
-    fun isWaiting(line: Int): Boolean = line in current().waiting
+    fun isWaiting(line: Int): Boolean = lensesOn(line).any { it.title.isBlank() }
 
     /** Injected text on [line] was clicked: what the lens it is part of does, if it is one. */
     fun clicked(line: Int, injection: Injection) {
         val slot = injection.id as? LensSlot ?: return
-        current().lenses[line]?.getOrNull(slot.index)?.onClick?.invoke()
+        lensesOn(line).filter { it.title.isNotBlank() }.getOrNull(slot.index)?.onClick?.invoke()
     }
 
     /** An edit moved what is shown, or dropped it all: it is worked out again when next asked for. */
     fun onDocumentChange() {
         if (state.hasInlineContent || answer.lines.isNotEmpty() || answer.wide.isNotEmpty()) stale = true
+        forgetLensLines()
+        val moved = state.codeLenses
+        if (moved === lenses.all) return
+        // Fewer: the edit took some with their text. Otherwise each is where it was in the list.
+        lenses = if (moved.size == lenses.all.size) ShownLenses(moved, lenses.order) else ShownLenses(moved)
     }
 
     /**
@@ -130,15 +182,32 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
      * edit has left it stale: its lines may be out of step with the document, which at worst says a
      * line changed that did not, where working it out first would hide what did.
      */
-    fun changed() {
+    fun changed() = refresh(lensesRestyled = false)
+
+    private fun refresh(lensesRestyled: Boolean) {
         val before = answer
         val after = build()
         answer = after
         stale = false
-        val changed = ArrayList<Int>()
+        forgetLensLines()
+        val changed = HashSet<Int>()
         for ((line, shown) in after.lines) if (before.lines[line] != shown) changed += line
         for (line in before.lines.keys) if (line !in after.lines) changed += line
+        if (lensesRestyled || state.codeLenses !== lenses.all) changed += takeLenses(lensesRestyled)
         if (changed.isNotEmpty() || before.wide != after.wide) onChanged(changed.sorted())
+    }
+
+    /** Shows the state's lenses, and says which lines that changes: all that have one, if [restyled]. */
+    private fun takeLenses(restyled: Boolean): Set<Int> {
+        val before = lenses.titlesByLine(document)
+        lenses = ShownLenses(state.codeLenses)
+        val after = lenses.titlesByLine(document)
+        if (restyled) return before.keys + after.keys
+        return (before.keys + after.keys).filterTo(HashSet()) { before[it] != after[it] }
+    }
+
+    private fun forgetLensLines() {
+        if (lensLines.isNotEmpty()) lensLines = HashMap()
     }
 
     private fun current(): Answer {
@@ -149,9 +218,28 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         return answer
     }
 
+    private fun lensesOn(line: Int): List<CodeLens> {
+        if (lenses.all.isEmpty() || line !in 0 until document.lineCount) return emptyList()
+        return lenses.within(document.lineStart(line), document.lineEnd(line))
+    }
+
+    /**
+     * What [line] shows, [others] being all but its lenses. The row comes first: it is at column 0,
+     * ahead of anything else at that column, and first to what a line can show, so that no piece of
+     * it is dropped.
+     */
+    private fun withLenses(line: Int, others: LineInjections?): LineInjections? {
+        lensLines[line]?.let { return it }
+        val onLine = lensesOn(line)
+        if (onLine.isEmpty()) return others
+        lensLinesBuilt++
+        val row = lensRow(line, onLine.filter { it.title.isNotBlank() })
+        return LineInjections.of(row + others?.items.orEmpty(), others?.colors.orEmpty()).also { lensLines[line] = it }
+    }
+
     private fun lineAnswer(line: Int): LineInjections? {
         val shown = current()
-        val own = shown.lines[line]
+        val own = withLenses(line, shown.lines[line])
         if (shown.wide.isEmpty()) return own
         val lineStart = document.lineStart(line)
         val lineEnd = document.lineEnd(line)
@@ -172,21 +260,9 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     private fun build(): Answer {
         val lines = HashMap<Int, Pending>()
         val wide = ArrayList<WideColor>()
-        // First: a row above is at column 0, ahead of anything else at that column, and first to
-        // what a line can show, so that no piece of the row is dropped from it.
-        val lenses = HashMap<Int, ArrayList<CodeLens>>()
-        for (lens in state.codeLenses) lenses.getOrPut(document.offsetToLineCol(lens.offset).first) { ArrayList() } += lens
-        val titled = HashMap<Int, List<CodeLens>>()
-        val waiting = HashSet<Int>()
-        for ((line, onLine) in lenses) {
-            val shown = onLine.filter { it.title.isNotBlank() }
-            lines.getOrPut(line) { Pending() }.items += lensRow(line, shown)
-            if (shown.isNotEmpty()) titled[line] = shown
-            if (shown.size < onLine.size) waiting += line
-        }
         state.forEachInlineDecoration { addDecoration(it, lines, wide) }
         for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
-        return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide, titled, waiting)
+        return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
     }
 
     /**
@@ -212,13 +288,23 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         return row
     }
 
-    /** The whitespace [line] starts with, for a row above it to start where its text does. */
+    /**
+     * What makes a row above [line] start where its text does: its whitespace, with each tab as the
+     * spaces to its stop, as an injected tab gets no stop of its own and would be drawn about a
+     * character wide. Where tabs have no stops ([tabColumns]) the line's are as narrow, and stay.
+     */
     private fun lensIndent(line: Int): String {
-        val start = document.lineStart(line)
-        val end = min(document.lineEnd(line), start + MAX_LENS_INDENT)
-        var at = start
-        while (at < end && (document[at] == ' ' || document[at] == '\t')) at++
-        return document.subSequence(start, at).toString()
+        val end = document.lineEnd(line)
+        var at = document.lineStart(line)
+        val indent = StringBuilder()
+        while (at < end && indent.length < MAX_LENS_INDENT) {
+            when (document[at++]) {
+                ' ' -> indent.append(' ')
+                '\t' -> if (tabColumns > 0) repeat(tabColumns - indent.length % tabColumns) { indent.append(' ') } else indent.append('\t')
+                else -> break
+            }
+        }
+        return indent.take(MAX_LENS_INDENT).toString()
     }
 
     private fun addDecoration(decoration: Decoration, lines: HashMap<Int, Pending>, wide: ArrayList<WideColor>) {
