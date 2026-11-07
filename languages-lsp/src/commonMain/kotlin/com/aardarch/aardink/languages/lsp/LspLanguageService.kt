@@ -171,9 +171,13 @@ class LspLanguageService(
      * Absent knowledge counts as yes: capabilities not known, because [LspClient.initialize] was not
      * called or has not been answered, and a feature registered through `client/registerCapability`
      * and not taken back, whatever its `documentSelector` says.
+     *
+     * `textDocumentSync`, the one member that can be a number, counts when it asks to hear of the
+     * document at all, by that number or through the registrations of `didOpen` and the like.
      */
     fun supports(provider: String): Boolean {
         val capabilities = client.serverCapabilities as? JsonObject ?: return true
+        if (provider == "textDocumentSync") return LspTextDocumentSync.from(capabilities, client.registrations) != LspTextDocumentSync()
         val declared = capabilities[provider]
         return declared is JsonObject || (declared as? JsonPrimitive)?.booleanOrNull == true || isRegistered(provider)
     }

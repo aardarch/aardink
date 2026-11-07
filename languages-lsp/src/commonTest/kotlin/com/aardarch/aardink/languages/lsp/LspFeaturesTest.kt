@@ -105,6 +105,26 @@ class LspFeaturesTest {
     }
 
     @Test
+    fun `textDocumentSync counts as a number, as options, and when registered`() = withServer("x") {
+        val answers = listOf(
+            """{"textDocumentSync":2}""" to true,
+            """{"textDocumentSync":1}""" to true,
+            """{"textDocumentSync":0}""" to false,
+            """{"textDocumentSync":{"openClose":true}}""" to true,
+            """{"textDocumentSync":{"change":1}}""" to true,
+            """{"textDocumentSync":{"openClose":false,"change":0}}""" to false,
+            "{}" to false,
+        )
+        for ((declared, expected) in answers) {
+            serverDeclares(declared)
+            assertEquals(expected, service.supports("textDocumentSync"), declared)
+        }
+
+        serverRegisters(registration("textDocument/didChange", """{"syncKind":2}"""))
+        assertTrue(service.supports("textDocumentSync"))
+    }
+
+    @Test
     fun `a request the server did not declare is not sent`() = withServer("val x = 1") {
         serverDeclares("{}")
         val anyColor = ColorInfo(0..0, Color.Red)
