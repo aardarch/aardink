@@ -28,6 +28,9 @@ import kotlinx.serialization.json.JsonElement
  *
  * The other members are notifications and run on the receive loop, so that they arrive in the
  * server's order. They must return quickly, and hand anything slow to a coroutine of their own.
+ * There is one exception, which no server sent: the [logMessage] that [LspClient.initialize] makes
+ * of a `positionEncoding` it cannot read runs in the coroutine that called `initialize`, so it can
+ * overlap one from the receive loop.
  *
  * `type` is an LSP `MessageType`: 1 error, 2 warning, 3 info, 4 log, 5 debug.
  */
@@ -36,7 +39,8 @@ interface LspClientHost {
      * Applies [edit], which may reach several files, for `workspace/applyEdit`. [label] is the
      * server's name for the change, for an undo stack. All of [edit] comes here, for documents with
      * an attached [LspLanguageService] too: an editor state may only be edited on its own thread,
-     * and which that is, only the host knows.
+     * and which that is, only the host knows. A server whose positions are not UTF-16 is refused
+     * without coming here, as every [LspPosition] in its edit would point at the wrong column.
      *
      * [LspLanguageService.rename] also comes here, with what its own document cannot carry out, so
      * the [edit] leaves that document's text edits out and [label] is null. That call runs in the

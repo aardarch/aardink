@@ -20,7 +20,11 @@ import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.TextEdit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -94,6 +98,12 @@ private suspend fun Harness.renamed(answerJson: String): List<TextEdit> {
     val edits = service.rename(doc, 4, "y")
     server.await()
     return edits
+}
+
+/** Closes the document from a coroutine already cancelled, as a host's `finally` can. Leaves the queue to catch up. */
+private fun Harness.closeOnceCancelled(): Job = launch(start = CoroutineStart.UNDISPATCHED) {
+    cancel()
+    service.didClose()
 }
 
 /** The text of a `didChange` that carries the whole document, as opposed to a range of it. */
@@ -279,6 +289,43 @@ class LspServerTrafficTest {
         assertTrue(unreadableEntry.isEmpty())
         assertTrue(unreadableEdits.isEmpty())
         assertTrue(host.edits.isEmpty())
+    }
+
+    @Test
+    fun `an entry that is neither an edit nor a whole file operation refuses the rename`() = withHost("val x = 1") { host ->
+        val here = """{"textDocument":{"uri":"$URI","version":2},"edits":[{"range":${range(0, 4, 0, 5)},"newText":"y"}]}"""
+        val unreadable = listOf(
+            """{"textDocument":{"version":2},"edits":[]}""",
+            """{"textDocument":"$OTHER_URI","edits":[]}""",
+            """{"textDocument":{"uri":7},"edits":[]}""",
+            """{"textDocument":{"uri":"$OTHER_URI"}}""",
+            """{"textDocument":{"uri":"$OTHER_URI"},"edits":"none"}""",
+            """{"textDocument":{"uri":"$OTHER_URI"},"edits":[{}]}""",
+            """{"foo":1}""",
+            """{"uri":"$OTHER_URI"}""",
+            """{"kind":"move","uri":"$OTHER_URI"}""",
+            """{"kind":"create"}""",
+            """{"kind":"delete","uri":7}""",
+            """{"kind":"rename","oldUri":"$OTHER_URI"}""",
+            """{"kind":"rename","uri":"$OTHER_URI"}""",
+        )
+
+        for (entry in unreadable) {
+            assertTrue(renamed("""{"documentChanges":[$here,$entry]}""").isEmpty(), "a host could skip $entry and say it applied")
+        }
+
+        assertTrue(host.edits.isEmpty())
+    }
+
+    @Test
+    fun `documentChanges that is not a list refuses the rename and a null one is no change`() = withHost("val x = 1") { host ->
+        val here = """"changes":{"$URI":[{"range":${range(0, 4, 0, 5)},"newText":"y"}]}"""
+
+        assertTrue(renamed("""{$here,"documentChanges":{"kind":"delete","uri":"$OTHER_URI"}}""").isEmpty())
+        assertTrue(renamed("""{$here,"documentChanges":"everything"}""").isEmpty())
+        assertTrue(host.edits.isEmpty())
+
+        assertEquals(listOf(TextEdit(4..4, "y")), renamed("""{$here,"documentChanges":null}"""))
     }
 
     @Test
@@ -471,6 +518,21 @@ class LspServerTrafficTest {
     }
 
     @Test
+    fun `applyEdit from a server counting positions another way is refused without the host`() = withHost { host ->
+        serverDeclares("""{"positionEncoding":"utf-8"}""")
+
+        serverAsks("1", APPLY_EDIT, """{"edit":{"changes":{"$OTHER_URI":[{"range":${range(0, 2, 0, 3)},"newText":"y"}]}}}""")
+        val refused = nextSent()["result"]!!.jsonObject
+        assertFalse(refused["applied"]!!.jsonPrimitive.boolean)
+        assertTrue("encoding" in refused["failureReason"]!!.jsonPrimitive.content)
+
+        serverAsks("2", APPLY_EDIT, """{"edit":{"documentChanges":[{"kind":"create","uri":"$OTHER_URI"}]}}""")
+        assertFalse(nextSent()["result"]!!.jsonObject["applied"]!!.jsonPrimitive.boolean)
+
+        assertTrue(host.edits.isEmpty(), "byte offsets read as UTF-16 columns would land in the wrong place")
+    }
+
+    @Test
     fun `what such a server pushes stays on its line`() = withServer("val x = 1\nval y = 2") {
         serverDeclares("""{"positionEncoding":"utf-8"}""")
 
@@ -564,13 +626,40 @@ class LspServerTrafficTest {
     }
 
     @Test
-    fun `capabilities not known are no reason to pull`() = withServer("val a = 1") {
+    fun `capabilities not known count as a server to pull from`() = withServer("val a = 1") {
+        assertTrue(service.supports("diagnosticProvider"))
         service.didOpen(doc)
         nextSent()
 
+        respond(PULL, fullReport("pulled"))
+        settle()
+
+        assertEquals("pulled", service.diagnostics(doc).single().message)
+    }
+
+    @Test
+    fun `a server that turns out to have no pull is not asked again`() = withServer("val a = 1") {
+        service.didOpen(doc)
+        nextSent()
+        respondWithMethodNotFound(PULL)
+        settle()
+
+        service.didChange(doc, 2)
+        assertEquals("textDocument/didChange", nextSent().method)
         advanceBy(10 * PULL_DEBOUNCE_MILLIS)
 
-        assertNothingSent("a server that was never asked what it does almost certainly pushes")
+        assertNothingSent("it has said it has no such method")
+    }
+
+    @Test
+    fun `capabilities that arrive in time call off a pull they do not allow`() = withServer("val a = 1") {
+        service.didOpen(doc)
+        nextSent()
+
+        serverDeclares("""{$INCREMENTAL_SYNC}""")
+        advanceBy(10 * PULL_DEBOUNCE_MILLIS)
+
+        assertNothingSent("the server has said it pushes")
     }
 
     @Test
@@ -701,5 +790,79 @@ class LspServerTrafficTest {
         advanceBy(10 * PULL_DEBOUNCE_MILLIS)
 
         assertNothingSent("the server has no such document any more")
+    }
+
+    @Test
+    fun `a cancelled close with a whole text still to send starts no pull`() = withServer("") {
+        serverDeclares("""{$FULL_SYNC,"diagnosticProvider":{}}""")
+        val state = editorState("val a = 1")
+        service.attach(state)
+        nextSent()
+        respond(PULL, fullReport("first"))
+        settle()
+        state.insert(0, "x")
+        settle()
+
+        closeOnceCancelled().join()
+
+        assertEquals("xval a = 1", sentNow().wholeText)
+        assertEquals("textDocument/didClose", sentNow().method)
+        advanceBy(10 * PULL_DEBOUNCE_MILLIS)
+        assertNothingSent("the server has no such document any more")
+    }
+
+    @Test
+    fun `a cancelled close with an edit still queued starts no pull`() = withServer("") {
+        serverDeclares(PULLING_SERVER)
+        val state = editorState("val a = 1")
+        service.attach(state)
+        nextSent()
+        respond(PULL, fullReport("first"))
+        settle()
+        state.insert(0, "x")
+
+        closeOnceCancelled().join()
+
+        assertEquals("textDocument/didChange", sentNow().method)
+        assertEquals("textDocument/didClose", sentNow().method)
+        advanceBy(10 * PULL_DEBOUNCE_MILLIS)
+        assertNothingSent("the server has no such document any more")
+    }
+
+    @Test
+    fun `a document opened again is asked about again`() = withServer("val a = 1") {
+        serverDeclares(PULLING_SERVER)
+        service.didOpen(doc)
+        nextSent()
+        service.didClose()
+        nextSent()
+
+        service.didOpen(doc)
+        nextSent()
+
+        respond(PULL, fullReport("reopened"))
+        settle()
+        assertEquals("reopened", service.diagnostics(doc).single().message)
+    }
+
+    @Test
+    fun `listeners hear one delivery at a time whoever makes it`() = withServer("val a = 1") {
+        val heard = mutableListOf<String>()
+        var running = 0
+        var most = 0
+        client.addDiagnosticsListener { uri, _, _ ->
+            running++
+            most = maxOf(most, running)
+            heard += uri
+            // Arrives during this call, as a pulled answer can on another thread of the client's scope.
+            if (uri == OTHER_URI) launch(start = CoroutineStart.UNDISPATCHED) { client.deliverDiagnostics(URI, null, emptyList()) }
+            running--
+        }
+
+        publish(OTHER_URI, "[]")
+        settle()
+
+        assertEquals(listOf(OTHER_URI, URI), heard)
+        assertEquals(1, most)
     }
 }

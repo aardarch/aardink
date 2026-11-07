@@ -184,8 +184,9 @@ private class TextMirror(text: String) {
  * takes up, since a registration can arrive at any time. A host's own [open] and [sendWholeText] are
  * sent whatever it declared, as they always were: a host calling them has said what it wants.
  *
- * [onTextSent] runs on the queue each time a text or a change of it has been written, and must
- * return at once.
+ * [onTextSent] runs on the queue each time a text or a change of it has been written, and [onClosed]
+ * when it reaches [close], after the last [onTextSent] of that session however the caller of [close]
+ * fared. Both must return at once.
  *
  * The queue lives from the first thing sent until [close] or the end of the client. A later session
  * gets a new queue, which starts once the last one has drained.
@@ -195,6 +196,7 @@ internal class LspDocumentSync(
     private val documentUri: String,
     private val languageId: String,
     private val onTextSent: () -> Unit = {},
+    private val onClosed: () -> Unit = {},
 ) {
 
     private sealed interface Item {
@@ -389,6 +391,7 @@ internal class LspDocumentSync(
             mirror = null
             unsent = false
             debounce?.cancel()
+            onClosed()
             if (announced) {
                 client.sendNotification(
                     "textDocument/didClose",

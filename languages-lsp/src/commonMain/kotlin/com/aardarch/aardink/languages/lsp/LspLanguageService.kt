@@ -53,6 +53,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -119,14 +120,16 @@ enum class LspSaveReason(internal val code: Int) {
  * same for rename support ([renameSupportFrom]).
  *
  * Diagnostics come the same way whichever way the server gives them. One that declared
- * `diagnosticProvider` is asked with `textDocument/diagnostic` once the document opens and each time
- * typing pauses, and its answer reaches every [DiagnosticsListener] as if it had been pushed, for
- * the version the question was about. A server that declared nothing of the kind is left to push.
+ * `diagnosticProvider`, or whose capabilities are not known, is asked with `textDocument/diagnostic`
+ * once the document opens and each time typing pauses, and its answer reaches every
+ * [DiagnosticsListener] as if it had been pushed, for the version the question was about. A
+ * `MethodNotFound` ends the asking for this document. A server that declared nothing of the kind is
+ * left to push.
  *
  * A server that answered a `positionEncoding` other than `utf-16` has no feature here that needs a
  * position, whatever else it declared or the host said: [supports] is false, and [supportsRename]
  * too. Edits go as whole text, and pushed diagnostics stay, on the right lines but perhaps not the
- * right columns.
+ * right columns. [LspClient] refuses its `workspace/applyEdit`.
  *
  * @param client Connected [LspClient] instance.
  * @param documentUri The file or document URI (e.g. `"file:///src/Main.kt"`).
@@ -216,7 +219,7 @@ class LspLanguageService(
         get() = lastCompletionsIncomplete
 
     /** Holds the version last sent to the server; diagnostics computed against an older one are stale. */
-    private val sync = LspDocumentSync(client, documentUri, languageId, onTextSent = ::pullDiagnosticsSoon)
+    private val sync = LspDocumentSync(client, documentUri, languageId, onTextSent = ::pullDiagnosticsSoon, onClosed = ::callOffPull)
 
     @Volatile
     private var diagnosticsVersion: Int? = null
@@ -246,13 +249,13 @@ class LspLanguageService(
     @Volatile
     private var diagnosticsPull: Job? = null
 
-    /**
-     * Asks for diagnostics once the text has stood still for a moment, unless the server pushes them.
-     * Unlike everywhere else, capabilities not known count as no: this is not something the host
-     * asked for, and pushing is the norm.
-     */
+    /** The server answered a pull with `MethodNotFound`, as one that only pushes may when its capabilities were not known. */
+    @Volatile
+    private var pullRefused = false
+
+    /** Asks for diagnostics once the text has stood still for a moment, unless the server pushes them. */
     private fun pullDiagnosticsSoon() {
-        if (client.serverCapabilities !is JsonObject || !supports("diagnosticProvider")) return
+        if (pullRefused || !supports("diagnosticProvider")) return
         diagnosticsPull?.cancel()
         diagnosticsPull = client.launchUntilClosed {
             delay(DIAGNOSTICS_PULL_DEBOUNCE_MILLIS)
@@ -260,13 +263,21 @@ class LspLanguageService(
         }
     }
 
+    /** Called on the queue, as the sends that start a pull are, so that none can follow it. */
+    private fun callOffPull() {
+        diagnosticsPull?.cancel()
+    }
+
     /**
      * The answer goes out as a push would, under the version asked about, so that [isStale] sees to
      * it the same way. `previousResultId` is not sent: a report saying `unchanged` would save the
      * server some work, but one dropped as stale would then leave nothing to compare with. A server
      * that says it anyway changes nothing here.
+     *
+     * What the server supports is read again, as capabilities not known a moment ago may be by now.
      */
     private suspend fun pullDiagnostics() {
+        if (!supports("diagnosticProvider")) return
         val params = buildJsonObject {
             put("textDocument", textDocumentJson)
             val provider = (client.serverCapabilities as? JsonObject)?.get("diagnosticProvider") as? JsonObject
@@ -274,6 +285,7 @@ class LspLanguageService(
         }
         var version = 0
         val answer = requestPatiently("textDocument/diagnostic", params) { version = sync.sentVersion }
+        if (answer is LspResult.Unsupported) pullRefused = true
         val report = (answer as? LspResult.Value)?.element as? JsonObject ?: return
         if (report.string("kind") != "full") return
         val items = report["items"]?.let { decodeOrNull(ListSerializer(LspDiagnostic.serializer()), it) } ?: return
@@ -347,18 +359,14 @@ class LspLanguageService(
      * so while attached this must be called on the thread that edits the state, as [detach] must.
      *
      * The notification goes even if the caller is cancelled while waiting for it, so this is safe in
-     * a `finally`.
+     * a `finally`, and no diagnostics are asked for after it either way.
      */
     suspend fun didClose() {
         client.removeDiagnosticsListener(diagnosticsListener)
         lspDiagnostics = emptyList()
         diagnosticsVersion = null
         offeredCompletions = emptyList()
-        try {
-            sync.close()
-        } finally {
-            diagnosticsPull?.cancel()
-        }
+        sync.close()
     }
 
     /**
@@ -978,25 +986,30 @@ class LspLanguageService(
      * way to perform half of a workspace edit, so a caller goes ahead only if every part is taken
      * care of.
      *
-     * Null when part of it cannot be: an entry too malformed to read, or a file operation on this
-     * document itself, which has to happen in order with its text edits.
+     * Null when part of it cannot be: `documentChanges` that is not a list, an entry of it that is
+     * not a `TextDocumentEdit` or a file operation this can read through, which a host might skip and
+     * still report as applied, or a file operation on this document itself, which has to happen in
+     * order with its text edits.
      */
     private fun partsOf(edit: LspWorkspaceEdit): EditParts? {
         val here = edit.changes?.get(documentUri).orEmpty().toMutableList()
         val otherChanges = edit.changes.orEmpty() - documentUri
         val otherEntries = mutableListOf<JsonElement>()
-        for (entry in (edit.documentChanges as? JsonArray).orEmpty()) {
+        val entries = when (val changes = edit.documentChanges) {
+            null, JsonNull -> emptyList()
+            is JsonArray -> changes
+            else -> return null
+        }
+        for (entry in entries) {
             val change = entry as? JsonObject ?: return null
-            when {
-                (change["textDocument"] as? JsonObject)?.string("uri") == documentUri -> {
-                    val edits = change["edits"] ?: return null
-                    here += decodeOrNull(ListSerializer(LspTextEdit.serializer()), edits) ?: return null
-                }
-
-                // `uri` is a CreateFile's or a DeleteFile's, the others a RenameFile's.
-                listOf("uri", "oldUri", "newUri").any { change.string(it) == documentUri } -> return null
-
-                else -> otherEntries += entry
+            if ("textDocument" in change) {
+                val uri = (change["textDocument"] as? JsonObject)?.uri("uri") ?: return null
+                val edits = change["edits"]?.let { decodeOrNull(ListSerializer(LspTextEdit.serializer()), it) } ?: return null
+                if (uri == documentUri) here += edits else otherEntries += entry
+            } else {
+                val uris = change.fileOperationUris() ?: return null
+                if (documentUri in uris) return null
+                otherEntries += entry
             }
         }
         if (otherChanges.isEmpty() && otherEntries.isEmpty()) return EditParts(here, elsewhere = null)
@@ -1135,6 +1148,18 @@ class LspLanguageService(
         }
 
         private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
+
+        private fun JsonObject.uri(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+        /** The files a `CreateFile`, `RenameFile` or `DeleteFile` is about, or null if this is not all of one. */
+        private fun JsonObject.fileOperationUris(): List<String>? {
+            val members = when (string("kind")) {
+                "create", "delete" -> listOf("uri")
+                "rename" -> listOf("oldUri", "newUri")
+                else -> return null
+            }
+            return members.map { uri(it) ?: return null }
+        }
 
         private fun JsonObject.int(name: String): Int? = (this[name] as? JsonPrimitive)?.intOrNull
 

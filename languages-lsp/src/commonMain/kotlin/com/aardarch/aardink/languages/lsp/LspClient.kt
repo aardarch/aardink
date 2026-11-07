@@ -46,7 +46,13 @@ import kotlinx.serialization.json.put
 import kotlin.concurrent.Volatile
 
 /**
- * Callback invoked when the server pushes `textDocument/publishDiagnostics` for [uri].
+ * Callback invoked with a server's diagnostics for [uri]: pushed as
+ * `textDocument/publishDiagnostics`, or the answer to the `textDocument/diagnostic` an
+ * [LspLanguageService] pulled.
+ *
+ * Calls come one at a time, each seeing what the last one did, so what only a listener touches needs
+ * no lock of its own. They do not all come from the receive loop, though: a pulled answer comes from
+ * a coroutine of its own, on whichever thread of the client's scope that runs.
  *
  * [version] is the document version the diagnostics were computed against, or null when the server
  * did not report one; listeners should drop a notification older than the last version they sent.
@@ -74,8 +80,8 @@ internal class LspRegistration(val id: String, val method: String, val options: 
  * Asynchronous Coroutine JSON-RPC 2.0 client managing communication with a Language Server.
  *
  * One client normally serves many documents: register one [DiagnosticsListener] per open
- * document with [addDiagnosticsListener]; every listener receives every `publishDiagnostics`
- * notification and filters by URI itself.
+ * document with [addDiagnosticsListener]; every listener receives the diagnostics of every document,
+ * pushed or pulled, and filters by URI itself.
  *
  * Internal mutable state ([nextRequestId], [pendingRequests], [listeningJob], [transportClosed])
  * is guarded by [lock], a `Mutex`, rather than `java.util.concurrent`'s `AtomicLong`/
@@ -85,10 +91,11 @@ internal class LspRegistration(val id: String, val method: String, val options: 
  * directly, so they take the lock with [Mutex.tryLock] and fall back to an async acquisition on
  * [scope] when it's already held — contention here is a receive-loop-starts-or-stops event, not a
  * hot path. [diagnosticsListeners] is a `@Volatile` copy-on-write list outside [lock] entirely:
- * both the read in [handleNotification] (the receive loop's hot path) and the writes in
+ * both the read in [deliverDiagnostics] (the receive loop's hot path) and the writes in
  * [addDiagnosticsListener]/[removeDiagnosticsListener] are lock-free, relying on `@Volatile` for
  * cross-thread visibility. Keeping listener writes off [lock] is what preserves their program
- * order — see [addDiagnosticsListener].
+ * order — see [addDiagnosticsListener]. Running the listeners is kept to one at a time by
+ * [diagnosticsDelivery], as the receive loop is not the only one to do it.
  *
  * Requests from the server each run in their own coroutine, a child of the receive loop, because
  * answering one can take as long as a person takes to answer a prompt and can itself need a response
@@ -111,6 +118,13 @@ class LspClient(
 
     @Volatile
     private var diagnosticsListeners: List<DiagnosticsListener> = emptyList()
+
+    /**
+     * Held while listeners run. Not [lock]: teardown must not wait on what a listener does. Listeners
+     * do not suspend, so whoever waits here, the receive loop included, waits for no longer than one
+     * delivery takes.
+     */
+    private val diagnosticsDelivery = Mutex()
 
     /**
      * Set once the connection is gone — the server closed the stream, or [stop] was called. A
@@ -303,7 +317,8 @@ class LspClient(
      *
      * A server that answers with a `positionEncoding` other than `utf-16` stays connected, since
      * text needs no positions, but [LspLanguageService] asks it nothing about a position: it is told
-     * of edits as whole text, and the host hears why through [LspClientHost.logMessage].
+     * of edits as whole text, its `workspace/applyEdit` is refused, and the host hears why through
+     * [LspClientHost.logMessage].
      */
     suspend fun initialize(rootUri: String?, capabilities: JsonElement = DefaultClientCapabilities): JsonElement? {
         val params = buildJsonObject {
@@ -649,15 +664,17 @@ class LspClient(
         }
     }
 
-    /** Hands every listener diagnostics for [uri], pushed by the server or pulled from it. */
-    internal fun deliverDiagnostics(uri: String, version: Int?, diagnostics: List<LspDiagnostic>) {
-        for (listener in diagnosticsListeners) {
-            try {
-                listener(uri, version, diagnostics)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // A misbehaving listener must not tear down the connection for everyone else.
+    /** Hands every listener diagnostics for [uri], pushed by the server or pulled from it, one delivery at a time. */
+    internal suspend fun deliverDiagnostics(uri: String, version: Int?, diagnostics: List<LspDiagnostic>) {
+        diagnosticsDelivery.withLock {
+            for (listener in diagnosticsListeners) {
+                try {
+                    listener(uri, version, diagnostics)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // A misbehaving listener must not tear down the connection for everyone else.
+                }
             }
         }
     }
@@ -697,7 +714,8 @@ class LspClient(
      *   of a token until the first `$/progress` for it, through [LspClientHost.progress].
      * - `window/showMessageRequest`: [LspClientHost.showMessageRequest]'s choice, or a `null` result
      *   for none.
-     * - `workspace/applyEdit`: [LspClientHost.applyWorkspaceEdit]'s answer.
+     * - `workspace/applyEdit`: [LspClientHost.applyWorkspaceEdit]'s answer, unless the server's
+     *   positions cannot be read: see [applyEditResult].
      * - `workspace/configuration`: answered with one `null` per requested item, per spec, meaning
      *   "no configuration value for this scope".
      */
@@ -768,15 +786,25 @@ class LspClient(
         return buildJsonObject { put("title", choice) }
     }
 
-    /** Read member by member, for the reason [showMessageRequestResult] gives. An edit too malformed to read applies nothing. */
+    /**
+     * Read member by member, for the reason [showMessageRequestResult] gives. An edit too malformed to
+     * read applies nothing, and neither does any edit from a server whose positions are not UTF-16:
+     * [LspPosition] says they are, so the host would put the text at the wrong column. That goes for
+     * an edit of file operations alone too, as what [initialize] tells the host stays on leaves it out.
+     */
     private suspend fun applyEditResult(params: JsonElement?): JsonElement {
         val request = params as? JsonObject
         val edit = request?.get("edit")?.let { decodeOrNull(LspWorkspaceEdit.serializer(), it) }
         val label = (request?.get("label") as? JsonPrimitive)?.contentOrNull
-        val applied = edit != null && host.applyWorkspaceEdit(edit, label)
+        val failure = when {
+            edit == null -> "The edit could not be read"
+            !positionsAreUtf16(serverCapabilities) -> "Positions in this server's encoding cannot be read"
+            host.applyWorkspaceEdit(edit, label) -> null
+            else -> "The edit was not applied in full"
+        }
         return buildJsonObject {
-            put("applied", applied)
-            if (!applied) put("failureReason", if (edit == null) "The edit could not be read" else "The edit was not applied in full")
+            put("applied", failure == null)
+            if (failure != null) put("failureReason", failure)
         }
     }
 

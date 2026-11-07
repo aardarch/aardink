@@ -805,6 +805,7 @@ class LspFeaturesTest {
 
     @Test
     fun `a server that says to try again is asked again`() = withServer(tenLines) {
+        serverDeclares("""{"foldingRangeProvider":true}""")
         opened()
         val folds = async { LspFoldingProvider(service).requestFoldableRanges(doc) }
 
@@ -819,6 +820,7 @@ class LspFeaturesTest {
 
     @Test
     fun `a server that keeps saying so is given up on, for now`() = withServer(tenLines) {
+        serverDeclares("""{"foldingRangeProvider":true}""")
         opened()
         val folds = async { assertFailsWith<IllegalStateException> { LspFoldingProvider(service).requestFoldableRanges(doc) } }
 
