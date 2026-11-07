@@ -16,6 +16,7 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.runtime.Immutable
+import com.aardarch.aardink.core.text.DocumentChange
 
 /**
  * A short label [LanguageService.inlayHints] shows among the characters: a parameter's name, an
@@ -28,3 +29,22 @@ import androidx.compose.runtime.Immutable
  */
 @Immutable
 data class InlayHint(val offset: Int, val label: String)
+
+/**
+ * The hints on show, moved with each edit until the next answer. A hint on text that went goes with
+ * it: what it said no longer applies, and a block deleted would leave them all at one column.
+ */
+internal class InlayHintTracker :
+    TrackedRanges<InlayHint>(
+        rangeOf = { it.offset until it.offset },
+        withRange = { hint, range -> hint.copy(offset = range.first) },
+        keepsOneCharacter = false,
+    ) {
+    override fun onDocumentChange(change: DocumentChange) {
+        if (change.deletedLength > 0 && !change.isReset) {
+            val inside = (change.offset + 1) until (change.offset + change.deletedLength)
+            if (items.any { it.offset in inside }) replace(items.filterNot { it.offset in inside })
+        }
+        super.onDocumentChange(change)
+    }
+}

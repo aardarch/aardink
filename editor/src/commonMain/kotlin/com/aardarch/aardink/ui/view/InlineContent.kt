@@ -22,8 +22,6 @@ import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.InlayHint
-import com.aardarch.aardink.core.TrackedRanges
-import com.aardarch.aardink.core.text.DocumentChange
 import kotlin.math.max
 import kotlin.math.min
 
@@ -39,8 +37,9 @@ internal data class ColumnColor(val from: Int, val to: Int, val color: Color)
  * Each line is a lookup. The lines are worked out again after a change, in time proportional to
  * what there is to show and not to the document, and only when next asked: an edit marks them stale.
  *
- * [EditorView] calls [onDocumentChange] first, before it splices its rows, because the rows are
- * estimated from this answer. Decorations have moved by then, as the state's listener comes first.
+ * The state holds what is shown, and moves it with an edit through listeners it adds before any
+ * view can add one. So when [EditorView] calls [onDocumentChange], first thing, it has all moved,
+ * and the rows the view estimates next come from where it now is.
  *
  * @param onChanged told which lines' answers changed, sorted, other than by an edit moving them.
  *   Empty when only colours across several lines did, which no row count depends on.
@@ -53,12 +52,6 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     private data class WideColor(val firstLine: Int, val lastLine: Int, val start: Int, val end: Int, val color: Color)
 
     private val document: CodeDocument get() = state.document
-
-    private val hints = TrackedRanges<InlayHint>(
-        rangeOf = { it.offset until it.offset },
-        withRange = { hint, range -> hint.copy(offset = range.first) },
-        keepsOneCharacter = false,
-    )
 
     private var answer = Answer(emptyMap(), emptyList())
     private var stale = false
@@ -73,44 +66,26 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
     val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
 
-    /** The hints on screen, as they are now. */
-    val shownHints: List<InlayHint> get() = hints.items
-
-    /** Shows [list] in place of the hints before, at offsets of the document as it is now. */
-    fun setHints(list: List<InlayHint>) {
-        if (list == hints.items) return
-        val before = current()
-        hints.replace(list)
-        publish(before)
-    }
-
     /** How a hint's label, and a decoration's text with no colour of its own, are drawn. */
     fun setStyles(hint: SpanStyle?, decoration: SpanStyle?) {
         if (hint == hintStyle && decoration == decorationStyle) return
-        val before = current()
         hintStyle = hint
         decorationStyle = decoration
-        publish(before)
+        changed()
     }
 
-    /** The decorations in the state changed. */
-    fun decorationsChanged() = publish(current())
+    /** An edit moved what is shown, or dropped it all: it is worked out again when next asked for. */
+    fun onDocumentChange() {
+        if (state.hasInlineContent || answer.lines.isNotEmpty() || answer.wide.isNotEmpty()) stale = true
+    }
 
     /**
-     * Moves what is here with [change]. A hint on text that went goes with it: what it said about
-     * that text no longer applies, and a block deleted would leave them all at one column.
+     * What the state shows changed, other than by an edit. Compared with the last answer even if an
+     * edit has left it stale: its lines may be out of step with the document, which at worst says a
+     * line changed that did not, where working it out first would hide what did.
      */
-    fun onDocumentChange(change: DocumentChange) {
-        if (hints.items.isEmpty() && !state.hasInlineDecorations) return
-        if (change.deletedLength > 0 && !change.isReset) {
-            val inside = (change.offset + 1) until (change.offset + change.deletedLength)
-            if (hints.items.any { it.offset in inside }) hints.replace(hints.items.filterNot { it.offset in inside })
-        }
-        hints.onDocumentChange(change)
-        stale = true
-    }
-
-    private fun publish(before: Answer) {
+    fun changed() {
+        val before = answer
         val after = build()
         answer = after
         stale = false
@@ -152,7 +127,7 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         val lines = HashMap<Int, Pending>()
         val wide = ArrayList<WideColor>()
         state.forEachInlineDecoration { addDecoration(it, lines, wide) }
-        for (hint in hints.items) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
+        for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
         return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
     }
 

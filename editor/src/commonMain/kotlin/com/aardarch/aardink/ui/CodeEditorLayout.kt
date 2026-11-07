@@ -743,10 +743,9 @@ private fun CodeEditorLayoutContent(
     }
 
     // ── Inlay hints: asked for around the view after a pause, moved with edits between answers ─
-    LaunchedEffect(view, languageService, options.inlayHints) {
-        val inline = view.inline
+    LaunchedEffect(state, view, languageService, options.inlayHints) {
         // What is here came from a service, and a change of either the service or the switch ends that.
-        inline.setHints(emptyList())
+        state.publishInlayHints(emptyList())
         val service = languageService.takeIf { options.inlayHints } ?: return@LaunchedEffect
         var asked: IntRange? = null
         snapshotFlow {
@@ -758,14 +757,14 @@ private fun CodeEditorLayoutContent(
         }.filterNotNull().collectLatest { (_, lines) ->
             delay(INLAY_HINTS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
-                inline.setHints(emptyList())
+                state.publishInlayHints(emptyList())
                 return@collectLatest
             }
             val document = state.document.snapshot()
             val hints = withContext(state.computeDispatcher) {
                 service.inlayHints(document, InlineContent.hintRange(document, lines))
             }
-            if (state.document.version == document.version) inline.setHints(InlineContent.usableHints(hints, document, lines))
+            if (state.document.version == document.version) state.publishInlayHints(InlineContent.usableHints(hints, document, lines))
         }
     }
 

@@ -280,7 +280,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     /** The decorations' text and colours and the inlay hints, which [injections] answers from once there are any. */
     val inline = InlineContent(state, ::inlineChanged)
 
-    private val decorationsChanged: () -> Unit = inline::decorationsChanged
+    private val inlineSourceChanged: () -> Unit = inline::changed
 
     /** A click on injected text with an [Injection.id], on a line. */
     var onInjectionClick: ((line: Int, injection: Injection) -> Unit)? = null
@@ -307,14 +307,14 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     fun attach() {
         document.addChangeListener(this)
-        state.inlineDecorationListeners += decorationsChanged
-        inline.decorationsChanged()
+        state.inlineListeners += inlineSourceChanged
+        inline.changed()
         structureDirty = true
     }
 
     fun detach() {
         document.removeChangeListener(this)
-        state.inlineDecorationListeners -= decorationsChanged
+        state.inlineListeners -= inlineSourceChanged
     }
 
     /**
@@ -333,7 +333,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
     override fun onDocumentChange(change: DocumentChange) {
         // First: the rows below are estimated from what it answers.
-        inline.onDocumentChange(change)
+        inline.onDocumentChange()
         if (change.lineDelta != 0 && !change.isReset) {
             foldState?.onLinesChanged(change.startLine, change.removedLines, change.addedLines)
             folds = FoldLayout.of(foldState?.foldedRanges().orEmpty(), document.lineCount)

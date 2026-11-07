@@ -57,7 +57,7 @@ class InlineContentTest {
     }
 
     private fun EditorView.hint(vararg hints: InlayHint) {
-        inline.setHints(hints.toList())
+        state.publishInlayHints(hints.toList())
         prepare(width, height)
     }
 
@@ -110,7 +110,7 @@ class InlineContentTest {
         view.hint(InlayHint(5, ": Int"))
         val version = view.injectionVersion
 
-        view.inline.setHints(listOf(InlayHint(5, ": Int")))
+        view.state.publishInlayHints(listOf(InlayHint(5, ": Int")))
         view.inline.setStyles(null, null)
 
         assertEquals(version, view.injectionVersion)
@@ -135,7 +135,7 @@ class InlineContentTest {
         view.state.setDecorations("late", listOf(Decoration(4..4, DecorationStyle(before = "<"))))
 
         assertNull(view.injections)
-        assertTrue(view.state.inlineDecorationListeners.isEmpty())
+        assertTrue(view.state.inlineListeners.isEmpty())
     }
 
     // ── A decoration's text ──────────────────────────────────────────────────
@@ -251,6 +251,19 @@ class InlineContentTest {
     }
 
     @Test
+    fun `what changes while an edit has left the answer stale is still told to the view`() {
+        val view = viewOf(longLines, softWrap = true, width = 300, height = 200)
+        val line = view.state.document.lineStart(200)
+        view.state.publishInlayHints(listOf(InlayHint(0, "h")))
+        view.prepare(300, 200)
+        view.state.applyEdit(0, 0, "x", TextRange(1))
+
+        view.state.publishInlayHints(listOf(InlayHint(line + 1, long)))
+
+        assertTrue(view.rowsOf(200) > 3, "the rows heard of it: ${view.rowsOf(200)}")
+    }
+
+    @Test
     fun `a decoration's text and a hint at one column keep one order`() {
         val view = viewOf("ab")
         view.state.setDecorations("test", listOf(Decoration(1..1, DecorationStyle(before = "<"))))
@@ -287,7 +300,7 @@ class InlineContentTest {
     fun `a hint has moved by the time the view splices its rows`() {
         val view = viewOf(longLines, softWrap = true, width = 300, height = 200)
         val lineStart = view.state.document.lineStart(200)
-        view.inline.setHints(listOf(InlayHint(lineStart + 2, long)))
+        view.state.publishInlayHints(listOf(InlayHint(lineStart + 2, long)))
         view.prepare(300, 200)
         assertTrue(view.rowsOf(200) > 3, "it wraps: ${view.rowsOf(200)}")
 
@@ -302,17 +315,17 @@ class InlineContentTest {
         val view = viewOf(longLines, softWrap = true, width = 300, height = 200)
         val first = view.state.document.lineStart(100)
         val second = view.state.document.lineStart(200)
-        view.inline.setHints(listOf(InlayHint(first, long)))
+        view.state.publishInlayHints(listOf(InlayHint(first, long)))
         view.prepare(300, 200)
         val rowsOfFirst = view.rowsOf(100)
         assertTrue(rowsOfFirst > 3)
 
-        view.inline.setHints(listOf(InlayHint(first, long), InlayHint(second, long)))
+        view.state.publishInlayHints(listOf(InlayHint(first, long), InlayHint(second, long)))
 
         assertEquals(rowsOfFirst, view.rowsOf(100))
         assertTrue(view.rowsOf(200) > 3)
 
-        view.inline.setHints(listOf(InlayHint(second, long)))
+        view.state.publishInlayHints(listOf(InlayHint(second, long)))
         assertEquals(1, view.rowsOf(100), "a line losing its hint is a line that changed")
     }
 
@@ -332,7 +345,7 @@ class InlineContentTest {
 
         // The first hints: they bring the hook, and a row map built again from estimates.
         val hints = (0 until firstShown).map { InlayHint(view.state.document.lineStart(it) + 2, long) }
-        view.inline.setHints(hints)
+        view.state.publishInlayHints(hints)
         view.prepare(300, 200)
         view.prepare(300, 200)
 
@@ -344,7 +357,7 @@ class InlineContentTest {
 
         // Then an answer with fewer: through the rows it changed, with the hook there.
         val rowsAfter = view.lineMap.totalRows
-        view.inline.setHints(hints.drop(firstShown / 2))
+        view.state.publishInlayHints(hints.drop(firstShown / 2))
         view.prepare(300, 200)
 
         assertTrue(view.lineMap.totalRows < rowsAfter, "they took rows away above the view")
@@ -359,10 +372,10 @@ class InlineContentTest {
         val view = viewOf(text, softWrap = true, width = 300, height = 200)
         val cut = EditorView.MAX_RENDERED_LINE_CHARS
 
-        view.inline.setHints(listOf(InlayHint(cut + 1, long)))
+        view.state.publishInlayHints(listOf(InlayHint(cut + 1, long)))
         assertNull(view.inline.lookup(0), "it could never be laid out")
 
-        view.inline.setHints(listOf(InlayHint(cut, "h")))
+        view.state.publishInlayHints(listOf(InlayHint(cut, "h")))
         assertEquals(cut, view.inline.lookup(0)?.items?.single()?.column, "the column it is cut at can still show one")
     }
 
@@ -370,7 +383,7 @@ class InlineContentTest {
     fun `no column an answer gives is past its line`() {
         val view = viewOf("ab\ncd")
 
-        view.inline.setHints(listOf(InlayHint(2, "end"), InlayHint(5, "last")))
+        view.state.publishInlayHints(listOf(InlayHint(2, "end"), InlayHint(5, "last")))
 
         assertEquals(2, view.inline.lookup(0)?.items?.single()?.column)
         assertEquals(2, view.inline.lookup(1)?.items?.single()?.column)
@@ -386,7 +399,7 @@ class InlineContentTest {
 
         view.edit(0, 0, "zero\n")
         assertEquals("val x: Int = 1", view.laidOut(2))
-        assertEquals(16, view.inline.shownHints.single().offset)
+        assertEquals(16, view.state.inlayHints.single().offset)
 
         view.edit(16, 0, "yz")
         assertEquals("val xyz: Int = 1", view.laidOut(2), "at the end of the word it is about, as the caret is")
@@ -400,7 +413,7 @@ class InlineContentTest {
 
         view.edit(2, 4, "")
 
-        assertEquals(listOf(InlayHint(2, "edge"), InlayHint(2, "other")), view.inline.shownHints)
+        assertEquals(listOf(InlayHint(2, "edge"), InlayHint(2, "other")), view.state.inlayHints)
         assertEquals("abedgeothercdgh".replace("cd", ""), view.laidOut())
     }
 
@@ -413,7 +426,7 @@ class InlineContentTest {
         view.prepare(width, height)
 
         assertEquals("other", view.laidOut())
-        assertTrue(view.inline.shownHints.isEmpty())
+        assertTrue(view.state.inlayHints.isEmpty())
     }
 
     @Test
