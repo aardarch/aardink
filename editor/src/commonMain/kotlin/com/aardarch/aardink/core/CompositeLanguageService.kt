@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
  *
  * - **Completions:** the primary's, then the fallback's, less any fallback item with the same kind
  *   and label as one of the primary's. Only the fallback's when the primary has none. Without
+ *   [inheritCompletions], only the primary's. **Resolving a completion:** the primary's when it
+ *   changes the item, else the fallback's, since either may have offered it; without
  *   [inheritCompletions], only the primary's.
  * - **Diagnostics, code actions and references:** both, the primary's first.
  * - **Hover, definition, signature help, auto-close, surrounding a selection:** the primary's, or
@@ -64,6 +66,11 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
             it !in complete ||
                 CompletionFilter.matches(CompletionFilter.typedFor(document, cursorOffset, it), it.filterText)
         }
+    }
+
+    override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
+        val own = primary.resolveCompletion(item)
+        return if (own != item || !inheritCompletions) own else fallback.resolveCompletion(item)
     }
 
     /** [own] then [inherited], less the inherited items [own] already offers by kind and label. */

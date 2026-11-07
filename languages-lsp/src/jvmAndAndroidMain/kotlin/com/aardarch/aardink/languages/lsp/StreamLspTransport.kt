@@ -24,6 +24,9 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Standard stream-based transport for `InputStream` / `OutputStream` (e.g. process Stdio or Socket streams).
@@ -31,6 +34,10 @@ import java.nio.charset.StandardCharsets
  * JVM/Android only — `java.io` streams have no common-Kotlin equivalent, so this class lives in
  * `jvmAndAndroidMain` rather than `commonMain` alongside [LspTransport] and [ChannelLspTransport].
  * A wasmJs host uses `WebSocketLspTransport` instead.
+ *
+ * A read or write on a process pipe cannot be interrupted, and on a server that has hung, only that
+ * process ending frees it. [close] does not wait for that, so a host that started a process should
+ * destroy it after stopping the client, or those threads stay blocked until the process exits.
  */
 class StreamLspTransport(private val inputStream: InputStream, private val outputStream: OutputStream) : LspTransport {
 
@@ -114,23 +121,41 @@ class StreamLspTransport(private val inputStream: InputStream, private val outpu
         }
     }
 
+    /**
+     * Closes both streams, waiting [CLOSE_WAIT_MILLIS] at most.
+     *
+     * Each half gets its own thread, because either can block. On a process pipe, closing the input
+     * waits for a read in progress, and the receive loop is nearly always in one. Closing the output
+     * waits for a write the server has stopped draining, through the lock `BufferedOutputStream`
+     * holds around it. Done in turn, the first would also keep the second from running: the server
+     * would never see its stdin end, which is what lets a healthy one exit and free that read. A
+     * throwing close must not skip the other half either.
+     */
     override fun close() {
-        // Guarded separately: a throwing read-side close must not skip the write side and leak the
-        // other half of a socket or process pipe.
-        try {
-            inputStream.close()
-        } catch (_: Exception) {
-            // Ignore close failures
+        val closed = CountDownLatch(2)
+        for (stream in listOf(inputStream, outputStream)) {
+            thread(isDaemon = true, name = "StreamLspTransport close") {
+                try {
+                    stream.close()
+                } catch (_: Exception) {
+                    // Ignore close failures
+                } finally {
+                    closed.countDown()
+                }
+            }
         }
         try {
-            outputStream.close()
-        } catch (_: Exception) {
-            // Ignore close failures
+            closed.await(CLOSE_WAIT_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
     private companion object {
         const val CONTENT_LENGTH_HEADER = "Content-Length:"
+
+        /** Far longer than a close that is not stuck takes, and short enough not to freeze a UI thread. */
+        const val CLOSE_WAIT_MILLIS = 500L
 
         /**
          * Largest payload this transport will allocate for, in bytes.

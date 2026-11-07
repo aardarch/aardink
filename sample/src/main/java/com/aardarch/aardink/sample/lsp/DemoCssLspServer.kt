@@ -130,7 +130,7 @@ private class DemoCssLanguageServer(private val transport: LspTransport) {
 
     private suspend fun onDidChange(params: JsonElement?) {
         val parsed = params?.let { decodeOrNull(LspDidChangeTextDocumentParams.serializer(), it) } ?: return
-        // LspLanguageService.didChange always sends one full-document content change.
+        // This server declares whole-text sync, so a change is always the full document.
         documentText = parsed.contentChanges.lastOrNull()?.text ?: documentText
         publishDiagnostics(uri = parsed.textDocument.uri, version = parsed.textDocument.version)
     }
@@ -184,6 +184,8 @@ private class DemoCssLanguageServer(private val transport: LspTransport) {
         put(
             "capabilities",
             buildJsonObject {
+                // TextDocumentSyncKind.Full. Left out it would mean None, and nothing would arrive.
+                put("textDocumentSync", JsonPrimitive(1))
                 put("hoverProvider", JsonPrimitive(true))
                 put(
                     "completionProvider",

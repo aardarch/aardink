@@ -106,6 +106,7 @@ import com.aardarch.aardink.ui.view.EditorController
 import com.aardarch.aardink.ui.view.EditorHostActions
 import com.aardarch.aardink.ui.view.EditorView
 import com.aardarch.aardink.ui.view.GutterContent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -611,17 +612,9 @@ private fun CodeEditorLayoutContent(
     // ── Folding: recompute foldable ranges when text changes ─────────────────
     if (foldState != null) {
         LaunchedEffect(foldState, state, foldingProvider) {
-            snapshotFlow { state.textVersion }.collect { _ ->
+            snapshotFlow { state.textVersion }.collectLatest {
                 delay(200)
-                val ranges = if (state.exceedsAnalysisLimit) {
-                    emptyList()
-                } else {
-                    val document = state.document.snapshot()
-                    withContext(state.computeDispatcher) {
-                        foldingProvider.foldableRanges(document)
-                    }
-                }
-                foldState.updateFoldableRanges(ranges)
+                currentFoldableRanges(state, foldingProvider)?.let(foldState::updateFoldableRanges)
             }
         }
     }
@@ -634,12 +627,7 @@ private fun CodeEditorLayoutContent(
         LaunchedEffect(state, foldingProvider) {
             snapshotFlow { state.textVersion }.collectLatest {
                 delay(200)
-                ownStickyRanges = if (state.exceedsAnalysisLimit) {
-                    emptyList()
-                } else {
-                    val document = state.document.snapshot()
-                    withContext(state.computeDispatcher) { foldingProvider.foldableRanges(document) }
-                }
+                currentFoldableRanges(state, foldingProvider)?.let { ownStickyRanges = it }
             }
         }
     }
@@ -1819,6 +1807,27 @@ private const val HOVER_DELAY_MS = 500L
 
 /** How long the card outlasts a mouse that moved off the symbol, as Monaco's `hover.hidingDelay`. */
 private const val HOVER_HIDE_DELAY_MS = 300L
+
+/**
+ * What [provider] answers for the text as it is now, or null to keep the ranges there are: it had no
+ * answer, or the text moved on while it was waited for. Ranges edits have moved stay right where they
+ * are, and an old answer laid over them would unfold whatever no longer starts on the same line.
+ *
+ * The cancellation of a new edit covers most of that, but it arrives with the next snapshot; the
+ * version check covers the gap, and an edit made straight through the public [CodeDocument].
+ */
+private suspend fun currentFoldableRanges(state: CodeEditorState, provider: FoldingProvider): List<FoldRange>? {
+    if (state.exceedsAnalysisLimit) return emptyList()
+    val document = state.document.snapshot()
+    val ranges = try {
+        withContext(state.computeDispatcher) { provider.requestFoldableRanges(document) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        return null
+    }
+    return ranges.takeIf { state.document.version == document.version }
+}
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
 

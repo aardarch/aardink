@@ -16,19 +16,15 @@
 package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeActionKind
-import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.TextEdit
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
@@ -41,88 +37,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-
-private const val URI = "file:///src/Main.kt"
-private const val OTHER_URI = "file:///src/Other.kt"
-
-/** LSP range JSON literal. */
-private fun range(startLine: Int, startChar: Int, endLine: Int, endChar: Int): String =
-    """{"start":{"line":$startLine,"character":$startChar},"end":{"line":$endLine,"character":$endChar}}"""
-
-/**
- * A fake language server on the other end of a [ChannelLspTransport].
- *
- * [clientScope] backs [client]'s receive loop and must be a [TestScope]'s `backgroundScope` (see
- * [withServer]) rather than a real dispatcher like `Dispatchers.Default`: both this harness's own
- * coroutines (via [scope], the enclosing `runTest`'s [CoroutineScope]) and the client's background
- * work then share one `TestCoroutineScheduler`, so `withTimeout` correctly waits for the client
- * instead of racing an unrelated real thread pool the virtual clock knows nothing about.
- */
-private class Harness(val doc: CodeDocument, scope: CoroutineScope, clientScope: CoroutineScope) : CoroutineScope by scope {
-    val transport = ChannelLspTransport()
-    val client = LspClient(transport, clientScope)
-    val service = LspLanguageService(client, URI, "kotlin")
-
-    /** A second adapter over the same connection, configured with what the server declared about rename. */
-    fun serviceWithRenameSupport(support: LspRenameSupport?) = LspLanguageService(client, URI, "kotlin", serverRenameSupport = support)
-
-    /** Next message the client put on the wire. */
-    suspend fun nextSent(): JsonObject = LspJson.parseToJsonElement(transport.sendChannel.receive()).jsonObject
-
-    /** Asserts the client has written nothing. */
-    fun assertNothingSent(message: String) = assertTrue(transport.sendChannel.tryReceive().isFailure, message)
-
-    /** Answers the next request with raw [resultJson] after asserting its method; returns the request. */
-    suspend fun respond(expectedMethod: String, resultJson: String): JsonObject {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"result":$resultJson}""")
-        return sent
-    }
-
-    /** Answers the next request with a JSON-RPC error. */
-    suspend fun respondWithError(expectedMethod: String) {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"boom"}}""")
-    }
-
-    /** Answers the next request the way a server that doesn't implement the method would. */
-    suspend fun respondWithMethodNotFound(expectedMethod: String) {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        val code = LspRequestException.METHOD_NOT_FOUND
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"unsupported"}}""")
-    }
-
-    /** Pushes `publishDiagnostics` for [uri] and returns once every registered listener has run. */
-    suspend fun publish(uri: String, diagnosticsJson: String, version: Int? = null) {
-        val done = CompletableDeferred<Unit>()
-        val probe: DiagnosticsListener = { _, _, _ -> done.complete(Unit) }
-        client.addDiagnosticsListener(probe)
-        client.start()
-        val versionMember = version?.let { """"version":$it,""" }.orEmpty()
-        transport.receiveChannel.send(
-            """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"$uri",$versionMember"diagnostics":$diagnosticsJson}}""",
-        )
-        withTimeout(5_000) { done.await() }
-        client.removeDiagnosticsListener(probe)
-    }
-}
-
-private fun withServer(text: String, block: suspend Harness.() -> Unit) = runTest {
-    val harness = Harness(CodeDocument(text), this, backgroundScope)
-    try {
-        harness.block()
-    } finally {
-        harness.client.stop()
-    }
-}
-
-private val JsonObject.params: JsonObject get() = this["params"]!!.jsonObject
 
 private val JsonObject.position: Pair<Int, Int>
     get() = this["position"]!!.jsonObject.let { it["line"]!!.jsonPrimitive.int to it["character"]!!.jsonPrimitive.int }
@@ -913,7 +827,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `rename refuses a workspace edit that reaches another file`() = withServer("val x = 1\nx.foo()") {
+    fun `rename refuses a workspace edit that reaches another file when no host takes it`() = withServer("val x = 1\nx.foo()") {
         val server = async {
             respond(
                 "textDocument/rename",
@@ -930,7 +844,7 @@ class LspLanguageServiceTest {
         server.await()
 
         // Renaming the declaration here and leaving the references in Other.kt alone would break
-        // the project; the editor cannot edit that file, so the whole rename is declined.
+        // the project; nothing here can edit that file, so the whole rename is declined.
         assertTrue(edits.isEmpty(), "a cross-file rename must not half-apply: was $edits")
     }
 

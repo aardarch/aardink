@@ -134,6 +134,46 @@ class CompositeLanguageServiceTest {
         assertEquals("<A>", own.format(doc, FormattingOptions()))
     }
 
+    /** Resolves [known] by adding [documentation], and leaves any other item as it is. */
+    private class Resolving(val known: CompletionItem, val documentation: String) : LanguageService by Fake() {
+        var asked = 0
+
+        override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
+            asked++
+            return if (item == known) item.copy(documentation = documentation) else item
+        }
+    }
+
+    @Test
+    fun `an item is resolved as it is by default`() = runTest {
+        val item = item("page")
+        assertTrue(Fake().resolveCompletion(item) === item)
+    }
+
+    @Test
+    fun `resolving a completion asks the primary, then the fallback if nothing changed`() = runTest {
+        val own = item("page")
+        val inherited = item("div")
+        val primary = Resolving(own, "from the primary")
+        val fallback = Resolving(inherited, "from the fallback")
+        val composite = CompositeLanguageService(primary, fallback)
+
+        assertEquals("from the primary", composite.resolveCompletion(own).documentation)
+        assertEquals(0, fallback.asked)
+        assertEquals("from the fallback", composite.resolveCompletion(inherited).documentation)
+        assertEquals(2, primary.asked)
+    }
+
+    @Test
+    fun `without inherited completions the fallback resolves none`() = runTest {
+        val inherited = item("div")
+        val fallback = Resolving(inherited, "from the fallback")
+        val composite = CompositeLanguageService(Fake(), fallback, inheritCompletions = false)
+
+        assertEquals(inherited, composite.resolveCompletion(inherited))
+        assertEquals(0, fallback.asked)
+    }
+
     @Test
     fun `rename goes to whichever service supports it`() = runTest {
         val composite = CompositeLanguageService(Fake(), Fake(supportsRename = true, renameTo = "x"))

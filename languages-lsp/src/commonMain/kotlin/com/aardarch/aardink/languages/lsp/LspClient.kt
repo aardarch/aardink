@@ -19,13 +19,19 @@ import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -34,12 +40,19 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlin.concurrent.Volatile
 
 /**
- * Callback invoked when the server pushes `textDocument/publishDiagnostics` for [uri].
+ * Callback invoked with a server's diagnostics for [uri]: pushed as
+ * `textDocument/publishDiagnostics`, or the answer to the `textDocument/diagnostic` an
+ * [LspLanguageService] pulled.
+ *
+ * Calls come one at a time, each seeing what the last one did, so what only a listener touches needs
+ * no lock of its own. They do not all come from the receive loop, though: a pulled answer comes from
+ * a coroutine of its own, on whichever thread of the client's scope that runs.
  *
  * [version] is the document version the diagnostics were computed against, or null when the server
  * did not report one; listeners should drop a notification older than the last version they sent.
@@ -60,12 +73,15 @@ class LspRequestException(val code: Int, message: String) : RuntimeException(mes
     }
 }
 
+/** One entry of `client/registerCapability`: the [method] the server added support for. */
+internal class LspRegistration(val id: String, val method: String, val options: JsonObject?)
+
 /**
  * Asynchronous Coroutine JSON-RPC 2.0 client managing communication with a Language Server.
  *
  * One client normally serves many documents: register one [DiagnosticsListener] per open
- * document with [addDiagnosticsListener]; every listener receives every `publishDiagnostics`
- * notification and filters by URI itself.
+ * document with [addDiagnosticsListener]; every listener receives the diagnostics of every document,
+ * pushed or pulled, and filters by URI itself.
  *
  * Internal mutable state ([nextRequestId], [pendingRequests], [listeningJob], [transportClosed])
  * is guarded by [lock], a `Mutex`, rather than `java.util.concurrent`'s `AtomicLong`/
@@ -75,12 +91,26 @@ class LspRequestException(val code: Int, message: String) : RuntimeException(mes
  * directly, so they take the lock with [Mutex.tryLock] and fall back to an async acquisition on
  * [scope] when it's already held — contention here is a receive-loop-starts-or-stops event, not a
  * hot path. [diagnosticsListeners] is a `@Volatile` copy-on-write list outside [lock] entirely:
- * both the read in [handleNotification] (the receive loop's hot path) and the writes in
+ * both the read in [deliverDiagnostics] (the receive loop's hot path) and the writes in
  * [addDiagnosticsListener]/[removeDiagnosticsListener] are lock-free, relying on `@Volatile` for
  * cross-thread visibility. Keeping listener writes off [lock] is what preserves their program
- * order — see [addDiagnosticsListener].
+ * order — see [addDiagnosticsListener]. Running the listeners is kept to one at a time by
+ * [diagnosticsDelivery], as the receive loop is not the only one to do it.
+ *
+ * Requests from the server each run in their own coroutine, a child of the receive loop, because
+ * answering one can take as long as a person takes to answer a prompt and can itself need a response
+ * from the server. They are concurrent rather than queued for the same reason: a server may ask the
+ * client something else before it answers a request a running callback is waiting on.
+ *
+ * @param transport The connection to the server.
+ * @param scope Runs the receive loop and whatever answers the server's requests.
+ * @param host What the client asks about things only the application can decide.
  */
-class LspClient(val transport: LspTransport, private val scope: CoroutineScope = CoroutineScope(EditorDispatchers.io)) {
+class LspClient(
+    val transport: LspTransport,
+    private val scope: CoroutineScope = CoroutineScope(EditorDispatchers.io),
+    private val host: LspClientHost = NoLspClientHost,
+) {
     private val lock = Mutex()
     private var nextRequestId: Long = 1L // guarded by lock
     private val pendingRequests = HashMap<Long, CompletableDeferred<LspMessage.Response>>() // guarded by lock
@@ -90,6 +120,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     private var diagnosticsListeners: List<DiagnosticsListener> = emptyList()
 
     /**
+     * Held while listeners run. Not [lock]: teardown must not wait on what a listener does. Listeners
+     * do not suspend, so whoever waits here, the receive loop included, waits for no longer than one
+     * delivery takes.
+     */
+    private val diagnosticsDelivery = Mutex()
+
+    /**
      * Set once the connection is gone — the server closed the stream, or [stop] was called. A
      * closed client never starts another receive loop, because nothing could complete the requests
      * it would accept.
@@ -97,8 +134,33 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     @Volatile
     private var closed = false
 
-    /** Guarded by [lock]; see [closeTransport]. */
+    /** Completes once [closed] is set, after [lock] is released; see [invokeOnClosed]. */
+    private val connectionEnded = CompletableDeferred<Unit>()
+
+    /** Guarded by [lock]; see [claimTransportClose]. */
     private var transportClosed = false
+
+    /**
+     * Set by [shutdown], under [lock]. The protocol allows the client no request but `shutdown` and
+     * no notification but `exit` from here on, which also rules out `$/cancelRequest` for a
+     * `shutdown` that timed out.
+     */
+    @Volatile
+    private var shuttingDown = false
+
+    /**
+     * The `ServerCapabilities` the server answered [initialize] with: null until that answer
+     * arrives, and when it carried none. Registrations made later through
+     * `client/registerCapability` are not reflected here.
+     */
+    @Volatile
+    var serverCapabilities: JsonElement? = null
+        private set
+
+    /** What the server has registered through `client/registerCapability` and not taken back. Written under [lock]. */
+    @Volatile
+    internal var registrations: List<LspRegistration> = emptyList()
+        private set
 
     /**
      * Registers [listener]; it stays registered until [removeDiagnosticsListener] is called.
@@ -136,19 +198,32 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      * teardown. In that case run [block] inline without the lock instead: the scope is dead, so
      * whoever holds the lock can no longer make progress either, and losing the teardown
      * entirely is strictly worse than running it unsynchronized.
+     *
+     * @param block Returns what [claimTransportClose] returned, and the transport closes after the
+     *   lock is released.
      */
-    private fun withLockOrAsync(block: () -> Unit) {
+    private fun withLockOrAsync(block: () -> Boolean) {
         if (lock.tryLock()) {
-            try {
+            val mustClose = try {
                 block()
             } finally {
                 lock.unlock()
             }
+            afterLock(mustClose)
         } else if (scope.isActive) {
-            scope.launch { lock.withLock { block() } }
+            scope.launch { afterLock(lock.withLock { block() }) }
         } else {
-            block()
+            afterLock(block())
         }
+    }
+
+    /**
+     * What a teardown does once [lock] is released: the handlers of [invokeOnClosed] go first, as a
+     * close can block for as long as a hung server holds a write up.
+     */
+    private fun afterLock(mustClose: Boolean) {
+        if (closed) connectionEnded.complete(Unit)
+        if (mustClose) transport.close()
     }
 
     /**
@@ -161,14 +236,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         withLockOrAsync { startLocked() }
     }
 
-    private fun startLocked() {
-        if (closed || listeningJob != null) return
+    private fun startLocked(): Boolean {
+        if (closed || listeningJob != null) return false
         if (!scope.isActive) {
             // A coroutine launched into a cancelled scope never runs, so no loop would ever answer
             // a request registered afterwards; the client is as good as closed.
             closed = true
-            closeTransport()
-            return
+            return claimTransportClose()
         }
         listeningJob = scope.launch {
             try {
@@ -185,6 +259,9 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                 // would reach the scope's uncaught handler and take the host process down over a
                 // language server going away.
             } finally {
+                // An answer in progress has nowhere left to go, and a callback waiting on a person
+                // would otherwise outlive the connection.
+                coroutineContext.cancelChildren()
                 // NonCancellable: onReceiveLoopEnded suspends on lock.withLock, and a suspend
                 // call in a finally block throws CancellationException before running its body
                 // once this coroutine is cancelled. Without this, a host cancelling the shared
@@ -194,13 +271,19 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
                 withContext(NonCancellable) { onReceiveLoopEnded() }
             }
         }
+        return false
     }
 
-    /** Closes the transport once; every teardown path may reach here, and only the first should close. Guarded by [lock]. */
-    private fun closeTransport() {
-        if (transportClosed) return
+    /**
+     * True for the one teardown path that closes the transport: every path may reach here, and only
+     * the first should close. Must be called with [lock] held, and the caller closes after releasing
+     * it, because a close can block behind a read or write that a hung server is holding up, and
+     * nothing that needs [lock] should wait on that.
+     */
+    private fun claimTransportClose(): Boolean {
+        if (transportClosed) return false
         transportClosed = true
-        transport.close()
+        return true
     }
 
     /**
@@ -209,12 +292,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      * register a request nothing will answer, release the transport, and fail what is in flight.
      */
     private suspend fun onReceiveLoopEnded() {
-        lock.withLock {
+        val mustClose = lock.withLock {
             closed = true
             listeningJob = null
             failPendingRequestsLocked("Language server connection closed")
-            closeTransport()
+            claimTransportClose()
         }
+        afterLock(mustClose)
     }
 
     /**
@@ -225,66 +309,200 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      * reject anything sent beforehand with a `ServerNotInitialized` (-32002) error.
      *
      * @param rootUri Workspace root, or null for a server with no workspace context.
-     * @param capabilities Client capabilities object; an empty object is valid, since every LSP
-     *   capability is optional for the client to support.
+     * @param capabilities Client capabilities object. Servers withhold what the client does not
+     *   declare, so replace [DefaultClientCapabilities] only to narrow or extend it.
      * @return The server's reported `ServerCapabilities` (the `capabilities` member of the
-     *   `InitializeResult`), or null if the response carried none.
+     *   `InitializeResult`), or null if the response carried none. Also kept in
+     *   [serverCapabilities].
+     *
+     * A server that answers with a `positionEncoding` other than `utf-16` stays connected, since
+     * text needs no positions, but [LspLanguageService] asks it nothing about a position: it is told
+     * of edits as whole text, its `workspace/applyEdit` is refused, and the host hears why through
+     * [LspClientHost.logMessage].
      */
-    suspend fun initialize(rootUri: String?, capabilities: JsonElement = buildJsonObject { }): JsonElement? {
+    suspend fun initialize(rootUri: String?, capabilities: JsonElement = DefaultClientCapabilities): JsonElement? {
         val params = buildJsonObject {
             put("processId", JsonNull)
             put("rootUri", rootUri?.let { JsonPrimitive(it) } ?: JsonNull)
             put("capabilities", capabilities)
         }
         val result = sendRequest("initialize", params)
+        // Before `initialized`: the server may ask the client something as soon as it reads that.
+        val declared = (result as? JsonObject)?.get("capabilities")
+        serverCapabilities = declared
+        if (!positionsAreUtf16(declared)) {
+            val encoding = (declared as? JsonObject)?.get("positionEncoding")
+            tellHost {
+                host.logMessage(MESSAGE_ERROR, "Positions in $encoding cannot be read: only whole-text sync and pushed diagnostics stay on")
+            }
+        }
         sendNotification("initialized", buildJsonObject { })
-        return (result as? JsonObject)?.get("capabilities")
+        return declared
+    }
+
+    /**
+     * Ends the session as the protocol asks: the `shutdown` request, its answer, the `exit`
+     * notification, and then the same teardown as [stop]. Requests still pending fail with
+     * [LspRequestException.CONNECTION_CLOSED], as do requests sent meanwhile, and notifications
+     * sent meanwhile are dropped.
+     *
+     * Never fails on the server's account: `exit` follows an error too, and a server that gives no
+     * answer within five seconds is treated the same way. One that has stopped reading altogether
+     * is closed without `exit` after ten. Closing the transport runs on the client's scope and is
+     * waited for for at most a second more, so this returns within eleven seconds even if that
+     * close blocks, unless the scope is already cancelled and only the caller is left to run it. A
+     * connection that is already closed makes this a no-op, as does a [shutdown] already running.
+     * If the caller is cancelled, the client still closes, without `exit`.
+     */
+    suspend fun shutdown() {
+        if (!claimShutdown()) return
+        // On the client's scope, not the caller's coroutine: a blocking transport finishes a write
+        // it has begun even when cancelled, so a server that stopped reading would hold the caller
+        // there for good, short of the very teardown that frees the write.
+        val farewell = scope.launch {
+            try {
+                withTimeoutOrNull(SHUTDOWN_TIMEOUT_MILLIS) { sendRequest("shutdown") }
+            } catch (_: LspRequestException) {
+                // Whatever the server made of it, the session is over.
+            }
+            sendNotification("exit")
+        }
+        try {
+            withTimeoutOrNull(2 * SHUTDOWN_TIMEOUT_MILLIS) { farewell.join() }
+        } finally {
+            farewell.cancel()
+            // NonCancellable: a caller cancelled above must still see the teardown through.
+            withContext(NonCancellable) { stopOffCaller() }
+        }
+    }
+
+    /**
+     * [stop] on the client's scope, waited for only briefly: a transport's close can block until the
+     * server goes away, and [shutdown] promises its caller a bound.
+     */
+    private suspend fun stopOffCaller() {
+        val stopping = scope.launch { stop() }
+        withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { stopping.join() }
+        // A coroutine launched into a cancelled scope never runs, and stop() is safe to repeat.
+        if (stopping.isCancelled) stop()
+    }
+
+    /**
+     * True for the one caller that gets to run [shutdown]. NonCancellable because a caller cancelled
+     * here must still reach the teardown; [lock] is never held across a suspension or a transport's
+     * close, so this is brief.
+     */
+    private suspend fun claimShutdown(): Boolean = withContext(NonCancellable) {
+        lock.withLock {
+            val first = !shuttingDown
+            shuttingDown = true
+            first
+        }
     }
 
     /**
      * Sends an LSP request and suspends until the matching response arrives.
      *
+     * Cancelling the caller sends `$/cancelRequest` for it. That goes out on the client's scope, so
+     * the caller is released at once even when the write is stuck behind a hung server, and a late
+     * answer from the server is ignored.
+     *
      * @return The `result` member of the response, or null when the server returned `null`.
      * @throws LspRequestException with [LspRequestException.CONNECTION_CLOSED] when the connection
-     *   is already closed or closes before a response is received, or with the server's code when
-     *   it answers with an `error`.
+     *   is already closed or shutting down, or closes before a response is received, or with the
+     *   server's code when it answers with an `error`.
      */
-    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? {
+    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? = sendRequest(method, params, onWritten = {})
+
+    /**
+     * [sendRequest], calling [onWritten] as soon as the request is on the wire rather than when it
+     * is answered: what a document's sync queue waits for before it lets a later edit out.
+     */
+    internal suspend fun sendRequest(method: String, params: JsonElement?, onWritten: () -> Unit): JsonElement? {
         start()
         val deferred = CompletableDeferred<LspMessage.Response>()
         // Checking `closed` and registering the deferred must happen together: between a bare check
         // and the insert, teardown could run its `failPendingRequests()` and miss this entry, and a
         // transport whose closed write does not throw would then leave the caller awaiting forever.
         val id =
-            registerPending(deferred)
+            registerPending(deferred, method)
                 ?: throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed")
+        var abandoned = false
         try {
             val request = LspMessage.Request(id = id, method = method, params = params)
             sendOrLoseConnection(LspJson.encodeToString(LspMessage.Request.serializer(), request))?.let { failure ->
                 throw LspRequestException(LspRequestException.CONNECTION_CLOSED, "Language server connection is closed: ${failure.message}")
             }
+            onWritten()
             val response = deferred.await()
             response.error?.let { throw LspRequestException(it.code, it.message) }
             return response.result?.takeUnless { it is JsonNull }
+        } catch (e: CancellationException) {
+            abandoned = true
+            throw e
         } finally {
             // NonCancellable: this cleanup must run even if the caller's own coroutine was
             // cancelled while awaiting the response — a suspend call in a `finally` otherwise
             // throws immediately under cancellation instead of taking the lock.
-            withContext(NonCancellable) { lock.withLock { pendingRequests.remove(id) } }
+            val unanswered = withContext(NonCancellable) { lock.withLock { pendingRequests.remove(id) != null } }
+            if (abandoned && unanswered) cancelOnServer(id)
         }
     }
 
     /**
+     * Tells the server nobody is waiting for request [id] any more.
+     *
+     * A blocking transport finishes its write even when the caller is cancelled during it, so a
+     * cancelled write may or may not have reached the server. Sending this either way is safe: a
+     * server ignores a cancel for an id it does not know.
+     */
+    private fun cancelOnServer(id: Long) {
+        scope.launch { sendNotification("\$/cancelRequest", buildJsonObject { put("id", id) }) }
+    }
+
+    /**
+     * Runs [block] on the client's scope until it finishes or the connection ends, so that it does
+     * not keep a host's scope from completing. A scope already cancelled gives back a job that has
+     * finished without running [block].
+     */
+    internal fun launchUntilClosed(block: suspend CoroutineScope.() -> Unit): Job {
+        val job = scope.launch(block = block)
+        val watching = invokeOnClosed { job.cancel() }
+        job.invokeOnCompletion { watching.dispose() }
+        return job
+    }
+
+    /**
+     * Calls [handler] when the connection ends, at once if it already has. Not called for a scope
+     * cancelled before there was a connection: that ends the coroutines by itself.
+     */
+    private fun invokeOnClosed(handler: () -> Unit): DisposableHandle = connectionEnded.invokeOnCompletion { handler() }
+
+    /**
+     * Has the host carry out [edit], the part of a rename [LspLanguageService] cannot, in the caller's
+     * coroutine. The server is not waiting on this as it is for `workspace/applyEdit`, so a failure,
+     * or a cancellation of the host's own, can only mean the edit was not applied.
+     */
+    internal suspend fun applyThroughHost(edit: LspWorkspaceEdit): Boolean = try {
+        host.applyWorkspaceEdit(edit, label = null)
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+        false
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
      * Allocates a request id and registers [deferred] against it, unless the client is already
-     * closed.
+     * closed, or [shutdown] has begun: the protocol allows no request but `shutdown` from there on.
      *
      * Shares [lock] with [onReceiveLoopEnded] and [onConnectionLost], so a request is either
      * registered before teardown runs — and therefore failed by it — or refused outright.
      *
-     * @return the allocated id, or null when the connection is closed and the caller must not wait.
+     * @return the allocated id, or null when the caller must not wait.
      */
-    private suspend fun registerPending(deferred: CompletableDeferred<LspMessage.Response>): Long? = lock.withLock {
-        if (closed) return@withLock null
+    private suspend fun registerPending(deferred: CompletableDeferred<LspMessage.Response>, method: String): Long? = lock.withLock {
+        if (closed || (shuttingDown && method != "shutdown")) return@withLock null
         val id = nextRequestId
         nextRequestId += 1
         pendingRequests[id] = deferred
@@ -299,24 +517,26 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
      * still pending and closes the transport.
      */
     private suspend fun onConnectionLost() {
-        lock.withLock {
+        val mustClose = lock.withLock {
             closed = true
             listeningJob?.cancel()
             listeningJob = null
             failPendingRequestsLocked("Language server connection closed")
-            closeTransport()
+            claimTransportClose()
         }
+        afterLock(mustClose)
     }
 
     /**
      * Sends a one-way notification without expecting a response.
      *
-     * Notifications are fire-and-forget, so one sent after the connection closed is dropped rather
-     * than reported — unlike [sendRequest], there is no caller waiting on an answer.
+     * Notifications are fire-and-forget, so one sent after the connection closed, or once
+     * [shutdown] has begun, is dropped rather than reported — unlike [sendRequest], there is no
+     * caller waiting on an answer.
      */
     suspend fun sendNotification(method: String, params: JsonElement? = null) {
         start()
-        if (closed) return
+        if (closed || (shuttingDown && method != "exit")) return
         val notification = LspMessage.Notification(method = method, params = params)
         // Nobody is waiting on a notification, so the failure itself is dropped; the connection
         // teardown it triggers is what matters, so pending requests do not wait on a dead server.
@@ -346,8 +566,10 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
     }
 
     /**
-     * Stops the receive loop, fails any pending requests and closes the transport. The client
-     * cannot be restarted afterwards; construct a new one for a new connection.
+     * Stops the receive loop, fails any pending requests and closes the transport, without a word
+     * to the server: this is the forced close, and [shutdown] the orderly one. The client cannot be
+     * restarted afterwards; construct a new one for a new connection. The transport closes on the
+     * calling thread, once pending requests have failed.
      *
      * Teardown is unconditional, including when [scope] has already been cancelled (see
      * [withLockOrAsync]). It is not, however, ordered against a [sendRequest] already in flight
@@ -358,14 +580,14 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         withLockOrAsync { stopLocked() }
     }
 
-    private fun stopLocked() {
+    private fun stopLocked(): Boolean {
         // Set before cancelling: the loop's own teardown runs later, on the transport's thread, and
         // a send in between must not see an idle-but-open client and relaunch the loop.
         closed = true
         listeningJob?.cancel()
         listeningJob = null
         failPendingRequestsLocked("Language server client stopped")
-        closeTransport()
+        return claimTransportClose()
     }
 
     /** Must be called with [lock] held. */
@@ -377,12 +599,13 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         }
     }
 
-    private suspend fun handleIncomingPayload(payload: String) {
+    /** Runs on the receive loop, with the loop's coroutine as the receiver. */
+    private suspend fun CoroutineScope.handleIncomingPayload(payload: String) {
         val message = parseObjectOrNull(payload) ?: return
         val id = message["id"]?.takeUnless { it is JsonNull }
         val method = (message["method"] as? JsonPrimitive)?.contentOrNull
         when {
-            method != null && id != null -> handleServerRequest(id, method, message["params"])
+            method != null && id != null -> launchServerRequest(id, method, message["params"])
             method != null -> handleNotification(method, message["params"])
             id != null -> handleResponse(payload)
         }
@@ -400,65 +623,194 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         lock.withLock { pendingRequests.remove(id) }?.complete(response)
     }
 
-    private fun handleNotification(method: String, params: JsonElement?) {
-        if (method != "textDocument/publishDiagnostics" || params == null) return
-        val published = try {
-            LspJson.decodeFromJsonElement(LspPublishDiagnosticsParams.serializer(), params)
-        } catch (_: SerializationException) {
-            return
-        } catch (_: IllegalArgumentException) {
-            return
+    /** Read member by member, for the reason [showMessageRequestResult] gives. Something malformed is dropped. */
+    private suspend fun handleNotification(method: String, params: JsonElement?) {
+        val notification = params as? JsonObject ?: return
+        when (method) {
+            "textDocument/publishDiagnostics" -> decodeOrNull(LspPublishDiagnosticsParams.serializer(), notification)?.let {
+                deliverDiagnostics(it.uri, it.version, it.diagnostics)
+            }
+
+            "window/showMessage" -> passMessage(notification, host::showMessage)
+
+            "window/logMessage" -> passMessage(notification, host::logMessage)
+
+            "\$/progress" -> {
+                val token = notification["token"]?.takeUnless { it is JsonNull } ?: return
+                val value = notification["value"] ?: return
+                tellHost { host.progress(token, value) }
+            }
         }
-        for (listener in diagnosticsListeners) {
-            try {
-                listener(published.uri, published.version, published.diagnostics)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // A misbehaving listener must not tear down the connection for everyone else.
+    }
+
+    private suspend fun passMessage(notification: JsonObject, pass: (type: Int, message: String) -> Unit) {
+        val type = (notification["type"] as? JsonPrimitive)?.intOrNull ?: return
+        val message = (notification["message"] as? JsonPrimitive)?.contentOrNull ?: return
+        tellHost { pass(type, message) }
+    }
+
+    /**
+     * Runs one of the host's notification members. A host that throws has only failed to hear
+     * something, and must not end the connection, nor must a cancellation that is not this
+     * coroutine's own: on the receive loop, that would end it too.
+     */
+    private suspend fun tellHost(notify: () -> Unit) {
+        try {
+            notify()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+        } catch (_: Exception) {
+            // As for a diagnostics listener, below.
+        }
+    }
+
+    /** Hands every listener diagnostics for [uri], pushed by the server or pulled from it, one delivery at a time. */
+    internal suspend fun deliverDiagnostics(uri: String, version: Int?, diagnostics: List<LspDiagnostic>) {
+        diagnosticsDelivery.withLock {
+            for (listener in diagnosticsListeners) {
+                try {
+                    listener(uri, version, diagnostics)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // A misbehaving listener must not tear down the connection for everyone else.
+                }
             }
         }
     }
 
     /**
-     * Answers server→client requests this bridge has a safe generic reply for; anything else gets
-     * a `MethodNotFound` error so the server does not block waiting on us.
+     * Answers a server→client request in its own coroutine, so the loop goes on reading responses
+     * while it runs.
      *
-     * - `client/registerCapability` / `client/unregisterCapability`: acknowledged with a `null`
-     *   result. This bridge always sends its full capabilities up front and does not track dynamic
-     *   registrations, so there is nothing further to do.
-     * - `window/showMessageRequest` / `window/workDoneProgress/create`: acknowledged with a `null`
-     *   result (no action selected). Surfacing these to a human is a host UI concern, not this
-     *   bridge's.
+     * Every request gets a reply unless the client itself is closing, because the server may be
+     * blocked on it. That includes a callback ending in a cancellation of its own, such as a
+     * `withTimeout` it let escape, which is why only this coroutine's cancellation passes silently.
+     * An exception must not leave this coroutine either: it is a child of the receive loop, and
+     * would take the connection with it.
+     */
+    private fun CoroutineScope.launchServerRequest(id: JsonElement, method: String, params: JsonElement?) {
+        launch {
+            val response = try {
+                answerServerRequest(id, method, params)
+            } catch (e: CancellationException) {
+                ensureActive()
+                internalErrorResponse(id, method, e)
+            } catch (e: Exception) {
+                internalErrorResponse(id, method, e)
+            }
+            sendOrLoseConnection(LspJson.encodeToString(LspMessage.Response.serializer(), response))
+        }
+    }
+
+    /**
+     * The reply to a server→client request; anything without a safe generic reply gets a
+     * `MethodNotFound` error so the server does not block waiting on us.
+     *
+     * - `client/registerCapability` / `client/unregisterCapability`: kept in [registrations] and
+     *   acknowledged with a `null` result. [DefaultClientCapabilities] invites none, but a host may
+     *   pass its own, and a server that registers text sync must then be sent the document.
+     * - `window/workDoneProgress/create`: acknowledged with a `null` result. The host needs no word
+     *   of a token until the first `$/progress` for it, through [LspClientHost.progress].
+     * - `window/showMessageRequest`: [LspClientHost.showMessageRequest]'s choice, or a `null` result
+     *   for none.
+     * - `workspace/applyEdit`: [LspClientHost.applyWorkspaceEdit]'s answer, unless the server's
+     *   positions cannot be read: see [applyEditResult].
      * - `workspace/configuration`: answered with one `null` per requested item, per spec, meaning
      *   "no configuration value for this scope".
      */
-    private suspend fun handleServerRequest(id: JsonElement, method: String, params: JsonElement?) {
+    private suspend fun answerServerRequest(id: JsonElement, method: String, params: JsonElement?): LspMessage.Response {
         val result: JsonElement = when (method) {
-            "client/registerCapability",
-            "client/unregisterCapability",
-            "window/showMessageRequest",
-            "window/workDoneProgress/create",
-            -> JsonNull
+            "client/registerCapability" -> {
+                addRegistrations(params)
+                JsonNull
+            }
+
+            "client/unregisterCapability" -> {
+                removeRegistrations(params)
+                JsonNull
+            }
+
+            "window/workDoneProgress/create" -> JsonNull
+
+            "window/showMessageRequest" -> showMessageRequestResult(params)
+
+            "workspace/applyEdit" -> applyEditResult(params)
 
             "workspace/configuration" -> workspaceConfigurationResult(params)
 
-            else -> return replyMethodNotFound(id, method)
+            else -> return LspMessage.Response(
+                id = id,
+                error = LspError(LspRequestException.METHOD_NOT_FOUND, "Method not found: $method"),
+            )
         }
-        sendOrLoseConnection(LspJson.encodeToString(LspMessage.Response.serializer(), LspMessage.Response(id = id, result = result)))
+        return LspMessage.Response(id = id, result = result)
+    }
+
+    /** Read member by member, for the reason [showMessageRequestResult] gives. */
+    private suspend fun addRegistrations(params: JsonElement?) {
+        val added = ((params as? JsonObject)?.get("registrations") as? JsonArray).orEmpty().mapNotNull { entry ->
+            val registration = entry as? JsonObject ?: return@mapNotNull null
+            val id = (registration["id"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            val method = (registration["method"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            LspRegistration(id, method, registration["registerOptions"] as? JsonObject)
+        }
+        lock.withLock { registrations = registrations + added }
+    }
+
+    private suspend fun removeRegistrations(params: JsonElement?) {
+        // `unregisterations` is how the protocol spells it, and has to go on spelling it.
+        val removed = ((params as? JsonObject)?.get("unregisterations") as? JsonArray).orEmpty().mapNotNull { entry ->
+            ((entry as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull
+        }
+        lock.withLock { registrations = registrations.filterNot { it.id in removed } }
+    }
+
+    private fun internalErrorResponse(id: JsonElement, method: String, cause: Exception) = LspMessage.Response(
+        id = id,
+        error = LspError(INTERNAL_ERROR, "Client failed to answer $method: ${cause.message}"),
+    )
+
+    /**
+     * Read member by member: an internal `@Serializable` class here would put its generated
+     * serializer in the public klib ABI. A request too malformed to show is answered with no choice.
+     */
+    private suspend fun showMessageRequestResult(params: JsonElement?): JsonElement {
+        val request = params as? JsonObject ?: return JsonNull
+        val type = (request["type"] as? JsonPrimitive)?.intOrNull ?: return JsonNull
+        val message = (request["message"] as? JsonPrimitive)?.contentOrNull ?: return JsonNull
+        val actions = (request["actions"] as? JsonArray).orEmpty().mapNotNull { action ->
+            ((action as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull
+        }
+        val choice = host.showMessageRequest(type, message, actions) ?: return JsonNull
+        return buildJsonObject { put("title", choice) }
+    }
+
+    /**
+     * Read member by member, for the reason [showMessageRequestResult] gives. An edit too malformed to
+     * read applies nothing, and neither does any edit from a server whose positions are not UTF-16:
+     * [LspPosition] says they are, so the host would put the text at the wrong column. That goes for
+     * an edit of file operations alone too, as what [initialize] tells the host stays on leaves it out.
+     */
+    private suspend fun applyEditResult(params: JsonElement?): JsonElement {
+        val request = params as? JsonObject
+        val edit = request?.get("edit")?.let { decodeOrNull(LspWorkspaceEdit.serializer(), it) }
+        val label = (request?.get("label") as? JsonPrimitive)?.contentOrNull
+        val failure = when {
+            edit == null -> "The edit could not be read"
+            !positionsAreUtf16(serverCapabilities) -> "Positions in this server's encoding cannot be read"
+            host.applyWorkspaceEdit(edit, label) -> null
+            else -> "The edit was not applied in full"
+        }
+        return buildJsonObject {
+            put("applied", failure == null)
+            if (failure != null) put("failureReason", failure)
+        }
     }
 
     private fun workspaceConfigurationResult(params: JsonElement?): JsonElement {
         val itemCount = ((params as? JsonObject)?.get("items") as? JsonArray)?.size ?: 0
         return JsonArray(List(itemCount) { JsonNull })
-    }
-
-    private suspend fun replyMethodNotFound(id: JsonElement, method: String) {
-        val response = LspMessage.Response(
-            id = id,
-            error = LspError(LspRequestException.METHOD_NOT_FOUND, "Method not found: $method"),
-        )
-        sendOrLoseConnection(LspJson.encodeToString(LspMessage.Response.serializer(), response))
     }
 
     private fun parseObjectOrNull(payload: String): JsonObject? = try {
@@ -467,5 +819,30 @@ class LspClient(val transport: LspTransport, private val scope: CoroutineScope =
         null
     } catch (_: IllegalArgumentException) {
         null
+    }
+
+    private fun <T> decodeOrNull(serializer: KSerializer<T>, element: JsonElement): T? = try {
+        LspJson.decodeFromJsonElement(serializer, element)
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+    private companion object {
+        /** JSON-RPC: the receiver failed while handling the request. */
+        const val INTERNAL_ERROR = -32603
+
+        /** LSP's `MessageType.Error`. */
+        const val MESSAGE_ERROR = 1
+
+        /**
+         * How long [shutdown] waits for the server's answer before going on to `exit`, and then
+         * for that to be written.
+         */
+        const val SHUTDOWN_TIMEOUT_MILLIS = 5_000L
+
+        /** How long [shutdown] waits for the transport to close before leaving it to finish alone. */
+        const val CLOSE_TIMEOUT_MILLIS = 1_000L
     }
 }

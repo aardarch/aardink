@@ -115,6 +115,7 @@ dependencies {
     testImplementation(libs.bundles.testing.screenshot)
     testImplementation(libs.androidx.compose.ui.ui.test.junit4)
     testImplementation(libs.androidx.compose.ui.ui.test.manifest)
+    testImplementation(libs.kotlinx.coroutines.test)
     // Roborazzi/Robolectric build the unit-test manifest from the debug variant's merged
     // manifest, so ui-test-manifest's ComponentActivity declaration must also be a debug dep
     // (not just a test dep) for createComposeRule() to find an activity to launch.

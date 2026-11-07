@@ -250,6 +250,7 @@ abstract fun interface com.aardarch.aardink.core/DiffProvider { // com.aardarch.
 
 abstract fun interface com.aardarch.aardink.core/FoldingProvider { // com.aardarch.aardink.core/FoldingProvider|null[0]
     abstract fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.core/FoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun requestFoldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.core/FoldingProvider.requestFoldableRanges|requestFoldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
 }
 
 abstract interface com.aardarch.aardink.core/IncrementalTokenizer { // com.aardarch.aardink.core/IncrementalTokenizer|null[0]
@@ -290,6 +291,7 @@ abstract interface com.aardarch.aardink.core/LanguageService { // com.aardarch.a
     open suspend fun prepareRename(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.ranges/IntRange? // com.aardarch.aardink.core/LanguageService.prepareRename|prepareRename(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun references(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Location> // com.aardarch.aardink.core/LanguageService.references|references(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun rename(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.core/LanguageService.rename|rename(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.String){}[0]
+    open suspend fun resolveCompletion(com.aardarch.aardink.core/CompletionItem): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/LanguageService.resolveCompletion|resolveCompletion(com.aardarch.aardink.core.CompletionItem){}[0]
     open suspend fun selectionRanges(com.aardarch.aardink.core/CodeDocument, kotlin.collections/List<kotlin/Int>): kotlin.collections/List<com.aardarch.aardink.core/SelectionRange> // com.aardarch.aardink.core/LanguageService.selectionRanges|selectionRanges(com.aardarch.aardink.core.CodeDocument;kotlin.collections.List<kotlin.Int>){}[0]
     open suspend fun signatureHelp(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/SignatureHelp? // com.aardarch.aardink.core/LanguageService.signatureHelp|signatureHelp(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
 }
@@ -1581,6 +1583,7 @@ open class com.aardarch.aardink.core/CompositeLanguageService : com.aardarch.aar
     open suspend fun prepareRename(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.ranges/IntRange? // com.aardarch.aardink.core/CompositeLanguageService.prepareRename|prepareRename(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun references(com.aardarch.aardink.core/CodeDocument, kotlin/Int): kotlin.collections/List<com.aardarch.aardink.core/Location> // com.aardarch.aardink.core/CompositeLanguageService.references|references(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
     open suspend fun rename(com.aardarch.aardink.core/CodeDocument, kotlin/Int, kotlin/String): kotlin.collections/List<com.aardarch.aardink.core/TextEdit> // com.aardarch.aardink.core/CompositeLanguageService.rename|rename(com.aardarch.aardink.core.CodeDocument;kotlin.Int;kotlin.String){}[0]
+    open suspend fun resolveCompletion(com.aardarch.aardink.core/CompletionItem): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/CompositeLanguageService.resolveCompletion|resolveCompletion(com.aardarch.aardink.core.CompletionItem){}[0]
     open suspend fun selectionRanges(com.aardarch.aardink.core/CodeDocument, kotlin.collections/List<kotlin/Int>): kotlin.collections/List<com.aardarch.aardink.core/SelectionRange> // com.aardarch.aardink.core/CompositeLanguageService.selectionRanges|selectionRanges(com.aardarch.aardink.core.CodeDocument;kotlin.collections.List<kotlin.Int>){}[0]
     open suspend fun signatureHelp(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/SignatureHelp? // com.aardarch.aardink.core/CompositeLanguageService.signatureHelp|signatureHelp(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
 }

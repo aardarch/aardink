@@ -41,6 +41,13 @@ interface LanguageService {
     suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem>
 
     /**
+     * [item] with what it left out of the list for being slow to work out, its
+     * [documentation][CompletionItem.documentation] say, for the item the user is looking at. [item] is one this
+     * service returned from [completions]. The default is [item] as it is.
+     */
+    suspend fun resolveCompletion(item: CompletionItem): CompletionItem = item
+
+    /**
      * Validates the entire document and returns diagnostics with precise character ranges.
      *
      * Called after each edit on a debounced schedule (typically 500ms after the last keystroke

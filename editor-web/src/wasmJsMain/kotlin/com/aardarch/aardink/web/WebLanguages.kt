@@ -448,10 +448,10 @@ internal fun languageFrom(
         base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
         languageService = baseService,
     )
-    grammars[id] = grammar
     // Under the providers, which answer nothing a configuration does: a language with nothing else
     // then gets the configuration's own service, which keeps a line's indentation on Enter.
     val configured = root.given("configuration")?.let { definition.withConfiguration(configurationFrom(it)) } ?: definition
+    grammars[id] = grammar
     return configured.copy(
         languageService = WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions),
     )

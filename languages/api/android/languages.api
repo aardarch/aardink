@@ -67,6 +67,7 @@ public final class com/aardarch/aardink/languages/IndentationFoldingProvider : c
 	public fun <init> (I)V
 	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/LanguageConfiguration {
@@ -361,6 +362,7 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun resolveCompletion (Lcom/aardarch/aardink/core/CompletionItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
@@ -396,12 +398,14 @@ public final class com/aardarch/aardink/languages/internal/folding/BraceFoldingP
 	public fun <init> (CCZZZZZI)V
 	public synthetic fun <init> (CCZZZZZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/internal/folding/MarkdownFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/folding/MarkdownFoldingProvider;
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/internal/folding/TagFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
@@ -410,12 +414,14 @@ public final class com/aardarch/aardink/languages/internal/folding/TagFoldingPro
 	public fun <init> (ZI)V
 	public synthetic fun <init> (ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/internal/folding/TomlFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/internal/folding/TomlFoldingProvider;
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/internal/html/HtmlTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {

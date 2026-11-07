@@ -124,7 +124,7 @@ class WebLanguagesTest {
         val fences = codeFenceTokenizers(registry)
         assertSame(registry.byId("kotlin")!!.tokenizer, fences("kotlin"))
         assertNull(fences("toy"), "not registered yet")
-        registry.register(languageFrom(toy, WebLanguageProviders(), registry))
+        registry.register(languageFrom(toy, WebLanguageProviders(), registry, mutableMapOf()))
         assertSame(registry.byId("toy")!!.tokenizer, fences("toy"))
     }
 
