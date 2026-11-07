@@ -82,6 +82,7 @@ import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.lsp.LspTransport
 import com.aardarch.aardink.languages.lsp.WebSocketLspTransport
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.EditorKeyBindings
 import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
@@ -128,6 +129,7 @@ import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.events.KeyboardEvent
 
 /**
  * One editor mounted by [AardinkWeb.mount]. Opaque to hosts: every operation goes through
@@ -275,6 +277,12 @@ object AardinkWeb {
     /** The connections from [connectLanguageServer] that have not ended. */
     internal val languageServers = ArrayList<WebLanguageServer>()
 
+    /** What [registerInlineCompletionsProvider] holds, by language, oldest first. */
+    private val inlineCompletionProviders = mutableStateMapOf<String, List<suspend (String, Int, Int) -> String?>>()
+
+    /** What [registerInlineCompletionsProvider] holds for [languageId], or null for nothing. Snapshot state. */
+    internal fun inlineCompletionSources(languageId: String) = inlineCompletionProviders[languageId]
+
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
      * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
@@ -350,6 +358,30 @@ object AardinkWeb {
     }
 
     /**
+     * Has [provider] offer ghost text in every editor of [languageId], those open now and those to
+     * come, as Monaco's `registerInlineCompletionsProvider`. It takes the text and a 1-based line and
+     * column, and answers Monaco's `InlineCompletions` as JSON, `{ "items": [{ "insertText", "range"? }] }`,
+     * or null for nothing. [languageId] need not be one this page knows yet, and a language can have
+     * several, whose answers are shown one after the other, oldest first.
+     *
+     * Without `range`, the word at the caret and the rest of the line are what the item replaces,
+     * as in Monaco, or the rest of the line, or nothing, whichever its text can hold: see
+     * [com.aardarch.aardink.core.InlineCompletion]. A snippet in `insertText` is left out.
+     *
+     * Returns the handle to end it with.
+     */
+    fun registerInlineCompletionsProvider(
+        languageId: String,
+        provider: suspend (text: String, line: Int, column: Int) -> String?,
+    ): DisposableHandle {
+        inlineCompletionProviders[languageId] = inlineCompletionProviders[languageId].orEmpty() + provider
+        return DisposableHandle {
+            val rest = inlineCompletionProviders[languageId].orEmpty() - provider
+            if (rest.isEmpty()) inlineCompletionProviders.remove(languageId) else inlineCompletionProviders[languageId] = rest
+        }
+    }
+
+    /**
      * Adds (or replaces) a theme, for [WebEditorOptions.theme] to name: VS Code theme JSON, whose
      * `tokenColors` scopes also colour grammars' token names by dotted prefix (`tag.aardflex`, then
      * `tag`). What it does not set comes from `base` (a theme key) if given, else `vscode-light`
@@ -404,6 +436,8 @@ object AardinkWeb {
             setAttribute("data-aardink-editor", "")
         }
         container.appendChild(viewport)
+        // On the way down, ahead of the input element Compose has inside.
+        viewport.addEventListener("keydown", { event -> altBracketKey(handle, event as KeyboardEvent) }, true)
         ComposeViewport(viewport) {
             if (!handle.disposed.value) EditorContent(handle)
         }
@@ -1345,6 +1379,9 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     val state = handle.state.value
     val service = handle.languageService
     val options = handle.options.value
+    // By the language asked for, as a server follows it: an unknown one shows as plain text.
+    val inlineSources = AardinkWeb.inlineCompletionSources(options.language) ?: AardinkWeb.inlineCompletionSources(handle.language.value.id)
+    val inlineCompletions = remember(inlineSources) { inlineSources?.let(::WebInlineCompletions) }
     var showGoToLine by remember { mutableStateOf(false) }
 
     // Keyed on the state: a language change swaps it, and the new one's versions start over.
@@ -1476,6 +1513,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 ),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },
+                inlineCompletionProvider = inlineCompletions,
             )
         }
     }
@@ -1687,6 +1725,32 @@ private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
         return true
     }
     return false
+}
+
+/**
+ * Alt+] and Alt+[, which Compose never hands over as keys: to its web input, a key that makes a
+ * character and has neither Ctrl nor Cmd held is typing, and Alt is not looked at. So they are read
+ * here from the page, by the same bindings every other key goes by, the host's first. Left alone
+ * when nothing runs, a key goes on to type what it types.
+ */
+private fun altBracketKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    val chord = KeyChord(
+        key = when (event.code) {
+            "BracketLeft" -> Key.LeftBracket
+            "BracketRight" -> Key.RightBracket
+            else -> return
+        },
+        alt = true,
+    )
+    val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it == listOf(chord) } }
+    val command = EditorKeyBindings.Default.firstOrNull { it.chord == listOf(chord) }?.command
+    when {
+        action != null -> action.run()
+        command == null || !handle.state.value.execute(command) -> return
+    }
+    event.preventDefault()
+    event.stopPropagation()
 }
 
 /** Keys that are only modifiers, which do not complete a chord. */

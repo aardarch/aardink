@@ -163,6 +163,24 @@ follows a target must check it first. To go back to no links opening at all, lis
 - With a server connected, a built-in language's answers come after the server's, and a formatter or
   outline the language has gives way to the server's.
 
+## Inline completions
+
+`CodeEditorLayout` gains `inlineCompletionProvider`, last and null by default, so a compiled caller
+needs a recompile and nothing else. `EditorCommand` gains `AcceptInlineCompletion` and
+`CycleInlineCompletion`, so an exhaustive `when` over it needs branches. `EditorKeyBindings.Default`
+gains Tab, Alt+] and Alt+[ for them.
+
+Tab is in that list now, where it said Tab was a fixed key, but it does what it did unless ghost text
+shows: a binding whose command cannot run leaves its key alone. A host with its own binding on Alt+]
+or Alt+[ keeps it, as yours come first, and has no key for going through what is on offer until it
+binds one. Unbinding Tab with a null command takes away indenting too, as it already did.
+
+On the web, `registerInlineCompletionsProvider` is new, with
+`editor.action.inlineSuggest.commit`, `showNext` and `showPrevious` for `trigger` and `getAction`. A wasm
+module built from the template copies `aardinkRegisterInlineCompletionsProvider` and
+`aardinkDisposeInlineCompletionsProvider`. `AardinkWeb.registerInlineCompletionsProvider` is the same
+thing from Kotlin. Nothing changes unless you call them.
+
 ## Code lenses
 
 `EditorOptions` and `WebEditorOptions` gain `codeLens`, and `WebLanguageProviders` gains `codeLenses`

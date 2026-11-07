@@ -114,7 +114,8 @@ so every Aardink build proves it still compiles, and `ExportsTemplateTest` exerc
 fails the build if the two ever export different functions. The template is not duplicated here
 because a copy in a document would drift.
 
-Editors and language server connections cross the JS boundary as integer ids. Every export is
+Editors, language server connections and inline completion providers cross the JS boundary as integer
+ids. Every export is
 prefixed `aardink` so it cannot collide with your module's own exports.
 
 `aardinkRegisterLanguage` takes one dispatcher for all of a language's providers: a function of
@@ -284,6 +285,55 @@ characters, so `  JavaScript:alert(1)` stays where it is and `HTTPS://example.co
 The tab opens in the click itself, not after it, so a popup blocker lets it through. The smoke test
 proves this in Chrome with its blocker on; Firefox and Safari have not been tried.
 
+### Inline completions
+
+Ghost text is what an assistant shows at the caret: dim, in the line, and not in the document until
+it is accepted.
+
+```js
+import { registerInlineCompletionsProvider } from '@aardarch/aardink-web';
+
+const registration = await registerInlineCompletionsProvider('kotlin', {
+  async provideInlineCompletions(text, line, column) {
+    const next = await askTheAssistant(text, line, column);
+    return { items: [{ insertText: next }] };
+  },
+});
+```
+
+It is its own call, not one of `registerLanguage`'s providers, as Monaco's is: it works for a built-in
+language, and for one registered later. Asked once typing pauses, with the whole text and a 1-based
+place, and not for each key. While something shows, typing what it says shortens it and asks nothing;
+typing anything else drops it, and it is asked again after the next pause. An answer for text that has
+moved on is dropped. There is no cancellation token, so your work behind it goes on: that is yours to
+cut short.
+
+Leave out `range` if all you know is what comes next. Text that repeats what follows the caret is not
+doubled: with `foo(|)`, `bar)` shows `bar` in front of the bracket. Monaco's default range is the word
+at the caret and the rest of the line, and it shows nothing for text that does not hold them; here,
+the rest of the line alone is tried, and then the text goes in at the caret. With a `range`, this is
+as Monaco has it: `insertText` must hold all the range, in order, and an empty one is a plain
+insertion, so a bracket it repeats there is meant, and doubled.
+
+| Key | Action id | Does |
+| --- | --- | --- |
+| Tab | `editor.action.inlineSuggest.commit` | Accepts, as one undo step, with the caret at the end of what it added, and asks for what comes next |
+| Alt+] | `editor.action.inlineSuggest.showNext` | The next on offer; with none showing, asks now. `addCommand` on the same key comes first |
+| Alt+[ | `editor.action.inlineSuggest.showPrevious` | The previous on offer |
+| Escape | none | Dismisses, ahead of closing the find panel |
+
+Tab indents as usual when nothing shows. A phone has no Tab, so give it a button that runs
+`trigger(null, 'editor.action.inlineSuggest.commit')`, enabled by `getAction(...).isSupported()`.
+
+Nothing shows in a read-only editor, with a selection or several carets, while a snippet is being
+filled in, or while an input method composes: on Android that can be each word as it is typed,
+depending on the keyboard. An open completion list at the caret hides ghost text, as Monaco's does, and
+takes Tab; when the list goes, ghost text that is still good comes back. The strip above a phone's
+keyboard does not hide it. Undo drops what shows, and does not ask.
+
+Left out of Monaco's shape: `snippet` in `insertText` (the item is skipped), `additionalTextEdits`,
+`command`, `handleItemDidShow` and the other callbacks, and `context`.
+
 ### Language servers
 
 ```js
@@ -379,6 +429,8 @@ files to apply them to.
 | `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
 | `codeLens` | The same | Off by default, where Monaco's is on. |
 | `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
+| `languages.registerInlineCompletionsProvider` | `registerInlineCompletionsProvider(languageId, { provideInlineCompletions(text, line, column) })`, returning a Promise of a disposable | Answers Monaco's `{ items: [{ insertText, range? }] }`, or the array alone. See [Inline completions](#inline-completions). |
+| `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious` | The same ids, in `trigger` and `getAction` | `isSupported()` on `commit` says whether anything shows. `hide` and `trigger` are not there: Escape dismisses, and `showNext` with nothing showing asks. |
 | `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing, in scrolling past what it last asked about, or after a fold opens or closes; a long closed fold on screen makes that a few calls at once, one for the lines on either side of it. With `extends` or a language server, every source's hints are shown, the first's where two are at one position; a server that has not answered within a second does not hold yours back. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
@@ -501,6 +553,8 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   Multiplatform release that uses `kotlin.wasm.unsafe` instead.
 - A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
+- Ghost text cannot be dismissed from a key of your own, or from a button: Escape does it, and there
+  is no action for it.
 - A language server connection does not reconnect, and the host hears of its end only on the
   console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
 - The items marked **manual** in the checklist above wait for real devices before 0.6.0.

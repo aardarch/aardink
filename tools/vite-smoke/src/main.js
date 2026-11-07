@@ -16,11 +16,19 @@
 
 // Uses the package exactly as aardflex-web-app's EditorPane will, and reports the outcome on
 // window.__aardinkSmoke for smoke.mjs to assert on.
-import { connectLanguageServer, createEditor, defineTheme, registerLanguage, tokenize, version } from '@aardarch/aardink-web';
+import {
+  connectLanguageServer,
+  createEditor,
+  defineTheme,
+  registerInlineCompletionsProvider,
+  registerLanguage,
+  tokenize,
+  version,
+} from '@aardarch/aardink-web';
 
 const report = (window.__aardinkSmoke = { done: false, checks: {}, error: null, version });
 // checklist.mjs drives further editors through the same public API.
-window.__aardink = { connectLanguageServer, createEditor, defineTheme, registerLanguage };
+window.__aardink = { connectLanguageServer, createEditor, defineTheme, registerInlineCompletionsProvider, registerLanguage };
 
 function waitFor(condition, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {

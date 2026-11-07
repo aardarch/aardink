@@ -208,6 +208,19 @@ export async function connectLanguageServer(url, languageId) {
   return { dispose: () => k.aardinkDisconnectLanguageServer(id) };
 }
 
+/**
+ * Has `provider.provideInlineCompletions` offer ghost text in every editor of a language, as Monaco's
+ * registerInlineCompletionsProvider. See index.d.ts.
+ */
+export async function registerInlineCompletionsProvider(languageId, provider) {
+  const k = await load();
+  const id = k.aardinkRegisterInlineCompletionsProvider(
+    languageId,
+    (text, line, column) => answer((...args) => provider.provideInlineCompletions(...args), text, line, column),
+  );
+  return { dispose: () => k.aardinkDisposeInlineCompletionsProvider(id) };
+}
+
 /** Monaco's defineTheme data ({ base, inherit, rules, colors }) as VS Code theme JSON; VS Code JSON as it is. */
 function toVsCodeTheme(theme) {
   if (!theme.rules) return theme;

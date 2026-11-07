@@ -113,6 +113,12 @@ internal object MonacoActions {
         put("editor.action.formatDocument", "Format Document" to EditorCommand.Format)
         put("editor.action.formatSelection", "Format Selection" to EditorCommand.FormatSelection)
         put("editor.action.triggerSuggest", "Trigger Suggest" to EditorCommand.TriggerSuggest)
+        put("editor.action.inlineSuggest.commit", "Accept Inline Suggestion" to EditorCommand.AcceptInlineCompletion)
+        put("editor.action.inlineSuggest.showNext", "Show Next Inline Suggestion" to EditorCommand.CycleInlineCompletion(forward = true))
+        put(
+            "editor.action.inlineSuggest.showPrevious",
+            "Show Previous Inline Suggestion" to EditorCommand.CycleInlineCompletion(forward = false),
+        )
         put("editor.action.showHover", "Show Hover" to EditorCommand.ShowHover)
         put("editor.action.quickFix", "Quick Fix..." to EditorCommand.ShowCodeActions)
         put("editor.action.rename", "Rename Symbol" to EditorCommand.Rename)

@@ -290,6 +290,94 @@ async function lensEditor(page) {
 }
 
 /**
+ * registerInlineCompletionsProvider with real keys: asked once after a pause and with the text as it
+ * is, ghost text on screen and not in the document, a bracket it repeats not doubled, Alt+] going
+ * through what is on offer, Tab as one undo step, Escape, and Tab indenting again with nothing to show.
+ */
+async function inlineCompletionCheck(page) {
+  setPhase('inline completions');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerInlineCompletionsProvider, registerLanguage } = window.__aardink;
+    window.__inlineAsked = [];
+    await registerLanguage({ id: 'toy-ghost', grammar: { tokenizer: { root: [] } } }, {});
+    window.__inlineProvider = await registerInlineCompletionsProvider('toy-ghost', {
+      provideInlineCompletions: async (text, line, column) => {
+        window.__inlineAsked.push({ text, line, column });
+        return { items: [{ insertText: 'ar)' }, { insertText: 'az)' }] };
+      },
+    });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'foo()\nsecond', language: 'toy-ghost' });
+  }, MOUNT);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const canAccept = () => page.evaluate(() => window.__smokeEditor.getAction('editor.action.inlineSuggest.commit').isSupported());
+  await sleep(800);
+  await page.mouse.click(300, 12);
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 5 }));
+  await sleep(100);
+  const acceptBefore = await canAccept();
+
+  await page.keyboard.type('b');
+  const askedAtOnce = await page.evaluate(() => window.__inlineAsked.length);
+  await sleep(100);
+  const plain = await shot();
+  await page.waitForFunction(() => window.__inlineAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const ghosted = await shot();
+  const askedAfterPause = await page.evaluate(() => window.__inlineAsked.slice());
+  const shownValue = await value();
+  const acceptWhileShown = await canAccept();
+
+  await page.keyboard.down('Alt');
+  await page.keyboard.press(']');
+  await page.keyboard.up('Alt');
+  await sleep(200);
+  const cycled = await shot();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const accepted = await value();
+  const caret = await page.evaluate(() => window.__smokeEditor.getPosition());
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await sleep(600);
+  const undone = await value();
+
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 6 }));
+  await page.keyboard.type('q');
+  await page.waitForFunction(() => window.__inlineAsked.at(-1).text.includes('bq'), { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const shownAgain = await canAccept();
+  await page.keyboard.press('Escape');
+  await sleep(200);
+  const afterEscape = await canAccept();
+
+  await page.evaluate(() => window.__inlineProvider.dispose());
+  await sleep(300);
+  const before = await value();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const indented = await value();
+
+  return {
+    'nothing can be accepted before anything shows': acceptBefore === false,
+    'an inline completions provider is not asked on the key itself': askedAtOnce === 0,
+    'it is asked after a pause, with the text and a 1-based place':
+      askedAfterPause.length === 1 && askedAfterPause[0].text === 'foo(b)\nsecond' && askedAfterPause[0].line === 1 && askedAfterPause[0].column === 6,
+    'ghost text is on screen and not in the document': ghosted !== plain && shownValue === 'foo(b)\nsecond' && acceptWhileShown === true,
+    'Alt+] shows the next one': cycled !== ghosted,
+    'Tab accepts what shows, with the bracket it repeats not doubled': accepted === 'foo(baz)\nsecond',
+    'accepting leaves the caret at the end of what it added': caret?.lineNumber === 1 && caret?.column === 8,
+    'accepting is one undo step': undone === 'foo(b)\nsecond',
+    'typing something else drops it and asks again': shownAgain === true,
+    'Escape dismisses it': afterEscape === false,
+    'Tab indents when nothing shows': indented !== before && indented.length > before.length,
+  };
+}
+
+/**
  * provideCodeLenses through the dispatcher, a row on screen and not in the document, and a real
  * click on each lens of the row coming back through runCodeLensCommand with the caret left alone.
  */
@@ -899,6 +987,7 @@ try {
     ...(await codeLensCheck(desktop)),
     ...(await serverCodeLensCheck(desktop)),
     ...(await stuckServerLensCheck(desktop)),
+    ...(await inlineCompletionCheck(desktop)),
     ...(await languageServerCheck(desktop)),
     ...(await linkCheck(desktop)),
   };

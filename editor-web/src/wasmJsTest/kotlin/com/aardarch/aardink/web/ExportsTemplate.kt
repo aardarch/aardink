@@ -40,6 +40,9 @@ private var nextHandleId = 1
 private val languageServers = mutableMapOf<Int, DisposableHandle>()
 private var nextLanguageServerId = 1
 
+private val inlineCompletionsProviders = mutableMapOf<Int, DisposableHandle>()
+private var nextInlineCompletionsProviderId = 1
+
 private fun handle(id: Int): AardinkEditorHandle =
     handles[id] ?: error("No Aardink editor with id $id; it was never created or is already disposed")
 
@@ -180,6 +183,26 @@ fun aardinkConnectLanguageServer(url: String, languageId: String): Int {
 @JsExport
 fun aardinkDisconnectLanguageServer(id: Int) {
     languageServers.remove(id)?.dispose()
+}
+
+/**
+ * Has [provider] offer ghost text in every editor of [languageId]; see
+ * `AardinkWeb.registerInlineCompletionsProvider`. It takes the text and a 1-based line and column.
+ * Returns its id for [aardinkDisposeInlineCompletionsProvider].
+ */
+@JsExport
+fun aardinkRegisterInlineCompletionsProvider(languageId: String, provider: (String, Int, Int) -> Promise<JsString?>): Int {
+    val id = nextInlineCompletionsProviderId++
+    inlineCompletionsProviders[id] = AardinkWeb.registerInlineCompletionsProvider(languageId) { text, line, column ->
+        provider(text, line, column).await<JsString?>()?.toString()
+    }
+    return id
+}
+
+/** Ends what [aardinkRegisterInlineCompletionsProvider] started. Safe to call twice; the second call is a no-op. */
+@JsExport
+fun aardinkDisposeInlineCompletionsProvider(id: Int) {
+    inlineCompletionsProviders.remove(id)?.dispose()
 }
 
 /** Adds a theme from VS Code theme JSON; see `AardinkWeb.registerTheme`. Returns "" when it worked, else what was wrong. */

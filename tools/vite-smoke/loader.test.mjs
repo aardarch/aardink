@@ -41,6 +41,8 @@ const provideKotlin = () => {
       'export const aardinkSetBundledFontUrl = () => {};',
       'export const aardinkTokenize = () => "[[]]";',
       'export const aardinkRegisterLanguage = (definition, dispatcher) => { globalThis.dispatcher = dispatcher; return ""; };',
+      'export const aardinkRegisterInlineCompletionsProvider = (language, provider) => { globalThis.inlineProvider = { language, provider }; return 7; };',
+      'export const aardinkDisposeInlineCompletionsProvider = (id) => { globalThis.inlineDisposed = id; };',
       'export const aardinkCreate = (container, value, options) => { globalThis.optionsSent.push(JSON.parse(options)); return 1; };',
       'export const aardinkUpdateOptions = (id, options) => globalThis.optionsSent.push(JSON.parse(options));',
       ...['Content', 'Cursor', 'Selection', 'Focus', 'Diagnostics', 'Scroll'].map((kind) => `export const aardinkOn${kind}Change = () => {};`),
@@ -98,6 +100,37 @@ test('a click on a lens reaches runCodeLensCommand with its id and arguments, an
 
   await registerLanguage({ id: 'unlensed' }, {});
   assert.equal(await globalThis.dispatcher('runCodeLensCommand', '', '["run",[]]'), null, 'no provider to run it');
+});
+
+test('an inline completions provider gets the text and a place, answers as JSON, and can be disposed', async () => {
+  const { registerInlineCompletionsProvider } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  const asked = [];
+  const registration = await registerInlineCompletionsProvider('ghostly', {
+    provideInlineCompletions(...args) {
+      asked.push(args);
+      return this.answer;
+    },
+    answer: { items: [{ insertText: 'next' }] },
+  });
+  const { language, provider } = globalThis.inlineProvider;
+
+  assert.equal(language, 'ghostly');
+  assert.equal(await provider('the text', 2, 3), '{"items":[{"insertText":"next"}]}');
+  assert.deepEqual(asked, [['the text', 2, 3]]);
+  registration.dispose();
+  assert.equal(globalThis.inlineDisposed, 7);
+});
+
+test('an inline completions provider with nothing to say answers null, and one that throws rejects', async () => {
+  const { registerInlineCompletionsProvider } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  await registerInlineCompletionsProvider('quiet', { provideInlineCompletions: () => null });
+  assert.equal(await globalThis.inlineProvider.provider('', 1, 1), null);
+  await registerInlineCompletionsProvider('failing', {
+    provideInlineCompletions: () => {
+      throw new Error('no ghost here');
+    },
+  });
+  await assert.rejects(globalThis.inlineProvider.provider('', 1, 1), /no ghost here/);
 });
 
 test('codeLens is on for what says so, and off by default', async () => {

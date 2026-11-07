@@ -246,7 +246,8 @@ export interface AardinkEditor {
    * `editor.action.changeAll`, `editor.action.insertCursorAtEndOfEachLineSelected`,
    * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
    * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
-   * `editor.action.showColorPicker`, and
+   * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext` and
+   * `.showPrevious`, and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -772,6 +773,60 @@ export function registerTheme(name: string, theme: AardinkThemeData | object): P
  * server down.
  */
 export function connectLanguageServer(url: string | URL, languageId: string): Promise<{ dispose(): void }>;
+
+/** What `provideInlineCompletions` offers: Monaco's `InlineCompletions`, or just its `items`. */
+export interface AardinkInlineCompletions {
+  items: AardinkInlineCompletion[];
+}
+
+/**
+ * Monaco's `InlineCompletion`, as far as the editor shows it. `insertText` is a string: a
+ * `{ snippet }` is left out, as ghost text cannot fill in its stops.
+ *
+ * `range` is what it replaces, and must hold the caret. What `insertText` repeats of it is not shown
+ * again: over `)`, the text `x) {` shows `x` before the bracket and ` {` after it, which is how ghost
+ * text keeps from doubling what follows the caret. So it has to hold all of `range`, in order, or it
+ * does not show, as in Monaco. An empty `range` is a plain insertion.
+ *
+ * Without `range`, it replaces the word at the caret and the rest of the line, as in Monaco. Where
+ * Monaco then shows nothing for text that does not hold them, this tries the rest of the line alone,
+ * and then puts the text in at the caret, so a provider that only knows what comes next can leave
+ * `range` out.
+ */
+export interface AardinkInlineCompletion {
+  insertText: string;
+  range?: AardinkRange;
+}
+
+/** Monaco's `InlineCompletionsProvider`, as far as the editor asks one anything. */
+export interface AardinkInlineCompletionsProvider {
+  /**
+   * What might come next at a 1-based `line` and `column`, best first: the first shows, and Alt+] and
+   * Alt+[ go through the others. Asked once typing pauses, not for each key, and at once after one
+   * is accepted, or by `editor.action.inlineSuggest.showNext` with none showing. While one shows,
+   * typing what it says asks nothing. An answer for text that has moved on is dropped; there is no
+   * cancellation token, so the work behind it is not told to stop.
+   */
+  provideInlineCompletions(
+    text: string,
+    line: number,
+    column: number,
+  ): AardinkInlineCompletions | AardinkInlineCompletion[] | null | Promise<AardinkInlineCompletions | AardinkInlineCompletion[] | null>;
+}
+
+/**
+ * Has `provider` offer ghost text in every editor of `languageId`, open now or to come, as Monaco's
+ * `languages.registerInlineCompletionsProvider`. Several for one language are all asked, and their
+ * answers follow each other, oldest first. Tab accepts, as one undo step; Alt+] and Alt+[ go through
+ * what is on offer; Escape dismisses. A phone has no Tab, so run `editor.action.inlineSuggest.commit`
+ * from a button: `getAction` says whether there is anything to accept. Nothing shows in a read-only
+ * editor, with a selection or several carets, while filling in a snippet, while an input method
+ * composes, or under an open completion list, which takes Tab. `dispose()` ends it.
+ */
+export function registerInlineCompletionsProvider(
+  languageId: string,
+  provider: AardinkInlineCompletionsProvider,
+): Promise<{ dispose(): void }>;
 
 /** Monaco's name for `registerTheme`. */
 export const defineTheme: typeof registerTheme;

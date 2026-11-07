@@ -29,6 +29,8 @@ import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
@@ -50,6 +52,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -314,6 +319,46 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
                 it.isNotEmpty()
             },
         )
+    }
+}
+
+/**
+ * What the hosts' providers of one language offer, for [AardinkWeb.registerInlineCompletionsProvider]:
+ * all of them at once, oldest first, as Monaco's providers for a language are. One that fails costs
+ * its own answer. An answer that comes after the editor stopped waiting is dropped; a Promise has no
+ * way to be called off, so the host's work goes on, and nothing here asks it to stop.
+ */
+internal class WebInlineCompletions(private val providers: List<suspend (text: String, line: Int, column: Int) -> String?>) :
+    InlineCompletionProvider {
+
+    override suspend fun provideInlineCompletions(document: CodeDocument, cursorOffset: Int): List<InlineCompletion> = coroutineScope {
+        val (line, column) = document.offsetToLineCol(cursorOffset)
+        val text = document.text
+        providers.map { provider ->
+            async {
+                try {
+                    provider(text, line + 1, column + 1)?.let { parseInlineCompletions(document, it) }.orEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    println("Aardink: an inline completions provider failed: ${e.message}")
+                    emptyList()
+                }
+            }
+        }.awaitAll().flatten()
+    }
+}
+
+/**
+ * Monaco's `InlineCompletions`, `{ items: [{ insertText, range? }] }`, or the bare array of items. An
+ * `insertText` that is a snippet is left out: ghost text cannot fill in its stops.
+ */
+internal fun parseInlineCompletions(document: CodeDocument, json: String): List<InlineCompletion> {
+    val root = parsed(json)
+    val items = ((root as? JsonObject)?.get("items") ?: root) as? JsonArray ?: return emptyList()
+    return items.mapNotNull { element ->
+        val item = element as? JsonObject ?: return@mapNotNull null
+        InlineCompletion(item.string("insertText") ?: return@mapNotNull null, rangeIn(document, item["range"]))
     }
 }
 
