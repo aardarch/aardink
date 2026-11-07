@@ -139,6 +139,11 @@ function monarchToJson(value) {
   return value;
 }
 
+/** A language configuration's RegExp literals, for JSON.stringify: VS Code's `{ pattern, flags }`. */
+function regexAsPattern(key, value) {
+  return value instanceof RegExp ? { pattern: value.source, flags: value.flags } : value;
+}
+
 /** The decorations owner deltaDecorations sets; each collection has its own. */
 const DELTA_OWNER = 'delta';
 
@@ -166,6 +171,7 @@ export async function registerLanguage(definition, providers = {}) {
       extensions: definition.extensions,
       inheritCompletions: definition.inheritCompletions,
       schema: definition.schema,
+      configuration: JSON.parse(JSON.stringify(definition.configuration ?? null, regexAsPattern)),
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
       grammar,

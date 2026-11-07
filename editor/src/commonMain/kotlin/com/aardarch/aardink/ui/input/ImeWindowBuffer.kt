@@ -42,7 +42,10 @@ internal class ImeWindowBuffer(private val document: CharSequence) : CharSequenc
     private var lo = 0
     private var hi = 0
     private val scratch = StringBuilder()
-    private var edited = false
+
+    /** Whether the batch has edited the text, even if it left it as it was. */
+    var edited = false
+        private set
 
     var selection: TextRange = TextRange.Zero
         private set

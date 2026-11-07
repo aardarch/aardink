@@ -1188,7 +1188,8 @@ class CodeEditorState(
      * is repeated at every other selection, as with several cursors in VS Code; while [composing],
      * only when the composition ends ([endComposition]). A single character typed at a caret gets
      * the typing rules ([TypingRules]: smart indent, auto-close) from [service], except while
-     * [composing].
+     * [composing]; typed over the selections, it may surround them instead
+     * ([LanguageService.surroundingClose]).
      *
      * Not an external edit: popups that follow typing stay up. Returns the character when one was
      * typed at a caret, for the completion trigger; null for anything else.
@@ -1201,6 +1202,7 @@ class CodeEditorState(
         composing: Boolean = false,
         service: LanguageService? = null,
     ): TypedInput? {
+        if (!composing && service != null && surroundSelections(start, end, text, service)) return null
         val eol = lineEnding
         val normalized = TypingRules.withLineEnding(TypingRules.normalizeLineEndings(text), eol)
         val from = start.coerceIn(0, document.length)
@@ -1258,7 +1260,8 @@ class CodeEditorState(
                 val position = caret.end + shift
                 placed[index] = TextRange(position)
                 if (position == 0 || document[position - 1] != typed) continue
-                val followUp = TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions) ?: continue
+                val followUp =
+                    TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions, eol = eol) ?: continue
                 applied += document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
                 placed[index] = TextRange(followUp.caret)
                 shift += followUp.text.length
@@ -1275,6 +1278,21 @@ class CodeEditorState(
             it.version = textVersion
         }
         return typed?.let { TypedInput(from, it, autoCloseLength) }
+    }
+
+    /**
+     * Wraps the selections when [text] is one character typed over all of them that [service]
+     * surrounds with: one undo step, and the selections stay on the text inside. Returns whether
+     * it did; a caret costs no more than a look at the primary selection.
+     */
+    private fun surroundSelections(start: Int, end: Int, text: String, service: LanguageService): Boolean {
+        val typed = text.singleOrNull() ?: return false
+        val before = currentSelections()
+        val primary = before.primary
+        if (primary.collapsed || start != primary.min || end != primary.max) return false
+        val close = service.surroundingClose(typed) ?: return false
+        val edit = EditingCommands.surround(document, before, typed, close) ?: return false
+        return applyChanges(edit.changes, EditKind.Other, external = false) { edit.selectionsAfter }
     }
 
     /**

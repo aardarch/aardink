@@ -58,6 +58,64 @@ class WebLanguagesTest {
     }
 
     @Test
+    fun `a definition's configuration reaches the language, over its providers`() = runTest {
+        AardinkWeb.registerLanguage(
+            """
+            {
+              "id": "configured",
+              "grammar": { "tokenizer": { "root": [ ["\\w+", "text"] ] } },
+              "configuration": {
+                "comments": { "lineComment": "--" },
+                "autoClosingPairs": [["(", ")"]],
+                "folding": { "markers": { "start": { "pattern": "^BEGIN", "flags": "i" }, "end": "^END" } },
+                "onEnterRules": [{ "beforeText": { "pattern": "^x" }, "action": { "indent": "none", "appendText": "y" } }]
+              }
+            }
+            """.trimIndent(),
+            WebLanguageProviders(hover = { _, _, _ -> """{ "contents": "from the host" }""" }),
+        )
+        val language = AardinkWeb.registry.byId("configured")!!
+        val service = language.languageService!!
+        assertEquals(CommentSyntax(line = "--"), language.tokenizer.commentSyntax)
+        assertEquals(")", service.autoClose(CodeDocument("("), 0, '('))
+        assertEquals(")", service.surroundingClose('('), "no surroundingPairs: the closing pairs surround")
+        assertEquals("y", service.smartIndent(CodeDocument("x\n"), 1))
+        assertEquals("  ", service.smartIndent(CodeDocument("  a\n"), 1), "no rule, and no language extended: the indentation stays")
+        assertTrue(language.foldingProvider.foldableRanges(CodeDocument("begin\na\nEND")).isNotEmpty())
+        assertEquals("from the host", service.hoverDoc(CodeDocument("a"), 0)?.content)
+    }
+
+    @Test
+    fun `a configuration may be the text of the file, comments and all`() {
+        AardinkWeb.registerLanguage(
+            """
+            {
+              "id": "configured-text",
+              "grammar": { "tokenizer": { "root": [] } },
+              "configuration": "// The file.\n{ \"surroundingPairs\": [[\"<\", \">\"],], }"
+            }
+            """.trimIndent(),
+        )
+        assertEquals(">", AardinkWeb.registry.byId("configured-text")!!.languageService!!.surroundingClose('<'))
+    }
+
+    @Test
+    fun `a configuration it cannot use is refused, saying where`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            AardinkWeb.registerLanguage(
+                """
+                {
+                  "id": "bad-configuration",
+                  "grammar": { "tokenizer": { "root": [] } },
+                  "configuration": { "onEnterRules": [{ "beforeText": "(?<=a)b", "action": { "indent": "none" } }] }
+                }
+                """.trimIndent(),
+            )
+        }
+        assertEquals("configuration.onEnterRules[0].beforeText: lookbehind is not supported: (?<=a)b", error.message)
+    }
+
+    @Test
     fun `a grammar with a lookbehind is refused, saying where`() {
         val error = assertFailsWith<IllegalArgumentException> {
             AardinkWeb.registerLanguage("""{ "id": "bad", "grammar": { "tokenizer": { "root": [ ["(?<=a)b", "x"] ] } } }""")

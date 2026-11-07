@@ -69,6 +69,137 @@ public final class com/aardarch/aardink/languages/IndentationFoldingProvider : c
 	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
 }
 
+public final class com/aardarch/aardink/languages/LanguageConfiguration {
+	public static final field $stable I
+	public static final field Companion Lcom/aardarch/aardink/languages/LanguageConfiguration$Companion;
+	public fun <init> ()V
+	public fun <init> (Lcom/aardarch/aardink/core/CommentSyntax;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;Lcom/aardarch/aardink/languages/FoldingRegionMarkers;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/core/CommentSyntax;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;Lcom/aardarch/aardink/languages/FoldingRegionMarkers;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/aardarch/aardink/core/CommentSyntax;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;
+	public final fun component7 ()Lcom/aardarch/aardink/languages/FoldingRegionMarkers;
+	public final fun copy (Lcom/aardarch/aardink/core/CommentSyntax;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;Lcom/aardarch/aardink/languages/FoldingRegionMarkers;)Lcom/aardarch/aardink/languages/LanguageConfiguration;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration;Lcom/aardarch/aardink/core/CommentSyntax;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;Lcom/aardarch/aardink/languages/FoldingRegionMarkers;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAutoClosingPairs ()Ljava/util/List;
+	public final fun getBrackets ()Ljava/util/List;
+	public final fun getComments ()Lcom/aardarch/aardink/core/CommentSyntax;
+	public final fun getFoldingMarkers ()Lcom/aardarch/aardink/languages/FoldingRegionMarkers;
+	public final fun getIndentationRules ()Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;
+	public final fun getOnEnterRules ()Ljava/util/List;
+	public final fun getSurroundingPairs ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$AutoClosingPair {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZZ)Lcom/aardarch/aardink/languages/LanguageConfiguration$AutoClosingPair;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration$AutoClosingPair;Ljava/lang/String;Ljava/lang/String;ZZILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration$AutoClosingPair;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClose ()Ljava/lang/String;
+	public final fun getNotInComment ()Z
+	public final fun getNotInString ()Z
+	public final fun getOpen ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$CharacterPair {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageConfiguration$CharacterPair;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration$CharacterPair;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration$CharacterPair;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClose ()Ljava/lang/String;
+	public final fun getOpen ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageConfiguration;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$EnterAction {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;Ljava/lang/String;I)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun copy (Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;Ljava/lang/String;I)Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;Ljava/lang/String;IILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppendText ()Ljava/lang/String;
+	public final fun getIndent ()Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public final fun getRemoveText ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$IndentAction : java/lang/Enum {
+	public static final field Indent Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public static final field IndentOutdent Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public static final field None Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public static final field Outdent Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+	public static fun values ()[Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentAction;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$IndentationRules {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;)V
+	public synthetic fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlin/text/Regex;
+	public final fun component2 ()Lkotlin/text/Regex;
+	public final fun component3 ()Lkotlin/text/Regex;
+	public final fun component4 ()Lkotlin/text/Regex;
+	public final fun copy (Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;)Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration$IndentationRules;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDecrease ()Lkotlin/text/Regex;
+	public final fun getIncrease ()Lkotlin/text/Regex;
+	public final fun getIndentNextLine ()Lkotlin/text/Regex;
+	public final fun getUnIndentedLine ()Lkotlin/text/Regex;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/languages/LanguageConfiguration$OnEnterRule {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;
+	public final fun component2 ()Lkotlin/text/Regex;
+	public final fun component3 ()Lkotlin/text/Regex;
+	public final fun component4 ()Lkotlin/text/Regex;
+	public final fun copy (Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;)Lcom/aardarch/aardink/languages/LanguageConfiguration$OnEnterRule;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageConfiguration$OnEnterRule;Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;Lkotlin/text/Regex;Lkotlin/text/Regex;Lkotlin/text/Regex;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageConfiguration$OnEnterRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/aardarch/aardink/languages/LanguageConfiguration$EnterAction;
+	public final fun getAfterText ()Lkotlin/text/Regex;
+	public final fun getBeforeText ()Lkotlin/text/Regex;
+	public final fun getPreviousLineText ()Lkotlin/text/Regex;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/languages/LanguageDefinition$Companion;
@@ -93,6 +224,7 @@ public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public final fun getTokenizer ()Lcom/aardarch/aardink/core/IncrementalTokenizer;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public final fun withConfiguration (Lcom/aardarch/aardink/languages/LanguageConfiguration;)Lcom/aardarch/aardink/languages/LanguageDefinition;
 }
 
 public final class com/aardarch/aardink/languages/LanguageDefinition$Companion {
@@ -232,6 +364,7 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
+	public fun surroundingClose (C)Ljava/lang/String;
 }
 
 public abstract class com/aardarch/aardink/languages/internal/RegexTokenizer : com/aardarch/aardink/core/IncrementalTokenizer {

@@ -245,9 +245,11 @@ object AardinkWeb {
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
      * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
-     * "triggerCharacters"?, "inheritCompletions"?, "schema"? }` (`schema`: an
+     * "triggerCharacters"?, "inheritCompletions"?, "schema"?, "configuration"? }` (`schema`: an
      * [com.aardarch.aardink.languages.XmlSchema] as JSON, whose completions, hover and checks come
-     * before the extended language's, or built-in XML's when it extends none): `grammar` is a [DeclarativeGrammar] (a subset
+     * before the extended language's, or built-in XML's when it extends none; `configuration`: a
+     * [com.aardarch.aardink.languages.LanguageConfiguration] as JSON, or its text as a string, for
+     * closing pairs, surrounding a selection, Enter, comments and fold markers): `grammar` is a [DeclarativeGrammar] (a subset
      * of Monaco's Monarch, with `comments` as in Monaco's language configuration), and `extends`
      * names a language whose language service and folding this one takes (`"xml"`), besides what
      * [providers] answer. `inheritCompletions: false` leaves out that language's completions,

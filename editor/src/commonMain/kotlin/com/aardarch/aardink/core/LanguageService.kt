@@ -49,10 +49,12 @@ interface LanguageService {
     suspend fun diagnostics(document: CodeDocument): List<Diagnostic>
 
     /**
-     * Returns the whitespace a newly inserted line starts with, or "" for none.
+     * Returns the text a newly inserted line starts with, or "" for none: its indentation, and
+     * after that anything else the language continues a line with (the ` * ` of a block comment).
+     * The caret goes after it.
      *
      * Called after the user presses Enter. [lineIndex] is the 0-based index of the NEW line
-     * (the one just created). The previous line is `lineIndex - 1`. Build the result with
+     * (the one just created). The previous line is `lineIndex - 1`. Build the indentation with
      * [options] (for example `options.indentAfter(previousLine, levels = 1)`), so it is tabs or
      * spaces as the editor is set up.
      */
@@ -68,6 +70,15 @@ interface LanguageService {
      * @param offset Document-absolute offset of the typed character (points at [charTyped]).
      */
     fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String?
+
+    /**
+     * What closes a selection when [typed] is typed over it, or null for [typed] to replace the
+     * selection as usual: with `(` answering `)`, typing `(` over `foo` gives `(foo)`, with `foo`
+     * still selected. Every selection is wrapped, in one undo step, unless one of them is a caret
+     * or only blanks, or a quote is typed over a quote. Asked with a selection only, and not while
+     * an input method is composing. The default is null.
+     */
+    fun surroundingClose(typed: Char): String? = null
 
     /**
      * Returns hover documentation for the token under [offset], or null if no doc is available.

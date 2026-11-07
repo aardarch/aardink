@@ -122,6 +122,155 @@ final class com.aardarch.aardink.languages/IndentationFoldingProvider : com.aard
     final fun foldableRanges(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/FoldRange> // com.aardarch.aardink.languages/IndentationFoldingProvider.foldableRanges|foldableRanges(com.aardarch.aardink.core.CodeDocument){}[0]
 }
 
+final class com.aardarch.aardink.languages/LanguageConfiguration { // com.aardarch.aardink.languages/LanguageConfiguration|null[0]
+    constructor <init>(com.aardarch.aardink.core/CommentSyntax? = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule> = ..., com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules? = ..., com.aardarch.aardink.languages/FoldingRegionMarkers? = ...) // com.aardarch.aardink.languages/LanguageConfiguration.<init>|<init>(com.aardarch.aardink.core.CommentSyntax?;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.CharacterPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.AutoClosingPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.CharacterPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.OnEnterRule>;com.aardarch.aardink.languages.LanguageConfiguration.IndentationRules?;com.aardarch.aardink.languages.FoldingRegionMarkers?){}[0]
+
+    final val autoClosingPairs // com.aardarch.aardink.languages/LanguageConfiguration.autoClosingPairs|{}autoClosingPairs[0]
+        final fun <get-autoClosingPairs>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair> // com.aardarch.aardink.languages/LanguageConfiguration.autoClosingPairs.<get-autoClosingPairs>|<get-autoClosingPairs>(){}[0]
+    final val brackets // com.aardarch.aardink.languages/LanguageConfiguration.brackets|{}brackets[0]
+        final fun <get-brackets>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> // com.aardarch.aardink.languages/LanguageConfiguration.brackets.<get-brackets>|<get-brackets>(){}[0]
+    final val comments // com.aardarch.aardink.languages/LanguageConfiguration.comments|{}comments[0]
+        final fun <get-comments>(): com.aardarch.aardink.core/CommentSyntax? // com.aardarch.aardink.languages/LanguageConfiguration.comments.<get-comments>|<get-comments>(){}[0]
+    final val foldingMarkers // com.aardarch.aardink.languages/LanguageConfiguration.foldingMarkers|{}foldingMarkers[0]
+        final fun <get-foldingMarkers>(): com.aardarch.aardink.languages/FoldingRegionMarkers? // com.aardarch.aardink.languages/LanguageConfiguration.foldingMarkers.<get-foldingMarkers>|<get-foldingMarkers>(){}[0]
+    final val indentationRules // com.aardarch.aardink.languages/LanguageConfiguration.indentationRules|{}indentationRules[0]
+        final fun <get-indentationRules>(): com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules? // com.aardarch.aardink.languages/LanguageConfiguration.indentationRules.<get-indentationRules>|<get-indentationRules>(){}[0]
+    final val onEnterRules // com.aardarch.aardink.languages/LanguageConfiguration.onEnterRules|{}onEnterRules[0]
+        final fun <get-onEnterRules>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule> // com.aardarch.aardink.languages/LanguageConfiguration.onEnterRules.<get-onEnterRules>|<get-onEnterRules>(){}[0]
+    final val surroundingPairs // com.aardarch.aardink.languages/LanguageConfiguration.surroundingPairs|{}surroundingPairs[0]
+        final fun <get-surroundingPairs>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> // com.aardarch.aardink.languages/LanguageConfiguration.surroundingPairs.<get-surroundingPairs>|<get-surroundingPairs>(){}[0]
+
+    final fun component1(): com.aardarch.aardink.core/CommentSyntax? // com.aardarch.aardink.languages/LanguageConfiguration.component1|component1(){}[0]
+    final fun component2(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> // com.aardarch.aardink.languages/LanguageConfiguration.component2|component2(){}[0]
+    final fun component3(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair> // com.aardarch.aardink.languages/LanguageConfiguration.component3|component3(){}[0]
+    final fun component4(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> // com.aardarch.aardink.languages/LanguageConfiguration.component4|component4(){}[0]
+    final fun component5(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule> // com.aardarch.aardink.languages/LanguageConfiguration.component5|component5(){}[0]
+    final fun component6(): com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules? // com.aardarch.aardink.languages/LanguageConfiguration.component6|component6(){}[0]
+    final fun component7(): com.aardarch.aardink.languages/FoldingRegionMarkers? // com.aardarch.aardink.languages/LanguageConfiguration.component7|component7(){}[0]
+    final fun copy(com.aardarch.aardink.core/CommentSyntax? = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair> = ..., kotlin.collections/List<com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule> = ..., com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules? = ..., com.aardarch.aardink.languages/FoldingRegionMarkers? = ...): com.aardarch.aardink.languages/LanguageConfiguration // com.aardarch.aardink.languages/LanguageConfiguration.copy|copy(com.aardarch.aardink.core.CommentSyntax?;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.CharacterPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.AutoClosingPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.CharacterPair>;kotlin.collections.List<com.aardarch.aardink.languages.LanguageConfiguration.OnEnterRule>;com.aardarch.aardink.languages.LanguageConfiguration.IndentationRules?;com.aardarch.aardink.languages.FoldingRegionMarkers?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.toString|toString(){}[0]
+
+    final enum class IndentAction : kotlin/Enum<com.aardarch.aardink.languages/LanguageConfiguration.IndentAction> { // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction|null[0]
+        enum entry Indent // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.Indent|null[0]
+        enum entry IndentOutdent // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.IndentOutdent|null[0]
+        enum entry None // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.None|null[0]
+        enum entry Outdent // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.Outdent|null[0]
+
+        final val entries // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<com.aardarch.aardink.languages/LanguageConfiguration.IndentAction> // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): com.aardarch.aardink.languages/LanguageConfiguration.IndentAction // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<com.aardarch.aardink.languages/LanguageConfiguration.IndentAction> // com.aardarch.aardink.languages/LanguageConfiguration.IndentAction.values|values#static(){}[0]
+    }
+
+    final class AutoClosingPair { // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair|null[0]
+        constructor <init>(kotlin/String, kotlin/String, kotlin/Boolean = ..., kotlin/Boolean = ...) // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.<init>|<init>(kotlin.String;kotlin.String;kotlin.Boolean;kotlin.Boolean){}[0]
+
+        final val close // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.close|{}close[0]
+            final fun <get-close>(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.close.<get-close>|<get-close>(){}[0]
+        final val notInComment // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.notInComment|{}notInComment[0]
+            final fun <get-notInComment>(): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.notInComment.<get-notInComment>|<get-notInComment>(){}[0]
+        final val notInString // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.notInString|{}notInString[0]
+            final fun <get-notInString>(): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.notInString.<get-notInString>|<get-notInString>(){}[0]
+        final val open // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.open|{}open[0]
+            final fun <get-open>(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.open.<get-open>|<get-open>(){}[0]
+
+        final fun component1(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.component2|component2(){}[0]
+        final fun component3(): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.component3|component3(){}[0]
+        final fun component4(): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.component4|component4(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.copy|copy(kotlin.String;kotlin.String;kotlin.Boolean;kotlin.Boolean){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.AutoClosingPair.toString|toString(){}[0]
+    }
+
+    final class CharacterPair { // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair|null[0]
+        constructor <init>(kotlin/String, kotlin/String) // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.<init>|<init>(kotlin.String;kotlin.String){}[0]
+
+        final val close // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.close|{}close[0]
+            final fun <get-close>(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.close.<get-close>|<get-close>(){}[0]
+        final val open // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.open|{}open[0]
+            final fun <get-open>(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.open.<get-open>|<get-open>(){}[0]
+
+        final fun component1(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.component2|component2(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String = ...): com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.copy|copy(kotlin.String;kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.CharacterPair.toString|toString(){}[0]
+    }
+
+    final class EnterAction { // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction|null[0]
+        constructor <init>(com.aardarch.aardink.languages/LanguageConfiguration.IndentAction = ..., kotlin/String = ..., kotlin/Int = ...) // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.<init>|<init>(com.aardarch.aardink.languages.LanguageConfiguration.IndentAction;kotlin.String;kotlin.Int){}[0]
+
+        final val appendText // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.appendText|{}appendText[0]
+            final fun <get-appendText>(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.appendText.<get-appendText>|<get-appendText>(){}[0]
+        final val indent // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.indent|{}indent[0]
+            final fun <get-indent>(): com.aardarch.aardink.languages/LanguageConfiguration.IndentAction // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.indent.<get-indent>|<get-indent>(){}[0]
+        final val removeText // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.removeText|{}removeText[0]
+            final fun <get-removeText>(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.removeText.<get-removeText>|<get-removeText>(){}[0]
+
+        final fun component1(): com.aardarch.aardink.languages/LanguageConfiguration.IndentAction // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.component2|component2(){}[0]
+        final fun component3(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.component3|component3(){}[0]
+        final fun copy(com.aardarch.aardink.languages/LanguageConfiguration.IndentAction = ..., kotlin/String = ..., kotlin/Int = ...): com.aardarch.aardink.languages/LanguageConfiguration.EnterAction // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.copy|copy(com.aardarch.aardink.languages.LanguageConfiguration.IndentAction;kotlin.String;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.EnterAction.toString|toString(){}[0]
+    }
+
+    final class IndentationRules { // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules|null[0]
+        constructor <init>(kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ...) // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.<init>|<init>(kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?){}[0]
+
+        final val decrease // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.decrease|{}decrease[0]
+            final fun <get-decrease>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.decrease.<get-decrease>|<get-decrease>(){}[0]
+        final val increase // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.increase|{}increase[0]
+            final fun <get-increase>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.increase.<get-increase>|<get-increase>(){}[0]
+        final val indentNextLine // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.indentNextLine|{}indentNextLine[0]
+            final fun <get-indentNextLine>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.indentNextLine.<get-indentNextLine>|<get-indentNextLine>(){}[0]
+        final val unIndentedLine // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.unIndentedLine|{}unIndentedLine[0]
+            final fun <get-unIndentedLine>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.unIndentedLine.<get-unIndentedLine>|<get-unIndentedLine>(){}[0]
+
+        final fun component1(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.component1|component1(){}[0]
+        final fun component2(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.component2|component2(){}[0]
+        final fun component3(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.component3|component3(){}[0]
+        final fun component4(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.component4|component4(){}[0]
+        final fun copy(kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ...): com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.copy|copy(kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.IndentationRules.toString|toString(){}[0]
+    }
+
+    final class OnEnterRule { // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule|null[0]
+        constructor <init>(com.aardarch.aardink.languages/LanguageConfiguration.EnterAction, kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ...) // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.<init>|<init>(com.aardarch.aardink.languages.LanguageConfiguration.EnterAction;kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?){}[0]
+
+        final val action // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.action|{}action[0]
+            final fun <get-action>(): com.aardarch.aardink.languages/LanguageConfiguration.EnterAction // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.action.<get-action>|<get-action>(){}[0]
+        final val afterText // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.afterText|{}afterText[0]
+            final fun <get-afterText>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.afterText.<get-afterText>|<get-afterText>(){}[0]
+        final val beforeText // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.beforeText|{}beforeText[0]
+            final fun <get-beforeText>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.beforeText.<get-beforeText>|<get-beforeText>(){}[0]
+        final val previousLineText // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.previousLineText|{}previousLineText[0]
+            final fun <get-previousLineText>(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.previousLineText.<get-previousLineText>|<get-previousLineText>(){}[0]
+
+        final fun component1(): com.aardarch.aardink.languages/LanguageConfiguration.EnterAction // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.component1|component1(){}[0]
+        final fun component2(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.component2|component2(){}[0]
+        final fun component3(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.component3|component3(){}[0]
+        final fun component4(): kotlin.text/Regex? // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.component4|component4(){}[0]
+        final fun copy(com.aardarch.aardink.languages/LanguageConfiguration.EnterAction = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ..., kotlin.text/Regex? = ...): com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.copy|copy(com.aardarch.aardink.languages.LanguageConfiguration.EnterAction;kotlin.text.Regex?;kotlin.text.Regex?;kotlin.text.Regex?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageConfiguration.OnEnterRule.toString|toString(){}[0]
+    }
+
+    final object Companion { // com.aardarch.aardink.languages/LanguageConfiguration.Companion|null[0]
+        final fun parse(kotlin/String): com.aardarch.aardink.languages/LanguageConfiguration // com.aardarch.aardink.languages/LanguageConfiguration.Companion.parse|parse(kotlin.String){}[0]
+    }
+}
+
 final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.aardink.languages/LanguageDefinition|null[0]
     constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<kotlin/String>, com.aardarch.aardink.core/IncrementalTokenizer, com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...) // com.aardarch.aardink.languages/LanguageDefinition.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
 
@@ -151,6 +300,7 @@ final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageDefinition.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageDefinition.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.toString|toString(){}[0]
+    final fun withConfiguration(com.aardarch.aardink.languages/LanguageConfiguration): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.withConfiguration|withConfiguration(com.aardarch.aardink.languages.LanguageConfiguration){}[0]
 
     final object Companion { // com.aardarch.aardink.languages/LanguageDefinition.Companion|null[0]
         final fun extending(com.aardarch.aardink.languages/LanguageDefinition, com.aardarch.aardink.core/LanguageService, kotlin/Boolean = ..., kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<kotlin/String> = ..., com.aardarch.aardink.core/IncrementalTokenizer = ...): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.Companion.extending|extending(com.aardarch.aardink.languages.LanguageDefinition;com.aardarch.aardink.core.LanguageService;kotlin.Boolean;kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer){}[0]
@@ -457,6 +607,12 @@ final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop|#static{}com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop|#static{}com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop|#static{}com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop[0]
+final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop|#static{}com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop|#static{}com_aardarch_aardink_languages_LanguageDefinition$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop|#static{}com_aardarch_aardink_languages_LanguageRegistry$stableprop[0]
 final val com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop|#static{}com_aardarch_aardink_languages_XmlSchema$stableprop[0]
@@ -511,6 +667,12 @@ final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_Declarat
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter|com_aardarch_aardink_languages_DeclarativeTokenizer$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter|com_aardarch_aardink_languages_FoldingRegionMarkers$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter|com_aardarch_aardink_languages_IndentationFoldingProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration_AutoClosingPair$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration_CharacterPair$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration_EnterAction$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration_IndentationRules$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop_getter|com_aardarch_aardink_languages_LanguageConfiguration_OnEnterRule$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter|com_aardarch_aardink_languages_LanguageDefinition$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter|com_aardarch_aardink_languages_LanguageRegistry$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter(): kotlin/Int // com.aardarch.aardink.languages/com_aardarch_aardink_languages_XmlSchema$stableprop_getter|com_aardarch_aardink_languages_XmlSchema$stableprop_getter(){}[0]

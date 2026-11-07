@@ -639,6 +639,7 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
+	public fun surroundingClose (C)Ljava/lang/String;
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspLanguageService$Companion {

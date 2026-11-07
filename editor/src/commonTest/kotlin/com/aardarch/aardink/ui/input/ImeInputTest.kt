@@ -177,6 +177,95 @@ class EditorImeAdapterTest {
     }
 
     @Test
+    fun `a commit over the selection surrounds it, and the input method starts over`() {
+        val state = stateOf("word")
+        state.selection = TextRange(0, 4)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        val recorder = Recorder()
+        adapter.listener = recorder
+        adapter.apply(listOf(CommitTextCommand("(", 1)))
+        assertEquals("(word)", state.text)
+        assertEquals(TextRange(1, 5), state.selection)
+        assertEquals(1, recorder.restarts)
+    }
+
+    @Test
+    fun `a commit over a selection that starts with the same character still surrounds it`() {
+        val state = stateOf("(a)")
+        state.selection = TextRange(0, 3)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        adapter.apply(listOf(CommitTextCommand("(", 1)))
+        assertEquals("((a))", state.text)
+    }
+
+    @Test
+    fun `a commit over one selected character that is the same character still surrounds it`() {
+        val state = stateOf("(")
+        state.selection = TextRange(0, 1)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        val recorder = Recorder()
+        adapter.listener = recorder
+        adapter.apply(listOf(CommitTextCommand("(", 1)))
+        assertEquals("(()", state.text)
+        assertEquals(TextRange(1, 2), state.selection)
+        assertEquals(1, recorder.restarts)
+    }
+
+    @Test
+    fun `a commit over one selected character that is the same character reaches the other selections`() {
+        val state = stateOf("a b")
+        state.setSelections(listOf(TextRange(0, 1), TextRange(2, 3)))
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(CommitTextCommand("a", 1)))
+        assertEquals("a a", state.text)
+        assertEquals(listOf(TextRange(1), TextRange(3)), state.selections)
+    }
+
+    @Test
+    fun `a commit over one selected character that is the same character and nothing wraps leaves the caret after it`() {
+        val state = stateOf("ab")
+        state.selection = TextRange(0, 1)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.apply(listOf(CommitTextCommand("a", 1)))
+        assertEquals("ab", state.text)
+        assertEquals(TextRange(1), state.selection)
+    }
+
+    @Test
+    fun `moving the caret past a selected character is no typing, and a batch with no edit does not wrap it`() {
+        val state = stateOf("(")
+        state.selection = TextRange(0, 1)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        adapter.apply(listOf(SetSelectionCommand(1, 1)))
+        assertEquals("(", state.text)
+        assertEquals(TextRange(1), state.selection)
+    }
+
+    @Test
+    fun `a composition over one selected character of the same character does not surround it`() {
+        val state = stateOf("(")
+        state.selection = TextRange(0, 1)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        adapter.apply(listOf(SetComposingTextCommand("(", 1)))
+        assertEquals("(", state.text)
+    }
+
+    @Test
+    fun `a composition over the selection replaces it, even with a surrounding character`() {
+        val state = stateOf("word")
+        state.selection = TextRange(0, 4)
+        val adapter = EditorImeAdapter(state, windowed = false)
+        adapter.service = { AutoCloseParens }
+        adapter.apply(listOf(SetComposingTextCommand("(", 1)))
+        assertEquals("(", state.text)
+    }
+
+    @Test
     fun `an edit from elsewhere ends the composition and restarts the input method`() {
         val state = stateOf("abc")
         state.selection = TextRange(3)
@@ -327,6 +416,8 @@ class EditorImeAdapterTest {
         override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
 
         override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = if (charTyped == '(') ")" else null
+
+        override fun surroundingClose(typed: Char): String? = if (typed == '(') ")" else null
 
         override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
     }

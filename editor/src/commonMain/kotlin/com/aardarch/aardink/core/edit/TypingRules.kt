@@ -41,7 +41,8 @@ internal object TypingRules {
      * The follow-up to typing [typed] at [offset] (the document already contains it), or null.
      * Enter indents the new line as [service] says; other characters may be auto-closed, with the
      * caret left between the pair. Nothing while an IME composition is in progress: the composed
-     * text is not final. [options] are passed on to [LanguageService.smartIndent].
+     * text is not final. [options] are passed on to [LanguageService.smartIndent]. A line break in
+     * what [service] answers, as a language configuration's text can have, is stored as [eol].
      */
     fun afterTyping(
         document: CodeDocument,
@@ -50,15 +51,16 @@ internal object TypingRules {
         typed: Char,
         composing: Boolean = false,
         options: FormattingOptions = FormattingOptions(),
+        eol: LineEnding = LineEnding.LF,
     ): FollowUp? {
         if (service == null || composing) return null
         return if (typed == '\n') {
             val newLine = document.offsetToLineCol(offset + 1).first
-            val indent = service.smartIndent(document, newLine, options)
+            val indent = withLineEnding(normalizeLineEndings(service.smartIndent(document, newLine, options)), eol)
             if (indent.isEmpty()) null else FollowUp(offset + 1, indent, offset + 1 + indent.length)
         } else {
             val closing = service.autoClose(document, offset, typed) ?: return null
-            FollowUp(offset + 1, closing, offset + 1)
+            FollowUp(offset + 1, withLineEnding(normalizeLineEndings(closing), eol), offset + 1)
         }
     }
 

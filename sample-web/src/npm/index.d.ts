@@ -407,6 +407,66 @@ export interface AardinkLanguageDefinition {
    * checks, closing tags and formatting when it extends none). Your providers still come first.
    */
   schema?: AardinkXmlSchema;
+  /**
+   * What the language says about typing, as VS Code's `language-configuration.json`: the object,
+   * or the file's text, which may have comments and trailing commas. Regular expressions are
+   * refused with a lookbehind. Its `comments` replace the definition's.
+   */
+  configuration?: AardinkLanguageConfiguration | string;
+}
+
+/** A regular expression in a language configuration: VS Code's two forms, or a RegExp literal. */
+export type AardinkConfigurationRegExp = string | RegExp | { pattern: string; flags?: string };
+
+/** An opening and a closing text, such as `['(', ')']`. */
+export type AardinkCharacterPair = [string, string] | { open: string; close: string };
+
+/**
+ * `registerLanguage`'s `configuration`. Every field is optional. As in VS Code, without
+ * `autoClosingPairs` the brackets close themselves, and without `surroundingPairs` those pairs
+ * surround. `wordPattern`, `autoCloseBefore` and `folding.offSide` are not read.
+ */
+export interface AardinkLanguageConfiguration {
+  /** What Ctrl/Cmd+/ comments with. */
+  comments?: { lineComment?: string | { comment: string }; blockComment?: [string, string] };
+  /** Pairs the language nests: Enter indents after an opening one. Matching and colouring brackets stay `()[]{}`. */
+  brackets?: AardinkCharacterPair[];
+  /**
+   * Closed when the opening text is typed. `notIn` (`'string'`, `'comment'`) is worked out from the
+   * caret's own line, so a block comment opened on an earlier line is not seen.
+   */
+  autoClosingPairs?: (AardinkCharacterPair | { open: string; close: string; notIn?: string[] })[];
+  /** Wrap a selection when the opening text, one character, is typed over it. */
+  surroundingPairs?: AardinkCharacterPair[];
+  /** What Enter does, the first rule that matches. */
+  onEnterRules?: AardinkOnEnterRule[];
+  /** What Enter does when no rule and no bracket decides. */
+  indentationRules?: {
+    increaseIndentPattern?: AardinkConfigurationRegExp;
+    decreaseIndentPattern?: AardinkConfigurationRegExp;
+    indentNextLinePattern?: AardinkConfigurationRegExp;
+    unIndentedLinePattern?: AardinkConfigurationRegExp;
+  };
+  /** Lines that open and close a fold region. */
+  folding?: { markers?: { start: AardinkConfigurationRegExp; end: AardinkConfigurationRegExp } };
+}
+
+/** One of `onEnterRules`: every regular expression given must match. */
+export interface AardinkOnEnterRule {
+  /** Against the text before the caret. */
+  beforeText?: AardinkConfigurationRegExp;
+  /** Against the text after the caret. */
+  afterText?: AardinkConfigurationRegExp;
+  /** Against the line above the one Enter was pressed on. */
+  previousLineText?: AardinkConfigurationRegExp;
+  action: {
+    /** `indentOutdent` leaves the closer at the opener's indentation and adds no line in between. */
+    indent: 'none' | 'indent' | 'outdent' | 'indentOutdent';
+    /** What the new line starts with after its indentation. Not used with `indentOutdent`. */
+    appendText?: string;
+    /** Characters taken off the end of the indentation. */
+    removeText?: number;
+  };
 }
 
 /** An XML vocabulary, for `registerLanguage`'s `schema`. */
