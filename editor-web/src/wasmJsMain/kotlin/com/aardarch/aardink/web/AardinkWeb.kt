@@ -1316,6 +1316,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     colorDecorators = options.colorDecorators,
                     breadcrumbs = options.breadcrumbs,
                     fontLigatures = options.fontLigatures,
+                    semanticHighlighting = options.semanticHighlighting,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
             )
