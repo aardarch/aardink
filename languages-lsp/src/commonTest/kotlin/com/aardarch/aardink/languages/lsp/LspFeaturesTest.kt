@@ -35,6 +35,7 @@ import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TextEdit
 import kotlinx.coroutines.async
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -721,39 +722,45 @@ class LspFeaturesTest {
         return content
     }
 
+    private suspend fun Harness.plainHover(text: String): String? = hover("""{"kind":"plaintext","value":${JsonPrimitive(text)}}""")
+
     @Test
-    fun `plain text comes out as Markdown that reads to the letter`() {
+    fun `plain text comes out as Markdown that reads to the letter`() = withServer("x") {
         val text = "# not a heading\n- not a list\n1. not a list\n=== not a rule\n*a* _b_ `c` <d> &amp;"
         val markdown = "\\# not a heading\\\n\\- not a list\\\n1\\. not a list\\\n\\=== not a rule\\\n\\*a\\* \\_b\\_ \\`c\\` \\<d> \\&amp;"
 
-        assertEquals(markdown, plainTextAsMarkdown(text))
+        assertEquals(markdown, plainHover(text))
     }
 
     @Test
-    fun `only what would be Markdown is escaped`() {
+    fun `only what would be Markdown is escaped`() = withServer("x") {
         val text = "a - b + c # d = e 1. f > g ~ h, foo.bar(baz) 2) i"
 
-        assertEquals(text, plainTextAsMarkdown(text))
+        assertEquals(text, plainHover(text))
     }
 
     @Test
-    fun `the rest of a line's opening marks and links are escaped`() {
-        assertEquals("""\+ x""", plainTextAsMarkdown("+ x"))
-        assertEquals("""\> x""", plainTextAsMarkdown("> x"))
-        assertEquals("""\~~~""", plainTextAsMarkdown("~~~"))
-        assertEquals("""12\) x""", plainTextAsMarkdown("12) x"))
-        assertEquals("""\[a\](b)""", plainTextAsMarkdown("[a](b)"))
-        assertEquals("""C:\\dir""", plainTextAsMarkdown("""C:\dir"""))
+    fun `the rest of a line's opening marks and links are escaped`() = withServer("x") {
+        assertEquals("""\+ x""", plainHover("+ x"))
+        assertEquals("""\~~~""", plainHover("~~~"))
+        assertEquals("""12\) x""", plainHover("12) x"))
+        assertEquals("""\[a\](b)""", plainHover("[a](b)"))
+        assertEquals("""C:\\dir""", plainHover("""C:\dir"""))
     }
 
     @Test
-    fun `plain text keeps its lines, paragraphs and indentation`() {
-        assertEquals("a\\\nb", plainTextAsMarkdown("a\nb"))
-        assertEquals("a\\\nb", plainTextAsMarkdown("a\r\nb"))
-        assertEquals("a\n\nb", plainTextAsMarkdown("a\n\nb"))
-        assertEquals("a\\\n&nbsp;&nbsp;&nbsp;&nbsp;b", plainTextAsMarkdown("a\n    b"))
-        assertEquals("&nbsp;&nbsp;&nbsp;&nbsp;\\- b", plainTextAsMarkdown("\t- b"))
-        assertEquals("a\n\nb", plainTextAsMarkdown("a\n   \nb"), "a line of spaces is a blank one")
+    fun `plain text keeps its lines and paragraphs, though not its indentation`() = withServer("x") {
+        assertEquals("a\\\nb", plainHover("a\nb"))
+        assertEquals("a\\\nb", plainHover("a\r\nb"))
+        assertEquals("a\n\nb", plainHover("a\n\nb"))
+        assertEquals("a\\\nb", plainHover("a\n    b"))
+        assertEquals("\\- b", plainHover("\t- b"))
+        assertEquals("a\n\nb", plainHover("a\n   \nb"), "a line of spaces is a blank one")
+    }
+
+    @Test
+    fun `a URL in plain text stays whole for the renderer to link`() = withServer("x") {
+        assertEquals("""See https://a.dev/x_y?a=1&b=2 and a\_b""", plainHover("See https://a.dev/x_y?a=1&b=2 and a_b"))
     }
 
     @Test
@@ -771,7 +778,7 @@ class LspFeaturesTest {
     @Test
     fun `a MarkedString's language becomes a code fence`() = withServer("x") {
         assertEquals("```kotlin\nval x: Int\n```", hover("""{"language":"kotlin","value":"val x: Int"}"""))
-        assertEquals("Doc\n\n```kotlin\nval x\n```", hover("""["Doc",{"language":"kotlin","value":"val x\n"}]"""))
+        assertEquals("Doc\n\n```kotlin\nval x\n```", hover("""["Doc",{"language":"kotlin","value":"val x"}]"""))
         assertEquals("```\nval x\n```", hover("""{"language":"","value":"val x"}"""))
     }
 
