@@ -22,11 +22,15 @@ package com.aardarch.aardink.sampleweb
 
 import com.aardarch.aardink.web.AardinkEditorHandle
 import com.aardarch.aardink.web.AardinkWeb
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.await
 import kotlin.js.Promise
 
 private val handles = mutableMapOf<Int, AardinkEditorHandle>()
 private var nextHandleId = 1
+
+private val languageServers = mutableMapOf<Int, DisposableHandle>()
+private var nextLanguageServerId = 1
 
 private fun handle(id: Int): AardinkEditorHandle =
     handles[id] ?: error("No Aardink editor with id $id; it was never created or is already disposed")
@@ -107,6 +111,12 @@ fun aardinkSetModelMarkers(id: Int, owner: String, diagnosticsJson: String) =
 /** JSON `{ scrollTop, scrollLeft, scrollHeight }` as the text scrolls. */
 @JsExport fun aardinkOnScrollChange(id: Int, callback: (String) -> Unit) = AardinkWeb.onScrollChange(handle(id), callback)
 
+/**
+ * Called with the target of every link opened in the editor, or `null` to go back to opening `http`
+ * and `https` links in a new tab; see `AardinkWeb.onOpenLink`.
+ */
+@JsExport fun aardinkOnOpenLink(id: Int, callback: ((String) -> Unit)?) = AardinkWeb.onOpenLink(handle(id), callback)
+
 /** Measures the container again now. */
 @JsExport fun aardinkLayout(id: Int) = AardinkWeb.layout(handle(id))
 
@@ -144,6 +154,20 @@ fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String,
     ""
 } catch (e: IllegalArgumentException) {
     e.message ?: "not a language definition"
+}
+
+/** Connects a language server over a WebSocket; see `AardinkWeb.connectLanguageServer`. Returns its id for [aardinkDisconnectLanguageServer]. */
+@JsExport
+fun aardinkConnectLanguageServer(url: String, languageId: String): Int {
+    val id = nextLanguageServerId++
+    languageServers[id] = AardinkWeb.connectLanguageServer(url, languageId)
+    return id
+}
+
+/** Closes each document and shuts the server down. Safe to call twice; the second call is a no-op. */
+@JsExport
+fun aardinkDisconnectLanguageServer(id: Int) {
+    languageServers.remove(id)?.dispose()
 }
 
 /** Adds a theme from VS Code theme JSON; see `AardinkWeb.registerTheme`. Returns "" when it worked, else what was wrong. */

@@ -194,6 +194,16 @@ export async function registerLanguage(definition, providers = {}) {
   if (error) throw new Error(`Aardink: ${error}`);
 }
 
+/**
+ * Has the language server at a WebSocket URL follow every editor of a language. See index.d.ts: it
+ * resolves once asked, not once connected, and a server that cannot be reached costs no editor.
+ */
+export async function connectLanguageServer(url, languageId) {
+  const k = await load();
+  const id = k.aardinkConnectLanguageServer(String(url), languageId);
+  return { dispose: () => k.aardinkDisconnectLanguageServer(id) };
+}
+
 /** Monaco's defineTheme data ({ base, inherit, rules, colors }) as VS Code theme JSON; VS Code JSON as it is. */
 function toVsCodeTheme(theme) {
   if (!theme.rules) return theme;
@@ -307,6 +317,11 @@ export async function createEditor(container, onChange, options = {}) {
     for (const listener of scrollListeners) listener(event);
   });
 
+  // Unlike the listeners above, the Kotlin side hears of these only while there is one: with none it
+  // opens http and https links itself. It does that in the click, which a popup blocker wants.
+  const linkListeners = new Set();
+  const openLink = (target) => linkListeners.forEach((listener) => listener(target));
+
   // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
   let deltaDecorations = [];
   let nextDecorationId = 1;
@@ -400,6 +415,16 @@ export async function createEditor(container, onChange, options = {}) {
       scrollListeners.add(listener);
       return () => scrollListeners.delete(listener);
     },
+    onOpenLink(listener) {
+      if (linkListeners.size === 0) k.aardinkOnOpenLink(id, openLink);
+      linkListeners.add(listener);
+      return {
+        dispose() {
+          linkListeners.delete(listener);
+          if (linkListeners.size === 0 && !disposed) k.aardinkOnOpenLink(id, null);
+        },
+      };
+    },
     layout: () => k.aardinkLayout(id),
     onDidChangeDiagnostics(listener) {
       diagnosticsListeners.add(listener);
@@ -481,6 +506,7 @@ export async function createEditor(container, onChange, options = {}) {
       focusListeners.clear();
       blurListeners.clear();
       scrollListeners.clear();
+      linkListeners.clear();
       k.aardinkDispose(id);
     },
   };

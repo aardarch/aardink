@@ -23,6 +23,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { MOUNT, startHarness } from './harness.mjs';
+import { startLoopbackLsp } from './loopback-lsp.mjs';
 
 // Which binaries ran, so a failure on CI can be compared with a local build of the same commit.
 for (const file of readdirSync('dist/assets').filter((f) => f.endsWith('.wasm'))) {
@@ -63,6 +64,341 @@ const KNOWN_UPSTREAM = [
   // which Res.readBytes uses to load the bundled font. Not in Aardink's code.
   /Accessing `memory` via `wasmExports` is deprecated/,
 ];
+
+// What a step sets off on purpose, for as long as that step wants it. Not printed.
+let expectedConsole = [];
+
+/** Fails the run on what a page says went wrong. */
+function watch(page) {
+  page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
+  page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
+  page.on('pageerror', (e) => failures.push(`page error during ${phase}: ${e.stack || e.message}`));
+  page.on('console', (m) => {
+    if (m.type() !== 'error' && !m.text().startsWith('Aardink:')) return;
+    if (expectedConsole.some((re) => re.test(m.text()))) return;
+    (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
+  });
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A page with no touch screen, where completions show in the list that Enter reaches. It keeps what
+ * `window.open` was called with and in what state, and tries one popup of its own before any
+ * gesture: only if the blocker stops that does getting past it mean anything.
+ */
+async function desktopPage() {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 900, height: 500 });
+  watch(page);
+  await page.evaluateOnNewDocument(() => {
+    window.__popupWithoutGesture = window.open('about:blank') !== null;
+    window.__opens = [];
+    // The pointer event whose task this is, if any. Not window.event: Compose's listeners are in a
+    // shadow tree, where that is always undefined.
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      window.addEventListener(type, () => {
+        window.__inTaskOf = type;
+        setTimeout(() => { window.__inTaskOf = null; });
+      }, true);
+    }
+    const open = window.open;
+    window.open = function (url, target, features) {
+      window.__opens.push({ url, target, features, active: navigator.userActivation.isActive, task: window.__inTaskOf ?? null });
+      return open.call(this, url, target, features);
+    };
+  });
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
+  return page;
+}
+
+/** A provider's arguments and answer through the dispatcher, set off by the real mouse and by the editor's own schedule. */
+async function dispatcherCheck(page) {
+  setPhase('provider dispatcher');
+  expectedConsole = [/^Aardink: a language provider failed: .*no diagnostics here/];
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__asked = [];
+    await registerLanguage(
+      { id: 'toy-dispatch', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+      {
+        provideHover: async (text, line, column) => {
+          window.__asked.push({ text, line, column });
+          return { contents: 'dispatched' };
+        },
+        provideDocumentSymbols: () => [{
+          name: 'dispatched',
+          kind: 11,
+          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 2, endColumn: 5 },
+        }],
+        // Rejected, and asked on the editor's own schedule: it costs that answer and nothing else.
+        provideDiagnostics: () => Promise.reject(new Error('no diagnostics here')),
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'first line\nsecond line', language: 'toy-dispatch' });
+  }, MOUNT);
+  await sleep(1000);
+  await page.mouse.move(150, 30);
+  await page.mouse.move(151, 30);
+  await page.waitForFunction(() => window.__asked.length > 0, { timeout: 5000 }).catch(() => {});
+  const asked = await page.evaluate(() => window.__asked[0] ?? null);
+  const symbols = await page.evaluate(() => window.__smokeEditor.getDocumentSymbols().map((symbol) => symbol.name));
+  await page.mouse.move(800, 400);
+  expectedConsole = [];
+  return {
+    'a provider gets the text and a place through the dispatcher':
+      asked?.text === 'first line\nsecond line' && asked?.line === 2 && asked?.column > 1,
+    'a provider\'s answer comes back through the dispatcher': symbols.includes('dispatched'),
+  };
+}
+
+/** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
+async function linkPixel(page) {
+  const png = await page.screenshot({ encoding: 'base64' });
+  return page.evaluate(async (png) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, image.width, image.height);
+    const blue = [];
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const i = (y * image.width + x) * 4;
+        if (data[i + 2] > 170 && data[i + 2] > data[i] + 60 && data[i + 1] > data[i]) blue.push([x, y]);
+      }
+    }
+    if (blue.length === 0) return null;
+    const middle = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    return { x: middle(blue.map(([x]) => x)), y: middle(blue.map(([, y]) => y)), count: blue.length };
+  }, png);
+}
+
+/**
+ * connectLanguageServer against a real WebSocket: editors open before and created after it, what
+ * the server knows reaching the text beside a host's providers, the end of a session, a connection
+ * that drops and one that never comes up.
+ */
+async function languageServerCheck(page) {
+  const checks = {};
+  const hoverLink = `${url}smoke-hover-link.txt`;
+  const server = await startLoopbackLsp(hoverLink);
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  try {
+    setPhase('language server: editors before and after');
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage(
+        { id: 'toy-server', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+        { triggerCharacters: ['@'], provideCompletionItems: () => [{ label: 'hosted', insertText: 'hosted' }] },
+      );
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'open before', language: 'toy-server' });
+      window.__diagnostics = [];
+      window.__smokeEditor.onDidChangeDiagnostics((list) => window.__diagnostics.push(list.map((d) => d.message)));
+      window.__connection = await connectLanguageServer(serverUrl, 'toy-server');
+    }, MOUNT, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await page.evaluate(async () => {
+      const box = document.createElement('div');
+      box.id = 'second';
+      box.style.cssText = 'position:fixed;right:0;bottom:0;width:10px;height:10px';
+      document.body.append(box);
+      window.__second = await window.__aardink.createEditor(box, undefined, { value: 'open after', language: 'toy-server' });
+    });
+    await server.until(() => server.count('textDocument/didOpen') === 2);
+    const opened = server.heard.filter((m) => m.method === 'textDocument/didOpen').map((m) => m.params.textDocument);
+    checks['a server hears of editors open already and created later'] = opened.length === 2 &&
+      opened[0].text === 'open before' && opened[1].text === 'open after' && opened[0].uri !== opened[1].uri &&
+      opened.every((d) => d.languageId === 'toy-server') && server.methods()[0] === 'initialize';
+
+    setPhase('language server: diagnostics');
+    await page.waitForFunction(() => window.__diagnostics.some((list) => list.includes('from the server, version 1')), { timeout: 5000 })
+      .then(() => { checks['a server\'s diagnostics reach the editor, without an edit'] = true; })
+      .catch(() => { checks['a server\'s diagnostics reach the editor, without an edit'] = false; });
+
+    setPhase('language server: completions');
+    await page.mouse.click(600, 20);
+    await page.keyboard.type('.');
+    const asked = await server.until(() => server.count('textDocument/completion') >= 1);
+    const methods = server.methods();
+    checks['an edit reaches the server ahead of the completion it set off'] = asked &&
+      methods.indexOf('textDocument/didChange') < methods.indexOf('textDocument/completion') && methods.includes('textDocument/didChange');
+    await sleep(500);
+    await page.keyboard.press('ArrowDown');
+    await sleep(100);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['a server\'s completion is accepted into the text'] = (await value()) === 'open before.served';
+    await page.keyboard.type('.');
+    await sleep(800);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['a host\'s provider still answers, ahead of the server'] = (await value()) === 'open before.served.hosted';
+
+    setPhase('language server: hover');
+    const hovers = server.count('textDocument/hover');
+    await page.mouse.move(120, 12);
+    await page.mouse.move(121, 12);
+    await server.until(() => server.count('textDocument/hover') > hovers);
+    await sleep(800);
+    const link = await linkPixel(page);
+    await page.evaluate(() => {
+      window.__links = [];
+      window.__stopLinks = window.__smokeEditor.onOpenLink((target) => window.__links.push(target));
+    });
+    checks['a server\'s hover reaches the editor, and the link in it the host'] = false;
+    if (link) {
+      await page.mouse.move(link.x, link.y);
+      await sleep(100);
+      await page.mouse.click(link.x, link.y);
+      await sleep(300);
+      const links = await page.evaluate(() => window.__links.slice());
+      checks['a server\'s hover reaches the editor, and the link in it the host'] = links.length === 1 && links[0] === hoverLink;
+      await page.evaluate(() => window.__stopLinks.dispose());
+      // Following a link takes the card down, so it is brought back for the second click.
+      await page.mouse.move(800, 400);
+      await sleep(800);
+      await page.mouse.move(120, 12);
+      await page.mouse.move(121, 12);
+      await sleep(1000);
+      await page.mouse.move(link.x, link.y);
+      await sleep(100);
+      await page.mouse.click(link.x, link.y);
+      const tab = await browser.waitForTarget((t) => t.url().includes('smoke-hover-link'), { timeout: 5000 }).catch(() => null);
+      await (await tab?.page())?.close();
+      const [open] = await page.evaluate(() => window.__opens.slice());
+      checks['with no listener, a card\'s link opens a tab, past the popup blocker'] = tab !== null && open?.url === hoverLink && open?.active === true;
+      console.log(`  .. a card's link: window.open ran with user activation ${open?.active}, in the task of ${open?.task}`);
+      await page.bringToFront();
+    }
+    await page.mouse.move(800, 400);
+    await sleep(500);
+
+    setPhase('language server: dispose');
+    const changes = server.count('textDocument/didChange');
+    await page.evaluate(() => window.__connection.dispose());
+    await server.until(() => server.count('exit') === 1 && server.connections() === 0);
+    checks['dispose closes each document and shuts the server down'] =
+      JSON.stringify(server.methods().slice(-4)) === JSON.stringify(['textDocument/didClose', 'textDocument/didClose', 'shutdown', 'exit']) &&
+      server.connections() === 0;
+    await page.mouse.click(600, 20);
+    await page.keyboard.type('x');
+    await sleep(300);
+    checks['after dispose the editor goes on, and the server hears no more'] =
+      (await value()) === 'open before.served.hostedx' && server.count('textDocument/didChange') === changes;
+
+    setPhase('language server: a connection that drops');
+    expectedConsole = [/^Aardink: the language server at .* closed the connection/];
+    const reopened = server.count('textDocument/didOpen');
+    await page.evaluate(async (serverUrl) => {
+      window.__dropped = await window.__aardink.connectLanguageServer(serverUrl, 'toy-server');
+    }, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === reopened + 2);
+    await page.waitForFunction(() => window.__diagnostics.at(-1)?.some((m) => m.startsWith('from the server')), { timeout: 5000 }).catch(() => {});
+    server.drop();
+    await page.waitForFunction(() => window.__diagnostics.at(-1)?.length === 0, { timeout: 5000 })
+      .then(() => { checks['a dropped server\'s squiggles go with it'] = true; })
+      .catch(() => { checks['a dropped server\'s squiggles go with it'] = false; });
+    // `.` was the server's trigger character, and went with it. The language's own stays.
+    await page.keyboard.type('@');
+    await sleep(800);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['after a drop the editor goes on with its language\'s own answers'] = (await value()) === 'open before.served.hostedx@hosted';
+    await page.evaluate(() => window.__dropped.dispose());
+
+    setPhase('language server: a connection that never comes up');
+    expectedConsole = [/^Aardink: could not connect to the language server/, /WebSocket connection to .* failed/];
+    await page.evaluate(async () => {
+      window.__refused = await window.__aardink.connectLanguageServer('ws://127.0.0.1:1', 'toy-server');
+      window.__badUrl = await window.__aardink.connectLanguageServer('ftp://example.invalid', 'toy-server');
+    });
+    await sleep(1000);
+    await page.keyboard.type('y');
+    await sleep(300);
+    checks['a server that cannot be reached costs no editor'] = (await value()) === 'open before.served.hostedx@hostedy' &&
+      await page.evaluate(() => {
+        window.__refused.dispose();
+        window.__badUrl.dispose();
+        return true;
+      });
+    expectedConsole = [];
+    await page.evaluate(() => {
+      window.__second.dispose();
+      document.getElementById('second').remove();
+    });
+  } finally {
+    await server.close();
+  }
+  return checks;
+}
+
+/**
+ * What a link does in text: a Ctrl+click on a URL opens a tab past the popup blocker with no
+ * listener, and goes to the listener with one, and only then. The check that the blocker was on at
+ * all comes first, or the tab would prove nothing.
+ */
+async function linkCheck(page) {
+  setPhase('links');
+  const checks = {};
+  const target = `${url}smoke-link.txt`;
+  checks['the popup blocker is on, so the next checks mean something'] = !(await page.evaluate(() => window.__popupWithoutGesture));
+  await page.evaluate(async (mount, target) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    window.__opens = [];
+    window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: target });
+  }, MOUNT, target);
+  await sleep(500);
+  const ctrlClick = async () => {
+    await page.mouse.move(150, 12);
+    await page.keyboard.down('Control');
+    await page.mouse.move(151, 12);
+    await sleep(100);
+    await page.mouse.click(151, 12);
+    await page.keyboard.up('Control');
+    await sleep(300);
+  };
+
+  await ctrlClick();
+  const tab = await browser.waitForTarget((t) => t.url().includes('smoke-link'), { timeout: 5000 }).catch(() => null);
+  await (await tab?.page())?.close();
+  const opens = await page.evaluate(() => window.__opens.slice());
+  checks['Ctrl+click on a URL opens a tab, past the popup blocker'] = tab !== null;
+  checks['the tab opens with noopener, in the user\'s gesture'] = opens.length === 1 && opens[0].url === target &&
+    opens[0].target === '_blank' && opens[0].features === 'noopener' && opens[0].active === true;
+  console.log(`  .. window.open ran with user activation ${opens[0]?.active}, in the task of ${opens[0]?.task}`);
+
+  const listened = await page.evaluate(() => {
+    window.__links = [];
+    window.__stopLinks = window.__smokeEditor.onOpenLink((link) => window.__links.push(link));
+    return true;
+  });
+  await ctrlClick();
+  const links = await page.evaluate(() => window.__links.slice());
+  checks['a listener gets the link, and no tab opens'] = listened && links.length === 1 && links[0] === target &&
+    (await page.evaluate(() => window.__opens.length)) === 1;
+
+  await page.evaluate(() => {
+    window.__stopLinks.dispose();
+    window.__stopLinks.dispose();
+  });
+  await ctrlClick();
+  const again = await browser.waitForTarget((t) => t.url().includes('smoke-link'), { timeout: 5000 }).catch(() => null);
+  await (await again?.page())?.close();
+  checks['with the listener gone, a link opens a tab again'] = again !== null && (await page.evaluate(() => window.__opens.length)) === 2 &&
+    (await page.evaluate(() => window.__links.length)) === 1;
+  return checks;
+}
 
 /**
  * Typing, an IME composition, a paste and a touch tap, the way a browser delivers them, into a
@@ -261,13 +597,7 @@ async function configurationCheck(page) {
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
-  page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
-  page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
-  page.on('pageerror', (e) => failures.push(`page error during ${phase}: ${e.stack || e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error' && !m.text().startsWith('Aardink:')) return;
-    (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
-  });
+  watch(page);
 
   setPhase('in-page checks');
   await page.goto(url, { waitUntil: 'load' });
@@ -289,6 +619,11 @@ try {
   const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)), ...(await configurationCheck(page)) };
   Object.assign(interactions, grammar);
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
+  setPhase('a page with no touch screen');
+  const desktop = await desktopPage();
+  const editorChecks = { ...(await dispatcherCheck(desktop)), ...(await languageServerCheck(desktop)), ...(await linkCheck(desktop)) };
+  Object.assign(interactions, editorChecks);
+  for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);
   if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
 } finally {

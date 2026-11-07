@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -63,8 +64,10 @@ import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
+import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
@@ -74,6 +77,8 @@ import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.lsp.LspTransport
+import com.aardarch.aardink.languages.lsp.WebSocketLspTransport
 import com.aardarch.aardink.ui.CodeEditorLayout
 import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.EditorOptions
@@ -92,6 +97,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -142,6 +148,19 @@ class AardinkEditorHandle internal constructor(
     internal val language: MutableState<LanguageDefinition> = mutableStateOf(initialLanguage)
     internal val options: MutableState<WebEditorOptions> = mutableStateOf(initialOptions)
 
+    /** The language servers following this editor, oldest first; see [AardinkWeb.connectLanguageServer]. */
+    internal val languageServers = mutableStateListOf<ServerDocument>()
+
+    /** The language's service with those servers', which is what answers in this editor. */
+    internal val languageService: LanguageService? by derivedStateOf {
+        servedLanguage(language.value.languageService, languageServers.toList())
+    }
+
+    /** The language's folding, or a server's where one folds. */
+    internal val foldingProvider: FoldingProvider by derivedStateOf {
+        servedFolding(language.value.foldingProvider, languageServers.toList())
+    }
+
     /** The host's diagnostics, or null while the language's own are shown. */
     internal val diagnostics: MutableState<List<Diagnostic>?> = mutableStateOf(null)
 
@@ -152,6 +171,7 @@ class AardinkEditorHandle internal constructor(
     internal val languageDiagnostics: MutableState<List<Diagnostic>> = mutableStateOf(emptyList())
 
     internal var onScrollChange: ((String) -> Unit)? = null
+    internal var onOpenLink: ((String) -> Unit)? = null
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -173,6 +193,9 @@ class AardinkEditorHandle internal constructor(
 
     /** The focus last reported to [onFocusChange]. */
     internal var reportedFocus = false
+
+    /** Counts [AardinkWeb.revalidate] calls, for what collects the language's diagnostics beside the layout. */
+    internal val revalidations = mutableIntStateOf(0)
 
     /** The first key of one of the host's chords, while the second is awaited. */
     internal var pendingHostChord: KeyChord? = null
@@ -244,6 +267,12 @@ object AardinkWeb {
     /** Counts registrations, so editors on screen pick up a theme or language registered again. */
     internal val registrations = mutableIntStateOf(0)
 
+    /** Every editor from [mount] not yet disposed, for [languageServers] to find. */
+    internal val mountedEditors = ArrayList<AardinkEditorHandle>()
+
+    /** The connections from [connectLanguageServer] that have not ended. */
+    internal val languageServers = ArrayList<WebLanguageServer>()
+
     /**
      * Adds a language highlighted by a grammar, for [mount] and [updateOptions] to use by its id.
      * [definitionJson] is `{ "id", "grammar", "extends"?, "displayName"?, "extensions"?,
@@ -285,6 +314,38 @@ object AardinkWeb {
      */
     fun registerLanguage(definitionJson: String, dispatcher: suspend (method: String, text: String, argsJson: String) -> String?): String =
         registerLanguage(definitionJson, dispatchedProviders(dispatcher))
+
+    /**
+     * Connects to the language server at the WebSocket [url], which carries one JSON-RPC message per
+     * frame, and has it follow every editor of [languageId]: those open now, those created later, and
+     * those switched to that language. Each is a document of its own to the server, under a generated
+     * `file:///aardink/` URI, kept up to date edit by edit. [languageId] is the language's id here and
+     * the one the server is told, and it need not be one this page knows: an editor asked for an
+     * unknown language shows plain text, but the server still follows it.
+     *
+     * What the server knows joins what the language has rather than replacing it. A language from
+     * [registerLanguage] keeps the first word, so the host's providers answer first and the server
+     * fills in; a built-in one's answers come after the server's, though it keeps Enter and closing
+     * pairs. Completions, diagnostics, code actions, references, links and colours come from both.
+     * Folding is the server's if it folds. Connecting a second server to a language adds to the
+     * first, which answers first.
+     *
+     * Never fails. A connection that cannot be made, or that drops later, is said on the console and
+     * the editors go on as they were, with their language's own service. Nothing reconnects by itself:
+     * call this again for that. A rename reaching other files, and `workspace/applyEdit`, are refused.
+     *
+     * Returns the handle to end it with: `dispose()` closes each document and shuts the server down.
+     */
+    fun connectLanguageServer(url: String, languageId: String): DisposableHandle =
+        connectLanguageServer(url, languageId) { WebSocketLspTransport.connect(it) }
+
+    /** [connectLanguageServer] over whatever [connect] opens. */
+    internal fun connectLanguageServer(url: String, languageId: String, connect: suspend (url: String) -> LspTransport): DisposableHandle {
+        val server = WebLanguageServer(url, languageId, connect, editors = { mountedEditors.toList() }, onEnded = { languageServers -= it })
+        languageServers += server
+        server.start()
+        return server
+    }
 
     /**
      * Adds (or replaces) a theme, for [WebEditorOptions.theme] to name: VS Code theme JSON, whose
@@ -346,6 +407,8 @@ object AardinkWeb {
         }
         handle.viewportElement = viewport
         handle.stopFollowingSize = followSize(viewport)
+        mountedEditors += handle
+        followedByServers(handle)
         return handle
     }
 
@@ -468,6 +531,12 @@ object AardinkWeb {
             }
         }
         handle.options.value = options
+        followedByServers(handle)
+    }
+
+    /** Every connection takes up or lets go of [handle], as what it shows now says. */
+    private fun followedByServers(handle: AardinkEditorHandle) {
+        languageServers.toList().forEach { it.follow(handle) }
     }
 
     /**
@@ -769,6 +838,26 @@ object AardinkWeb {
     }
 
     /**
+     * Registers the single link listener, replacing any previous one; `null` removes it. Called with
+     * the target of every link opened in the editor, by Ctrl/Cmd+click in the text or a click in a
+     * hover, signature help or completion card, and whatever its scheme: a target can come from a
+     * language server, so a listener decides for itself what is safe to follow. With no listener,
+     * `http` and `https` links open in a new tab with `noopener`, and anything else does nothing.
+     */
+    fun onOpenLink(handle: AardinkEditorHandle, callback: ((target: String) -> Unit)?) {
+        handle.onOpenLink = callback
+    }
+
+    /** What the editor does with a link: see [onOpenLink]. */
+    internal fun openLink(handle: AardinkEditorHandle, target: String) {
+        val listener = handle.onOpenLink
+        when {
+            listener != null -> listener(target)
+            opensInNewTab(target) -> openNewTab(target)
+        }
+    }
+
+    /**
      * Monaco's `layout()`: the editor measures its container again now. It follows the container's
      * size by itself, so this is only needed when something it cannot see moved it.
      */
@@ -793,6 +882,7 @@ object AardinkWeb {
      * host's list from [setDiagnostics] is shown.
      */
     fun revalidate(handle: AardinkEditorHandle) {
+        handle.revalidations.intValue++
         handle.state.value.revalidate()
     }
 
@@ -1023,7 +1113,7 @@ object AardinkWeb {
      */
     fun format(handle: AardinkEditorHandle, then: (Boolean) -> Unit = {}) {
         val state = handle.state.value
-        val service = handle.language.value.languageService
+        val service = handle.languageService
         if (service == null || handle.options.value.readOnly) return then(false)
         val options = handle.options.value
         val formatting = FormattingOptions(options.tabSize, options.insertSpaces)
@@ -1140,6 +1230,8 @@ object AardinkWeb {
     fun dispose(handle: AardinkEditorHandle) {
         if (handle.disposed.value) return
         handle.disposed.value = true
+        mountedEditors -= handle
+        followedByServers(handle)
         // Out of the page: from Compose Multiplatform 1.13 that tears the viewport down entirely
         // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops.
         handle.stopFollowingSize?.let(::callStop)
@@ -1152,6 +1244,7 @@ object AardinkWeb {
         handle.onDiagnosticsChange = null
         handle.onSelectionChange = null
         handle.onFocusChange = null
+        handle.onOpenLink = null
         handle.hostActions.clear()
         handle.pendingChanges.clear()
         handle.scope.cancel()
@@ -1207,7 +1300,7 @@ object AardinkWeb {
 @Composable
 private fun EditorContent(handle: AardinkEditorHandle) {
     val state = handle.state.value
-    val language = handle.language.value
+    val service = handle.languageService
     val options = handle.options.value
     var showGoToLine by remember { mutableStateOf(false) }
 
@@ -1235,10 +1328,9 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     // own are collected here, on the layout's schedule, to go with them.
     val owners = handle.ownerDiagnostics.toMap()
     val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
-    LaunchedEffect(state, language, collectLanguage) {
-        val service = language.languageService
+    LaunchedEffect(state, service, collectLanguage) {
         if (!collectLanguage || service == null) return@LaunchedEffect
-        snapshotFlow { state.textVersion }.collectLatest { asked ->
+        snapshotFlow { state.textVersion to handle.revalidations.intValue }.collectLatest { (asked, _) ->
             delay(500)
             val document = state.document.snapshot()
             val list = service.diagnostics(document)
@@ -1294,10 +1386,10 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 contextMenuItems = handle.hostActions.filter {
                     it.inContextMenu
                 }.map { action -> EditorMenuItem(action.label, onClick = action.run) },
-                languageService = language.languageService,
+                languageService = service,
                 findReplaceState = handle.findReplaceState,
                 foldState = handle.foldState,
-                foldingProvider = language.foldingProvider,
+                foldingProvider = handle.foldingProvider,
                 diagnostics = handle.diagnostics.value ?: if (owners.isEmpty()) {
                     null
                 } else {
@@ -1329,6 +1421,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     fontLigatures = options.fontLigatures,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
+                onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },
             )
         }
     }
@@ -1374,6 +1467,28 @@ private fun followSize(element: Element): JsAny = js(
         cancelAnimationFrame(frame);
         observer.disconnect();
     };
+}""",
+)
+
+/**
+ * Whether a link opens in a new tab when the host has no listener: only `http` and `https`, as the
+ * target can come from a language server and a `javascript:` URL would run in the page. The scheme
+ * is read as a browser reads it, past the leading spaces and control characters it drops and in
+ * any case. A tab or newline inside the scheme, which a browser also drops, is simply not `http`.
+ */
+internal fun opensInNewTab(target: String): Boolean {
+    val scheme = target.trimStart { it <= ' ' }.substringBefore(':', "").lowercase()
+    return scheme == "http" || scheme == "https"
+}
+
+/** A new tab that cannot reach this page, or nothing for a URL the browser refuses: `http://` alone throws. */
+private fun openNewTab(url: String): Unit = js(
+    """{
+    try {
+        window.open(url, '_blank', 'noopener');
+    } catch (e) {
+        console.warn('Aardink: could not open ' + url, e);
+    }
 }""",
 )
 

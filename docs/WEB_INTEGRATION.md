@@ -68,6 +68,7 @@ There are two ways in:
 | `onCursorChange(callback)` | 1-based line and column. |
 | `onSelectionChange(callback)` | Every change to the selections, as JSON `{ selections, reason, source }`: `reason` is `keyboard`, `pointer`, `edit`, `undo`, `redo`, `flush` or `api`, `source` Monaco's. |
 | `onFocusChange(callback)` | `true` when the text gains the keyboard focus, `false` when it loses it. |
+| `onOpenLink(callback)` | Every link opened in the editor, whatever its scheme; see [Links](#links). One listener; `null` removes it, and `http` and `https` links then open in a new tab. |
 | `getPosition` / `setPosition(line, column)` | The primary caret, 1-based; `setPosition` places one caret without scrolling. |
 | `revealLine(line, center)` / `revealPosition(line, column, center)` | Scroll a place into view, to the middle with `center`, without moving the caret. |
 | `trigger(actionId, payloadJson)` / `canTrigger` / `actionLabel` | Monaco's `trigger`: an action the host added, or one of the editor's own by Monaco's id (`editor.action.formatDocument`, `editor.action.marker.next`, `editor.foldLevel2`, `editor.action.insertSnippet` with `{ snippet }`, ...). |
@@ -86,6 +87,8 @@ There are two ways in:
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
 | `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, and `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, dispatcher)` | The same with one function answering for every provider, as the [export template](#the-export-template) has it. |
+| `connectLanguageServer(url, languageId)` | Has the language server at a WebSocket URL follow every editor of a language; see [Language servers](#language-servers). Returns a `DisposableHandle`. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
@@ -111,8 +114,15 @@ so every Aardink build proves it still compiles, and `ExportsTemplateTest` exerc
 fails the build if the two ever export different functions. The template is not duplicated here
 because a copy in a document would drift.
 
-Editors cross the JS boundary as integer ids. Every export is prefixed `aardink` so it cannot
-collide with your module's own exports.
+Editors and language server connections cross the JS boundary as integer ids. Every export is
+prefixed `aardink` so it cannot collide with your module's own exports.
+
+`aardinkRegisterLanguage` takes one dispatcher for all of a language's providers: a function of
+`(method, text, argsJson)` answering with JSON through a Promise, or null for nothing. `method` is a
+member of `WebLanguageProviders` (`completions`, `hover`, `diagnostics`, `documentSymbols`,
+`documentColors`), and `argsJson` the provider's other arguments as a JSON array: `[line, column]`,
+1-based, for `completions` and `hover`, and `[]` for the rest. Answer null to a name you do not know.
+That means no provider, and it is how a later version adds one with no change to your copy.
 
 > With Kotlin 2.4.20, `@JsExport` functions declared in a *dependency* klib do end up in the
 > consuming executable's exports. The template stays the recommended route anyway, because only
@@ -253,10 +263,64 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   one request. `triggerCharacters` on the providers open the list when typed, besides the extended
   language's, or in place of them with `inheritCompletions: false`.
 - **Hover** is `{ title?, contents, example? }`: `contents` is Markdown (raw HTML shows as written),
-  and `example` is shown as code below it. A link shows as its text, there and in signature help:
-  the web has no handler to open one with.
+  and `example` is shown as code below it. A link there, or in signature help, is live: see
+  [Links](#links).
 - **`revalidate()`** collects the language's diagnostics again at once, for when what your
   `provideDiagnostics` depends on outside the text has changed (another file, a setting).
+
+### Links
+
+A link opens by Ctrl/Cmd+click on a URL in the text, or by a click in a hover, signature help or
+a completion's detail pane. `editor.onOpenLink(listener)` gets the target of every one, whatever its
+scheme, and returns a disposable. Text in a card can come from a language server, so check a target
+before following it: it may be `javascript:`.
+
+With no listener, `http` and `https` links open in a new tab with `noopener`, and anything else does
+nothing. The scheme is read as a browser reads it, in any case and past leading spaces and control
+characters, so `  JavaScript:alert(1)` stays where it is and `HTTPS://example.com` opens.
+
+The tab opens in the click itself, not after it, so a popup blocker lets it through. The smoke test
+proves this in Chrome with its blocker on; Firefox and Safari have not been tried.
+
+### Language servers
+
+```js
+import { connectLanguageServer, createEditor } from '@aardarch/aardink-web';
+
+const server = await connectLanguageServer('wss://example.com/lsp', 'kotlin');
+const editor = await createEditor(container, undefined, { language: 'kotlin' });
+// ...
+server.dispose();
+```
+
+The server follows every editor of that language: those open already, those created later, and
+those switched to it with `updateOptions`. Each is a document of its own to the server, under a
+generated `file:///aardink/editor-1.kt` URI, kept up to date edit by edit. A language this page does
+not know still works: an editor asked for `python` shows plain text, and a server connected for
+`python` follows it. The WebSocket carries one JSON-RPC message per frame, with no `Content-Length`
+headers, so a server that speaks LSP on stdin and stdout needs a bridge in front of it.
+
+What the server knows joins what the language has:
+
+| | Who answers |
+| --- | --- |
+| A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
+| A built-in language | The server first, then the language, except that Enter and closing pairs stay the language's. |
+| Completions, diagnostics, code actions, references, links, colours | Both, as above. |
+| Folding | The server, if it folds; otherwise the language. |
+| Trigger characters | Both. A server that declares none adds none. |
+
+Connecting a second server to a language adds to the first, which answers first.
+
+`connectLanguageServer` resolves once the connection has been asked for, not once it is up, so a
+server that is slow to start holds nothing up. It never rejects on the server's account. A server
+that cannot be reached, or that drops later, is said on the console, and the editors go on with
+their language's own service, its squiggles gone. Nothing reconnects by itself: call it again for
+that. `dispose()` closes each document, sends `shutdown` and `exit`, and leaves the editors running.
+Disposing an editor closes its document and leaves the connection up.
+
+A rename that reaches other files, and `workspace/applyEdit`, are refused: the page has no other
+files to apply them to.
 
 ### Option names coming from Monaco
 
@@ -426,4 +490,6 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   Multiplatform release that uses `kotlin.wasm.unsafe` instead.
 - A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
+- A language server connection does not reconnect, and the host hears of its end only on the
+  console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
 - The items marked **manual** in the checklist above wait for real devices before 0.6.0.

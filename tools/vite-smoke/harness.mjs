@@ -37,7 +37,13 @@ export function findChrome() {
 export async function startHarness() {
   const server = await preview({ preview: { port: 0 } });
   const url = server.resolvedUrls.local[0];
-  const browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: ['--no-sandbox'] });
+  const browser = await puppeteer.launch({
+    executablePath: findChrome(),
+    headless: true,
+    args: ['--no-sandbox'],
+    // Puppeteer turns the popup blocker off; smoke.mjs checks that a link gets past it.
+    ignoreDefaultArgs: ['--disable-popup-blocking'],
+  });
   return {
     server,
     url,

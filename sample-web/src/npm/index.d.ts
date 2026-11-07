@@ -278,6 +278,14 @@ export interface AardinkEditor {
   getScrollHeight(): number;
   /** Called as the text scrolls. Returns an unsubscribe function. */
   onDidScrollChange(listener: (event: { scrollTop: number; scrollLeft: number; scrollHeight: number }) => void): () => void;
+  /**
+   * Called with the target of every link opened in the editor, by Ctrl/Cmd+click on a URL in the
+   * text or a click in a hover, signature help or completion card, whatever its scheme. A target
+   * can come from a language server, so check it before following it: it may be `javascript:`. With
+   * no listener, `http` and `https` links open in a new tab with `noopener`, and anything else does
+   * nothing. Returns a disposable.
+   */
+  onOpenLink(listener: (target: string) => void): { dispose(): void };
   /** Measures the container again now; the editor follows its container's size by itself. */
   layout(): void;
   /**
@@ -622,7 +630,7 @@ export interface AardinkCompletionList {
 
 export interface AardinkHover {
   title?: string;
-  /** Markdown. Raw HTML shows as written, and a link as its text: the web opens no links. */
+  /** Markdown. Raw HTML shows as written. A link goes to `onOpenLink`, or to a new tab for `http` and `https`. */
   contents: string;
   /** Shown as code below `contents`. */
   example?: string;
@@ -687,6 +695,25 @@ export interface AardinkThemeData {
 
 /** Adds a theme for `createEditor`'s `theme` option: Monaco's `defineTheme` data, or a VS Code theme's JSON. */
 export function registerTheme(name: string, theme: AardinkThemeData | object): Promise<void>;
+
+/**
+ * Connects to the language server at a WebSocket URL, which carries one JSON-RPC message per frame,
+ * and has it follow every editor of `languageId`: those open now, those created later, and those
+ * switched to it with `updateOptions`. Each is a document of its own to the server, under a
+ * generated `file:///aardink/` URI.
+ *
+ * What the server knows joins what the language has. The providers of a language from
+ * `registerLanguage` answer first and the server fills in; a built-in language's answers come after
+ * the server's, though it keeps Enter and closing pairs. Completions, diagnostics, code actions,
+ * references, links and colours come from both.
+ *
+ * Resolves once the connection has been asked for, not once it is up. A server that cannot be
+ * reached, or that drops later, is said on the console and the editors go on with their language's
+ * own service. Nothing reconnects by itself: call this again for that. A rename reaching other
+ * files, and `workspace/applyEdit`, are refused. `dispose()` closes each document and shuts the
+ * server down.
+ */
+export function connectLanguageServer(url: string | URL, languageId: string): Promise<{ dispose(): void }>;
 
 /** Monaco's name for `registerTheme`. */
 export const defineTheme: typeof registerTheme;

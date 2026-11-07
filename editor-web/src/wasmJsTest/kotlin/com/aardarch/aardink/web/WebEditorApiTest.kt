@@ -69,6 +69,63 @@ class WebEditorApiTest {
     }
 
     @Test
+    fun `only http and https links open by themselves, however the scheme is written`() {
+        val opening = listOf(
+            "http://example.com",
+            "https://example.com/a?b=c#d",
+            "HTTP://EXAMPLE.COM",
+            "hTtPs://example.com",
+            "  https://example.com",
+            "\t\r\n https://example.com",
+            "\u0001https://example.com",
+        )
+        opening.forEach { assertTrue(opensInNewTab(it), it) }
+        val staying = listOf(
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            "JAVASCRIPT:alert(1)",
+            "  javascript:alert(1)",
+            "\t\n javascript:alert(1)",
+            "\u0001javascript:alert(1)",
+            "java\tscript:alert(1)",
+            "java\nscript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "DATA:text/html,x",
+            " data:text/html,x",
+            "vbscript:x",
+            "blob:https://example.com/id",
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "mailto:someone@example.com",
+            "ht\ntp://example.com",
+            "\u00A0https://example.com",
+            "//example.com",
+            "/relative/path",
+            "relative/path",
+            "#anchor",
+            "https",
+            "",
+        )
+        staying.forEach { assertFalse(opensInNewTab(it), it) }
+    }
+
+    @Test
+    fun `a listener gets every link, and the last one set is the one that does`() {
+        val handle = mount("")
+        val first = mutableListOf<String>()
+        val second = mutableListOf<String>()
+        AardinkWeb.onOpenLink(handle) { first += it }
+        AardinkWeb.openLink(handle, "https://example.com")
+        AardinkWeb.openLink(handle, "javascript:alert(1)")
+        AardinkWeb.openLink(handle, "command:editor.doSomething")
+        assertEquals(listOf("https://example.com", "javascript:alert(1)", "command:editor.doSomething"), first)
+        AardinkWeb.onOpenLink(handle) { second += it }
+        AardinkWeb.openLink(handle, "data:text/plain,x")
+        assertEquals(3, first.size)
+        assertEquals(listOf("data:text/plain,x"), second)
+    }
+
+    @Test
     fun `selections go out and come back in Monaco's shape`() {
         val handle = mount("one\ntwo\nthree")
         val selections = listOf(WebSelection(2, 4, 2, 1), WebSelection(1, 1, 1, 1))

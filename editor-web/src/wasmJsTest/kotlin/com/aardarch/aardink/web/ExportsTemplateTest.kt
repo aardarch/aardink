@@ -184,6 +184,42 @@ class ExportsTemplateTest {
     }
 
     @Test
+    fun `a link goes to the listener through the exports, until it is taken away`() {
+        val id = aardinkCreate(container.id, "", "{}")
+        try {
+            val handle = requireNotNull(AardinkWeb.mountedEditors.lastOrNull())
+            val opened = mutableListOf<String>()
+            aardinkOnOpenLink(id) { opened += it }
+            AardinkWeb.openLink(handle, "javascript:void(0)")
+            assertEquals(listOf("javascript:void(0)"), opened)
+            aardinkOnOpenLink(id, null)
+            AardinkWeb.openLink(handle, "javascript:void(0)")
+            assertEquals(1, opened.size)
+        } finally {
+            aardinkDispose(id)
+        }
+    }
+
+    @Test
+    fun `a URL the browser refuses is still an id to disconnect, and costs no editor`() = runTest {
+        val id = aardinkCreate(container.id, "one", "{}")
+        // A scheme a WebSocket cannot have: the browser throws from its constructor, in JavaScript.
+        val server = aardinkConnectLanguageServer("ftp://example.invalid", "plaintext")
+        try {
+            withContext(Dispatchers.Main) {
+                withTimeout(5_000) {
+                    while (AardinkWeb.languageServers.isNotEmpty()) delay(16)
+                }
+            }
+            assertEquals("one", aardinkGetValue(id))
+        } finally {
+            aardinkDisconnectLanguageServer(server)
+            aardinkDisconnectLanguageServer(server) // idempotent
+            aardinkDispose(id)
+        }
+    }
+
+    @Test
     fun `each editor gets its own id and a disposed id is rejected`() {
         val first = aardinkCreate(container.id, "", "{}")
         val second = aardinkCreate(container.id, "", "{}")

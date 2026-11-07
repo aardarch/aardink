@@ -61,7 +61,7 @@ A link in hover, signature help or a completion's detail pane goes to `CodeEdito
 `onOpenLink`, and nowhere else. A host that leaves `onOpenLink` out gets a link as its plain text,
 since nothing would open it.
 
-The npm package has no way to set a handler yet, so on the web every link shows as its text.
+On the web a link is live: see [Links on the web](#links-on-the-web).
 
 ## Code in documentation
 
@@ -95,3 +95,68 @@ provides this from the language registry the editor was mounted with.
 A card now outlasts a mouse that moves off its symbol by 300 ms, and stays while the mouse is over
 it, so that a link or Quick Fix can be reached. It used to go at once. Changing `languageService`
 takes the card down.
+
+## A wasm module built from the export template
+
+`aardinkRegisterLanguage` takes one dispatcher in place of a callback per provider, so that a later
+provider needs no change to a module built from the template. Users of the npm package are not
+affected: `registerLanguage`'s providers are as they were. Copy the new version from
+`ExportsTemplate.kt`, with the JavaScript that calls it:
+
+```kotlin
+// 0.8
+fun aardinkRegisterLanguage(
+    definitionJson: String,
+    completions: (String, Int, Int) -> Promise<JsString?>,
+    hover: (String, Int, Int) -> Promise<JsString?>,
+    diagnostics: (String) -> Promise<JsString?>,
+    documentSymbols: (String) -> Promise<JsString?>,
+    documentColors: (String) -> Promise<JsString?>,
+): String
+
+// 0.9
+fun aardinkRegisterLanguage(definitionJson: String, dispatcher: (String, String, String) -> Promise<JsString?>): String
+```
+
+```js
+// 0.8
+k.aardinkRegisterLanguage(json, completions, hover, diagnostics, documentSymbols, documentColors);
+
+// 0.9: method is 'completions', 'hover', 'diagnostics', 'documentSymbols' or 'documentColors'
+k.aardinkRegisterLanguage(json, (method, text, argsJson) => {
+  const args = JSON.parse(argsJson); // [line, column] for completions and hover, else []
+  // answer with a Promise of JSON, or of null for nothing, as for a method you do not know
+});
+```
+
+A Kotlin host passing `WebLanguageProviders` to `AardinkWeb.registerLanguage` changes nothing.
+
+The template also gains `aardinkOnOpenLink`, `aardinkConnectLanguageServer` and
+`aardinkDisconnectLanguageServer`, which your copy needs for those features.
+
+## Links on the web
+
+The web used to open no links, and hover and signature help showed them as text. Now `AardinkWeb`
+always gives `CodeEditorLayout` an `onOpenLink`, so they are live, and two things behave differently
+with no change on your side:
+
+- **Ctrl/Cmd+click on a URL in the text opens a tab.** It did nothing before.
+- **A link in a hover, signature help or completion detail pane opens a tab on a click.**
+
+Both only for `http` and `https`, in a new tab with `noopener`. Anything else does nothing, so a
+`javascript:` link in a server's hover text stays inert.
+
+To decide for yourself, listen with `editor.onOpenLink(listener)`, or `AardinkWeb.onOpenLink` from
+Kotlin. A listener gets every target whatever its scheme and nothing opens by itself, so one that
+follows a target must check it first. To go back to no links opening at all, listen and do nothing.
+
+## Language servers on the web
+
+`connectLanguageServer(url, languageId)` is new; see
+[WEB_INTEGRATION.md](WEB_INTEGRATION.md#language-servers). Nothing changes unless you call it, but:
+
+- `aardink-editor-web` now depends on `aardink-languages-lsp` at runtime, and its dependency on
+  `kotlinx-coroutines-core` is now `api`, as `DisposableHandle` is in a public signature. The npm
+  package's `aardink-web.wasm` grew by about 217 KB, or 61 KB gzipped, for everyone.
+- With a server connected, a built-in language's answers come after the server's, and a formatter or
+  outline the language has gives way to the server's.
