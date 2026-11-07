@@ -51,7 +51,7 @@ internal class LspSemanticLegend(private val tokenTypes: List<String>, private v
     /** The type of a token with the legend's [type] and the [modifiers] bits, or null when [type] is outside it. */
     fun typeOf(type: Int, modifiers: Int): NamedTokenType? {
         val name = tokenTypes.getOrNull(type) ?: return null
-        return named.getOrPut(type.toLong() shl Int.SIZE_BITS or (modifiers.toLong() and 0xFFFFFFFFL)) {
+        return named.getOrPut(type.toLong() shl Int.SIZE_BITS or modifiers.toUInt().toLong()) {
             NamedTokenType(
                 buildString {
                     append(THEME_NAMES[name] ?: name)
