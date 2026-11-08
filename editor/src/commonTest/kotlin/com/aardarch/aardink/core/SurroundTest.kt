@@ -56,6 +56,7 @@ class SurroundTest {
                 '(' -> ")"
                 '"' -> "\""
                 '<' -> "/>"
+                '@' -> "\n'@"
                 else -> null
             }
         }
@@ -144,6 +145,15 @@ class SurroundTest {
         state.selection = TextRange(2, 9)
         state.typeOver("(")
         assertEquals("on(e\ntwo\nt)hree", state.text)
+    }
+
+    @Test
+    fun `a closer's line break is the document's`() {
+        val state = stateFor("a\r\nab cd")
+        state.setSelections(listOf(TextRange(3, 5), TextRange(6, 8)))
+        state.typeOver("@")
+        assertEquals("a\r\n@ab\r\n'@ @cd\r\n'@", state.text)
+        assertEquals(listOf(TextRange(4, 6), TextRange(12, 14)), state.selections, "each moves by the closer's length in the document")
     }
 
     @Test

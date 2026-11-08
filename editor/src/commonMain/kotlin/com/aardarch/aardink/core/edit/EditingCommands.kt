@@ -57,20 +57,27 @@ internal object EditingCommands {
      * [open] before and [close] after each of [selections], which stay selected, as VS Code
      * surrounds them. Null when this is not a surround but plain typing over them: when one is a
      * caret or holds only blanks, or [open] is a quote and one is a single quote, which changes
-     * the quote instead.
+     * the quote instead. Line breaks in [close] become [eol].
      */
-    fun surround(document: CharSequence, selections: SelectionSet, open: Char, close: String): CommandEdit? {
+    fun surround(
+        document: CharSequence,
+        selections: SelectionSet,
+        open: Char,
+        close: String,
+        eol: LineEnding = LineEnding.LF,
+    ): CommandEdit? {
         val ranges = selections.inDocumentOrder
         if (ranges.any { it.collapsed || isBlank(document, it) }) return null
         if (open in QUOTES && ranges.any { it.length == 1 && document[it.min] in QUOTES }) return null
         val opening = open.toString()
+        val closing = TypingRules.withLineEnding(TypingRules.normalizeLineEndings(close), eol)
         val changes = ArrayList<TextChange>(ranges.size * 2)
         for (range in ranges) {
             changes.add(TextChange(range.min, range.min, opening))
-            changes.add(TextChange(range.max, range.max, close))
+            changes.add(TextChange(range.max, range.max, closing))
         }
         // Each range moves by what the ones before it gained, and by its own opening.
-        val added = opening.length + close.length
+        val added = opening.length + closing.length
         val shifts = ranges.withIndex().associate { (index, range) -> range to index * added + opening.length }
         val after = selections.ranges.map { range ->
             val shift = shifts.getValue(range)

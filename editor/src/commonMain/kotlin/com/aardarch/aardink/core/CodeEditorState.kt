@@ -1420,7 +1420,7 @@ class CodeEditorState(
         val primary = before.primary
         if (primary.collapsed || start != primary.min || end != primary.max) return false
         val close = service.surroundingClose(typed) ?: return false
-        val edit = EditingCommands.surround(document, before, typed, close) ?: return false
+        val edit = EditingCommands.surround(document, before, typed, close, lineEnding) ?: return false
         return applyChanges(edit.changes, EditKind.Other, external = false) { edit.selectionsAfter }
     }
 
