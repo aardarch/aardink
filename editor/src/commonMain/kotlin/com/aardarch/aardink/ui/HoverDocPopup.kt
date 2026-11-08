@@ -17,7 +17,6 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -38,7 +36,9 @@ import com.aardarch.aardink.core.HoverDoc
  * Floating popup showing hover documentation for the token under the cursor.
  *
  * Positioned by the Popup system near the current anchor. The caller dismisses it
- * via [onDismiss] (typically when the cursor moves or a key is pressed).
+ * via [onDismiss] (typically when the cursor moves or a key is pressed). Links in the documentation
+ * show as their text here: only the editor's own hover, through [CodeEditorLayout]'s `onOpenLink`,
+ * opens them.
  */
 @Composable
 fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
@@ -52,7 +52,7 @@ fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Mod
 
 /** The popup's card: title, content and an optional example. */
 @Composable
-internal fun HoverDocCard(doc: HoverDoc, modifier: Modifier = Modifier) {
+internal fun HoverDocCard(doc: HoverDoc, modifier: Modifier = Modifier, onOpenLink: ((String) -> Unit)? = null) {
     EditorChromeTheme {
         Surface(
             modifier = modifier
@@ -66,38 +66,29 @@ internal fun HoverDocCard(doc: HoverDoc, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = doc.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                HorizontalDivider(thickness = 0.5.dp)
-                Text(
-                    text = doc.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (doc.example != null) HoverDocExample(doc.example)
+                HoverDocBody(doc, dividedTitle = true, onOpenLink)
             }
         }
     }
 }
 
-/** A [HoverDoc.example] as hover cards show it: code-font text on an inset panel. */
+/**
+ * [doc] inside a card's column: its title, its content as Markdown and its example. With
+ * [dividedTitle] a line sets the title off, for a card that holds nothing else.
+ */
 @Composable
-internal fun HoverDocExample(example: String) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(
-            text = example,
-            modifier = Modifier.padding(8.dp),
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontFamily = LocalEditorTypography.current.fontFamily,
-            ),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+internal fun HoverDocBody(doc: HoverDoc, dividedTitle: Boolean, onOpenLink: ((String) -> Unit)?) {
+    Text(
+        text = doc.title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    if (dividedTitle) HorizontalDivider(thickness = 0.5.dp)
+    MarkdownDoc(
+        text = doc.content,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        onOpenLink = onOpenLink,
+    )
+    if (doc.example != null) DocCodePanel(doc.example)
 }

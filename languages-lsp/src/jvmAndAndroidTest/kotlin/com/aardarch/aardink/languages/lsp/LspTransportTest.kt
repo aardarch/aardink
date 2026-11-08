@@ -15,17 +15,35 @@
  */
 package com.aardarch.aardink.languages.lsp
 
+import com.aardarch.aardink.platform.EditorDispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -44,7 +62,185 @@ private class InterleavingOutputStream(private val sink: ByteArrayOutputStream) 
     }
 }
 
+/**
+ * The two ends of a process pipe to a server that has hung, as they behave on Windows: a read waits
+ * for the server, closing the input waits for that read, and a write waits for the server to drain
+ * it, with `BufferedOutputStream` holding its lock throughout. Nothing frees them but [serverExits].
+ */
+private class HungPipe {
+    private val serverGone = CountDownLatch(1)
+    private val reading = CountDownLatch(1)
+    private val writing = CountDownLatch(1)
+
+    @Volatile
+    var outputClosed = false
+        private set
+
+    val input = object : InputStream() {
+        override fun read(): Int {
+            reading.countDown()
+            serverGone.await()
+            return -1
+        }
+
+        override fun close() {
+            if (reading.count == 0L) serverGone.await()
+        }
+    }
+
+    val output = BufferedOutputStream(
+        object : OutputStream() {
+            override fun write(b: Int) = hold()
+
+            override fun write(b: ByteArray, off: Int, len: Int) = hold()
+
+            private fun hold() {
+                writing.countDown()
+                serverGone.await()
+                throw IOException("The pipe has been ended")
+            }
+
+            override fun close() {
+                outputClosed = true
+            }
+        },
+    )
+
+    fun serverExits() = serverGone.countDown()
+
+    /** Waits, off the test's thread so the client's coroutines can run, for a read to be in progress. */
+    suspend fun awaitRead() = withContext(EditorDispatchers.io) { assertTrue(reading.await(10, TimeUnit.SECONDS)) }
+
+    /** The same for a write. */
+    suspend fun awaitWrite() = withContext(EditorDispatchers.io) { assertTrue(writing.await(10, TimeUnit.SECONDS)) }
+}
+
+/** Runs [free] if the test is still going in ten seconds, so a regression fails instead of hanging the build. */
+private class Rescue(free: () -> Unit) {
+    @Volatile
+    var needed = false
+        private set
+
+    init {
+        thread(isDaemon = true) {
+            Thread.sleep(10_000)
+            needed = true
+            free()
+        }
+    }
+}
+
+/** A transport whose close blocks until [free]; it answers `shutdown` and nothing else. */
+private class BlockingCloseTransport : LspTransport {
+    private val incoming = Channel<String>(Channel.UNLIMITED)
+    private val released = CountDownLatch(1)
+    val closing = CountDownLatch(1)
+
+    override suspend fun sendPayload(jsonPayload: String) {
+        val message = LspJson.parseToJsonElement(jsonPayload).jsonObject
+        if (message["method"]?.jsonPrimitive?.content == "shutdown") {
+            incoming.send("""{"jsonrpc":"2.0","id":${message["id"]},"result":null}""")
+        }
+    }
+
+    override suspend fun receivePayload(): String? = incoming.receiveCatching().getOrNull()
+
+    override fun close() {
+        closing.countDown()
+        released.await()
+        incoming.close()
+    }
+
+    fun free() = released.countDown()
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class LspTransportTest {
+
+    @Test
+    fun `close does not wait for a read and a write stuck on a process pipe`() = runTest {
+        val pipe = HungPipe()
+        val transport = StreamLspTransport(pipe.input, pipe.output)
+        backgroundScope.launch { transport.receivePayload() }
+        backgroundScope.launch { runCatching { transport.sendPayload("{}") } }
+        pipe.awaitRead()
+        pipe.awaitWrite()
+        val rescue = Rescue(pipe::serverExits)
+
+        try {
+            transport.close()
+
+            assertFalse(rescue.needed, "close waited for the server to go away")
+        } finally {
+            pipe.serverExits()
+        }
+    }
+
+    @Test
+    fun `close reaches the output while a read is in progress, so the server sees its stdin end`() = runTest {
+        // A read is what the receive loop is nearly always doing. A healthy server exits when its
+        // stdin ends, and that is what frees the read, so the output must not queue behind it.
+        val pipe = HungPipe()
+        val transport = StreamLspTransport(pipe.input, pipe.output)
+        backgroundScope.launch { transport.receivePayload() }
+        pipe.awaitRead()
+        val rescue = Rescue(pipe::serverExits)
+
+        try {
+            transport.close()
+
+            assertFalse(rescue.needed, "close waited for the server to go away")
+            assertTrue(pipe.outputClosed)
+        } finally {
+            pipe.serverExits()
+        }
+    }
+
+    @Test
+    fun `shutdown returns while a read and a write are stuck on a process pipe`() = runTest {
+        val pipe = HungPipe()
+        val client = LspClient(StreamLspTransport(pipe.input, pipe.output), backgroundScope)
+        backgroundScope.launch { client.sendNotification("textDocument/didChange") }
+        pipe.awaitRead()
+        pipe.awaitWrite()
+        val rescue = Rescue(pipe::serverExits)
+
+        try {
+            client.shutdown()
+
+            assertFalse(rescue.needed, "shutdown waited for the server to go away")
+            val failure = assertFailsWith<LspRequestException> { client.sendRequest("textDocument/hover") }
+            assertEquals(LspRequestException.CONNECTION_CLOSED, failure.code)
+        } finally {
+            pipe.serverExits()
+        }
+    }
+
+    @Test
+    fun `a transport whose close blocks holds up neither shutdown nor the client`() = runTest {
+        val transport = BlockingCloseTransport()
+        val scope = CoroutineScope(EditorDispatchers.io + SupervisorJob())
+        val client = LspClient(transport, scope)
+        val pending = async { runCatching { client.sendRequest("textDocument/hover") } }
+        runCurrent()
+        val rescue = Rescue(transport::free)
+
+        try {
+            client.shutdown()
+            withContext(EditorDispatchers.io) { assertTrue(transport.closing.await(10, TimeUnit.SECONDS)) }
+
+            // Refused rather than stalled: nothing may need the client's lock behind that close.
+            val refused = assertFailsWith<LspRequestException> { client.sendRequest("textDocument/hover") }
+            assertEquals(LspRequestException.CONNECTION_CLOSED, refused.code)
+            val failure = pending.await().exceptionOrNull()
+            assertTrue(failure is LspRequestException, "expected LspRequestException, got $failure")
+            assertEquals(LspRequestException.CONNECTION_CLOSED, failure.code)
+            assertFalse(rescue.needed, "something waited for the close")
+        } finally {
+            transport.free()
+            scope.cancel()
+        }
+    }
 
     @Test
     fun `concurrent sends never interleave frames`() = runBlocking {

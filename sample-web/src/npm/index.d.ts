@@ -60,6 +60,19 @@ export interface AardinkOptions {
   breadcrumbs?: boolean;
   /** The font's ligatures; on by default. */
   fontLigatures?: boolean;
+  /** Colours what a language server's semantic tokens say over the syntax's. Off by default. */
+  semanticHighlighting?: boolean;
+  /**
+   * Shows what `provideInlayHints` or a language server says, among the characters of the lines
+   * around the view. Off by default. Takes Monaco's `{ enabled }` too; with `'onUnlessPressed'` and
+   * `'offUnlessPressed'` no key is watched, so they mean on and off.
+   */
+  inlayHints?: boolean | { enabled?: boolean | 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' };
+  /**
+   * Shows what `provideCodeLenses` or a language server says, in a row above its lines. Off by
+   * default, where Monaco's is on.
+   */
+  codeLens?: boolean;
 }
 
 /**
@@ -233,7 +246,8 @@ export interface AardinkEditor {
    * `editor.action.changeAll`, `editor.action.insertCursorAtEndOfEachLineSelected`,
    * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
    * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
-   * `editor.action.showColorPicker`, and
+   * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext`,
+   * `.showPrevious` and `.hide`, and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -278,6 +292,14 @@ export interface AardinkEditor {
   getScrollHeight(): number;
   /** Called as the text scrolls. Returns an unsubscribe function. */
   onDidScrollChange(listener: (event: { scrollTop: number; scrollLeft: number; scrollHeight: number }) => void): () => void;
+  /**
+   * Called with the target of every link opened in the editor, by Ctrl/Cmd+click on a URL in the
+   * text or a click in a hover, signature help or completion card, whatever its scheme. A target
+   * can come from a language server, so check it before following it: it may be `javascript:`. With
+   * no listener, `http` and `https` links open in a new tab with `noopener`, and anything else does
+   * nothing. Returns a disposable.
+   */
+  onOpenLink(listener: (target: string) => void): { dispose(): void };
   /** Measures the container again now; the editor follows its container's size by itself. */
   layout(): void;
   /**
@@ -373,10 +395,17 @@ export interface AardinkLanguageDefinition {
   id: string;
   /**
    * A subset of Monaco's Monarch: states in `tokenizer` (`root` first), rules of
-   * `[regex, action, next?]`, `cases` with `@array`/`@default`/`@eos`, capture groups (each
-   * with a token name, `{ token, next }` or `cases` of its own), `include`, `@rematch`,
-   * `defaultToken`, `ignoreCase`, `tokenPostfix`. RegExp literals are fine. Lookbehind is not
-   * supported, and is refused.
+   * `[regex, action, next?]`, `cases`, capture groups (each with a token name, `{ token, next }`
+   * or `cases` of its own), `include`, `@rematch`, `switchTo`, `goBack`, `@brackets` with a
+   * top-level `brackets`, `defaultToken`, `ignoreCase`, `tokenPostfix`, and `@name` in a regex
+   * for the top-level string `name`, as a group of its own. A guard is
+   * `@default`, `@eos`, or a subject of `$#` or `$S0`, `$S1`... then `@array`, `~regex`, `==text`
+   * or `!@`, `!~`, `!=`, as in `$#==$S2`; `next` and `switchTo` take `$#` and `$Sn` too. `log` is
+   * accepted and ignored. RegExp literals are fine. Lookbehind and `$` in a token name are
+   * refused, as is `goBack` in a capture group's action. `nextEmbedded` hands the text to the
+   * grammar of the language registered with that id, before or after this one, and
+   * `nextEmbedded: '@pop'` takes it back; with no such language, the text stays on this grammar.
+   * A built-in language has no grammar, so it cannot be embedded.
    */
   grammar: object;
   /** A built-in or registered language whose completions, diagnostics, hover and folding this one takes too, e.g. `'xml'`. */
@@ -400,6 +429,66 @@ export interface AardinkLanguageDefinition {
    * checks, closing tags and formatting when it extends none). Your providers still come first.
    */
   schema?: AardinkXmlSchema;
+  /**
+   * What the language says about typing, as VS Code's `language-configuration.json`: the object,
+   * or the file's text, which may have comments and trailing commas. Regular expressions are
+   * refused with a lookbehind. Its `comments` replace the definition's.
+   */
+  configuration?: AardinkLanguageConfiguration | string;
+}
+
+/** A regular expression in a language configuration: VS Code's two forms, or a RegExp literal. */
+export type AardinkConfigurationRegExp = string | RegExp | { pattern: string; flags?: string };
+
+/** An opening and a closing text, such as `['(', ')']`. */
+export type AardinkCharacterPair = [string, string] | { open: string; close: string };
+
+/**
+ * `registerLanguage`'s `configuration`. Every field is optional. As in VS Code, without
+ * `autoClosingPairs` the brackets close themselves, and without `surroundingPairs` those pairs
+ * surround. `wordPattern`, `autoCloseBefore` and `folding.offSide` are not read.
+ */
+export interface AardinkLanguageConfiguration {
+  /** What Ctrl/Cmd+/ comments with. */
+  comments?: { lineComment?: string | { comment: string }; blockComment?: [string, string] };
+  /** Pairs the language nests: Enter indents after an opening one. Matching and colouring brackets stay `()[]{}`. */
+  brackets?: AardinkCharacterPair[];
+  /**
+   * Closed when the opening text is typed. `notIn` (`'string'`, `'comment'`) is worked out from the
+   * caret's own line, so a block comment opened on an earlier line is not seen.
+   */
+  autoClosingPairs?: (AardinkCharacterPair | { open: string; close: string; notIn?: string[] })[];
+  /** Wrap a selection when the opening text, one character, is typed over it. */
+  surroundingPairs?: AardinkCharacterPair[];
+  /** What Enter does, the first rule that matches. */
+  onEnterRules?: AardinkOnEnterRule[];
+  /** What Enter does when no rule and no bracket decides. */
+  indentationRules?: {
+    increaseIndentPattern?: AardinkConfigurationRegExp;
+    decreaseIndentPattern?: AardinkConfigurationRegExp;
+    indentNextLinePattern?: AardinkConfigurationRegExp;
+    unIndentedLinePattern?: AardinkConfigurationRegExp;
+  };
+  /** Lines that open and close a fold region. */
+  folding?: { markers?: { start: AardinkConfigurationRegExp; end: AardinkConfigurationRegExp } };
+}
+
+/** One of `onEnterRules`: every regular expression given must match. */
+export interface AardinkOnEnterRule {
+  /** Against the text before the caret. */
+  beforeText?: AardinkConfigurationRegExp;
+  /** Against the text after the caret. */
+  afterText?: AardinkConfigurationRegExp;
+  /** Against the line above the one Enter was pressed on. */
+  previousLineText?: AardinkConfigurationRegExp;
+  action: {
+    /** `indentOutdent` leaves the closer at the opener's indentation and adds no line in between. */
+    indent: 'none' | 'indent' | 'outdent' | 'indentOutdent';
+    /** What the new line starts with after its indentation. Not used with `indentOutdent`. */
+    appendText?: string;
+    /** Characters taken off the end of the indentation. */
+    removeText?: number;
+  };
 }
 
 /** An XML vocabulary, for `registerLanguage`'s `schema`. */
@@ -466,8 +555,7 @@ export interface AardinkModelDeltaDecoration {
 /**
  * Monaco's `IModelDecorationOptions`, as far as the editor draws them. Where Monaco takes a CSS
  * class (`className`, `inlineClassName`, `linesDecorationsClassName`), give a colour instead: CSS
- * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`. Nothing here changes the text's layout, so
- * Monaco's `before` and `after` are not read.
+ * hex, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`.
  */
 export interface AardinkDecorationOptions {
   /** Behind the characters; behind whole lines with `isWholeLine`. */
@@ -478,6 +566,15 @@ export interface AardinkDecorationOptions {
   underlineColor?: string;
   /** A bar at the gutter's text edge on each line, as Monaco's `linesDecorationsClassName` places one. */
   gutterColor?: string;
+  /** The colour of the range's characters, in place of Monaco's `inlineClassName`, and of `before` and `after`. */
+  inlineColor?: string;
+  /**
+   * Text in front of the range, as Monaco's `before`. It is not in the document, moves with the range,
+   * and is drawn in `inlineColor`, or faintly without it. `content` is all that is read, on one row.
+   */
+  before?: { content: string };
+  /** Text behind the range, as Monaco's `after`, by the same rules as `before`. */
+  after?: { content: string };
   isWholeLine?: boolean;
   hoverMessage?: string | { value: string } | Array<string | { value: string }>;
   overviewRuler?: { color: string; position?: number };
@@ -518,11 +615,11 @@ export interface AardinkCompletionItem {
     | 'method' | 'constructor' | 'field' | 'variable' | 'class' | 'struct' | 'interface' | 'enum' | 'enumMember' | 'keyword'
     | 'text' | 'file' | 'folder' | 'reference' | 'constant' | 'event' | 'operator' | 'typeParameter' | 'unit' | 'user' | 'issue'
     | number;
-  /** A short line about the item, such as a type or a signature, shown beside the label. */
+  /** A short line about the item, such as a type or a signature, shown beside the label and above its `documentation`. */
   detail?: string;
   /** Characters that, typed while this item is selected, accept it and are then typed after it. Not for snippets. */
   commitCharacters?: string[];
-  /** Shown beside the label; Monaco's `{ value }` is shown as plain text. */
+  /** Markdown, either way. Shown beside the label as one line of plain text, and whole beside the list for the selected item. */
   documentation?: string | { value: string };
   /**
    * What the text typed so far is matched against, as in Monaco: its characters in order, ignoring
@@ -555,7 +652,7 @@ export interface AardinkCompletionList {
 
 export interface AardinkHover {
   title?: string;
-  /** Plain text. */
+  /** Markdown. Raw HTML shows as written. A link goes to `onOpenLink`, or to a new tab for `http` and `https`. */
   contents: string;
   /** Shown as code below `contents`. */
   example?: string;
@@ -594,6 +691,42 @@ export interface AardinkLanguageProviders {
    * picked in the editor's picker is written back as CSS hex (`#rrggbb`, `#rrggbbaa`).
    */
   provideDocumentColors?(text: string): AardinkColorInformation[] | null | Promise<AardinkColorInformation[] | null>;
+  /**
+   * Labels shown among the characters of `range`, as Monaco's `provideInlayHints`, with the
+   * `inlayHints` option on. `range` holds whole lines around the view: it is asked after a pause in
+   * typing, in scrolling past what it last asked about, or after a fold opens or closes. A long closed
+   * fold on screen makes that a few calls at once, one for the lines on either side of it. With
+   * `extends`, the base language's are added, less any at a position this has one at. With a language
+   * server these are shown after a second if it has not answered by then.
+   */
+  provideInlayHints?(text: string, range: AardinkRange): AardinkInlayHint[] | null | Promise<AardinkInlayHint[] | null>;
+  /**
+   * What is shown in a row above the line each `range` starts on, as Monaco's `provideCodeLenses`,
+   * with the `codeLens` option on. It is about the whole text, and asked after a pause in typing;
+   * between answers each lens moves with its text. Lenses on one line share a row. An array, with no
+   * `{ lenses }` around it, and each lens with its `command`: there is no `resolveCodeLens`. With
+   * `extends`, the base language's are added, less any with this one's position and title. With a
+   * language server these are shown after a second if it has not answered by then.
+   */
+  provideCodeLenses?(text: string): AardinkCodeLens[] | null | Promise<AardinkCodeLens[] | null>;
+  /**
+   * A lens from `provideCodeLenses` was clicked or tapped: its command's `id`, and its `arguments`,
+   * `[]` when it has none. As they passed through JSON, they hold only what JSON can. There is no
+   * command registry behind this: a lens does what this does with its `id`.
+   */
+  runCodeLensCommand?(id: string, args: unknown[]): void | Promise<void>;
+}
+
+/** Monaco's `CodeLens`, with the command it must have here: a title in a row above the line `range` starts on. */
+export interface AardinkCodeLens {
+  range: AardinkRange;
+  command: { id: string; title: string; arguments?: unknown[] };
+}
+
+/** Monaco's `InlayHint`, as far as the editor draws it: a label at a position, in front of the character there. */
+export interface AardinkInlayHint {
+  position: AardinkPosition;
+  label: string;
 }
 
 /** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */
@@ -620,6 +753,83 @@ export interface AardinkThemeData {
 
 /** Adds a theme for `createEditor`'s `theme` option: Monaco's `defineTheme` data, or a VS Code theme's JSON. */
 export function registerTheme(name: string, theme: AardinkThemeData | object): Promise<void>;
+
+/**
+ * Connects to the language server at a WebSocket URL, which carries one JSON-RPC message per frame,
+ * and has it follow every editor of `languageId`: those open now, those created later, and those
+ * switched to it with `updateOptions`. Each is a document of its own to the server, under a
+ * generated `file:///aardink/` URI.
+ *
+ * What the server knows joins what the language has. The providers of a language from
+ * `registerLanguage` answer first and the server fills in; a built-in language's answers come after
+ * the server's. Either way Enter, closing pairs and surrounding a selection stay the language's,
+ * even where it does nothing, and an editor with no language service, such as plain text, types as
+ * it does without a server. Completions, diagnostics, code actions, references, links and colours
+ * come from both, and what a server pushes shows after a pause in typing.
+ *
+ * Resolves once the connection has been asked for, not once it is up. A server that cannot be
+ * reached, or that drops later, is said on the console and the editors go on with their language's
+ * own service. Nothing reconnects by itself: call this again for that. A rename reaching other
+ * files, and `workspace/applyEdit`, are refused. `dispose()` closes each document and shuts the
+ * server down.
+ */
+export function connectLanguageServer(url: string | URL, languageId: string): Promise<{ dispose(): void }>;
+
+/** What `provideInlineCompletions` offers: Monaco's `InlineCompletions`, or just its `items`. */
+export interface AardinkInlineCompletions {
+  items: AardinkInlineCompletion[];
+}
+
+/**
+ * Monaco's `InlineCompletion`, as far as the editor shows it. `insertText` is a string: a
+ * `{ snippet }` is left out, as ghost text cannot fill in its stops.
+ *
+ * `range` is what it replaces, and must hold the caret. What `insertText` repeats of it is not shown
+ * again: over `)`, the text `x) {` shows `x` before the bracket and ` {` after it, which is how ghost
+ * text keeps from doubling what follows the caret. So it has to hold all of `range`, in order, or it
+ * does not show, as in Monaco. An empty `range` is a plain insertion.
+ *
+ * Without `range`, it replaces the word at the caret and the rest of the line, as in Monaco. Where
+ * Monaco then shows nothing for text that does not hold them, this tries the rest of the line alone,
+ * and then puts the text in at the caret, so a provider that only knows what comes next can leave
+ * `range` out. Text the document has already, from the caret on or from the word's start to the caret
+ * or past it, shows nothing.
+ */
+export interface AardinkInlineCompletion {
+  insertText: string;
+  range?: AardinkRange;
+}
+
+/** Monaco's `InlineCompletionsProvider`, as far as the editor asks one anything. */
+export interface AardinkInlineCompletionsProvider {
+  /**
+   * What might come next at a 1-based `line` and `column`, best first: the first shows, and Alt+] and
+   * Alt+[ go through the others. Asked once typing pauses, not for each key, and at once after one
+   * is accepted, or by `editor.action.inlineSuggest.showNext` with none showing. While one shows,
+   * typing what it says asks nothing. An answer for text that has moved on is dropped; there is no
+   * cancellation token, so the work behind it is not told to stop.
+   */
+  provideInlineCompletions(
+    text: string,
+    line: number,
+    column: number,
+  ): AardinkInlineCompletions | AardinkInlineCompletion[] | null | Promise<AardinkInlineCompletions | AardinkInlineCompletion[] | null>;
+}
+
+/**
+ * Has `provider` offer ghost text in every editor of `languageId`, open now or to come, as Monaco's
+ * `languages.registerInlineCompletionsProvider`. Several for one language are all asked, and their
+ * answers follow each other, oldest first. Tab accepts, as one undo step; Alt+] and Alt+[ go through
+ * what is on offer; Escape dismisses, until the next edit asks again. A phone has neither key, so run
+ * `editor.action.inlineSuggest.commit` and `.hide` from buttons: `getAction` says whether anything
+ * shows. Nothing shows in a read-only editor, with a selection or several carets, while filling in a
+ * snippet, while an input method composes, or under an open completion list, which takes Tab.
+ * `dispose()` ends it.
+ */
+export function registerInlineCompletionsProvider(
+  languageId: string,
+  provider: AardinkInlineCompletionsProvider,
+): Promise<{ dispose(): void }>;
 
 /** Monaco's name for `registerTheme`. */
 export const defineTheme: typeof registerTheme;

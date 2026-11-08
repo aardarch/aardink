@@ -68,6 +68,7 @@ There are two ways in:
 | `onCursorChange(callback)` | 1-based line and column. |
 | `onSelectionChange(callback)` | Every change to the selections, as JSON `{ selections, reason, source }`: `reason` is `keyboard`, `pointer`, `edit`, `undo`, `redo`, `flush` or `api`, `source` Monaco's. |
 | `onFocusChange(callback)` | `true` when the text gains the keyboard focus, `false` when it loses it. |
+| `onOpenLink(callback)` | Every link opened in the editor, whatever its scheme; see [Links](#links). One listener; `null` removes it, and `http` and `https` links then open in a new tab. |
 | `getPosition` / `setPosition(line, column)` | The primary caret, 1-based; `setPosition` places one caret without scrolling. |
 | `revealLine(line, center)` / `revealPosition(line, column, center)` | Scroll a place into view, to the middle with `center`, without moving the caret. |
 | `trigger(actionId, payloadJson)` / `canTrigger` / `actionLabel` | Monaco's `trigger`: an action the host added, or one of the editor's own by Monaco's id (`editor.action.formatDocument`, `editor.action.marker.next`, `editor.foldLevel2`, `editor.action.insertSnippet` with `{ snippet }`, ...). |
@@ -85,14 +86,19 @@ There are two ways in:
 | `tokenize(languageId, text)` | For debugging a grammar: the tokens per line as JSON, in the shape of Monaco's `tokenize`. A grammar's comments and strings, being the editor's own, come back as `comment` and `string`, and the built-in languages' tokens under Monaco's standard names. |
 | `dispose` / `isDisposed` | Stop the editor's work and take its element out of the container (the editor mounts into an element of its own inside it). Idempotent. The container itself is left for you to remove or reuse. **See W-1 below: on Compose Multiplatform 1.12 memory is not fully released.** |
 | `preloadFont()` | Starts fetching the bundled font, so the first editor shows in it at once; `preloadAardink()` in the npm package calls it. |
-| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, and `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover and diagnostics as JSON. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, providers)` | Adds a language highlighted by a `DeclarativeGrammar` (a Monarch subset); `extends` takes a built-in language's service and folding, `inheritCompletions: false` leaves out its completions, `triggerCharacters` open the completion list, `schema` (an `XmlSchema` as JSON) gives an XML dialect completions, hover and checks from its vocabulary, and `configuration` (VS Code's `language-configuration.json`) gives it closing pairs, surrounding and Enter indentation. `WebLanguageProviders` answers completions (`{ suggestions, incomplete: false }` to be asked once per word), hover, diagnostics, document symbols, colours, inlay hints and code lenses as JSON, and runs a lens's command. Editors mounted with the default registry see it. |
+| `registerLanguage(definitionJson, dispatcher)` | The same with one function answering for every provider, as the [export template](#the-export-template) has it. |
+| `connectLanguageServer(url, languageId)` | Has the language server at a WebSocket URL follow every editor of a language; see [Language servers](#language-servers). Returns a `DisposableHandle`. |
+| `registerInlineCompletionsProvider(languageId, provider)` | Ghost text from `provider(text, line, column)`, answering Monaco's `{ items }` as JSON, in every editor of a language; see [Inline completions](#inline-completions). Returns a `DisposableHandle`. |
+| `getDocumentSymbolsJson`, `getSymbolPathAtJson`, `setDecorationsJson`, `getDecorationRangesJson`, `setDiagnosticsForOwner`, `getVisibleRangesJson`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onScrollChange`, `layout` | The Kotlin side of the npm package's symbols, decorations, owners' markers and scrolling, in Monaco's shapes. |
 | `registerTheme(name, themeJson)` | Adds a theme from VS Code theme JSON; its `tokenColors` scopes also colour grammars' token names by dotted prefix. |
 | `setResourceUrl(path, url)` | Fetch a bundled resource (e.g. `BUNDLED_FONT_PATH`) from a URL of your choosing; see [Fonts](#fonts). |
 
 `WebEditorOptions` fields: `language`, `theme`, `fontSize`, `wordWrap`, `readOnly`,
 `showGutter`, `showLineNumbers`, `showFoldMarkers`, `minimap`, `stickyScroll`,
 `bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces`, `renderWhitespace`,
-`quickSuggestions`. An unknown `language` falls back to plain
+`quickSuggestions`, `overviewRuler`, `occurrencesHighlight`, `linkedEditing`, `colorDecorators`,
+`breadcrumbs`, `fontLigatures`, `semanticHighlighting`, `inlayHints`, `codeLens`. An unknown `language` falls back to plain
 text and an unknown `theme` to `vscode-dark`. Built-in theme keys are in
 `AardinkWeb.builtInThemes`. Changing `language` keeps the text, the selection and the undo history.
 
@@ -111,8 +117,18 @@ so every Aardink build proves it still compiles, and `ExportsTemplateTest` exerc
 fails the build if the two ever export different functions. The template is not duplicated here
 because a copy in a document would drift.
 
-Editors cross the JS boundary as integer ids. Every export is prefixed `aardink` so it cannot
-collide with your module's own exports.
+Editors, language server connections and inline completion providers cross the JS boundary as integer
+ids. Every export is
+prefixed `aardink` so it cannot collide with your module's own exports.
+
+`aardinkRegisterLanguage` takes one dispatcher for all of a language's providers: a function of
+`(method, text, argsJson)` answering with JSON through a Promise, or null for nothing. `method` is a
+member of `WebLanguageProviders` (`completions`, `hover`, `diagnostics`, `documentSymbols`,
+`documentColors`, `inlayHints`, `codeLenses`, `runCodeLensCommand`), and `argsJson` the provider's
+other arguments as a JSON array: `[line, column]`, 1-based, for `completions` and `hover`, `[range]`,
+Monaco's `IRange`, for `inlayHints`, `[id, args]` for `runCodeLensCommand`, whose `text` is empty and
+whose answer is not read, and `[]` for the rest. Answer null to a name you do not know.
+That means no provider, and it is how a later version adds one with no change to your copy.
 
 > With Kotlin 2.4.20, `@JsExport` functions declared in a *dependency* klib do end up in the
 > consuming executable's exports. The template stays the recommended route anyway, because only
@@ -144,10 +160,13 @@ const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
-`createEditor` is async: the first call loads the WebAssembly module (~13 MB of `.wasm`, ~4.7 MB
-gzipped), and `preloadAardink()` starts that early. The package depends on `@js-joda/core`, which
-Compose's date/time support imports. Its dependency list is copied from the one Kotlin generates
-for the module, so it stays accurate.
+`createEditor` is async: the first call loads the WebAssembly module (~14 MB of `.wasm`, ~5 MB
+gzipped: `aardink-web.wasm` 5.5 MB, 1.7 MB gzipped, and `skiko.wasm` 8.6 MB, 3.3 MB gzipped, as
+built for 0.9), and `preloadAardink()` starts that early. `aardink-web.wasm` is 486 KB larger than
+in 0.8.0 (9.6%), 145 KB gzipped, for every page whether or not it uses what 0.9 adds; 222 KB of
+that, 63 KB gzipped, is `connectLanguageServer` and the language server bridge behind it. The package
+depends on `@js-joda/core`, which Compose's date/time support imports. Its dependency list is copied
+from the one Kotlin generates for the module, so it stays accurate.
 
 ### Vite
 
@@ -204,14 +223,29 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 ```
 
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
-  `cases` with `@array`, `@default` and `@eos`, capture groups (each with a token name,
-  `{ token, next }` or `cases` of its own), `include`, `@rematch`, `defaultToken`, `ignoreCase`,
-  `tokenPostfix` and `@name` regex attributes. Not supported: `@brackets`, `nextEmbedded`,
-  `log`, `$1`-style substitutions in token names, and lookbehind, which is refused when the
-  language is registered because Kotlin/wasm's regex engine runs it at every position. The
-  grammar highlights a line at a time, so an edit rescans only until the lines below are back in
-  the state they were in. [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real
-  Monaco language over this way.
+  `cases`, capture groups (each with a token name, `{ token, next }` or `cases` of its own),
+  `include`, `@rematch`, `switchTo`, `goBack`, `@brackets` with a top-level `brackets`,
+  `defaultToken`, `ignoreCase`, `tokenPostfix` and `@name` regex attributes, each a group of its
+  own as in Monarch, in rules and in `~` guards. A `cases` guard is
+  `@default`, `@eos`, or a test as in Monarch: a subject of `$#` (the match, the default) or `$S0`,
+  `$S1` and so on (the state's name and its dotted parts), then `@array`, `~regex`, `==text` or
+  their opposites `!@`, `!~` and `!=`, so `$#==$S2` closes on the text that opened. `next` and
+  `switchTo` can use `$#` and `$Sn` as well, as in `@string.$#`; if the grammar has no state of
+  that name the stack stays as it is. `log` is accepted and ignored. A top-level `brackets` is
+  checked only when an action uses `@brackets`; otherwise it is an ordinary string or array.
+  Refused when the language is registered: lookbehind, because Kotlin/wasm's regex engine runs it
+  at every position, and `$` in a token name, because names are fixed when the grammar is read.
+  Choose between fixed names with `cases` where a Monaco grammar has `string.$S2`. `goBack` is
+  refused in a capture group's action, and never goes back further than the match began.
+  `nextEmbedded` hands the text to the grammar of the language registered with that id, before or
+  after this one, until a rule of the state with `nextEmbedded: '@pop'` matches. With no such
+  language the text stays on this grammar's rules, and a built-in language, having no grammar,
+  cannot be embedded. Each grammar's tokens carry its own `tokenPostfix`. Not supported:
+  `$1`-style capture groups in guards, `next` and `nextEmbedded`, and `$Sn` in a rule's regex,
+  which stay literal text. The grammar highlights a line at a time, so an edit
+  rescans only until the lines below are back in the state they were in.
+  [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco language over this
+  way.
 - **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.aardflex`
   takes the theme's `tag.aardflex` rule, else its `tag` rule, else the built-in themes' colour for
   Monaco's standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). A
@@ -237,9 +271,127 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   diagnostics, folding and hover; answering `{ suggestions, exclusive: true }` leaves them out for
   one request. `triggerCharacters` on the providers open the list when typed, besides the extended
   language's, or in place of them with `inheritCompletions: false`.
-- **Hover** is `{ title?, contents, example? }`: plain text, and `example` shown as code below it.
+- **Hover** is `{ title?, contents, example? }`: `contents` is Markdown (raw HTML shows as written),
+  and `example` is shown as code below it. A link there, or in signature help, is live: see
+  [Links](#links).
 - **`revalidate()`** collects the language's diagnostics again at once, for when what your
   `provideDiagnostics` depends on outside the text has changed (another file, a setting).
+
+### Links
+
+A link opens by Ctrl/Cmd+click on a URL in the text, or by a click in a hover, signature help or
+a completion's detail pane. `editor.onOpenLink(listener)` gets the target of every one, whatever its
+scheme, and returns a disposable. Text in a card can come from a language server, so check a target
+before following it: it may be `javascript:`.
+
+With no listener, `http` and `https` links open in a new tab with `noopener`, and anything else does
+nothing. The scheme is read as a browser reads it, in any case and past leading spaces and control
+characters, so `  JavaScript:alert(1)` stays where it is and `HTTPS://example.com` opens.
+
+The tab opens in the click itself, not after it, so a popup blocker lets it through. The smoke test
+proves this in Chrome with its blocker on; Firefox and Safari have not been tried.
+
+### Inline completions
+
+Ghost text is what an assistant shows at the caret: dim, in the line, and not in the document until
+it is accepted.
+
+```js
+import { registerInlineCompletionsProvider } from '@aardarch/aardink-web';
+
+const registration = await registerInlineCompletionsProvider('kotlin', {
+  async provideInlineCompletions(text, line, column) {
+    const next = await askTheAssistant(text, line, column);
+    return { items: [{ insertText: next }] };
+  },
+});
+```
+
+It is its own call, not one of `registerLanguage`'s providers, as Monaco's is: it works for a built-in
+language, and for one registered later. Asked once typing pauses, with the whole text and a 1-based
+place, and not for each key. While something shows, typing what it says shortens it and asks nothing;
+typing anything else drops it, and it is asked again after the next pause. An answer for text that has
+moved on is dropped. There is no cancellation token, so your work behind it goes on: that is yours to
+cut short.
+
+Leave out `range` if all you know is what comes next. Text that repeats what follows the caret is not
+doubled: with `foo(|)`, `bar)` shows `bar` in front of the bracket, and `)` alone shows nothing, as
+does anything else the document has already from the caret on. Monaco's default range is the word
+at the caret and the rest of the line, and it shows nothing for text that does not hold them; here,
+the rest of the line alone is tried, and then the text goes in at the caret. With a `range`, this is
+as Monaco has it: `insertText` must hold all the range, in order, and an empty one is a plain
+insertion, so a bracket it repeats there is meant, and doubled. An item whose `range` is not one in
+the text, past its last line or reversed, is left out.
+
+| Key | Action id | Does |
+| --- | --- | --- |
+| Tab | `editor.action.inlineSuggest.commit` | Accepts, as one undo step, with the caret at the end of what it added, and asks for what comes next |
+| Alt+] | `editor.action.inlineSuggest.showNext` | The next on offer; with none showing, asks now. `addCommand` on the same key comes first |
+| Alt+[ | `editor.action.inlineSuggest.showPrevious` | The previous on offer |
+| Escape | `editor.action.inlineSuggest.hide` | Dismisses, ahead of closing the find panel, and it stays gone until the next edit asks. An open completion list closes first. `addCommand` on the same key comes first |
+
+Tab indents as usual when nothing shows, and Escape goes on to what else is open. A phone has neither
+key, so give it buttons that run `trigger(null, 'editor.action.inlineSuggest.commit')` and
+`trigger(null, 'editor.action.inlineSuggest.hide')`, enabled by `getAction(...).isSupported()`.
+Accepting scrolls to the caret, as Tab does; hiding leaves the view where it is, as Escape does.
+
+Nothing shows in a read-only editor, with a selection or several carets, while a snippet is being
+filled in, or while an input method composes: on Android that can be each word as it is typed,
+depending on the keyboard. An open completion list at the caret hides ghost text, as Monaco's does, and
+takes Tab; when the list goes, ghost text that is still good comes back. The strip above a phone's
+keyboard does not hide it. Undo drops what shows, and does not ask.
+
+Left out of Monaco's shape: `snippet` in `insertText` (the item is skipped), `additionalTextEdits`,
+`command`, `handleItemDidShow` and the other callbacks, and `context`.
+
+### Language servers
+
+```js
+import { connectLanguageServer, createEditor } from '@aardarch/aardink-web';
+
+const server = await connectLanguageServer('wss://example.com/lsp', 'kotlin');
+const editor = await createEditor(container, undefined, { language: 'kotlin' });
+// ...
+server.dispose();
+```
+
+The server follows every editor of that language: those open already, those created later, and
+those switched to it with `updateOptions`. Each is a document of its own to the server, under a
+generated `file:///aardink/editor-1.kt` URI, kept up to date edit by edit. A language this page does
+not know still works: an editor asked for `python` shows plain text, and a server connected for
+`python` follows it. The WebSocket carries one JSON-RPC message per frame, with no `Content-Length`
+headers, so a server that speaks LSP on stdin and stdout needs a bridge in front of it.
+
+What the server knows joins what the language has:
+
+| | Who answers |
+| --- | --- |
+| A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
+| A built-in language | The server first, then the language. |
+| Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. A server never changes what typing does, so an editor with no language service, such as plain text or a language this page does not know, types as it does without one. |
+| Completions, diagnostics, code actions, references, links, colours | Both, as above. |
+| Folding | The server, if it folds; otherwise the language. |
+| Trigger characters | Both. A server that declares none adds none. |
+
+Connecting a second server to a language adds to the first, which answers first.
+
+Because a registered language's own answers come first, so do those of the language it extends. A
+language registered with `extends: 'json'` therefore keeps JSON's formatter and outline ahead of a
+real JSON server's, which answers only where JSON has nothing. See
+[Known limitations](#known-limitations).
+
+Diagnostics a server pushes show after the same pause in typing as any others. A push never cuts
+that pause short, so `provideDiagnostics` runs no more often for having a server connected.
+
+`connectLanguageServer` resolves once the connection has been asked for, not once it is up, so a
+server that is slow to start holds nothing up. It never rejects on the server's account. A server
+that cannot be reached, or that drops later, is said on the console, and the editors go on with
+their language's own service, its squiggles gone. Nothing reconnects by itself: call it again for
+that. `dispose()` closes each document, sends `shutdown` and `exit`, and leaves the editors running.
+Disposing an editor closes its document and leaves the connection up.
+
+A rename that reaches other files, and `workspace/applyEdit`, are refused: the page has no other
+files to apply them to.
 
 ### Option names coming from Monaco
 
@@ -284,10 +436,17 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
 | `renderWhitespace` | `renderWhitespace` | `'none'`, `'boundary'`, `'selection'` (the default), `'trailing'`, `'all'`; the colour is the theme's `editorWhitespace.foreground`. |
 | `registerCompletionItemProvider(id, { triggerCharacters, provideCompletionItems })` | `registerLanguage`'s providers | `triggerCharacters` and `provideCompletionItems` on the same object; items with `filterText`, `sortText`, `range`, `detail`, `commitCharacters` and Monaco's `kind` names or numbers. Answer `{ suggestions, incomplete: false }` to be asked once per word, Monaco's behaviour; without it your provider is asked on each letter, as in 0.6. |
 | Completion snippets (`insertTextRules: InsertAsSnippet`) | `insertTextRules` | `CompletionItemInsertTextRule.InsertAsSnippet`: tab stops, placeholders, choices and the `TM_` variables; Tab and Shift+Tab step through them. `KeepWhitespace` as in Monaco. |
-| `deltaDecorations`, `createDecorationsCollection` | The same | `isWholeLine`, `hoverMessage`, `overviewRuler.color` and `minimap.color` as Monaco's; colours (`backgroundColor`, `borderColor`, `underlineColor`, `gutterColor`, CSS hex) where Monaco takes a CSS class. Nothing that changes the text's layout (`before`, `after`). |
+| `deltaDecorations`, `createDecorationsCollection` | The same | `isWholeLine`, `hoverMessage`, `overviewRuler.color`, `minimap.color`, and `before` and `after` (`{ content }`, on one row, and nothing else of them) as Monaco's; colours (`backgroundColor`, `borderColor`, `underlineColor`, `gutterColor`, `inlineColor`, CSS hex) where Monaco takes a CSS class. `inlineColor` stands for `inlineClassName`: it colours the range's characters, and `before` and `after`, which are faint without it. That text is not in the document, and moves with the range. |
 | `overviewRulerLanes` | `overviewRulerLanes` | Above 0 shows the ruler; off by default. |
 | `occurrencesHighlight`, `linkedEditing`, `colorDecorators` | The same | Off by default. |
 | `fontLigatures` | The same | On by default. |
+| `'semanticHighlighting.enabled'` | `semanticHighlighting` | A boolean under this plain key, off by default. Monaco's dotted `'semanticHighlighting.enabled'` key is not read, so rename it when moving options over. Colours from a language server over the syntax's; there is no JS provider for them. Token types come named as a theme colours them (`type.class`, `variable.parameter`, `function.method`), so a theme rule named `class` does not match. |
+| `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
+| `codeLens` | The same | Off by default, where Monaco's is on. |
+| `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
+| `languages.registerInlineCompletionsProvider` | `registerInlineCompletionsProvider(languageId, { provideInlineCompletions(text, line, column) })`, returning a Promise of a disposable | Answers Monaco's `{ items: [{ insertText, range? }] }`, or the array alone. See [Inline completions](#inline-completions). |
+| `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious`, `hide` | The same ids, in `trigger` and `getAction` | `isSupported()` on `commit` and `hide` says whether anything shows. `trigger` is not there: `showNext` with nothing showing asks. |
+| `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing, in scrolling past what it last asked about, or after a fold opens or closes; a long closed fold on screen makes that a few calls at once, one for the lines on either side of it. With `extends` or a language server, every source's hints are shown, the first's where two are at one position; a server that has not answered within a second does not hold yours back. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
 | `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |
@@ -379,6 +538,21 @@ CI runs `perf.mjs --gate` on every push; a measurement past its gate fails the b
 (400 ms to mount, 50 ms p95 per key, no lost keys, 2 ms per frame for the minimap) are looser
 than the targets above to absorb shared-runner noise.
 
+The layout behind 0.9's inline text was measured on its own before the features using it were built:
+key-to-idle p95 with it switched off was within 3% of 0.8.0 on the same machine, and with three hints
+a line and a lens every 20 lines within 1% of that again
+([the spike's report](spikes/0.9-inline-layout.md#s2-and-s9-results) has the figures and what they
+do not settle). `perf.mjs --hints` measures the reference document with real hints and lenses from a
+registered language's providers, and `perf.mjs --semantic` with semantic tokens from a language
+server on a local WebSocket, each to a file of its own; neither is part of `--gate` yet.
+
+Measured with those on the built 0.9, with nothing opted in, key-to-idle and key-to-change are
+within 1% and 5% of 0.8.0 on the same machine. Semantic highlighting from a server adds about
+210 ms to key-to-idle on the reference document, with a task of about 73 ms as each answer lands.
+Hints and lenses on a 60,000-line document take key-to-idle to about 215 ms, against 20 ms at 5,000
+lines. Keys typed at a steady pace still show within 6 ms in both. The figures are in the roadmap's
+§15.1.
+
 ## Verification checklist
 
 Automated items run against the production build: `pnpm checklist` in `tools/vite-smoke/`
@@ -409,4 +583,25 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   Multiplatform release that uses `kotlin.wasm.unsafe` instead.
 - A theme rule's `background` is not drawn. Bold and italic come from the bundled font's own
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
-- The items marked **manual** in the checklist above wait for real devices before 0.6.0.
+- A language server connection does not reconnect, and the host hears of its end only on the
+  console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
+- A language from `registerLanguage` answers before a language server, and so does the built-in
+  language it extends. With `extends: 'json'` (or `xml`, `toml`, `kotlin`), that language's formatter
+  and outline come ahead of a connected server's, which fills in only what they leave empty. A
+  server's formatter and outline win only for a built-in language used as it is.
+- The page has no save, so a server is never sent `willSave` or `didSave`. A server that reports
+  only when a file is saved shows nothing.
+- Of the keys that type a character with Alt held, only Alt+] and Alt+[ reach the editor's bindings:
+  the browser input Compose uses takes any other as typing. So `addCommand('Alt+K', ...)` never runs,
+  and neither do the default Shift+Alt+A (block comment) and Shift+Alt+I (carets at line ends). Bind
+  such commands to a key with Ctrl or Cmd, or run them with `trigger`
+  (`editor.action.blockComment`, `editor.action.insertCursorAtEndOfEachLineSelected`).
+- Inlay hints, code lenses and semantic tokens are not asked for again when a server says they are
+  out of date (`workspace/inlayHint/refresh` and the like). The editor asks again only for reasons of
+  its own: an edit; for hints, scrolling or a fold; for lenses, one without a title coming on screen.
+- Semantic highlighting from a language server asks for the whole document after each edit, and its
+  answer is parsed in one piece: on a 5,000-line file each answer holds the page for about 70 ms as
+  it lands, and a key pressed then waits for it. Code lenses are asked about the whole document too,
+  so on a file of tens of thousands of lines the editor takes about 200 ms to settle after a key.
+  Both are off by default (`semanticHighlighting`, `codeLens`).
+- The items marked **manual** in the checklist above still wait for real devices.

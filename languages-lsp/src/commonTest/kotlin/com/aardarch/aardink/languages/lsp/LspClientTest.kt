@@ -209,7 +209,7 @@ class LspClientTest {
     fun `unsupported server-to-client request is answered with MethodNotFound`() = runTest {
         setUp()
         client.start()
-        serverSends("""{"jsonrpc":"2.0","id":"abc","method":"workspace/applyEdit","params":{"edit":{}}}""")
+        serverSends("""{"jsonrpc":"2.0","id":"abc","method":"workspace/inlineValue/refresh","params":{}}""")
 
         val reply = nextSent()
         assertEquals("abc", reply["id"]!!.jsonPrimitive.content)
@@ -265,7 +265,7 @@ class LspClientTest {
             val params = init["params"]!!.jsonObject
             assertTrue(params["processId"]!!.jsonNull === JsonNull)
             assertEquals("file:///workspace", params["rootUri"]!!.jsonPrimitive.content)
-            assertEquals(emptyMap<String, Nothing>(), params["capabilities"]!!.jsonObject.toMap())
+            assertEquals(DefaultClientCapabilities, params["capabilities"])
             val id = init["id"]!!.jsonPrimitive.long
             serverSends("""{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"hoverProvider":true}}}""")
 

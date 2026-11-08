@@ -55,6 +55,7 @@ import com.aardarch.aardink.ui.input.EditorImeGeometry
 import com.aardarch.aardink.ui.resolveKeyBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.sign
 
 /** What the host layout does for commands that are not about the text: panels, dialogs, popups. */
 internal class EditorHostActions(
@@ -63,6 +64,8 @@ internal class EditorHostActions(
     val onGoToLine: () -> Unit = {},
     /** Escape with one caret: returns whether it closed something (a popup, the find panel). */
     val onEscape: () -> Boolean = { false },
+    /** Closes the completion list; returns whether one was up. Ghost text waits for it, wherever it is. */
+    val onCloseList: () -> Boolean = { false },
     /** Ctrl+Space. */
     val onTriggerSuggest: () -> Unit = {},
     /** After every input edit, with the character typed when it was one (completion follows it). */
@@ -178,14 +181,14 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             actions.onInput(typed)
             revealCaret()
         }
-        pointer.onPress = { touch ->
+        pointer.onPress = { touch, typing ->
             touchMode = touch
             hoverAt = null
             contextMenuAt = null
             showToolbarAtCaret = false
             preferredX = null
-            requestFocus()
-            if (touch && !readOnly) ime.keyboardRequests++
+            if (typing) requestFocus()
+            if (touch && typing && !readOnly) ime.keyboardRequests++
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
         pointer.onLinkClick = { actions.onOpenLink(state.selection.end) || actions.onGoToDefinition() }
@@ -248,6 +251,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             }
 
             // Unbound by the host: no binding of the editor's own, so the key types if it types.
+            // Escape too, which types nothing: the host gets every one, as before 0.9.
             KeyBindingMatch.Unbound -> return typeKey(event)
 
             null -> {}
@@ -273,9 +277,26 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
      * the text changed, except for commands that scroll the view themselves.
      */
     private fun run(command: EditorCommand) {
+        if (command == EditorCommand.DismissInlineCompletion) {
+            dismissGhost()
+            return
+        }
         val ran = state.execute(command)
         val scrolls = command is EditorCommand.ScrollLines || command is EditorCommand.Reveal
         if (ran && !scrolls) revealCaret()
+    }
+
+    /**
+     * The key that dismisses ghost text, Escape unless a host moved it. It is Escape's step on the way
+     * to what else is open, so it does what Escape does up to there and shows nothing: the caret can
+     * be far from the view. A list that is not at the caret, a phone's strip, takes no keys of its own
+     * and leaves ghost text showing beside it, and it closes first.
+     */
+    private fun dismissGhost() {
+        if (!state.canExecute(EditorCommand.DismissInlineCompletion)) return
+        contextMenuAt = null
+        preferredX = null
+        if (!actions.onCloseList()) state.execute(EditorCommand.DismissInlineCompletion)
     }
 
     /** Types [text] at every selection, as a keyboard does. */
@@ -411,7 +432,19 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         return true
     }
 
+    /**
+     * Ends ghost text ahead of going by rows. Going anywhere ends it, and its rows are not rows to go
+     * to: text it pushes down is on the caret's own line, and Down would stop there.
+     */
+    private fun dropGhostRows() {
+        state.inlineCompletions.shown?.let { ghost ->
+            state.inlineCompletions.clear()
+            view.measureRows(ghost.line)
+        }
+    }
+
     private fun vertical(select: Boolean, rows: Int): Boolean {
+        dropGhostRows()
         val primary = state.selection
         val x = preferredX ?: view.caretX(primary.end)
         state.moveSelections(select) { range -> view.verticalMove(range.end, rows, if (range == primary) x else null) }
@@ -429,6 +462,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
 
     /** A caret on the row above (or below) each caret, keeping their x. */
     private fun addCursor(direction: Int): Boolean {
+        dropGhostRows()
         val current = state.currentSelections()
         val added = current.ranges.map { TextRange(view.verticalMove(it.end, direction, view.caretX(it.end))) }
         state.replaceSelections(SelectionSet.of(current.ranges + added))
@@ -441,12 +475,13 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
      * corner; the first press starts one from the primary selection.
      */
     private fun columnSelect(rows: Int, columns: Int): Boolean {
+        dropGhostRows()
         val charWidth = view.style?.metrics?.charWidth ?: return true
         if (view.totalRows == 0) return true
         val box = this.columns.current()
         this.columns.select(
             box.copy(
-                activeRow = (box.activeRow + rows).coerceIn(0, view.totalRows - 1),
+                activeRow = view.textRowFrom((box.activeRow + rows).coerceIn(0, view.totalRows - 1), rows.sign),
                 activeX = (box.activeX + columns * charWidth).coerceAtLeast(0f),
             ),
         )
@@ -544,8 +579,8 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         val column = offset - line.start
         if (column >= line.shownLength) return null
         val layout = line.layout
-        val box = layout.getBoundingBox(column)
-        val shift = layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
+        val box = layout.charBox(column)
+        val shift = layout.rowShift(layout.charRow(column), frame.metrics.lineHeight)
         return box.translate(Offset(frame.textLeft, line.top - frame.scrollY + shift) + coordinates.localToRoot(Offset.Zero))
     }
 }

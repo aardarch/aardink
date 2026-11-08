@@ -38,6 +38,7 @@ import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.edit.SelectionSet
+import com.aardarch.aardink.core.edit.TextChange
 import kotlin.math.max
 import kotlin.math.min
 
@@ -88,8 +89,14 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     private var depth = 0
 
     /** The text being composed, in document offsets, or null. */
-    var composition by mutableStateOf<TextRange?>(null)
-        private set
+    var composition: TextRange?
+        get() = composed
+        private set(value) {
+            composed = value
+            state.inlineCompletions.setComposing(value != null)
+        }
+
+    private var composed by mutableStateOf<TextRange?>(null)
 
     /** The language service for the typing rules; read when an edit arrives. */
     var service: () -> LanguageService? = { null }
@@ -291,18 +298,22 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     private fun flush() = state.withSelectionReason(SelectionChangeReason.Keyboard) { flushInput() }
 
     private fun flushInput() {
-        val change = buffer.change()
         val selection = buffer.selection
         val newComposition = buffer.composition
         val wasComposing = composition != null
+        val composing = wasComposing || newComposition != null
         val expectedLength = buffer.length
+        // Where what was composing ends now, whatever it turned into.
+        val composedEnd = composition?.let { it.max + expectedLength - state.document.length }
+        val change = buffer.change() ?: if (composing) null else overItself(selection)
         if (change != null) {
+            val input = if (composing) change else overSelection(change, selection)
             val typed = state.applyInput(
-                start = change.start,
-                end = change.end,
-                text = change.text,
+                start = input.start,
+                end = input.end,
+                text = input.text,
                 selectionAfter = selection,
-                composing = wasComposing || newComposition != null,
+                composing = composing,
                 service = service(),
             )
             onInput(typed)
@@ -314,6 +325,8 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
             // Repeated at the other selections now, then closed as one undo step.
             state.endComposition()
             state.pushUndoStop()
+            // Committed at the caret, that was typing; moved away from, it was not.
+            if (selection.collapsed && selection.end == composedEnd) state.inlineCompletions.askAgain()
         }
         ownVersion = state.textVersion
         lastSelection = state.selection
@@ -325,6 +338,29 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
         } else {
             listener?.updateSelection(imeSelection, imeComposition)
         }
+    }
+
+    /**
+     * [change] as one character typed over the whole selection, when it is that: the buffer leaves
+     * out what the old and new text share, so `(` over `(a)` comes as `a)` deleted, and a surround
+     * would not see it. [after] is the selection the input method left.
+     */
+    private fun overSelection(change: TextChange, after: TextRange): TextChange {
+        val selected = state.selection
+        val replaced = after == TextRange(selected.min + 1) && buffer.length == state.document.length - selected.length + 1
+        if (selected.collapsed || !replaced || change.start < selected.min || change.end > selected.max) return change
+        return TextChange(selected.min, selected.max, buffer[selected.min].toString())
+    }
+
+    /**
+     * The one selected character typed over with itself, which leaves the text as it was and so
+     * is no change to the buffer, yet is still typing: a surround wraps it, and the other
+     * selections take it too. [after] is the selection the input method left.
+     */
+    private fun overItself(after: TextRange): TextChange? {
+        val selected = state.selection
+        if (!buffer.edited || selected.length != 1 || after != TextRange(selected.min + 1)) return null
+        return TextChange(selected.min, selected.max, buffer[selected.min].toString())
     }
 
     /**

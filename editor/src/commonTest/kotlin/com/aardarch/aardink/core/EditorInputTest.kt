@@ -16,6 +16,7 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.text.TextRange
+import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,57 @@ class EditorInputTest {
         }
     }
 
+    /**
+     * What an editor does as it is typed in with no service, and with one that answers nothing, as
+     * the web's is for an editor with a language server and no language: keys, then the text, the
+     * carets, and what one undo leaves after each.
+     */
+    private fun typed(service: LanguageService?, initial: String, selections: List<TextRange>, keys: String): List<String> {
+        val state = CodeEditorState(initialText = initial)
+        state.replaceSelections(SelectionSet.of(selections))
+        val seen = keys.map { key ->
+            val primary = state.selection
+            state.applyInput(primary.min, primary.max, key.toString(), service = service)
+            "${state.document.text}|${state.selections}"
+        }
+        state.undo()
+        return seen + state.document.text
+    }
+
+    private object AnswersNothing : LanguageService {
+        override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> = emptyList()
+
+        override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = emptyList()
+
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
+
+        override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
+
+        override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = null
+
+        override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
+    }
+
+    @Test
+    fun `a service that answers nothing types as no service does`() {
+        val caret = listOf(TextRange(2))
+        val cases = listOf(
+            Triple("  ", caret, "don't (a) [b] {c} \"d\"\n"),
+            Triple("    if (x) {", listOf(TextRange(12)), "\ny\n\n}"),
+            Triple("a\r\n  b", listOf(TextRange(6)), "\nc'"),
+            Triple("word and word", listOf(TextRange(0, 4)), "(x'"),
+            Triple("word and word", listOf(TextRange(0, 4), TextRange(9, 13)), "'\n("),
+            Triple("  a\n  b", listOf(TextRange(3), TextRange(7)), "\n'("),
+        )
+        for ((initial, selections, keys) in cases) {
+            assertEquals(typed(null, initial, selections, keys), typed(AnswersNothing, initial, selections, keys), "$keys in $initial")
+        }
+        assertEquals(
+            "  don't (a) [b] {c} \"d\"\n",
+            typed(AnswersNothing, "  ", caret, "don't (a) [b] {c} \"d\"\n").dropLast(1).last().substringBefore('|'),
+        )
+    }
+
     @Test
     fun `typing replaces the selection and reports the typed character`() {
         val state = stateFor("hello")
@@ -102,6 +154,43 @@ class EditorInputTest {
         state.type("\n")
         assertEquals("x\r\n    \r\ny", state.text)
         assertEquals(TextRange(7), state.selection)
+    }
+
+    /** What a language configuration can answer: text with line breaks in it. */
+    private object MultiLine : LanguageService by Service {
+        override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = "\n'@"
+
+        override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = "  a\n  b"
+    }
+
+    @Test
+    fun `a closing with a line break takes the document's line ending, and the caret stays before it`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        val typed = state.applyInput(1, 1, "'", service = MultiLine)
+        assertEquals("x'\r\n'@\r\ny", state.text)
+        assertEquals(TextRange(2), state.selection)
+        assertEquals(4, typed?.autoCloseLength, "the closing as it is in the document")
+    }
+
+    @Test
+    fun `an indent with a line break takes the document's line ending, and the caret goes after it`() {
+        val state = stateFor("x\r\ny")
+        state.selection = TextRange(1)
+        state.applyInput(1, 1, "\n", service = MultiLine)
+        assertEquals("x\r\n  a\r\n  b\r\ny", state.text)
+        assertEquals(TextRange(11), state.selection)
+    }
+
+    @Test
+    fun `a closing's CR LF becomes the document's LF`() {
+        val state = stateFor("x")
+        state.selection = TextRange(1)
+        val service = object : LanguageService by Service {
+            override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = "\r\n)"
+        }
+        state.applyInput(1, 1, "(", service = service)
+        assertEquals("x(\n)", state.text)
     }
 
     @Test

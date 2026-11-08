@@ -37,7 +37,16 @@ const provideKotlin = () => {
   mkdirSync(join(dir, 'kotlin'), { recursive: true });
   writeFileSync(
     join(dir, 'kotlin', 'aardink-web.mjs'),
-    'export const aardinkSetBundledFontUrl = () => {};\nexport const aardinkTokenize = () => "[[]]";\n',
+    [
+      'export const aardinkSetBundledFontUrl = () => {};',
+      'export const aardinkTokenize = () => "[[]]";',
+      'export const aardinkRegisterLanguage = (definition, dispatcher) => { globalThis.dispatcher = dispatcher; return ""; };',
+      'export const aardinkRegisterInlineCompletionsProvider = (language, provider) => { globalThis.inlineProvider = { language, provider }; return 7; };',
+      'export const aardinkDisposeInlineCompletionsProvider = (id) => { globalThis.inlineDisposed = id; };',
+      'export const aardinkCreate = (container, value, options) => { globalThis.optionsSent.push(JSON.parse(options)); return 1; };',
+      'export const aardinkUpdateOptions = (id, options) => globalThis.optionsSent.push(JSON.parse(options));',
+      ...['Content', 'Cursor', 'Selection', 'Focus', 'Diagnostics', 'Scroll'].map((kind) => `export const aardinkOn${kind}Change = () => {};`),
+    ].join('\n'),
   );
 };
 
@@ -48,4 +57,107 @@ test('a failed load is not kept: the next call loads again', async () => {
   provideKotlin();
 
   assert.deepEqual(await tokenize('x', 'plaintext'), [[]]);
+});
+
+test('a provider answers by its name, with its arguments after the text, and any other name gets null', async () => {
+  const { registerLanguage } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  const asked = [];
+  await registerLanguage({ id: 'dispatched' }, {
+    provideHover: (...args) => {
+      asked.push(args);
+      return { contents: 'an answer' };
+    },
+    provideDiagnostics: async () => [{ startLineNumber: 1, startColumn: 1, endColumn: 2, message: 'wrong', severity: 8 }],
+    provideCompletionItems: () => {
+      throw new Error('no completions here');
+    },
+  });
+  const { dispatcher } = globalThis;
+
+  assert.equal(await dispatcher('hover', 'the text', '[2,3]'), '{"contents":"an answer"}');
+  assert.deepEqual(asked, [['the text', 2, 3]]);
+  assert.equal(JSON.parse(await dispatcher('diagnostics', 'the text', '[]'))[0].severity, 'error');
+  await assert.rejects(dispatcher('completions', 'the text', '[1,1]'), /no completions here/);
+  assert.equal(await dispatcher('documentSymbols', 'the text', '[]'), null, 'a provider the host did not give');
+  assert.equal(await dispatcher('somethingLater', 'the text', '[]'), null, 'a name this package does not know');
+  assert.equal(await dispatcher('constructor', 'the text', '[]'), null, "nor one on an object's prototype");
+});
+
+test('a click on a lens reaches runCodeLensCommand with its id and arguments, and no text', async () => {
+  const { registerLanguage } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  const ran = [];
+  await registerLanguage({ id: 'lensed' }, {
+    provideCodeLenses: (text) => [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, command: { id: text, title: 'Run' } }],
+    runCodeLensCommand: (...args) => {
+      ran.push(args);
+    },
+  });
+  const { dispatcher } = globalThis;
+
+  assert.equal(JSON.parse(await dispatcher('codeLenses', 'the text', '[]'))[0].command.id, 'the text');
+  assert.equal(await dispatcher('runCodeLensCommand', '', '["run",[1,"two"]]'), null);
+  assert.deepEqual(ran, [['run', [1, 'two']]]);
+
+  await registerLanguage({ id: 'unlensed' }, {});
+  assert.equal(await globalThis.dispatcher('runCodeLensCommand', '', '["run",[]]'), null, 'no provider to run it');
+});
+
+test('an inline completions provider gets the text and a place, answers as JSON, and can be disposed', async () => {
+  const { registerInlineCompletionsProvider } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  const asked = [];
+  const registration = await registerInlineCompletionsProvider('ghostly', {
+    provideInlineCompletions(...args) {
+      asked.push(args);
+      return this.answer;
+    },
+    answer: { items: [{ insertText: 'next' }] },
+  });
+  const { language, provider } = globalThis.inlineProvider;
+
+  assert.equal(language, 'ghostly');
+  assert.equal(await provider('the text', 2, 3), '{"items":[{"insertText":"next"}]}');
+  assert.deepEqual(asked, [['the text', 2, 3]]);
+  registration.dispose();
+  assert.equal(globalThis.inlineDisposed, 7);
+});
+
+test('an inline completions provider with nothing to say answers null, and one that throws rejects', async () => {
+  const { registerInlineCompletionsProvider } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  await registerInlineCompletionsProvider('quiet', { provideInlineCompletions: () => null });
+  assert.equal(await globalThis.inlineProvider.provider('', 1, 1), null);
+  await registerInlineCompletionsProvider('failing', {
+    provideInlineCompletions: () => {
+      throw new Error('no ghost here');
+    },
+  });
+  await assert.rejects(globalThis.inlineProvider.provider('', 1, 1), /no ghost here/);
+});
+
+test('codeLens is on for what says so, and off by default', async () => {
+  const { createEditor } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  globalThis.optionsSent = [];
+  const editor = await createEditor({ id: 'lenses' }, undefined, {});
+  assert.equal(globalThis.optionsSent[0].codeLens, undefined, 'left to the default, which is off');
+  editor.updateOptions({ codeLens: true });
+  assert.equal(globalThis.optionsSent.at(-1).codeLens, true);
+  editor.updateOptions({ codeLens: false });
+  assert.equal(globalThis.optionsSent.at(-1).codeLens, false);
+});
+
+test('inlayHints is on for what says so, and off for anything else, as its neighbours are', async () => {
+  const { createEditor } = await import(pathToFileURL(join(dir, 'index.js')).href);
+  globalThis.optionsSent = [];
+  const editor = await createEditor({ id: 'hints' }, undefined, { inlayHints: null });
+  const sent = (inlayHints) => {
+    editor.updateOptions({ inlayHints });
+    return globalThis.optionsSent.at(-1).inlayHints;
+  };
+
+  assert.equal(globalThis.optionsSent[0].inlayHints, false, 'null, when the editor is made');
+  for (const off of [null, false, 0, '', 'off', 'offUnlessPressed', { enabled: false }, { enabled: 'off' }, { enabled: 'offUnlessPressed' }]) {
+    assert.equal(sent(off), false, `${JSON.stringify(off)} is off`);
+  }
+  for (const on of [true, 'on', 'onUnlessPressed', {}, { enabled: true }, { enabled: 'on' }, { enabled: 'onUnlessPressed' }]) {
+    assert.equal(sent(on), true, `${JSON.stringify(on)} is on`);
+  }
 });

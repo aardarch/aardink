@@ -16,7 +16,7 @@
 package com.aardarch.aardink.ui.view
 
 /**
- * Laid-out lines ([T] is a `TextLayoutResult`), keyed by what they show rather than by line
+ * Laid-out lines ([T] is a [LineLayout]), keyed by what they show rather than by line
  * number, so a line that moved (an edit above it added lines) keeps its layout. Only the colour
  * spans go into a layout; selections, find matches, squiggles and carets are drawn over it as
  * rectangles, so none of them costs a relayout.

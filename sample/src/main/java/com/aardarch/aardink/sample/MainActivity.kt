@@ -61,6 +61,7 @@ import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.rememberCodeEditorState
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.languages.lsp.DiagnosticsListener
 import com.aardarch.aardink.languages.lsp.LspLanguageService
 import com.aardarch.aardink.sample.lsp.DEMO_CSS_DOCUMENT_URI
 import com.aardarch.aardink.sample.lsp.createDemoCssLspConnection
@@ -75,6 +76,7 @@ import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -312,17 +314,26 @@ private fun EditorScreen(
     val service = language.languageService
     if (service != null) {
         LaunchedEffect(state, service) {
-            // A language server computes diagnostics itself; it must be told about the document
-            // and each edit so what it pushes back actually reflects what's on screen.
-            if (service is LspLanguageService) service.didOpen(state.document)
-            try {
-                snapshotFlow { state.textVersion }.collect { version ->
+            if (service is LspLanguageService) {
+                // A language server computes diagnostics itself. attach() opens the document and
+                // tells it about each edit, so all that is left here is showing what it pushes back.
+                val published = Channel<Unit>(Channel.CONFLATED)
+                val onPublished: DiagnosticsListener = { uri, _, _ ->
+                    if (uri == service.documentUri) published.trySend(Unit)
+                }
+                service.attach(state)
+                service.client.addDiagnosticsListener(onPublished)
+                try {
+                    for (ignored in published) diagnostics = service.diagnostics(state.document.snapshot())
+                } finally {
+                    service.client.removeDiagnosticsListener(onPublished)
+                    service.didClose()
+                }
+            } else {
+                snapshotFlow { state.textVersion }.collect {
                     delay(400)
-                    if (service is LspLanguageService) service.didChange(state.document, version)
                     diagnostics = withContext(Dispatchers.Default) { service.diagnostics(state.document) }
                 }
-            } finally {
-                if (service is LspLanguageService) service.didClose()
             }
         }
     }

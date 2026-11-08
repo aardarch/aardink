@@ -17,21 +17,33 @@ package com.aardarch.aardink.web
 
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.BuiltInLanguages
+import com.aardarch.aardink.languages.LanguageDefinition
+import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.EditorThemes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** Languages and themes registered from the page: grammars, their colours, and the providers. */
@@ -55,6 +67,74 @@ class WebLanguagesTest {
         val tokens = language.tokenizer.tokenizeFull("shout <b")
         assertEquals(listOf(NamedTokenType("keyword.toy"), NamedTokenType("tag.toy")), tokens.map { it.type })
         assertEquals(CommentSyntax(line = "#"), language.tokenizer.commentSyntax)
+    }
+
+    @Test
+    fun `a definition's configuration reaches the language, over its providers`() = runTest {
+        AardinkWeb.registerLanguage(
+            """
+            {
+              "id": "configured",
+              "grammar": { "tokenizer": { "root": [ ["\\w+", "text"] ] } },
+              "configuration": {
+                "comments": { "lineComment": "--" },
+                "autoClosingPairs": [["(", ")"]],
+                "folding": { "markers": { "start": { "pattern": "^BEGIN", "flags": "i" }, "end": "^END" } },
+                "onEnterRules": [{ "beforeText": { "pattern": "^x" }, "action": { "indent": "none", "appendText": "y" } }]
+              }
+            }
+            """.trimIndent(),
+            WebLanguageProviders(hover = { _, _, _ -> """{ "contents": "from the host" }""" }),
+        )
+        val language = AardinkWeb.registry.byId("configured")!!
+        val service = language.languageService!!
+        assertEquals(CommentSyntax(line = "--"), language.tokenizer.commentSyntax)
+        assertEquals(")", service.autoClose(CodeDocument("("), 0, '('))
+        assertEquals(")", service.surroundingClose('('), "no surroundingPairs: the closing pairs surround")
+        assertEquals("y", service.smartIndent(CodeDocument("x\n"), 1))
+        assertEquals("  ", service.smartIndent(CodeDocument("  a\n"), 1), "no rule, and no language extended: the indentation stays")
+        assertTrue(language.foldingProvider.foldableRanges(CodeDocument("begin\na\nEND")).isNotEmpty())
+        assertEquals("from the host", service.hoverDoc(CodeDocument("a"), 0)?.content)
+    }
+
+    @Test
+    fun `a configuration may be the text of the file, comments and all`() {
+        AardinkWeb.registerLanguage(
+            """
+            {
+              "id": "configured-text",
+              "grammar": { "tokenizer": { "root": [] } },
+              "configuration": "// The file.\n{ \"surroundingPairs\": [[\"<\", \">\"],], }"
+            }
+            """.trimIndent(),
+        )
+        assertEquals(">", AardinkWeb.registry.byId("configured-text")!!.languageService!!.surroundingClose('<'))
+    }
+
+    @Test
+    fun `a configuration it cannot use is refused, saying where`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            AardinkWeb.registerLanguage(
+                """
+                {
+                  "id": "bad-configuration",
+                  "grammar": { "tokenizer": { "root": [] } },
+                  "configuration": { "onEnterRules": [{ "beforeText": "(?<=a)b", "action": { "indent": "none" } }] }
+                }
+                """.trimIndent(),
+            )
+        }
+        assertEquals("configuration.onEnterRules[0].beforeText: lookbehind is not supported: (?<=a)b", error.message)
+    }
+
+    @Test
+    fun `a code fence finds a language by its id, including one registered after the editor asked`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        val fences = codeFenceTokenizers(registry)
+        assertSame(registry.byId("kotlin")!!.tokenizer, fences("kotlin"))
+        assertNull(fences("toy"), "not registered yet")
+        registry.register(languageFrom(toy, WebLanguageProviders(), registry, mutableMapOf()))
+        assertSame(registry.byId("toy")!!.tokenizer, fences("toy"))
     }
 
     @Test
@@ -112,6 +192,72 @@ class WebLanguagesTest {
         val theme = AardinkWeb.registeredThemes.getValue("toy-diagnostics")
         assertEquals(Color(0xFF89B4FA), theme.infoColor)
         assertEquals(EditorThemes.VsCodeDark.errorColor, theme.errorColor)
+    }
+
+    /** `[[` hands the text to the language [embedded] names, until `]]`. */
+    private fun embedding(id: String, embedded: String) = """
+        {
+          "id": "$id",
+          "grammar": {
+            "tokenizer": {
+              "root": [ ["\\[\\[", { "token": "open", "next": "@inner", "nextEmbedded": "$embedded" }], ["\\w+", "outer"] ],
+              "inner": [ ["\\]\\]", { "token": "close", "next": "@pop", "nextEmbedded": "@pop" }], ["\\w+", "own"] ]
+            }
+          }
+        }
+    """.trimIndent()
+
+    private fun words(id: String, name: String) = """{ "id": "$id", "grammar": { "tokenizer": { "root": [ ["\\w+", "$name"] ] } } }"""
+
+    private fun tokenNames(id: String, text: String) =
+        AardinkWeb.registry.byId(id)!!.tokenizer.tokenizeFull(text).filter { it.end > it.start }.map { (it.type as NamedTokenType).name }
+
+    @Test
+    fun `nextEmbedded finds a language registered before`() {
+        AardinkWeb.registerLanguage(words("embed-before-inner", "inner"))
+        AardinkWeb.registerLanguage(embedding("embed-before", "embed-before-inner"))
+        assertEquals(listOf("outer", "open", "inner", "close", "outer"), tokenNames("embed-before", "a [[b]] c"))
+    }
+
+    @Test
+    fun `nextEmbedded finds a language registered after, and stays on its own rules until then`() {
+        AardinkWeb.registerLanguage(embedding("embed-after", "embed-after-inner"))
+        assertEquals(listOf("open", "own", "close"), tokenNames("embed-after", "[[b]]"))
+        AardinkWeb.registerLanguage(words("embed-after-inner", "inner"))
+        assertEquals(listOf("open", "inner", "close"), tokenNames("embed-after", "[[b]]"))
+    }
+
+    @Test
+    fun `nextEmbedded follows a language registered again`() {
+        AardinkWeb.registerLanguage(words("embed-again-inner", "first"))
+        AardinkWeb.registerLanguage(embedding("embed-again", "embed-again-inner"))
+        AardinkWeb.registerLanguage(words("embed-again-inner", "second"))
+        assertEquals(listOf("open", "second", "close"), tokenNames("embed-again", "[[b]]"))
+    }
+
+    @Test
+    fun `a definition that fails leaves the grammar it replaces in place`() {
+        AardinkWeb.registerLanguage(words("embed-kept-inner", "kept"))
+        AardinkWeb.registerLanguage(embedding("embed-kept", "embed-kept-inner"))
+        assertFailsWith<IllegalArgumentException> {
+            AardinkWeb.registerLanguage(
+                """{ "id": "embed-kept-inner", "triggerCharacters": ["ab"], "grammar": { "tokenizer": { "root": [ ["\\w+", "lost"] ] } } }""",
+            )
+        }
+        assertEquals(listOf("open", "kept", "close"), tokenNames("embed-kept", "[[b]]"))
+    }
+
+    @Test
+    fun `a built-in language has no grammar to embed, so its id stays on the grammar's rules`() {
+        AardinkWeb.registerLanguage(embedding("embed-builtin", "json"))
+        assertEquals(listOf("open", "own", "close"), tokenNames("embed-builtin", "[[b]]"))
+    }
+
+    @Test
+    fun `tokenize sees through nextEmbedded`() {
+        AardinkWeb.registerLanguage(words("embed-tokenize-inner", "inner"))
+        AardinkWeb.registerLanguage(embedding("embed-tokenize", "embed-tokenize-inner"))
+        assertTrue("inner" in AardinkWeb.tokenize("embed-tokenize", "[[b]]"))
     }
 
     @Test
@@ -432,5 +578,168 @@ class WebLanguagesTest {
         val colors = service.documentColors(CodeDocument("bg: red;"))
         assertEquals(listOf(4..6), colors.map { it.range })
         assertEquals(Color(1f, 0f, 0f, 0.5f), colors.single().color)
+    }
+
+    @Test
+    fun `a host's inlay hints in Monaco's shape, asked about a range`() = runTest {
+        var asked: Pair<String, String>? = null
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                inlayHints = { text, range ->
+                    asked = text to range
+                    """[{ "position": { "lineNumber": 2, "column": 3 }, "label": ": Int" },
+                        { "position": { "lineNumber": 9, "column": 1 }, "label": "at the end" },
+                        { "position": { "lineNumber": 1, "column": 99 }, "label": "at its line's end" },
+                        { "position": "not a position", "label": "lost" },
+                        { "position": { "lineNumber": 1, "column": 1 } },
+                        { "position": { "lineNumber": 1, "column": 1 }, "label": 7 }]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-hints")!!.languageService!!
+        val document = CodeDocument("ab\ncd")
+
+        val hints = service.inlayHints(document, 0 until document.length)
+
+        assertEquals(listOf(InlayHint(5, ": Int"), InlayHint(5, "at the end"), InlayHint(2, "at its line's end")), hints)
+        assertEquals("ab\ncd", asked?.first)
+        assertEquals("""{"startLineNumber":1,"startColumn":1,"endLineNumber":2,"endColumn":3}""", asked?.second)
+    }
+
+    @Test
+    fun `no inlay hint provider, or one that gives nothing or fails, is no hints`() = runTest {
+        val document = CodeDocument("ab")
+        AardinkWeb.registerLanguage("""{ "id": "toy-no-hints", "grammar": { "tokenizer": { "root": [] } } }""", WebLanguageProviders())
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-no-hints")!!.languageService!!.inlayHints(document, 0..1))
+
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-null-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(inlayHints = { _, _ -> null }),
+        )
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-null-hints")!!.languageService!!.inlayHints(document, 0..1))
+
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-bad-hints", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(inlayHints = { _, _ -> error("no hints here") }),
+        )
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-bad-hints")!!.languageService!!.inlayHints(document, 0..1))
+    }
+
+    private fun lensLanguage(id: String) = """{ "id": "$id", "grammar": { "tokenizer": { "root": [] } } }"""
+
+    private suspend fun awaitUntil(condition: () -> Boolean) = withContext(Dispatchers.Main) {
+        withTimeout(5_000) {
+            while (!condition()) delay(16)
+        }
+    }
+
+    @Test
+    fun `a host's code lenses in Monaco's shape, each at the start of its range`() = runTest {
+        var asked: String? = null
+        AardinkWeb.registerLanguage(
+            lensLanguage("toy-lenses"),
+            WebLanguageProviders(
+                codeLenses = { text ->
+                    asked = text
+                    """[{ "range": { "startLineNumber": 2, "startColumn": 2, "endLineNumber": 2, "endColumn": 3 },
+                          "command": { "id": "run", "title": "Run" } },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                          "command": { "id": "show", "title": "2 references", "arguments": [1, "two"] } },
+                        { "range": "not a range", "command": { "id": "lost", "title": "lost" } },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 } },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                          "command": { "id": "lost" } },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                          "command": { "id": "lost", "title": "  " } },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                          "command": { "title": "no id" } }]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-lenses")!!.languageService!!
+
+        val lenses = service.codeLenses(CodeDocument("ab\ncd"))
+
+        assertEquals(listOf(4 to "Run", 0 to "2 references"), lenses.map { it.offset to it.title })
+        assertEquals("ab\ncd", asked)
+    }
+
+    @Test
+    fun `no code lens provider, or one that gives nothing or fails, is no lenses`() = runTest {
+        val document = CodeDocument("ab")
+        AardinkWeb.registerLanguage(lensLanguage("toy-no-lenses"), WebLanguageProviders())
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-no-lenses")!!.languageService!!.codeLenses(document))
+
+        AardinkWeb.registerLanguage(lensLanguage("toy-null-lenses"), WebLanguageProviders(codeLenses = { null }))
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-null-lenses")!!.languageService!!.codeLenses(document))
+
+        AardinkWeb.registerLanguage(lensLanguage("toy-bad-lenses"), WebLanguageProviders(codeLenses = { error("no lenses here") }))
+        assertEquals(emptyList(), AardinkWeb.registry.byId("toy-bad-lenses")!!.languageService!!.codeLenses(document))
+    }
+
+    private val oneLens = """[{ "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                                "command": { "id": "show", "title": "t", "arguments": [1, "two", { "three": null }] } },
+                              { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+                                "command": { "id": "bare", "title": "u" } }]"""
+
+    @Test
+    fun `a click comes back through the provider, with the command's id and arguments`() = runTest {
+        val ran = mutableListOf<Pair<String, String>>()
+        AardinkWeb.registerLanguage(
+            lensLanguage("toy-clicks"),
+            WebLanguageProviders(codeLenses = { oneLens }, runCodeLensCommand = { id, args -> ran += id to args }),
+        )
+        val lenses = AardinkWeb.registry.byId("toy-clicks")!!.languageService!!.codeLenses(CodeDocument("ab"))
+
+        lenses.forEach { it.onClick() }
+
+        awaitUntil { ran.size == 2 }
+        assertEquals(listOf("show" to """[1,"two",{"three":null}]""", "bare" to "[]"), ran)
+    }
+
+    @Test
+    fun `a click with no provider to run it, or one that fails, costs nothing`() = runTest {
+        AardinkWeb.registerLanguage(lensLanguage("toy-no-run"), WebLanguageProviders(codeLenses = { oneLens }))
+        val quiet = AardinkWeb.registry.byId("toy-no-run")!!.languageService!!.codeLenses(CodeDocument("ab"))
+        quiet.first().onClick()
+
+        var failed = false
+        AardinkWeb.registerLanguage(
+            lensLanguage("toy-bad-run"),
+            WebLanguageProviders(
+                codeLenses = { oneLens },
+                runCodeLensCommand = { _, _ ->
+                    failed = true
+                    error("no run here")
+                },
+            ),
+        )
+        val failing = AardinkWeb.registry.byId("toy-bad-run")!!.languageService!!.codeLenses(CodeDocument("ab"))
+        failing.first().onClick()
+
+        awaitUntil { failed }
+    }
+
+    @Test
+    fun `with extends, a language's lenses come first, and the base's follow`() = runTest {
+        val base = LanguageDefinition(
+            "lens-base",
+            "Lens base",
+            emptyList(),
+            PlainTextTokenizer,
+            languageService = object : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+                override suspend fun codeLenses(document: CodeDocument): List<CodeLens> = listOf(CodeLens(1, "base"), CodeLens(0, "t"))
+            },
+        )
+        AardinkWeb.registry.register(base)
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-lens-dialect", "extends": "lens-base", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(codeLenses = { oneLens }),
+        )
+
+        val lenses = AardinkWeb.registry.byId("toy-lens-dialect")!!.languageService!!.codeLenses(CodeDocument("ab"))
+
+        assertEquals(listOf("t", "u", "base"), lenses.map { it.title }, "the base's own \"t\" at the same offset is the same lens")
     }
 }

@@ -139,8 +139,30 @@ function monarchToJson(value) {
   return value;
 }
 
+/** A language configuration's RegExp literals, for JSON.stringify: VS Code's `{ pattern, flags }`. */
+function regexAsPattern(key, value) {
+  return value instanceof RegExp ? { pattern: value.source, flags: value.flags } : value;
+}
+
 /** The decorations owner deltaDecorations sets; each collection has its own. */
 const DELTA_OWNER = 'delta';
+
+/**
+ * What the Kotlin side asks by name, and the host's function that answers it, read at each call. A
+ * new provider is one line here; a name not here has no provider, and gets null.
+ */
+const PROVIDERS = new Map([
+  ['completions', (providers) => providers.provideCompletionItems],
+  ['hover', (providers) => providers.provideHover],
+  ['diagnostics', (providers) => providers.provideDiagnostics &&
+    ((text) => Promise.resolve(providers.provideDiagnostics(text)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic))))],
+  ['documentSymbols', (providers) => providers.provideDocumentSymbols],
+  ['documentColors', (providers) => providers.provideDocumentColors],
+  ['inlayHints', (providers) => providers.provideInlayHints],
+  ['codeLenses', (providers) => providers.provideCodeLenses],
+  // A click is about a command, so no text comes with it.
+  ['runCodeLensCommand', (providers) => providers.runCodeLensCommand && ((_text, id, args) => providers.runCodeLensCommand(id, args))],
+]);
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
@@ -166,22 +188,37 @@ export async function registerLanguage(definition, providers = {}) {
       extensions: definition.extensions,
       inheritCompletions: definition.inheritCompletions,
       schema: definition.schema,
+      configuration: JSON.parse(JSON.stringify(definition.configuration ?? null, regexAsPattern)),
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
       grammar,
     }),
-    (text, line, column) => answer(providers.provideCompletionItems, text, line, column),
-    (text, line, column) => answer(providers.provideHover, text, line, column),
-    (text) =>
-      answer(
-        providers.provideDiagnostics &&
-          ((t) => Promise.resolve(providers.provideDiagnostics(t)).then((list) => (list == null ? null : list.map(toKotlinDiagnostic)))),
-        text,
-      ),
-    (text) => answer(providers.provideDocumentSymbols, text),
-    (text) => answer(providers.provideDocumentColors, text),
+    (method, text, argsJson) => answer(PROVIDERS.get(method)?.(providers), text, ...JSON.parse(argsJson)),
   );
   if (error) throw new Error(`Aardink: ${error}`);
+}
+
+/**
+ * Has the language server at a WebSocket URL follow every editor of a language. See index.d.ts: it
+ * resolves once asked, not once connected, and a server that cannot be reached costs no editor.
+ */
+export async function connectLanguageServer(url, languageId) {
+  const k = await load();
+  const id = k.aardinkConnectLanguageServer(String(url), languageId);
+  return { dispose: () => k.aardinkDisconnectLanguageServer(id) };
+}
+
+/**
+ * Has `provider.provideInlineCompletions` offer ghost text in every editor of a language, as Monaco's
+ * registerInlineCompletionsProvider. See index.d.ts.
+ */
+export async function registerInlineCompletionsProvider(languageId, provider) {
+  const k = await load();
+  const id = k.aardinkRegisterInlineCompletionsProvider(
+    languageId,
+    (text, line, column) => answer((...args) => provider.provideInlineCompletions(...args), text, line, column),
+  );
+  return { dispose: () => k.aardinkDisposeInlineCompletionsProvider(id) };
 }
 
 /** Monaco's defineTheme data ({ base, inherit, rules, colors }) as VS Code theme JSON; VS Code JSON as it is. */
@@ -236,8 +273,15 @@ function toKotlinOptions(options) {
   if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
   if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
-  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs']) {
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens']) {
     if (options[key] !== undefined) out[key] = !!options[key];
+  }
+  if (options.inlayHints !== undefined) {
+    // Monaco's { enabled: 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' }; a key held down is not
+    // read, so those two are their first word. A plain boolean works too.
+    const value = options.inlayHints;
+    const enabled = typeof value === 'object' && value !== null ? value.enabled ?? 'on' : value;
+    out.inlayHints = !!enabled && enabled !== 'off' && enabled !== 'offUnlessPressed';
   }
   for (const key of ['minimap', 'stickyScroll', 'bracketPairColorization']) {
     const value = options[key];
@@ -296,6 +340,11 @@ export async function createEditor(container, onChange, options = {}) {
     const event = JSON.parse(json);
     for (const listener of scrollListeners) listener(event);
   });
+
+  // Unlike the listeners above, the Kotlin side hears of these only while there is one: with none it
+  // opens http and https links itself. It does that in the click, which a popup blocker wants.
+  const linkListeners = new Set();
+  const openLink = (target) => linkListeners.forEach((listener) => listener(target));
 
   // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
   let deltaDecorations = [];
@@ -390,6 +439,16 @@ export async function createEditor(container, onChange, options = {}) {
       scrollListeners.add(listener);
       return () => scrollListeners.delete(listener);
     },
+    onOpenLink(listener) {
+      if (linkListeners.size === 0) k.aardinkOnOpenLink(id, openLink);
+      linkListeners.add(listener);
+      return {
+        dispose() {
+          linkListeners.delete(listener);
+          if (linkListeners.size === 0 && !disposed) k.aardinkOnOpenLink(id, null);
+        },
+      };
+    },
     layout: () => k.aardinkLayout(id),
     onDidChangeDiagnostics(listener) {
       diagnosticsListeners.add(listener);
@@ -471,6 +530,7 @@ export async function createEditor(container, onChange, options = {}) {
       focusListeners.clear();
       blurListeners.clear();
       scrollListeners.clear();
+      linkListeners.clear();
       k.aardinkDispose(id);
     },
   };

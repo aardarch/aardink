@@ -66,9 +66,12 @@ interface IncrementalTokenizer {
      * @param dirtyRange Lines that have changed since the last tokenization pass.
      * @param previousTokens The list this tokenizer returned from its previous pass over this
      *   document, passed back unchanged, so an implementation can recognise its own earlier
-     *   result (by identity) and rescan only what changed. Empty when the editor wants a quick
-     *   provisional result for just [dirtyRange] before a full pass: on a single-threaded host it
-     *   asks that way for the visible lines of a large document.
+     *   result (by identity) and rescan only what changed. Empty when the editor wants a result
+     *   for just [dirtyRange], scanned from the root state, that leaves no trace in the tokenizer:
+     *   on a single-threaded host it asks that way for the visible lines of a large document
+     *   before a full pass, and [CodeBlock][com.aardarch.aardink.ui.CodeBlock] asks that way for
+     *   all the lines of a snippet, so documentation does not disturb the document sharing the
+     *   tokenizer.
      * @return Tokens for the lines this pass covered, sorted by [Token.start].
      */
     fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token>

@@ -115,6 +115,44 @@ class CodeEditorState(
     }
 
     /**
+     * The language service's semantic tokens, a layer over [tokenStore] that a line's layout merges
+     * in. It moves with edits as that store does. Null while there is no answer to keep, and while
+     * [EditorOptions.semanticHighlighting][com.aardarch.aardink.ui.EditorOptions] is off, so that
+     * an edit then costs nothing more than it did without it.
+     */
+    internal var semanticStore: TokenStore? = null
+        private set
+
+    /** Bumped when [semanticStore] changes what any line shows, as [tokenVersion] is for [tokenStore]. */
+    internal var semanticVersion by mutableIntStateOf(0)
+        private set
+
+    /** The language service whose answers [semanticStore] holds, set by the layout. */
+    internal var semanticSource: LanguageService? = null
+
+    /**
+     * Shows [tokens], the language service's answer about [snapshot], unless an edit overtakes them.
+     * No tokens is no layer: most services have none to give, and an edit should not pay for that.
+     */
+    internal suspend fun applySemanticTokens(tokens: List<Token>, snapshot: CodeDocument) {
+        if (document.version != snapshot.version) return
+        if (tokens.isEmpty()) {
+            clearSemanticTokens()
+            return
+        }
+        val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
+        if (store.overlay(tokens, snapshot)) semanticVersion++
+    }
+
+    /** Back to the syntax colours alone. */
+    internal fun clearSemanticTokens() {
+        val store = semanticStore ?: return
+        store.close()
+        semanticStore = null
+        semanticVersion++
+    }
+
+    /**
      * How the editor indents, from [EditorOptions.tabSize][com.aardarch.aardink.ui.EditorOptions]
      * and `insertSpaces`; set by the layout from its options, and passed to the language service
      * for Enter and formatting.
@@ -190,6 +228,7 @@ class CodeEditorState(
         if (changed) rememberSelections(selectionSet)
         selectionSet = set
         leaveSnippetIfOutside()
+        inlineCompletions.afterSelection()
         if (changed) emitSelectionChange(selectionReasonContext ?: SelectionChangeReason.Api)
     }
 
@@ -471,10 +510,12 @@ class CodeEditorState(
         }
         val tracker = decorationOwners[owner] ?: DecorationTracker().also {
             decorationOwners[owner] = it
-            document.addChangeListener(it)
             decorationOwnersVersion++
         }
         tracker.replace(clamped)
+        val hadInline = tracker.hasInline
+        tracker.hasInline = clamped.any { it.style.isInline }
+        if (hadInline || tracker.hasInline) inlineChanged()
     }
 
     /** [owner]'s decorations as they are now, moved along with the edits since they were set. */
@@ -486,8 +527,70 @@ class CodeEditorState(
     /** Removes [owner]'s decorations. */
     fun clearDecorations(owner: String) {
         val tracker = decorationOwners.remove(owner) ?: return
-        document.removeChangeListener(tracker)
         decorationOwnersVersion++
+        if (tracker.hasInline) inlineChanged()
+    }
+
+    /**
+     * Moves every owner's decorations with an edit. One listener, added before any view can be, so
+     * that what a view asks of [forEachInlineDecoration] while it splices its rows is already moved.
+     */
+    private val decorationMover = DocumentChangeListener { change ->
+        for (tracker in decorationOwners.values) tracker.onDocumentChange(change)
+    }
+
+    /** Told when what is part of a line's layout changes, other than by an edit moving it. */
+    internal var inlineListeners: List<() -> Unit> = emptyList()
+
+    private fun inlineChanged() = inlineListeners.forEach { it() }
+
+    /** Whether anything from the decorations, the hints or the lenses is part of a line's layout. */
+    internal val hasInlineContent: Boolean
+        get() = hintTracker.items.isNotEmpty() || lensTracker.items.isNotEmpty() || decorationOwners.values.any { it.hasInline }
+
+    /** Calls [action] with every decoration that is part of a line's layout, as they are now. */
+    internal fun forEachInlineDecoration(action: (Decoration) -> Unit) {
+        for (tracker in decorationOwners.values) {
+            if (!tracker.hasInline) continue
+            for (decoration in tracker.items) if (decoration.style.isInline) action(decoration)
+        }
+    }
+
+    private val hintTracker = InlayHintTracker()
+
+    /** The language service's newest inlay hints, moved along with the edits since. */
+    internal val inlayHints: List<InlayHint> get() = hintTracker.items
+
+    /** Shows [hints] in place of those before, at offsets of the document as it is now. */
+    internal fun publishInlayHints(hints: List<InlayHint>) {
+        if (hints == hintTracker.items) return
+        hintTracker.replace(hints)
+        inlineChanged()
+    }
+
+    private val lensTracker = OffsetTracker<CodeLens>({ it.offset }, { lens, offset -> lens.copy(offset = offset) })
+
+    /** The language service's newest code lenses, moved along with the edits since. */
+    internal val codeLenses: List<CodeLens> get() = lensTracker.items
+
+    /** Shows [lenses] in place of those before, at offsets of the document as it is now. */
+    internal fun publishCodeLenses(lenses: List<CodeLens>) {
+        if (lenses == lensTracker.items) return
+        lensTracker.replace(lenses)
+        inlineChanged()
+    }
+
+    /** Told which lines' ghost text changed, other than by an edit moving it. */
+    internal var ghostListeners: List<(lines: List<Int>) -> Unit> = emptyList()
+
+    /** The inline completions on offer at the caret, and the ghost text of the one showing. */
+    internal val inlineCompletions = GhostTextTracker(document, ::singleCaret) { lines -> ghostListeners.forEach { it(lines) } }
+
+    /** The caret, if it is one that ghost text can show at. */
+    private fun singleCaret(): Int? {
+        val selections = currentSelections()
+        val primary = selections.primary
+        return primary.end.takeIf { !readOnly && snippet == null && selections.isSingle && primary.collapsed }
     }
 
     /** Every owner's decorations, in order of where they start: what the view draws. */
@@ -512,7 +615,8 @@ class CodeEditorState(
      * The commands without parameters that [execute] would run now, for a host's toolbar or menu to
      * enable its buttons by. Snapshot state: reading it in composition recomposes when it changes
      * (after an undo, when the language service changes). [EditorCommand.InsertSnippet],
-     * [EditorCommand.FoldLevel] and [EditorCommand.Reveal] are not listed; ask [canExecute].
+     * [EditorCommand.FoldLevel], [EditorCommand.CycleInlineCompletion] and [EditorCommand.Reveal] are
+     * not listed; ask [canExecute].
      */
     val availableCommands: Set<EditorCommand>
         get() = buildSet {
@@ -524,6 +628,7 @@ class CodeEditorState(
                 if (tokenizer.commentSyntax?.blockStart != null) add(EditorCommand.BlockComment)
                 addAll(listOf(EditorCommand.JoinLines, EditorCommand.UpperCase, EditorCommand.LowerCase))
                 addAll(listOf(EditorCommand.TrimTrailingWhitespace, EditorCommand.InsertLineBelow, EditorCommand.InsertLineAbove))
+                if (inlineCompletions.shown != null) add(EditorCommand.AcceptInlineCompletion)
             }
             add(EditorCommand.SelectAllOccurrences)
             add(EditorCommand.ExpandSelection)
@@ -531,6 +636,7 @@ class CodeEditorState(
             addAll(listOf(EditorCommand.ChangeAllOccurrences, EditorCommand.JumpToBracket))
             if (cursorHistory.isNotEmpty()) add(EditorCommand.CursorUndo)
             if (canShrinkSelection) add(EditorCommand.ShrinkSelection)
+            if (inlineCompletions.shown != null) add(EditorCommand.DismissInlineCompletion)
             addAll(uiCommandsAvailable)
         }
 
@@ -542,6 +648,7 @@ class CodeEditorState(
         is EditorCommand.ScrollLines -> uiCommandHandler != null
         is EditorCommand.ScrollTo -> uiCommandHandler != null
         is EditorCommand.Reveal -> uiCommandHandler != null
+        is EditorCommand.CycleInlineCompletion -> uiCommandHandler != null && inlineCompletions.canCycle
         else -> command in availableCommands
     }
 
@@ -600,6 +707,10 @@ class CodeEditorState(
 
             EditorCommand.SelectLine -> selectLine()
 
+            EditorCommand.AcceptInlineCompletion -> acceptInlineCompletion()
+
+            EditorCommand.DismissInlineCompletion -> true.also { inlineCompletions.clear() }
+
             is EditorCommand.InsertSnippet -> {
                 val primary = selection
                 insertSnippet(primary.min until primary.max, command.snippet)
@@ -607,6 +718,22 @@ class CodeEditorState(
             }
 
             else -> uiCommandHandler?.invoke(command) ?: false
+        }
+    }
+
+    /**
+     * Puts the ghost text showing in the document: what it shows and nothing else, so that text it
+     * repeats stays as it is, along with what is anchored to it. Then asks for what might come next
+     * without waiting, as Monaco does. The caret can end up lines below where the view stops, and a
+     * host's button has no key to show it, so this does.
+     */
+    private fun acceptInlineCompletion(): Boolean {
+        val pieces = inlineCompletions.settled?.pieces ?: return false
+        val changes = pieces.map { TextChange(it.offset, it.offset, TypingRules.withLineEnding(it.text, lineEnding)) }
+        val caret = changes.last().start + changes.sumOf { it.text.length }
+        return applyChanges(changes, EditKind.Other) { SelectionSet.caret(caret) }.also {
+            uiCommandHandler?.invoke(EditorCommand.Reveal(caret))
+            inlineCompletions.askAgain(now = true)
         }
     }
 
@@ -764,6 +891,7 @@ class CodeEditorState(
         val before = currentSelections()
         val edit = LineCommands.indent(document, before, indentUnit)
         if (before.ranges.all { it.collapsed }) applyCommand(edit) else applyKeepingLinesSelected(edit.changes, before)
+        inlineCompletions.askAgain()
     }
 
     /**
@@ -1188,7 +1316,8 @@ class CodeEditorState(
      * is repeated at every other selection, as with several cursors in VS Code; while [composing],
      * only when the composition ends ([endComposition]). A single character typed at a caret gets
      * the typing rules ([TypingRules]: smart indent, auto-close) from [service], except while
-     * [composing].
+     * [composing]; typed over the selections, it may surround them instead
+     * ([LanguageService.surroundingClose]).
      *
      * Not an external edit: popups that follow typing stay up. Returns the character when one was
      * typed at a caret, for the completion trigger; null for anything else.
@@ -1201,6 +1330,7 @@ class CodeEditorState(
         composing: Boolean = false,
         service: LanguageService? = null,
     ): TypedInput? {
+        if (!composing && service != null && surroundSelections(start, end, text, service)) return null
         val eol = lineEnding
         val normalized = TypingRules.withLineEnding(TypingRules.normalizeLineEndings(text), eol)
         val from = start.coerceIn(0, document.length)
@@ -1258,7 +1388,8 @@ class CodeEditorState(
                 val position = caret.end + shift
                 placed[index] = TextRange(position)
                 if (position == 0 || document[position - 1] != typed) continue
-                val followUp = TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions) ?: continue
+                val followUp =
+                    TypingRules.afterTyping(document, service, position - 1, typed, options = formattingOptions, eol = eol) ?: continue
                 applied += document.applyChanges(listOf(TextChange(followUp.insertAt, followUp.insertAt, followUp.text)))
                 placed[index] = TextRange(followUp.caret)
                 shift += followUp.text.length
@@ -1274,7 +1405,23 @@ class CodeEditorState(
             it.selections = currentSelections()
             it.version = textVersion
         }
+        if (!composing) inlineCompletions.askAgain()
         return typed?.let { TypedInput(from, it, autoCloseLength) }
+    }
+
+    /**
+     * Wraps the selections when [text] is one character typed over all of them that [service]
+     * surrounds with: one undo step, and the selections stay on the text inside. Returns whether
+     * it did; a caret costs no more than a look at the primary selection.
+     */
+    private fun surroundSelections(start: Int, end: Int, text: String, service: LanguageService): Boolean {
+        val typed = text.singleOrNull() ?: return false
+        val before = currentSelections()
+        val primary = before.primary
+        if (primary.collapsed || start != primary.min || end != primary.max) return false
+        val close = service.surroundingClose(typed) ?: return false
+        val edit = EditingCommands.surround(document, before, typed, close, lineEnding) ?: return false
+        return applyChanges(edit.changes, EditKind.Other, external = false) { edit.selectionsAfter }
     }
 
     /**
@@ -1369,7 +1516,7 @@ class CodeEditorState(
         val before = currentSelections()
         val edit = EditingCommands.deleteLeft(document, before, word) ?: return false
         val kind = if (!word && before.ranges.all { it.collapsed }) EditKind.DeletingLeft else EditKind.Other
-        return applyChanges(edit.changes, kind) { edit.selectionsAfter }
+        return applyChanges(edit.changes, kind) { edit.selectionsAfter }.also { inlineCompletions.askAgain() }
     }
 
     /** Delete, or Ctrl+Delete with [word], at every selection. */
@@ -1377,7 +1524,7 @@ class CodeEditorState(
         val before = currentSelections()
         val edit = EditingCommands.deleteRight(document, before, word) ?: return false
         val kind = if (!word && before.ranges.all { it.collapsed }) EditKind.DeletingRight else EditKind.Other
-        return applyChanges(edit.changes, kind) { edit.selectionsAfter }
+        return applyChanges(edit.changes, kind) { edit.selectionsAfter }.also { inlineCompletions.askAgain() }
     }
 
     /** What copying the selections puts on the clipboard (their lines, when all are carets). */
@@ -1393,7 +1540,7 @@ class CodeEditorState(
     /** Pastes [text] at every selection; see [EditingCommands.paste] for [wholeLines] and spreading lines. */
     internal fun paste(text: String, wholeLines: Boolean = false): Boolean {
         val edit = EditingCommands.paste(document, currentSelections(), text, wholeLines, lineEnding) ?: return false
-        return applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }
+        return applyChanges(edit.changes, EditKind.Other) { edit.selectionsAfter }.also { inlineCompletions.askAgain() }
     }
 
     /** Ctrl+A. */
@@ -1464,6 +1611,10 @@ class CodeEditorState(
     init {
         document.addChangeListener(contentRecorder)
         document.addChangeListener(symbolTracker)
+        document.addChangeListener(decorationMover)
+        document.addChangeListener(hintTracker)
+        document.addChangeListener(lensTracker)
+        document.addChangeListener(inlineCompletions)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
         if (document.length > 0) scheduleTokenization(debounce = false)
@@ -1561,6 +1712,7 @@ class CodeEditorState(
         if (changed) rememberSelections(selectionSet)
         selectionSet = selections
         leaveSnippetIfOutside()
+        inlineCompletions.afterEdit(external)
         if (external) externalEditVersion++
         return changed
     }

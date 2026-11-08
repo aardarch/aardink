@@ -47,10 +47,12 @@ kotlin {
             dependencies {
                 api(project(":editor"))
                 api(project(":languages"))
+                implementation(project(":languages-lsp"))
                 // JetBrains Mono is bundled here, not in :editor: Android and desktop hosts
                 // have system monospace fonts, the browser canvas has none.
                 implementation(libs.compose.mp.components.resources)
-                implementation(libs.kotlinx.coroutines.core)
+                // DisposableHandle is in AardinkWeb.connectLanguageServer's signature, hence `api`.
+                api(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
             }
         }

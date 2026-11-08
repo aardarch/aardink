@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -177,10 +178,21 @@ internal fun VirtualizedEditorBody(
         columnWidthEm = columnWidthEm,
         joinIndentation = joinIndentation,
     )
+    // Faint, so that it does not read as the document's text; a hint gets a ground as well, as VS
+    // Code's, to tell it from what surrounds it.
+    val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
+    val hintStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f), background = textColor.copy(alpha = 0.08f)) }
+    // Fainter than either, as Monaco's `editorGhostText.foreground`, and with no ground: it is about to be text.
+    val ghostStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.45f)) }
+    // Whether the mouse is on text a click does something on: asked as it moves, changing rarely.
+    val onClickable by remember(controller, view) {
+        derivedStateOf { controller.hoverAt?.let { view.offsetAt(it).injection?.id != null } == true }
+    }
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
+        view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle, ghostStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
         controller.clipboard = clipboard
@@ -353,7 +365,15 @@ internal fun VirtualizedEditorBody(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(EditorTestTags.EDITOR)
-                    .pointerHoverIcon(if (controller.linkModifier && controller.link != null) PointerIcon.Hand else PointerIcon.Text)
+                    .pointerHoverIcon(
+                        if (onClickable ||
+                            (controller.linkModifier && controller.link != null)
+                        ) {
+                            PointerIcon.Hand
+                        } else {
+                            PointerIcon.Text
+                        },
+                    )
                     .pointerInput(controller) { trackHover(controller) }
                     .then(if (onZoom != null) Modifier.pointerInput(Unit) { zoomGestures(onZoom) } else Modifier),
                 inputModifier = Modifier
@@ -371,7 +391,7 @@ internal fun VirtualizedEditorBody(
                     EditorSelectionHandles(controller, theme.cursorColor)
                     EditorContextMenu(controller)
                     EditorTouchMenu(controller)
-                    popups()
+                    CompositionLocalProvider(LocalDocumentState provides state, content = popups)
                 },
             )
         },

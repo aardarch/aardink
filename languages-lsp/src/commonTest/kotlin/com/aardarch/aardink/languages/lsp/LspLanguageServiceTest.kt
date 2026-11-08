@@ -16,19 +16,15 @@
 package com.aardarch.aardink.languages.lsp
 
 import com.aardarch.aardink.core.CodeActionKind
-import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.TextEdit
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
@@ -41,88 +37,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-
-private const val URI = "file:///src/Main.kt"
-private const val OTHER_URI = "file:///src/Other.kt"
-
-/** LSP range JSON literal. */
-private fun range(startLine: Int, startChar: Int, endLine: Int, endChar: Int): String =
-    """{"start":{"line":$startLine,"character":$startChar},"end":{"line":$endLine,"character":$endChar}}"""
-
-/**
- * A fake language server on the other end of a [ChannelLspTransport].
- *
- * [clientScope] backs [client]'s receive loop and must be a [TestScope]'s `backgroundScope` (see
- * [withServer]) rather than a real dispatcher like `Dispatchers.Default`: both this harness's own
- * coroutines (via [scope], the enclosing `runTest`'s [CoroutineScope]) and the client's background
- * work then share one `TestCoroutineScheduler`, so `withTimeout` correctly waits for the client
- * instead of racing an unrelated real thread pool the virtual clock knows nothing about.
- */
-private class Harness(val doc: CodeDocument, scope: CoroutineScope, clientScope: CoroutineScope) : CoroutineScope by scope {
-    val transport = ChannelLspTransport()
-    val client = LspClient(transport, clientScope)
-    val service = LspLanguageService(client, URI, "kotlin")
-
-    /** A second adapter over the same connection, configured with what the server declared about rename. */
-    fun serviceWithRenameSupport(support: LspRenameSupport?) = LspLanguageService(client, URI, "kotlin", serverRenameSupport = support)
-
-    /** Next message the client put on the wire. */
-    suspend fun nextSent(): JsonObject = LspJson.parseToJsonElement(transport.sendChannel.receive()).jsonObject
-
-    /** Asserts the client has written nothing. */
-    fun assertNothingSent(message: String) = assertTrue(transport.sendChannel.tryReceive().isFailure, message)
-
-    /** Answers the next request with raw [resultJson] after asserting its method; returns the request. */
-    suspend fun respond(expectedMethod: String, resultJson: String): JsonObject {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"result":$resultJson}""")
-        return sent
-    }
-
-    /** Answers the next request with a JSON-RPC error. */
-    suspend fun respondWithError(expectedMethod: String) {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":"boom"}}""")
-    }
-
-    /** Answers the next request the way a server that doesn't implement the method would. */
-    suspend fun respondWithMethodNotFound(expectedMethod: String) {
-        val sent = nextSent()
-        assertEquals(expectedMethod, sent["method"]!!.jsonPrimitive.content)
-        val id = sent["id"]!!.jsonPrimitive.content
-        val code = LspRequestException.METHOD_NOT_FOUND
-        transport.receiveChannel.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"unsupported"}}""")
-    }
-
-    /** Pushes `publishDiagnostics` for [uri] and returns once every registered listener has run. */
-    suspend fun publish(uri: String, diagnosticsJson: String, version: Int? = null) {
-        val done = CompletableDeferred<Unit>()
-        val probe: DiagnosticsListener = { _, _, _ -> done.complete(Unit) }
-        client.addDiagnosticsListener(probe)
-        client.start()
-        val versionMember = version?.let { """"version":$it,""" }.orEmpty()
-        transport.receiveChannel.send(
-            """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"$uri",$versionMember"diagnostics":$diagnosticsJson}}""",
-        )
-        withTimeout(5_000) { done.await() }
-        client.removeDiagnosticsListener(probe)
-    }
-}
-
-private fun withServer(text: String, block: suspend Harness.() -> Unit) = runTest {
-    val harness = Harness(CodeDocument(text), this, backgroundScope)
-    try {
-        harness.block()
-    } finally {
-        harness.client.stop()
-    }
-}
-
-private val JsonObject.params: JsonObject get() = this["params"]!!.jsonObject
 
 private val JsonObject.position: Pair<Int, Int>
     get() = this["position"]!!.jsonObject.let { it["line"]!!.jsonPrimitive.int to it["character"]!!.jsonPrimitive.int }
@@ -271,6 +185,23 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `completion documentation is Markdown, with plain text escaped to show to the letter`() = withServer("x") {
+        val server = async {
+            respond(
+                "textDocument/completion",
+                """[
+                  {"label":"a","documentation":"snake_case"},
+                  {"label":"b","documentation":{"kind":"plaintext","value":"*a*"}},
+                  {"label":"c","documentation":{"kind":"markdown","value":"*a*"}}
+                ]""",
+            )
+        }
+        val items = service.completions(doc, 1)
+        server.await()
+        assertEquals(listOf("snake\\_case", "\\*a\\*", "*a*"), items.map { it.documentation })
+    }
+
+    @Test
     fun `diagnostics carry the code, its description, tags and related information`() = withServer("val a = 1\nval b = 2") {
         publish(
             URI,
@@ -391,12 +322,83 @@ class LspLanguageServiceTest {
         val arrayServer = async {
             respond("textDocument/hover", """{"contents":["first",{"language":"kotlin","value":"val x: Int"}]}""")
         }
-        assertEquals("first\n\nval x: Int", service.hoverDoc(doc, 4)?.content)
+        assertEquals("first\n\n```kotlin\nval x: Int\n```", service.hoverDoc(doc, 4)?.content)
         arrayServer.await()
 
         val nullServer = async { respond("textDocument/hover", "null") }
         assertNull(service.hoverDoc(doc, 4))
         nullServer.await()
+    }
+
+    @Test
+    fun `hoverDoc fences a MarkedString's code past any backticks in it`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"language":"md","value":"```\nx\n```"}}""")
+        }
+        assertEquals("````md\n```\nx\n```\n````", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc keeps a plain string as the Markdown LSP says it is`() = withServer("val x = 1") {
+        val server = async { respond("textDocument/hover", """{"contents":"**x**: Int"}""") }
+        assertEquals("**x**: Int", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc escapes plaintext so that it shows to the letter, line for line`() = withServer("val x = 1") {
+        val server = async {
+            respond(
+                "textDocument/hover",
+                """{"contents":{"kind":"plaintext","value":"# a_b *c*\n- `d` <e> & [f]\n1. g\n\n  --- h\n"}}""",
+            )
+        }
+        assertEquals(
+            "\\# a\\_b \\*c\\*\\\n\\- \\`d\\` \\<e> \\& \\[f\\]\\\n1\\. g\n\n\\--- h",
+            service.hoverDoc(doc, 4)?.content,
+        )
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc leaves a URL in plaintext whole, for the renderer to link`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"kind":"plaintext","value":"See https://a.dev/x_y?a=1&b=2 and a_b"}}""")
+        }
+        assertEquals("See https://a.dev/x_y?a=1&b=2 and a\\_b", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc escapes a backslash after a URL in plaintext, so that it shows and the URL ends`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":{"kind":"plaintext","value":"https://a.dev/x\\_y"}}""")
+        }
+        assertEquals("https://a.dev/x\\\\\\_y", service.hoverDoc(doc, 4)?.content)
+        server.await()
+    }
+
+    @Test
+    fun `hoverDoc returns null for a MarkedString with no code`() = withServer("val x = 1") {
+        for (contents in listOf(
+            """{"language":"kotlin","value":""}""",
+            """{"language":"kotlin","value":"  \n "}""",
+            """[{"language":"kotlin","value":""}]""",
+        )) {
+            val server = async { respond("textDocument/hover", """{"contents":$contents}""") }
+            assertNull(service.hoverDoc(doc, 4), contents)
+            server.await()
+        }
+    }
+
+    @Test
+    fun `hoverDoc leaves out an empty MarkedString beside others`() = withServer("val x = 1") {
+        val server = async {
+            respond("textDocument/hover", """{"contents":[{"language":"kotlin","value":""},"Docs"]}""")
+        }
+        assertEquals("Docs", service.hoverDoc(doc, 4)?.content)
+        server.await()
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────
@@ -702,6 +704,23 @@ class LspLanguageServiceTest {
     }
 
     @Test
+    fun `signatureHelp reads a bare string as plain text and markdown MarkupContent as it is`() = withServer("foo(1, ") {
+        val server = async {
+            respond(
+                "textDocument/signatureHelp",
+                """{"signatures":[{"label":"foo(a)","documentation":"Takes *args",
+                   "parameters":[{"label":"a","documentation":{"kind":"markdown","value":"*a* value"}}]}]}""",
+            )
+        }
+
+        val signature = service.signatureHelp(doc, 7)?.signatures?.single()
+        server.await()
+
+        assertEquals("Takes \\*args", signature?.documentation)
+        assertEquals("*a* value", signature?.parameters?.single()?.documentation)
+    }
+
+    @Test
     fun `signatureHelp returns null when there are no signatures`() = withServer("foo(") {
         val server = async { respond("textDocument/signatureHelp", """{"signatures":[]}""") }
         assertNull(service.signatureHelp(doc, 4))
@@ -808,7 +827,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `rename refuses a workspace edit that reaches another file`() = withServer("val x = 1\nx.foo()") {
+    fun `rename refuses a workspace edit that reaches another file when no host takes it`() = withServer("val x = 1\nx.foo()") {
         val server = async {
             respond(
                 "textDocument/rename",
@@ -825,7 +844,7 @@ class LspLanguageServiceTest {
         server.await()
 
         // Renaming the declaration here and leaving the references in Other.kt alone would break
-        // the project; the editor cannot edit that file, so the whole rename is declined.
+        // the project; nothing here can edit that file, so the whole rename is declined.
         assertTrue(edits.isEmpty(), "a cross-file rename must not half-apply: was $edits")
     }
 

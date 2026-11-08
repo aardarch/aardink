@@ -58,6 +58,17 @@ class DecorationTest {
     }
 
     @Test
+    fun `an empty decoration follows the edits too`() {
+        val state = state()
+        state.setDecorations("host", listOf(Decoration(4 until 4, red)))
+
+        state.document.insert(0, ">> ")
+
+        assertEquals(7, state.decorations("host").single().range.first)
+        assertEquals(7, state.shownDecorations.single().range.first)
+    }
+
+    @Test
     fun `ranges past the end are clamped, and an empty list clears`() {
         val state = state()
         state.setDecorations("host", listOf(Decoration(10..99, red), Decoration(50 until 50, blue)))

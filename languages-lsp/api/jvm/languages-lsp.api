@@ -10,9 +10,10 @@ public final class com/aardarch/aardink/languages/lsp/ChannelLspTransport : com/
 
 public final class com/aardarch/aardink/languages/lsp/LspClient {
 	public static final field $stable I
-	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;)V
-	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;Lcom/aardarch/aardink/languages/lsp/LspClientHost;)V
+	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspTransport;Lkotlinx/coroutines/CoroutineScope;Lcom/aardarch/aardink/languages/lsp/LspClientHost;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun addDiagnosticsListener (Lkotlin/jvm/functions/Function3;)V
+	public final fun getServerCapabilities ()Lkotlinx/serialization/json/JsonElement;
 	public final fun getTransport ()Lcom/aardarch/aardink/languages/lsp/LspTransport;
 	public final fun initialize (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun initialize$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
@@ -21,8 +22,29 @@ public final class com/aardarch/aardink/languages/lsp/LspClient {
 	public static synthetic fun sendNotification$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun sendRequest (Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun sendRequest$default (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Lkotlinx/serialization/json/JsonElement;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun shutdown (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun start ()V
 	public final fun stop ()V
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspClientCapabilitiesKt {
+	public static final fun getDefaultClientCapabilities ()Lkotlinx/serialization/json/JsonObject;
+}
+
+public abstract interface class com/aardarch/aardink/languages/lsp/LspClientHost {
+	public fun applyWorkspaceEdit (Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun logMessage (ILjava/lang/String;)V
+	public fun progress (Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)V
+	public fun showMessage (ILjava/lang/String;)V
+	public fun showMessageRequest (ILjava/lang/String;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspClientHost$DefaultImpls {
+	public static fun applyWorkspaceEdit (Lcom/aardarch/aardink/languages/lsp/LspClientHost;Lcom/aardarch/aardink/languages/lsp/LspWorkspaceEdit;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun logMessage (Lcom/aardarch/aardink/languages/lsp/LspClientHost;ILjava/lang/String;)V
+	public static fun progress (Lcom/aardarch/aardink/languages/lsp/LspClientHost;Lkotlinx/serialization/json/JsonElement;Lkotlinx/serialization/json/JsonElement;)V
+	public static fun showMessage (Lcom/aardarch/aardink/languages/lsp/LspClientHost;ILjava/lang/String;)V
+	public static fun showMessageRequest (Lcom/aardarch/aardink/languages/lsp/LspClientHost;ILjava/lang/String;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspCodeAction {
@@ -542,6 +564,13 @@ public final class com/aardarch/aardink/languages/lsp/LspError$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class com/aardarch/aardink/languages/lsp/LspFoldingProvider : com/aardarch/aardink/core/FoldingProvider {
+	public static final field $stable I
+	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspLanguageService;)V
+	public fun foldableRanges (Lcom/aardarch/aardink/core/CodeDocument;)Ljava/util/List;
+	public fun requestFoldableRanges (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class com/aardarch/aardink/languages/lsp/LspFormattingOptions {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspFormattingOptions$Companion;
@@ -610,15 +639,20 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public static final field Companion Lcom/aardarch/aardink/languages/lsp/LspLanguageService$Companion;
 	public fun <init> (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;)V
 	public synthetic fun <init> (Lcom/aardarch/aardink/languages/lsp/LspClient;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lcom/aardarch/aardink/languages/lsp/LspRenameSupport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun attach (Lcom/aardarch/aardink/core/CodeEditorState;)V
 	public fun autoClose (Lcom/aardarch/aardink/core/CodeDocument;IC)Ljava/lang/String;
 	public fun codeActions (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun codeLenses (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun colorPresentations-9LQNqLg (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/ColorInfo;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun completions (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun declaration (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun definition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun detach ()V
 	public fun diagnostics (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didChange (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didClose (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun didOpen (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun didSave (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentColors (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentHighlights (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -632,13 +666,21 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun implementation (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun inlayHints (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun linkedEditingRanges (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun prepareRename (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun references (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun rename (Lcom/aardarch/aardink/core/CodeDocument;ILjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun resolveCompletion (Lcom/aardarch/aardink/core/CompletionItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun selectionRanges (Lcom/aardarch/aardink/core/CodeDocument;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun semanticTokens (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
+	public final fun supports (Ljava/lang/String;)Z
+	public fun surroundingClose (C)Ljava/lang/String;
+	public final fun typeDefinition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun willSave (Lcom/aardarch/aardink/languages/lsp/LspSaveReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspLanguageService$Companion {
@@ -1103,6 +1145,15 @@ public final class com/aardarch/aardink/languages/lsp/LspRequestException : java
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspRequestException$Companion {
+}
+
+public final class com/aardarch/aardink/languages/lsp/LspSaveReason : java/lang/Enum {
+	public static final field AfterDelay Lcom/aardarch/aardink/languages/lsp/LspSaveReason;
+	public static final field FocusOut Lcom/aardarch/aardink/languages/lsp/LspSaveReason;
+	public static final field Manual Lcom/aardarch/aardink/languages/lsp/LspSaveReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/languages/lsp/LspSaveReason;
+	public static fun values ()[Lcom/aardarch/aardink/languages/lsp/LspSaveReason;
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspSignatureHelp {

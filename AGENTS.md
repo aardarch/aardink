@@ -12,33 +12,42 @@ cannot -- `src/main/java` no longer exists anywhere.
 ```text
 editor/          # The library module -- the published artifact (com.aardarch:aardink)
   src/commonMain/kotlin/com/aardarch/aardink/
-    core/        # CodeEditorState, CodeDocument, tokens (TokenStore), diagnostics tracking, find, folding, LSP models
+    core/        # CodeEditorState, CodeDocument, tokens (TokenStore, with a semantic layer over the syntax's),
+                 #   diagnostics tracking, find, folding, inlay hints, code lenses, inline completions, LSP models
       text/      # GapBuffer, LineIndex, DocumentChange: the document's storage, updated edit by edit
       edit/      # UI-free editing: SelectionSet, UndoHistory, TypingRules, TextNavigator, LineCommands, MinimalEdits
-    ui/          # Composables: CodeEditorLayout, EditorOptions, themes, find panel, popups, dialogs
-      view/      # The renderer (internal): EditorView (VisualLineMap, LineLayoutCache), EditorDrawing,
-                 #   EditorController + EditorKeyBindings, pointer input, gutter, sticky scroll, minimap
+    ui/          # Composables: CodeEditorLayout, EditorOptions, EditorKeyBindings, themes, find panel, popups,
+                 #   dialogs, the Markdown renderer and the completion detail pane (internal)
+      view/      # The renderer (internal): EditorView (VisualLineMap, LineLayoutCache, LineLayout, OffsetMap),
+                 #   InlineContent (hints, lenses, ghost text), EditorDrawing, EditorController + the fixed
+                 #   key table, pointer input, gutter, sticky scroll, minimap
       input/     # Text input (internal): EditorImeAdapter, ImeWindowBuffer
     platform/    # expect declarations -- the ONLY package where expect/actual may live
   src/androidMain/ src/jvmMain/ src/wasmJsMain/      # actuals, under platform/ only
   src/skikoMain/ # actuals shared by desktop and web (text input request, scrollbars): under platform/ too
   src/commonTest/kotlin/                             # kotlin.test, runs on every target
+  src/skikoTest/kotlin/                              # View tests on Skia's real text layout, JVM and wasmJs
+  src/jvmTest/kotlin/                                # Compose UI tests, pixel tests, and end-to-end tests with :languages and :languages-lsp (test only)
   api/           # Committed public ABI dumps (klib + android + jvm)
 
 languages/       # Built-in language support -- published as com.aardarch:aardink-languages
   src/commonMain/kotlin/com/aardarch/aardink/languages/
     LanguageDefinition.kt / LanguageRegistry.kt / BuiltInLanguages.kt
-    DeclarativeGrammar.kt / DeclarativeTokenizer.kt   # Monarch grammars as data (also behind the web's registerLanguage)
+    DeclarativeGrammar.kt / DeclarativeTokenizer.kt   # Monarch grammars as data, embedding by id (also behind the web's registerLanguage)
+    LanguageConfiguration.kt   # VS Code's language-configuration.json: closing pairs, surround, Enter rules
     internal/    # Per-language tokenizers + folding providers + services (Kotlin, XML, JSON, TOML, etc.)
 
 languages-lsp/   # External Language Server Protocol bridge -- published as com.aardarch:aardink-languages-lsp
   src/commonMain/kotlin/com/aardarch/aardink/languages/lsp/
-    LspClient.kt / LspLanguageService.kt / LspTransport.kt / LspMessage.kt
+    LspClient.kt / LspClientHost.kt / LspClientCapabilities.kt / LspTransport.kt / LspMessage.kt
+    LspLanguageService.kt / LspDocumentSync.kt (attach, the ordered sync queue) / LspFoldingProvider.kt
+    LspMarkdown.kt / LspSemanticTokens.kt   # a server's text as Markdown; semantic tokens decoded by legend
   src/jvmAndAndroidMain/   # StreamLspTransport -- java.io has no common equivalent
   src/wasmJsMain/          # WebSocketLspTransport
 
 editor-web/      # Browser bridge -- published as com.aardarch:aardink-editor-web (wasmJs only)
-  src/wasmJsMain/kotlin/com/aardarch/aardink/web/   # AardinkWeb (mount/getValue/...), WebEditorOptions, WebLanguages (registerLanguage/registerTheme)
+  src/wasmJsMain/kotlin/com/aardarch/aardink/web/   # AardinkWeb (mount/getValue/...), WebEditorOptions, WebLanguages (registerLanguage/registerTheme),
+                                                    #   WebLanguageServers (connectLanguageServer), WebKeybindings (Monaco's action ids)
   src/wasmJsMain/composeResources/font/             # Bundled JetBrains Mono (OFL, see JETBRAINS_MONO_OFL.txt)
   src/wasmJsTest/.../ExportsTemplate.kt             # The @JsExport template consumers copy -- compiled and tested here
 
@@ -85,7 +94,8 @@ All commands run from the repo root.
 ./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply :sample-web:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :sample:verifyRoborazziDebug          # Screenshot regression check
-./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change
+./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change (SampleScreenshotTest only)
+./gradlew :sample:recordRoborazziDebug --tests '*.EditorSceneScreenshotTest'   # Re-record scene baselines (scene-*.png), one test class at a time
 ./scripts/verify-consumer.ps1                   # Publish to ~/.m2 and prove a real consumer still resolves -android
 ./gradlew dokkaAll                              # API docs (HTML)
 ./gradlew :sample-desktop:run                   # Desktop harness
@@ -93,6 +103,7 @@ All commands run from the repo root.
 ./gradlew :sample-web:npmPackage                # Build the npm package into sample-web/build/npm
 cd tools/vite-smoke; pnpm install --force; pnpm smoke   # npm package in a real Vite app (after npmPackage)
 cd tools/vite-smoke; pnpm build; node checklist.mjs     # Measure web checklist items W-1/3/7/8/10
+cd tools/vite-smoke; pnpm build; node perf.mjs --hints  # Latency with inlay hints and code lenses (--semantic: a server's semantic tokens)
 ```
 
 The wasmJs tests run in headless Chrome via Karma. Install Chrome locally and, if it is not
@@ -132,7 +143,7 @@ JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; 
 - **Public API discipline** — run `./gradlew updateAbiAll` after any intentional API change
   and commit the updated dumps under `*/api/`. Every public symbol added, changed or removed
   must be in the current version's API ledger, [docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md)
-  §14 for 0.8 (0.7's is §11; the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
+  §15 for 0.9 (0.8's is §14, 0.7's is §11; the 0.6 ledger is [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md) §5), and,
   if it breaks consumers, in that version's `docs/MIGRATION_0.x.md`. Nothing public is added
   without that.
 - **License:** Apache 2.0 — all new files must include the Apache 2.0 header
@@ -171,9 +182,19 @@ catch a breach, but late; these rules keep it from happening:
   (`CooperativePacer`, `diagnosticsPacer`), and `Dispatchers.Default` there is the UI loop.
 - **Selections and carets never relayout text.** They are drawn over the laid-out lines; colour
   changes key the layout cache by colour, not by position.
+- **Only `LineLayout` reads a `TextLayoutResult` by position.** A laid-out line can hold text that
+  is not in the document (inlay hints, `before` and `after`, ghost text, lens rows), so a layout's
+  own offsets and rows are not the document's. `LineLayout` maps them through the line's `OffsetMap`
+  and speaks document columns and text rows only; calling `getLineForOffset`, `getCursorRect`,
+  `getBoundingBox`, `getOffsetForPosition` or `getPathForRange` anywhere else is a bug even where no
+  line has injected text yet.
+- **Inline content is asked for per line and moved with edits.** Hints are asked for about the lines
+  around the view after a pause, lenses and ghost text are kept in trackers moved by each
+  `DocumentChange` before the view splices its rows, and `injectionsChanged` is given the lines that
+  changed, never left to walk them all.
 - **Do not add runtime dependencies without necessity** — `:editor` depends on Compose plus
   `kotlinx-serialization-json` (an agreed exception: `EditorThemeParser` needs it in place of
-  the Android-only `org.json` so the module compiles as common Kotlin); `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own.
+  the Android-only `org.json` so the module compiles as common Kotlin); `:languages-lsp` additionally depends on `kotlinx-serialization-json` for JSON-RPC payloads and `kotlinx-coroutines-core` for the client and transport. Both are `api` dependencies, because `JsonElement` and `CoroutineScope` appear in `LspClient`'s public signatures. `:languages-lsp` pulls in no Compose of its own. `:editor-web` depends on `:languages-lsp` (for `connectLanguageServer`), so its dependencies reach every web consumer, and has `kotlinx-coroutines-core` as `api`, because `DisposableHandle` is in `AardinkWeb`'s signatures. `:editor`'s `jvmTest` alone depends on `:languages` and `:languages-lsp`, to test against the real tokenizers and the real adapter; nothing in `:editor`'s main code may.
 
 ## Separation of Concerns
 
@@ -190,24 +211,28 @@ The `editor` module is intentionally language-agnostic:
 | Symbol | Description |
 | --- | --- |
 | `CodeEditorLayout` | Top-level composable — the main entry point for consumers |
-| `EditorOptions` | The editor's switches: read-only, soft wrap, gutter, minimap, sticky scroll, brackets, tabs |
+| `EditorOptions` | The editor's switches: read-only, soft wrap, gutter, minimap, sticky scroll, brackets, tabs; `inlayHints`, `codeLens`, `semanticHighlighting` (off by default) |
 | `CodeEditorState` / `rememberCodeEditorState()` | State holder: text, `selections`, `applyTextEdits()`, undo (`canUndo`, `pushUndoStop`, `alternativeVersionId`) |
 | `ContentChange` / `CodeEditorState.addContentListener` | Edits as they happen, with ranges and inserted text; `addSelectionListener` for selections |
 | `EditorCommand` / `CodeEditorState.execute` | What a key or menu does, for a host's buttons; `availableCommands` to enable them |
-| `DeclarativeGrammar` / `DeclarativeTokenizer` | Highlighting from a Monarch grammar as JSON (`:languages`) |
-| `AardinkWeb` | The browser bridge (`:editor-web`); the npm package wraps it in a Monaco-shaped API |
-| `LanguageService` | Interface — completions, diagnostics, hover, formatting, code actions, definition, signature help, rename |
+| `DeclarativeGrammar` / `DeclarativeTokenizer` | Highlighting from a Monarch grammar as JSON, one grammar embedding another through a resolver by id (`:languages`) |
+| `LanguageConfiguration` / `LanguageDefinition.withConfiguration` | VS Code's `language-configuration.json`: closing pairs, surround, Enter rules, comments, folding markers (`:languages`) |
+| `AardinkWeb` | The browser bridge (`:editor-web`); the npm package wraps it in a Monaco-shaped API, with `connectLanguageServer` and `registerInlineCompletionsProvider` |
+| `LanguageService` | Interface — completions (with `resolveCompletion`), diagnostics, hover, formatting, code actions, definition, signature help, rename, inlay hints, code lenses (`CodeLens`), semantic tokens |
+| `InlayHint` / `CodeLens` | A label inside a line; a clickable title in a row above one (a blank title: not known yet, asked again on screen) |
+| `InlineCompletionProvider` / `InlineCompletion` | Ghost text at the caret, for an assistant: `CodeEditorLayout(inlineCompletionProvider)`, Tab to accept |
 | `CompositeLanguageService` | A dialect's service over a base language's (`LanguageDefinition.extending` in `:languages`) |
 | `XmlSchema` / `XmlSchemaLanguageService` | An XML dialect's completions, hover and checks from its vocabulary as JSON (`:languages`) |
-| `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`) |
-| `LspClient` | Coroutine JSON-RPC 2.0 client for LSP servers (`:languages-lsp`) |
+| `LspLanguageService` | LanguageService adapter for external Language Servers (`:languages-lsp`); `attach(state)` keeps the server in step, `supports` says what it declared |
+| `LspClient` / `LspClientHost` | Coroutine JSON-RPC 2.0 client for LSP servers, and what it asks of its host: workspace edits, messages, progress (`:languages-lsp`) |
+| `LspFoldingProvider` | A server's folds as a `FoldingProvider` (`:languages-lsp`) |
 | `IncrementalTokenizer` | Interface — implement for syntax highlighting |
-| `FoldingProvider` | Interface — implement for code folding |
+| `FoldingProvider` | Interface — implement for code folding; `requestFoldableRanges` for an answer that must be awaited |
 | `EditorTheme` / `LocalEditorTheme` | Theme data class and CompositionLocal; `EditorTheme.fromColorScheme` for Material 3 |
 | `DocumentSymbol` / `CodeEditorState.symbolPathAt` | The document's structure from the language service; the symbols around an offset |
-| `Decoration` / `CodeEditorState.setDecorations` | A host's highlights on the text, per owner, kept on their text through edits |
+| `Decoration` / `CodeEditorState.setDecorations` | A host's highlights on the text, per owner, kept on their text through edits; `DecorationStyle.before`, `after` and `inlineColor` for text inside the line |
 | `KeyChord` / `EditorKeyBinding` / `EditorKeyBindings.Default` | Keys as data; `EditorOptions.keyBindings` overrides the editor's own |
-| `CodeBlock` | Read-only highlighted code, for short snippets |
+| `CodeBlock` / `LocalCodeFenceTokenizers` | Read-only highlighted code, for short snippets; the tokenizer for a fence's language in Markdown documentation |
 | `EditorThemes` | Pre-built themes (VsCodeDark, VsCodeLight, MaterialDark, MaterialLight, MidnightOcean, SolarizedDark) |
 
 ## Versioning
@@ -227,7 +252,7 @@ The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the
 vanniktech Maven Publish plugin, and `:sample-web` stamps it into the npm package — never
 hardcode a version in `build.gradle.kts`. Between releases `VERSION_NAME` is the next version
-with a `-SNAPSHOT` suffix (now `0.8.0-SNAPSHOT`); `create-release.ps1` suggests the version
+with a `-SNAPSHOT` suffix (now `0.9.0-SNAPSHOT`); `create-release.ps1` suggests the version
 without the suffix, and the first commit after a release moves `VERSION_NAME` to the next
 `-SNAPSHOT`.
 

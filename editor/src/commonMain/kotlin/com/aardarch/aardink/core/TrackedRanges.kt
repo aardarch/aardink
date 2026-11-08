@@ -18,6 +18,7 @@ package com.aardarch.aardink.core
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import com.aardarch.aardink.core.text.DocumentChange
 import com.aardarch.aardink.core.text.DocumentChangeListener
@@ -47,8 +48,11 @@ internal open class TrackedRanges<T>(
     var given: List<T>? = null
         private set
 
-    /** [given], moved along with the edits made since. */
-    var items by mutableStateOf<List<T>>(emptyList())
+    /**
+     * [given], moved along with the edits made since. A new list is always written: an item holding
+     * an empty range equals itself moved, as every empty range equals every other.
+     */
+    var items by mutableStateOf<List<T>>(emptyList(), referentialEqualityPolicy())
         private set
 
     /** Tracks [list], whose ranges address the document as it is now. */
@@ -80,7 +84,8 @@ internal open class TrackedRanges<T>(
     protected open fun moved(item: T, change: DocumentChange): T {
         val range = rangeOf(item)
         val mapped = mapRange(range, change, keepsOneCharacter)
-        return if (mapped == range) item else withRange(item, mapped)
+        // By its ends: every empty range is equal to every other, wherever it is.
+        return if (mapped.first == range.first && mapped.last == range.last) item else withRange(item, mapped)
     }
 
     companion object {

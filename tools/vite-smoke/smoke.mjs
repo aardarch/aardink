@@ -23,6 +23,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { MOUNT, startHarness } from './harness.mjs';
+import { startLoopbackLsp } from './loopback-lsp.mjs';
 
 // Which binaries ran, so a failure on CI can be compared with a local build of the same commit.
 for (const file of readdirSync('dist/assets').filter((f) => f.endsWith('.wasm'))) {
@@ -63,6 +64,778 @@ const KNOWN_UPSTREAM = [
   // which Res.readBytes uses to load the bundled font. Not in Aardink's code.
   /Accessing `memory` via `wasmExports` is deprecated/,
 ];
+
+// What a step sets off on purpose, for as long as that step wants it. Not printed.
+let expectedConsole = [];
+
+/** Fails the run on what a page says went wrong. */
+function watch(page) {
+  page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
+  page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
+  page.on('pageerror', (e) => failures.push(`page error during ${phase}: ${e.stack || e.message}`));
+  page.on('console', (m) => {
+    if (m.type() !== 'error' && !m.text().startsWith('Aardink:')) return;
+    if (expectedConsole.some((re) => re.test(m.text()))) return;
+    (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
+  });
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A page with no touch screen, where completions show in the list that Enter reaches. It keeps what
+ * `window.open` was called with and in what state, and tries one popup of its own before any
+ * gesture: only if the blocker stops that does getting past it mean anything.
+ */
+async function desktopPage() {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 900, height: 500 });
+  watch(page);
+  await page.evaluateOnNewDocument(() => {
+    window.__popupWithoutGesture = window.open('about:blank') !== null;
+    window.__opens = [];
+    // The pointer event whose task this is, if any. Not window.event: Compose's listeners are in a
+    // shadow tree, where that is always undefined.
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      window.addEventListener(type, () => {
+        window.__inTaskOf = type;
+        setTimeout(() => { window.__inTaskOf = null; });
+      }, true);
+    }
+    const open = window.open;
+    window.open = function (url, target, features) {
+      window.__opens.push({ url, target, features, active: navigator.userActivation.isActive, task: window.__inTaskOf ?? null });
+      return open.call(this, url, target, features);
+    };
+  });
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__aardinkSmoke?.done, { timeout: 60000 });
+  return page;
+}
+
+/** A provider's arguments and answer through the dispatcher, set off by the real mouse and by the editor's own schedule. */
+async function dispatcherCheck(page) {
+  setPhase('provider dispatcher');
+  expectedConsole = [/^Aardink: a language provider failed: .*no diagnostics here/];
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__asked = [];
+    await registerLanguage(
+      { id: 'toy-dispatch', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+      {
+        provideHover: async (text, line, column) => {
+          window.__asked.push({ text, line, column });
+          return { contents: 'dispatched' };
+        },
+        provideDocumentSymbols: () => [{
+          name: 'dispatched',
+          kind: 11,
+          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 2, endColumn: 5 },
+        }],
+        // Rejected, and asked on the editor's own schedule: it costs that answer and nothing else.
+        provideDiagnostics: () => Promise.reject(new Error('no diagnostics here')),
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'first line\nsecond line', language: 'toy-dispatch' });
+  }, MOUNT);
+  await sleep(1000);
+  await page.mouse.move(150, 30);
+  await page.mouse.move(151, 30);
+  await page.waitForFunction(() => window.__asked.length > 0, { timeout: 5000 }).catch(() => {});
+  const asked = await page.evaluate(() => window.__asked[0] ?? null);
+  const symbols = await page.evaluate(() => window.__smokeEditor.getDocumentSymbols().map((symbol) => symbol.name));
+  await page.mouse.move(800, 400);
+  expectedConsole = [];
+  return {
+    'a provider gets the text and a place through the dispatcher':
+      asked?.text === 'first line\nsecond line' && asked?.line === 2 && asked?.column > 1,
+    'a provider\'s answer comes back through the dispatcher': symbols.includes('dispatched'),
+  };
+}
+
+/**
+ * provideInlayHints through the dispatcher, and text from it and from a decoration that is on screen
+ * and not in the document. What is on screen is compared whole: nothing else moves on an editor
+ * without focus, so an equal picture after it goes says the difference was that text.
+ */
+async function inlayHintCheck(page) {
+  setPhase('inlay hints and decoration text');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__hintsAsked = [];
+    await registerLanguage(
+      { id: 'toy-hints', grammar: { tokenizer: { root: [] } } },
+      {
+        provideInlayHints: async (text, range) => {
+          window.__hintsAsked.push({ text, range });
+          return [{ position: { lineNumber: 1, column: 5 }, label: ': WWWWWW' }];
+        },
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'val x = 1\nsecond', language: 'toy-hints' });
+  }, MOUNT);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  const settle = () => sleep(800);
+  await settle();
+  const plain = await shot();
+  const stable = plain === await shot();
+  const askedWhileOff = await page.evaluate(() => window.__hintsAsked.length);
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: { enabled: 'on' } }));
+  await page.waitForFunction(() => window.__hintsAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await settle();
+  const hinted = await shot();
+  const asked = await page.evaluate(() => window.__hintsAsked[0] ?? null);
+  const hintedValue = await page.evaluate(() => window.__smokeEditor.getValue());
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: false }));
+  await settle();
+  const hintGone = await shot();
+
+  await page.evaluate(() => {
+    const range = { startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 6 };
+    const options = { before: { content: '<' }, after: { content: '>' }, inlineColor: '#ff0000' };
+    window.__smokeIds = window.__smokeEditor.deltaDecorations([], [{ range, options }]);
+  });
+  await settle();
+  const decorated = await shot();
+  const decoratedValue = await page.evaluate(() => window.__smokeEditor.getValue());
+  await page.evaluate(() => window.__smokeEditor.deltaDecorations(window.__smokeIds, []));
+  await settle();
+  const decorationGone = await shot();
+
+  return {
+    'nothing moves on screen by itself, so the pictures below can be compared': stable,
+    'inlay hints are not asked for with the option off': askedWhileOff === 0,
+    'provideInlayHints gets the text and a range through the dispatcher':
+      asked?.text === 'val x = 1\nsecond' && asked?.range?.startLineNumber === 1 && asked?.range?.startColumn === 1 &&
+      asked?.range?.endLineNumber === 2 && asked?.range?.endColumn === 7,
+    'a hint is on screen and not in the document': hinted !== plain && hintedValue === 'val x = 1\nsecond',
+    'turning the option off takes the hint away': hintGone === plain,
+    'before and after are on screen and not in the document': decorated !== plain && decoratedValue === 'val x = 1\nsecond',
+    'removing the decoration takes its text away': decorationGone === plain,
+  };
+}
+
+/**
+ * A host's provider with a language server behind it that declares inlay hints and never answers
+ * the request: the provider's hint still has to reach the screen. The picture to compare with is
+ * taken with the server connected, as what it publishes is on screen too.
+ */
+async function stuckServerHintCheck(page) {
+  setPhase('inlay hints: a server stuck on the request');
+  const server = await startLoopbackLsp('', { capabilities: { inlayHintProvider: true }, unanswered: ['textDocument/inlayHint'] });
+  try {
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage(
+        { id: 'toy-stuck', grammar: { tokenizer: { root: [] } } },
+        { provideInlayHints: () => [{ position: { lineNumber: 1, column: 5 }, label: ': WWWWWW' }] },
+      );
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'val x = 1', language: 'toy-stuck' });
+      window.__stuck = await connectLanguageServer(serverUrl, 'toy-stuck');
+    }, MOUNT, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await sleep(800);
+    const plain = await page.screenshot({ encoding: 'base64' });
+
+    await page.evaluate(() => window.__smokeEditor.updateOptions({ inlayHints: true }));
+    const asked = await server.until(() => server.count('textDocument/inlayHint') >= 1);
+    await sleep(1800);
+    const hinted = await page.screenshot({ encoding: 'base64' });
+    await page.evaluate(() => window.__stuck.dispose());
+
+    return {
+      'a provider\'s hint reaches the screen past a server stuck on the request': asked && hinted !== plain,
+    };
+  } finally {
+    await server.close();
+  }
+}
+
+/** Long enough for a click at x 150 or 450 to land on the first or the second of two lenses on the top row. */
+const LENS_TITLE = 'W'.repeat(30);
+
+/** A language with two lenses over its first line, whose runs land in `window.__lensRuns`. */
+async function lensEditor(page) {
+  await page.evaluate(async (mount, title) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    window.__lensesAsked = [];
+    window.__lensRuns = [];
+    const range = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 };
+    await registerLanguage(
+      { id: 'toy-lens', grammar: { tokenizer: { root: [] } } },
+      {
+        provideCodeLenses: async (text) => {
+          window.__lensesAsked.push(text);
+          return [
+            { range, command: { id: 'first', title, arguments: [1, 'two'] } },
+            { range, command: { id: 'second', title } },
+          ];
+        },
+        runCodeLensCommand: (id, args) => {
+          window.__lensRuns.push({ id, args });
+        },
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'fun main() {}\nsecond', language: 'toy-lens' });
+  }, MOUNT, LENS_TITLE);
+}
+
+/**
+ * registerInlineCompletionsProvider with real keys: asked once after a pause and with the text as it
+ * is, ghost text on screen and not in the document, a bracket it repeats not doubled, Alt+] going
+ * through what is on offer, Tab as one undo step, Escape, and Tab indenting again with nothing to show.
+ */
+async function inlineCompletionCheck(page) {
+  setPhase('inline completions');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerInlineCompletionsProvider, registerLanguage } = window.__aardink;
+    window.__inlineAsked = [];
+    await registerLanguage({ id: 'toy-ghost', grammar: { tokenizer: { root: [] } } }, {});
+    window.__inlineProvider = await registerInlineCompletionsProvider('toy-ghost', {
+      provideInlineCompletions: async (text, line, column) => {
+        window.__inlineAsked.push({ text, line, column });
+        return { items: [{ insertText: 'ar)' }, { insertText: 'az)' }] };
+      },
+    });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'foo()\nsecond', language: 'toy-ghost' });
+  }, MOUNT);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const canAccept = () => page.evaluate(() => window.__smokeEditor.getAction('editor.action.inlineSuggest.commit').isSupported());
+  await sleep(800);
+  await page.mouse.click(300, 12);
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 5 }));
+  await sleep(100);
+  const acceptBefore = await canAccept();
+
+  await page.keyboard.type('b');
+  const askedAtOnce = await page.evaluate(() => window.__inlineAsked.length);
+  await sleep(100);
+  const plain = await shot();
+  await page.waitForFunction(() => window.__inlineAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const ghosted = await shot();
+  const askedAfterPause = await page.evaluate(() => window.__inlineAsked.slice());
+  const shownValue = await value();
+  const acceptWhileShown = await canAccept();
+
+  await page.keyboard.down('Alt');
+  await page.keyboard.press(']');
+  await page.keyboard.up('Alt');
+  await sleep(200);
+  const cycled = await shot();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const accepted = await value();
+  const caret = await page.evaluate(() => window.__smokeEditor.getPosition());
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await sleep(600);
+  const undone = await value();
+
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 6 }));
+  await page.keyboard.type('q');
+  await page.waitForFunction(() => window.__inlineAsked.at(-1).text.includes('bq'), { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const shownAgain = await canAccept();
+  const canHide = () => page.evaluate(() => window.__smokeEditor.getAction('editor.action.inlineSuggest.hide').isSupported());
+  const hideWhileShown = await canHide();
+  await page.keyboard.press('Escape');
+  await sleep(200);
+  const afterEscape = await canAccept();
+  const hideAfterEscape = await canHide();
+
+  await page.keyboard.type('r');
+  await page.waitForFunction(() => window.__inlineAsked.at(-1).text.includes('bqr'), { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const shownForButton = await canAccept();
+  const asksBeforeHide = await page.evaluate(() => window.__inlineAsked.length);
+  const hid = await page.evaluate(() => window.__smokeEditor.trigger(null, 'editor.action.inlineSuggest.hide'));
+  await sleep(600);
+  const afterHide = await canAccept();
+  const hideStaysGone = (await page.evaluate(() => window.__inlineAsked.length)) === asksBeforeHide;
+
+  await page.evaluate(() => window.__inlineProvider.dispose());
+  await sleep(300);
+  const before = await value();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const indented = await value();
+
+  return {
+    'nothing can be accepted before anything shows': acceptBefore === false,
+    'an inline completions provider is not asked on the key itself': askedAtOnce === 0,
+    'it is asked after a pause, with the text and a 1-based place':
+      askedAfterPause.length === 1 && askedAfterPause[0].text === 'foo(b)\nsecond' && askedAfterPause[0].line === 1 && askedAfterPause[0].column === 6,
+    'ghost text is on screen and not in the document': ghosted !== plain && shownValue === 'foo(b)\nsecond' && acceptWhileShown === true,
+    'Alt+] shows the next one': cycled !== ghosted,
+    'Tab accepts what shows, with the bracket it repeats not doubled': accepted === 'foo(baz)\nsecond',
+    'accepting leaves the caret at the end of what it added': caret?.lineNumber === 1 && caret?.column === 8,
+    'accepting is one undo step': undone === 'foo(b)\nsecond',
+    'typing something else drops it and asks again': shownAgain === true,
+    'Escape dismisses it, and hide is there only while something shows':
+      hideWhileShown === true && afterEscape === false && hideAfterEscape === false,
+    'hide from a button dismisses it, and it stays gone until an edit asks':
+      shownForButton === true && hid === true && afterHide === false && hideStaysGone,
+    'Tab indents when nothing shows': indented !== before && indented.length > before.length,
+  };
+}
+
+/**
+ * provideCodeLenses through the dispatcher, a row on screen and not in the document, and a real
+ * click on each lens of the row coming back through runCodeLensCommand with the caret left alone.
+ */
+async function codeLensCheck(page) {
+  setPhase('code lenses');
+  await lensEditor(page);
+  const shot = () => page.screenshot({ encoding: 'base64' });
+  await sleep(800);
+  const plain = await shot();
+  const askedWhileOff = await page.evaluate(() => window.__lensesAsked.length);
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await page.waitForFunction(() => window.__lensesAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(800);
+  const lensed = await shot();
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: false }));
+  await sleep(800);
+  const gone = await shot();
+
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await sleep(800);
+  const state = () => page.evaluate(() => ({
+    value: window.__smokeEditor.getValue(),
+    caret: window.__smokeEditor.getPosition(),
+    runs: window.__lensRuns.slice(),
+  }));
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 2, column: 3 }));
+  await page.mouse.click(150, 12);
+  await sleep(300);
+  await page.mouse.click(450, 12);
+  await sleep(300);
+  const clicked = await state();
+
+  return {
+    'code lenses are not asked for with the option off': askedWhileOff === 0,
+    'provideCodeLenses gets the text through the dispatcher': (await page.evaluate(() => window.__lensesAsked[0])) === 'fun main() {}\nsecond',
+    'a lens is on screen and not in the document': lensed !== plain && clicked.value === 'fun main() {}\nsecond',
+    'a click on each lens of a row runs its own command, with its arguments':
+      JSON.stringify(clicked.runs) === JSON.stringify([{ id: 'first', args: [1, 'two'] }, { id: 'second', args: [] }]),
+    'a click on a lens leaves the caret where it was': clicked.caret?.lineNumber === 2 && clicked.caret?.column === 3,
+    'turning the option off takes the row away': gone === plain,
+  };
+}
+
+/** A tap on a page with a touch screen runs a lens as a click does. */
+async function codeLensTapCheck(page) {
+  setPhase('code lenses by touch');
+  await lensEditor(page);
+  await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+  await page.waitForFunction(() => window.__lensesAsked.length > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(800);
+  await page.touchscreen.tap(150, 12);
+  await sleep(500);
+  const runs = await page.evaluate(() => window.__lensRuns.slice());
+  return { 'a tap on a lens runs it': runs.length === 1 && runs[0].id === 'first' };
+}
+
+/**
+ * A language server's lenses through a real WebSocket: asked for, resolved, on screen, and a click
+ * going back as workspace/executeCommand.
+ */
+async function serverCodeLensCheck(page) {
+  setPhase('code lenses: a language server');
+  const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } };
+  const server = await startLoopbackLsp('', {
+    capabilities: { codeLensProvider: { resolveProvider: true }, executeCommandProvider: { commands: ['server.run'] } },
+    answers: {
+      'textDocument/codeLens': () => [{ range, data: 7 }],
+      'codeLens/resolve': (lens) => ({ ...lens, command: { title: LENS_TITLE, command: 'server.run', arguments: [lens.data] } }),
+    },
+  });
+  try {
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage({ id: 'toy-served-lens', grammar: { tokenizer: { root: [] } } });
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'fun main() {}', language: 'toy-served-lens', codeLens: true });
+      window.__servedLens = await connectLanguageServer(serverUrl, 'toy-served-lens');
+    }, MOUNT, server.url);
+    const resolved = await server.until(() => server.count('codeLens/resolve') === 1);
+    await sleep(800);
+    await page.mouse.click(150, 12);
+    const ran = await server.until(() => server.count('workspace/executeCommand') === 1);
+    const sent = server.heard.find((message) => message.method === 'workspace/executeCommand')?.params;
+    const heard = server.methods();
+    await page.evaluate(() => window.__servedLens.dispose());
+    return {
+      'a server\'s lens is asked for after the document opens, and resolved with its data':
+        resolved && heard.indexOf('textDocument/didOpen') < heard.indexOf('textDocument/codeLens') &&
+        server.heard.find((message) => message.method === 'codeLens/resolve')?.params?.data === 7,
+      'a click on a server\'s lens runs its command there': ran && sent?.command === 'server.run' && sent?.arguments?.[0] === 7,
+    };
+  } finally {
+    await server.close();
+  }
+}
+
+/**
+ * A host's provider with a language server behind it that declares lenses and never answers the
+ * request: the provider's lens still has to reach the screen, and a click on it the host.
+ */
+async function stuckServerLensCheck(page) {
+  setPhase('code lenses: a server stuck on the request');
+  const server = await startLoopbackLsp('', { capabilities: { codeLensProvider: {} }, unanswered: ['textDocument/codeLens'] });
+  try {
+    await lensEditor(page);
+    await page.evaluate(async (serverUrl) => {
+      window.__stuck = await window.__aardink.connectLanguageServer(serverUrl, 'toy-lens');
+    }, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await page.evaluate(() => window.__smokeEditor.updateOptions({ codeLens: true }));
+    const asked = await server.until(() => server.count('textDocument/codeLens') >= 1);
+    await sleep(1800);
+    await page.mouse.click(150, 12);
+    await sleep(300);
+    const runs = await page.evaluate(() => window.__lensRuns.slice());
+    await page.evaluate(() => window.__stuck.dispose());
+    return { 'a provider\'s lens reaches the screen and takes a click past a server stuck on the request': asked && runs.length === 1 };
+  } finally {
+    await server.close();
+  }
+}
+
+/** Where the link in the hover card is: the pixels of the theme's link colour, found on a screenshot. */
+async function linkPixel(page) {
+  const png = await page.screenshot({ encoding: 'base64' });
+  return page.evaluate(async (png) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, image.width, image.height);
+    const blue = [];
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const i = (y * image.width + x) * 4;
+        if (data[i + 2] > 170 && data[i + 2] > data[i] + 60 && data[i + 1] > data[i]) blue.push([x, y]);
+      }
+    }
+    if (blue.length === 0) return null;
+    const middle = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    return { x: middle(blue.map(([x]) => x)), y: middle(blue.map(([, y]) => y)), count: blue.length };
+  }, png);
+}
+
+/**
+ * connectLanguageServer against a real WebSocket: editors open before and created after it, what
+ * the server knows reaching the text beside a host's providers, the end of a session, a connection
+ * that drops and one that never comes up.
+ */
+/**
+ * The same keys, in an editor with no language service, with and without a real server following
+ * it: a server changes nothing about typing. It offers no completions here, as a list up would be
+ * something else that Enter reaches.
+ */
+async function serverTypingCheck(page) {
+  const checks = {};
+  // With [server], null unless the server has opened the document before the first key: the
+  // promise connectLanguageServer gives is kept once the connection is asked for, not once it is up.
+  const typedIn = async (language, server) => {
+    setPhase(`typing in ${language} ${server ? 'with' : 'without'} a server`);
+    const opened = server?.count('textDocument/didOpen');
+    await page.evaluate(async (mount, language, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: '  word', language });
+      window.__typingServer = serverUrl ? await window.__aardink.connectLanguageServer(serverUrl, language) : null;
+    }, MOUNT, language, server?.url ?? null);
+    if (server && !(await server.until(() => server.count('textDocument/didOpen') === opened + 1))) {
+      await page.evaluate(() => {
+        window.__typingServer?.dispose();
+        window.__typingServer = null;
+      });
+      return null;
+    }
+    await sleep(500);
+    await page.mouse.click(300, 12);
+    await sleep(300);
+    await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 7 }));
+    await sleep(100);
+    await page.keyboard.type(" don't (a) [b] {c} \"d\"");
+    await sleep(300);
+    await page.keyboard.press('Enter');
+    await sleep(100);
+    await page.keyboard.type('next');
+    await sleep(300);
+    await page.evaluate(() => window.__smokeEditor.setSelections([{
+      selectionStartLineNumber: 2, selectionStartColumn: 1, positionLineNumber: 2, positionColumn: 5,
+    }]));
+    await sleep(100);
+    await page.keyboard.type('(');
+    await sleep(300);
+    const text = await page.evaluate(() => window.__smokeEditor.getValue());
+    await page.evaluate(() => {
+      window.__typingServer?.dispose();
+      window.__typingServer = null;
+    });
+    await sleep(100);
+    return text;
+  };
+  const server = await startLoopbackLsp('', { answers: { 'textDocument/completion': () => ({ isIncomplete: false, items: [] }) } });
+  try {
+    const expected = '  word don\'t (a) [b] {c} "d"\n(';
+    for (const language of ['python', 'plaintext']) {
+      const without = await typedIn(language, null);
+      const opened = server.count('textDocument/didOpen');
+      const served = await typedIn(language, server);
+      checks[`typing in ${language} is as it says, with no server`] = without === expected;
+      checks[`typing in ${language} is the same with a server, which had opened it before the first key`] =
+        served !== null && served === without && server.count('textDocument/didOpen') === opened + 1;
+    }
+  } finally {
+    await server.close();
+  }
+  return checks;
+}
+
+async function languageServerCheck(page) {
+  const checks = {};
+  const hoverLink = `${url}smoke-hover-link.txt`;
+  const server = await startLoopbackLsp(hoverLink);
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  try {
+    setPhase('language server: editors before and after');
+    await page.evaluate(async (mount, serverUrl) => {
+      window.__smokeEditor?.dispose();
+      document.getElementById('check')?.remove();
+      const { connectLanguageServer, createEditor, registerLanguage } = window.__aardink;
+      await registerLanguage(
+        { id: 'toy-server', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+        { triggerCharacters: ['@'], provideCompletionItems: () => [{ label: 'hosted', insertText: 'hosted' }] },
+      );
+      window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'open before', language: 'toy-server' });
+      window.__diagnostics = [];
+      window.__smokeEditor.onDidChangeDiagnostics((list) => window.__diagnostics.push(list.map((d) => d.message)));
+      window.__connection = await connectLanguageServer(serverUrl, 'toy-server');
+    }, MOUNT, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === 1);
+    await page.evaluate(async () => {
+      const box = document.createElement('div');
+      box.id = 'second';
+      box.style.cssText = 'position:fixed;right:0;bottom:0;width:10px;height:10px';
+      document.body.append(box);
+      window.__second = await window.__aardink.createEditor(box, undefined, { value: 'open after', language: 'toy-server' });
+    });
+    await server.until(() => server.count('textDocument/didOpen') === 2);
+    const opened = server.heard.filter((m) => m.method === 'textDocument/didOpen').map((m) => m.params.textDocument);
+    checks['a server hears of editors open already and created later'] = opened.length === 2 &&
+      opened[0].text === 'open before' && opened[1].text === 'open after' && opened[0].uri !== opened[1].uri &&
+      opened.every((d) => d.languageId === 'toy-server') && server.methods()[0] === 'initialize';
+
+    setPhase('language server: diagnostics');
+    await page.waitForFunction(() => window.__diagnostics.some((list) => list.includes('from the server, version 1')), { timeout: 5000 })
+      .then(() => { checks['a server\'s diagnostics reach the editor, without an edit'] = true; })
+      .catch(() => { checks['a server\'s diagnostics reach the editor, without an edit'] = false; });
+
+    setPhase('language server: completions');
+    await page.mouse.click(600, 20);
+    await page.keyboard.type('.');
+    const asked = await server.until(() => server.count('textDocument/completion') >= 1);
+    const methods = server.methods();
+    checks['an edit reaches the server ahead of the completion it set off'] = asked &&
+      methods.indexOf('textDocument/didChange') < methods.indexOf('textDocument/completion') && methods.includes('textDocument/didChange');
+    await sleep(500);
+    await page.keyboard.press('ArrowDown');
+    await sleep(100);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['a server\'s completion is accepted into the text'] = (await value()) === 'open before.served';
+    await page.keyboard.type('.');
+    await sleep(800);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['a host\'s provider still answers, ahead of the server'] = (await value()) === 'open before.served.hosted';
+
+    setPhase('language server: typing');
+    await page.keyboard.type('\'');
+    await sleep(100);
+    checks['a language that closes nothing keeps a server\'s generic pairs out of typing'] = (await value()) === 'open before.served.hosted\'';
+    await page.keyboard.press('Backspace');
+    await sleep(100);
+
+    setPhase('language server: hover');
+    const hovers = server.count('textDocument/hover');
+    await page.mouse.move(120, 12);
+    await page.mouse.move(121, 12);
+    await server.until(() => server.count('textDocument/hover') > hovers);
+    await sleep(800);
+    const link = await linkPixel(page);
+    await page.evaluate(() => {
+      window.__links = [];
+      window.__stopLinks = window.__smokeEditor.onOpenLink((target) => window.__links.push(target));
+    });
+    checks['a server\'s hover reaches the editor, and the link in it the host'] = false;
+    if (link) {
+      await page.mouse.move(link.x, link.y);
+      await sleep(100);
+      await page.mouse.click(link.x, link.y);
+      await sleep(300);
+      const links = await page.evaluate(() => window.__links.slice());
+      checks['a server\'s hover reaches the editor, and the link in it the host'] = links.length === 1 && links[0] === hoverLink;
+      await page.evaluate(() => window.__stopLinks.dispose());
+      // Following a link takes the card down, so it is brought back for the second click.
+      await page.mouse.move(800, 400);
+      await sleep(800);
+      await page.mouse.move(120, 12);
+      await page.mouse.move(121, 12);
+      await sleep(1000);
+      await page.mouse.move(link.x, link.y);
+      await sleep(100);
+      await page.mouse.click(link.x, link.y);
+      const tab = await browser.waitForTarget((t) => t.url().includes('smoke-hover-link'), { timeout: 5000 }).catch(() => null);
+      await (await tab?.page())?.close();
+      const [open] = await page.evaluate(() => window.__opens.slice());
+      checks['with no listener, a card\'s link opens a tab, past the popup blocker'] = tab !== null && open?.url === hoverLink && open?.active === true;
+      console.log(`  .. a card's link: window.open ran with user activation ${open?.active}, in the task of ${open?.task}`);
+      await page.bringToFront();
+    }
+    await page.mouse.move(800, 400);
+    await sleep(500);
+
+    setPhase('language server: dispose');
+    const changes = server.count('textDocument/didChange');
+    await page.evaluate(() => window.__connection.dispose());
+    await server.until(() => server.count('exit') === 1 && server.connections() === 0);
+    checks['dispose closes each document and shuts the server down'] =
+      JSON.stringify(server.methods().slice(-4)) === JSON.stringify(['textDocument/didClose', 'textDocument/didClose', 'shutdown', 'exit']) &&
+      server.connections() === 0;
+    await page.mouse.click(600, 20);
+    await page.keyboard.type('x');
+    await sleep(300);
+    checks['after dispose the editor goes on, and the server hears no more'] =
+      (await value()) === 'open before.served.hostedx' && server.count('textDocument/didChange') === changes;
+
+    setPhase('language server: a connection that drops');
+    expectedConsole = [/^Aardink: the language server at .* closed the connection/];
+    const reopened = server.count('textDocument/didOpen');
+    await page.evaluate(async (serverUrl) => {
+      window.__dropped = await window.__aardink.connectLanguageServer(serverUrl, 'toy-server');
+    }, server.url);
+    await server.until(() => server.count('textDocument/didOpen') === reopened + 2);
+    await page.waitForFunction(() => window.__diagnostics.at(-1)?.some((m) => m.startsWith('from the server')), { timeout: 5000 }).catch(() => {});
+    server.drop();
+    await page.waitForFunction(() => window.__diagnostics.at(-1)?.length === 0, { timeout: 5000 })
+      .then(() => { checks['a dropped server\'s squiggles go with it'] = true; })
+      .catch(() => { checks['a dropped server\'s squiggles go with it'] = false; });
+    // `.` was the server's trigger character, and went with it. The language's own stays.
+    await page.keyboard.type('@');
+    await sleep(800);
+    await page.keyboard.press('Enter');
+    await sleep(300);
+    checks['after a drop the editor goes on with its language\'s own answers'] = (await value()) === 'open before.served.hostedx@hosted';
+    await page.evaluate(() => window.__dropped.dispose());
+
+    setPhase('language server: a connection that never comes up');
+    expectedConsole = [/^Aardink: could not connect to the language server/, /WebSocket connection to .* failed/];
+    await page.evaluate(async () => {
+      window.__refused = await window.__aardink.connectLanguageServer('ws://127.0.0.1:1', 'toy-server');
+      window.__badUrl = await window.__aardink.connectLanguageServer('ftp://example.invalid', 'toy-server');
+    });
+    await sleep(1000);
+    await page.keyboard.type('y');
+    await sleep(300);
+    checks['a server that cannot be reached costs no editor'] = (await value()) === 'open before.served.hostedx@hostedy' &&
+      await page.evaluate(() => {
+        window.__refused.dispose();
+        window.__badUrl.dispose();
+        return true;
+      });
+    expectedConsole = [];
+    await page.evaluate(() => {
+      window.__second.dispose();
+      document.getElementById('second').remove();
+    });
+  } finally {
+    await server.close();
+  }
+  return checks;
+}
+
+/**
+ * What a link does in text: a Ctrl+click on a URL opens a tab past the popup blocker with no
+ * listener, and goes to the listener with one, and only then. The check that the blocker was on at
+ * all comes first, or the tab would prove nothing.
+ */
+async function linkCheck(page) {
+  setPhase('links');
+  const checks = {};
+  const target = `${url}smoke-link.txt`;
+  checks['the popup blocker is on, so the next checks mean something'] = !(await page.evaluate(() => window.__popupWithoutGesture));
+  await page.evaluate(async (mount, target) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    window.__opens = [];
+    window.__smokeEditor = await window.__aardink.createEditor(eval(mount), undefined, { value: target });
+  }, MOUNT, target);
+  await sleep(500);
+  const ctrlClick = async () => {
+    await page.mouse.move(150, 12);
+    await page.keyboard.down('Control');
+    await page.mouse.move(151, 12);
+    await sleep(100);
+    await page.mouse.click(151, 12);
+    await page.keyboard.up('Control');
+    await sleep(300);
+  };
+
+  await ctrlClick();
+  const tab = await browser.waitForTarget((t) => t.url().includes('smoke-link'), { timeout: 5000 }).catch(() => null);
+  await (await tab?.page())?.close();
+  const opens = await page.evaluate(() => window.__opens.slice());
+  checks['Ctrl+click on a URL opens a tab, past the popup blocker'] = tab !== null;
+  checks['the tab opens with noopener, in the user\'s gesture'] = opens.length === 1 && opens[0].url === target &&
+    opens[0].target === '_blank' && opens[0].features === 'noopener' && opens[0].active === true;
+  console.log(`  .. window.open ran with user activation ${opens[0]?.active}, in the task of ${opens[0]?.task}`);
+
+  const listened = await page.evaluate(() => {
+    window.__links = [];
+    window.__stopLinks = window.__smokeEditor.onOpenLink((link) => window.__links.push(link));
+    return true;
+  });
+  await ctrlClick();
+  const links = await page.evaluate(() => window.__links.slice());
+  checks['a listener gets the link, and no tab opens'] = listened && links.length === 1 && links[0] === target &&
+    (await page.evaluate(() => window.__opens.length)) === 1;
+
+  await page.evaluate(() => {
+    window.__stopLinks.dispose();
+    window.__stopLinks.dispose();
+  });
+  await ctrlClick();
+  const again = await browser.waitForTarget((t) => t.url().includes('smoke-link'), { timeout: 5000 }).catch(() => null);
+  await (await again?.page())?.close();
+  checks['with the listener gone, a link opens a tab again'] = again !== null && (await page.evaluate(() => window.__opens.length)) === 2 &&
+    (await page.evaluate(() => window.__links.length)) === 1;
+  return checks;
+}
 
 /**
  * Typing, an IME composition, a paste and a touch tap, the way a browser delivers them, into a
@@ -216,16 +989,52 @@ async function grammarCheck(page) {
   return { 'registered grammar and theme colour the text': magenta > 50 };
 }
 
+/**
+ * A language configuration from JavaScript, RegExp literals included: typing over a selection
+ * surrounds it, and Enter follows a rule whose regex has a flag.
+ */
+async function configurationCheck(page) {
+  setPhase('language configuration');
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const select = (line, startColumn, endColumn) => page.evaluate((line, startColumn, endColumn) => {
+    window.__smokeEditor.setSelections([{
+      selectionStartLineNumber: line, selectionStartColumn: startColumn, positionLineNumber: line, positionColumn: endColumn,
+    }]);
+  }, line, startColumn, endColumn);
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    await registerLanguage({
+      id: 'toy-configuration',
+      grammar: { tokenizer: { root: [] } },
+      configuration: {
+        autoClosingPairs: [['(', ')']],
+        onEnterRules: [{ beforeText: /^NOTE/i, action: { indent: 'none', appendText: '> ' } }],
+      },
+    });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'note\nword', language: 'toy-configuration' });
+  }, MOUNT);
+  await new Promise((r) => setTimeout(r, 500));
+  await page.mouse.click(300, 20);
+  await select(2, 1, 5);
+  await page.keyboard.type('(');
+  await new Promise((r) => setTimeout(r, 300));
+  const surrounded = await value();
+  await select(1, 5, 5);
+  await page.keyboard.press('Enter');
+  await new Promise((r) => setTimeout(r, 300));
+  const entered = await value();
+  return {
+    'a configuration surrounds a selection': surrounded === 'note\n(word)',
+    'a configuration\'s RegExp rule decides Enter': entered === 'note\n> \n(word)',
+  };
+}
+
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 500, hasTouch: true });
-  page.on('requestfailed', (r) => failures.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
-  page.on('response', (r) => { if (r.status() >= 400) failures.push(`HTTP ${r.status()}: ${r.url()}`); });
-  page.on('pageerror', (e) => failures.push(`page error during ${phase}: ${e.stack || e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error' && !m.text().startsWith('Aardink:')) return;
-    (KNOWN_UPSTREAM.some((re) => re.test(m.text())) ? notices : failures).push(`console: ${m.text()}`);
-  });
+  watch(page);
 
   setPhase('in-page checks');
   await page.goto(url, { waitUntil: 'load' });
@@ -244,9 +1053,30 @@ try {
   if (Object.keys(report.checks).length < 5) failures.push('not every check ran');
   const interactions = await interactionChecks(page);
   for (const [name, ok] of Object.entries(interactions)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
-  const grammar = { ...(await triggerCheck(page)), ...(await grammarCheck(page)) };
+  const grammar = {
+    ...(await triggerCheck(page)),
+    ...(await grammarCheck(page)),
+    ...(await configurationCheck(page)),
+    ...(await codeLensTapCheck(page)),
+  };
   Object.assign(interactions, grammar);
   for (const [name, ok] of Object.entries(grammar)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
+  setPhase('a page with no touch screen');
+  const desktop = await desktopPage();
+  const editorChecks = {
+    ...(await dispatcherCheck(desktop)),
+    ...(await inlayHintCheck(desktop)),
+    ...(await stuckServerHintCheck(desktop)),
+    ...(await codeLensCheck(desktop)),
+    ...(await serverCodeLensCheck(desktop)),
+    ...(await stuckServerLensCheck(desktop)),
+    ...(await inlineCompletionCheck(desktop)),
+    ...(await languageServerCheck(desktop)),
+    ...(await serverTypingCheck(desktop)),
+    ...(await linkCheck(desktop)),
+  };
+  Object.assign(interactions, editorChecks);
+  for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
   const failedInteractions = Object.entries(interactions).filter(([, ok]) => !ok).map(([name]) => name);
   if (failedInteractions.length) failures.push(`failed interactions: ${failedInteractions.join(', ')}`);
 } finally {

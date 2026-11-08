@@ -99,6 +99,15 @@ class XmlSchemaLanguageServiceTest {
     }
 
     @Test
+    fun `hover names an attribute's values to the letter, whatever Markdown would make of them`() = runTest {
+        val literal = XmlSchema.parse(
+            """{ "elements": { "a": { "attributes": { "target": { "doc": "Where.", "values": ["_top_", "*", "wrap_content", "<x>"] } } } } }""",
+        )
+        val hover = XmlSchemaLanguageService(literal).hoverDoc(CodeDocument("<a target=\"x\"/>"), 4)
+        assertEquals("Where.\n\nValues: \\_top\\_, \\*, wrap\\_content, \\<x>", hover?.content)
+    }
+
+    @Test
     fun `markup inside a processing instruction or a declaration is not read as elements`() = runTest {
         val documents = listOf(
             "<?test > <bogus/> ?><wallpaper/>",

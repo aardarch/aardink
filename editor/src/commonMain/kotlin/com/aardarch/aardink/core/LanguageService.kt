@@ -41,6 +41,19 @@ interface LanguageService {
     suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem>
 
     /**
+     * [item] with what it left out of the list for being slow to work out, its
+     * [documentation][CompletionItem.documentation] say, for the item the user is looking at. [item] is one this
+     * service returned from [completions]. The default is [item] as it is.
+     *
+     * Asked for when the detail pane shows [item], and when [item] is accepted without
+     * [additionalEdits][CompletionItem.additionalEdits]. Those the answer adds are about the text as
+     * it is at the call: the editor applies them after inserting the item, as an undo step of their
+     * own, unless the text has moved on by then. On acceptance this runs on the UI thread up to its
+     * first suspension, so it must not block.
+     */
+    suspend fun resolveCompletion(item: CompletionItem): CompletionItem = item
+
+    /**
      * Validates the entire document and returns diagnostics with precise character ranges.
      *
      * Called after each edit on a debounced schedule (typically 500ms after the last keystroke
@@ -49,10 +62,12 @@ interface LanguageService {
     suspend fun diagnostics(document: CodeDocument): List<Diagnostic>
 
     /**
-     * Returns the whitespace a newly inserted line starts with, or "" for none.
+     * Returns the text a newly inserted line starts with, or "" for none: its indentation, and
+     * after that anything else the language continues a line with (the ` * ` of a block comment).
+     * The caret goes after it.
      *
      * Called after the user presses Enter. [lineIndex] is the 0-based index of the NEW line
-     * (the one just created). The previous line is `lineIndex - 1`. Build the result with
+     * (the one just created). The previous line is `lineIndex - 1`. Build the indentation with
      * [options] (for example `options.indentAfter(previousLine, levels = 1)`), so it is tabs or
      * spaces as the editor is set up.
      */
@@ -68,6 +83,15 @@ interface LanguageService {
      * @param offset Document-absolute offset of the typed character (points at [charTyped]).
      */
     fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String?
+
+    /**
+     * What closes a selection when [typed] is typed over it, or null for [typed] to replace the
+     * selection as usual: with `(` answering `)`, typing `(` over `foo` gives `(foo)`, with `foo`
+     * still selected. Every selection is wrapped, in one undo step, unless one of them is a caret
+     * or only blanks, or a quote is typed over a quote. Asked with a selection only, and not while
+     * an input method is composing. The default is null.
+     */
+    fun surroundingClose(typed: Char): String? = null
 
     /**
      * Returns hover documentation for the token under [offset], or null if no doc is available.
@@ -190,6 +214,42 @@ interface LanguageService {
      * `#rrggbb`, or `#rrggbbaa` when it is not opaque.
      */
     suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> = emptyList()
+
+    /**
+     * What is known about the tokens of [document] beyond its syntax (that a name is a parameter, a
+     * type, a constant), for the editor to colour over its syntax tokens
+     * ([com.aardarch.aardink.ui.EditorOptions.semanticHighlighting]). Each token's type is looked up
+     * in the theme as a syntax token's is; where the theme has no colour for it, or no token covers
+     * a character, the syntax colour stays. The editor asks after a pause in typing, and moves
+     * the tokens with the text in between. The default is none.
+     */
+    suspend fun semanticTokens(document: CodeDocument): List<Token> = emptyList()
+
+    /**
+     * Short labels the editor shows among the characters of [range] of [document], such as a
+     * parameter's name or an inferred type, with
+     * [EditorOptions.inlayHints][com.aardarch.aardink.ui.EditorOptions] on. [range] runs from the
+     * start of a line to the end of that or a later one, first to last (inclusive), and holds the
+     * lines around the view: the editor asks again after a pause in typing, in scrolling past what it
+     * asked about, or after a fold opens or closes, and calls off a question it no longer needs
+     * answered. A long closed fold on screen makes that a few calls at once, one for the lines on
+     * either side of it, so that the lines it hides are not asked about.
+     */
+    suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = emptyList()
+
+    /**
+     * What the editor shows in a row above lines of [document], such as a reference count or a way
+     * to run a test, with [EditorOptions.codeLens][com.aardarch.aardink.ui.EditorOptions] on. Lenses
+     * on one line share its row, each clicked on its own.
+     *
+     * The answer is about the whole document. The editor asks after a pause in typing, calls off a
+     * question it no longer needs answered, and moves what it has with each edit until the next
+     * answer. A service for which a lens's title costs a lot can leave it blank
+     * ([CodeLens.title]), and the editor asks again when such a lens comes on screen, and whenever
+     * an answer leaves fewer blank there. Those rows being up, it waits as long as that question
+     * takes, and a service may take its time over the next title.
+     */
+    suspend fun codeLenses(document: CodeDocument): List<CodeLens> = emptyList()
 
     /**
      * Characters that should trigger a completion request when typed.

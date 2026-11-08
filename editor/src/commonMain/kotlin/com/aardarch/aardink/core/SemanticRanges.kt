@@ -84,6 +84,14 @@ internal object UrlDetector {
         return null
     }
 
+    /** Where the URL starting at [start] in [text] ends (exclusive), or null when none starts there. */
+    fun urlEnd(text: CharSequence, start: Int): Int? {
+        val match = URL.matchAt(text, start) ?: return null
+        var end = match.range.last + 1
+        while (end > start && text[end - 1] in TRAILING) end--
+        return end
+    }
+
     private const val TRAILING = ".,;:!?"
 }
 

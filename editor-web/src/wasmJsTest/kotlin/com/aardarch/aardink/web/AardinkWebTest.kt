@@ -15,10 +15,19 @@
  */
 package com.aardarch.aardink.web
 
+import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.languages.BuiltInLanguages
+import com.aardarch.aardink.languages.LanguageDefinition
+import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -254,6 +263,94 @@ class AardinkWebTest {
         assertTrue(options.readOnly)
         assertEquals("vscode-light", options.theme)
         assertEquals(16f, options.fontSize)
+    }
+
+    /** A language whose service counts how often it is asked for semantic tokens. */
+    private class CountingTokens : LanguageService by BuiltInLanguages.Kotlin.languageService!! {
+        var asked = 0
+        var askedForHints = 0
+        var askedForLenses = 0
+
+        override suspend fun semanticTokens(document: CodeDocument): List<Token> {
+            asked++
+            return emptyList()
+        }
+
+        override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+            askedForHints++
+            return emptyList()
+        }
+
+        override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+            askedForLenses++
+            return emptyList()
+        }
+    }
+
+    private fun mountCounting(service: CountingTokens, options: WebEditorOptions): AardinkEditorHandle {
+        val language = LanguageDefinition("counting", "Counting", emptyList(), PlainTextTokenizer, languageService = service)
+        val div = document.createElement("div") as HTMLElement
+        div.id = "aardink-test-${nextId++}"
+        div.style.width = "600px"
+        div.style.height = "400px"
+        document.body!!.appendChild(div)
+        containers += div
+        val registry = LanguageRegistry.withBuiltIns().register(language)
+        return AardinkWeb.mount(div.id, "text", options.copy(language = "counting"), registry).also { mounted += it }
+    }
+
+    @Test
+    fun `semantic highlighting is off by default`() {
+        assertFalse(AardinkWeb.parseOptions("{}").semanticHighlighting)
+        assertTrue(AardinkWeb.parseOptions("""{"semanticHighlighting": true}""").semanticHighlighting)
+    }
+
+    @Test
+    fun `the option reaches the editor, which asks the language's service`() = runTest {
+        val service = CountingTokens()
+        val handle = mountCounting(service, WebEditorOptions())
+        withContext(Dispatchers.Main) { delay(600) }
+        assertEquals(0, service.asked, "nothing is asked for with it off")
+
+        AardinkWeb.patchOptions(handle, """{"semanticHighlighting": true}""")
+
+        awaitUntil { service.asked > 0 }
+    }
+
+    @Test
+    fun `inlay hints are off by default`() {
+        assertFalse(AardinkWeb.parseOptions("{}").inlayHints)
+        assertTrue(AardinkWeb.parseOptions("""{"inlayHints": true}""").inlayHints)
+    }
+
+    @Test
+    fun `the inlay hints option reaches the editor, which asks the language's service`() = runTest {
+        val service = CountingTokens()
+        val handle = mountCounting(service, WebEditorOptions())
+        withContext(Dispatchers.Main) { delay(600) }
+        assertEquals(0, service.askedForHints, "nothing is asked for with it off")
+
+        AardinkWeb.patchOptions(handle, """{"inlayHints": true}""")
+
+        awaitUntil { service.askedForHints > 0 }
+    }
+
+    @Test
+    fun `code lenses are off by default`() {
+        assertFalse(AardinkWeb.parseOptions("{}").codeLens)
+        assertTrue(AardinkWeb.parseOptions("""{"codeLens": true}""").codeLens)
+    }
+
+    @Test
+    fun `the code lens option reaches the editor, which asks the language's service`() = runTest {
+        val service = CountingTokens()
+        val handle = mountCounting(service, WebEditorOptions())
+        withContext(Dispatchers.Main) { delay(600) }
+        assertEquals(0, service.askedForLenses, "nothing is asked for with it off")
+
+        AardinkWeb.patchOptions(handle, """{"codeLens": true}""")
+
+        awaitUntil { service.askedForLenses > 0 }
     }
 
     @Test

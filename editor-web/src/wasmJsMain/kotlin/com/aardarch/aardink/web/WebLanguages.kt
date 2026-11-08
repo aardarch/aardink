@@ -18,6 +18,7 @@ package com.aardarch.aardink.web
 import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.CompletionItem
 import com.aardarch.aardink.core.CompletionKind
@@ -27,6 +28,9 @@ import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.InlayHint
+import com.aardarch.aardink.core.InlineCompletion
+import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
@@ -37,6 +41,7 @@ import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
 import com.aardarch.aardink.languages.IndentationFoldingProvider
+import com.aardarch.aardink.languages.LanguageConfiguration
 import com.aardarch.aardink.languages.LanguageDefinition
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.XmlSchema
@@ -44,6 +49,13 @@ import com.aardarch.aardink.languages.XmlSchemaLanguageService
 import com.aardarch.aardink.ui.EditorThemeParser
 import com.aardarch.aardink.ui.EditorThemes
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -84,6 +96,13 @@ import kotlinx.serialization.json.jsonObject
  * - [documentColors]: an array of Monaco's `IColorInformation`, `{ range, color: { red, green,
  *   blue, alpha } }` with each channel from 0 to 1, for the colour swatches. The picker writes a
  *   picked colour back as CSS hex.
+ * - [inlayHints]: asked about a range, as a [WebRange] in JSON: an array of `{ position: { lineNumber,
+ *   column }, label }`, 1-based as Monaco's, for what `inlayHints` shows among the characters.
+ * - [codeLenses]: an array of Monaco's `CodeLens`, `{ range, command: { id, title, arguments? } }`,
+ *   for what `codeLens` shows in a row above the line `range` starts on.
+ * - [runCodeLensCommand]: a lens was clicked. It gets the command's `id` and its `arguments` as a
+ *   JSON array, `[]` for none, and what it answers is not read. A click comes back here because an
+ *   answer is JSON, and a language's service has no hold of any one editor.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -97,6 +116,29 @@ class WebLanguageProviders(
     val diagnostics: (suspend (text: String) -> String?)? = null,
     val documentSymbols: (suspend (text: String) -> String?)? = null,
     val documentColors: (suspend (text: String) -> String?)? = null,
+    val inlayHints: (suspend (text: String, rangeJson: String) -> String?)? = null,
+    val codeLenses: (suspend (text: String) -> String?)? = null,
+    val runCodeLensCommand: (suspend (id: String, argsJson: String) -> Unit)? = null,
+)
+
+/**
+ * [AardinkWeb.registerLanguage]'s one function for every provider, as [WebLanguageProviders]: each
+ * goes by its member's name, with what it takes beyond the text as a JSON array. A new provider is
+ * one more line here, and one in the npm package's `PROVIDERS`. A template's copy changes in
+ * nothing: a dispatcher answers null for a name it does not know, which is no provider.
+ */
+internal fun dispatchedProviders(dispatcher: suspend (method: String, text: String, argsJson: String) -> String?) = WebLanguageProviders(
+    completions = { text, line, column -> dispatcher("completions", text, "[$line,$column]") },
+    hover = { text, line, column -> dispatcher("hover", text, "[$line,$column]") },
+    diagnostics = { text -> dispatcher("diagnostics", text, "[]") },
+    documentSymbols = { text -> dispatcher("documentSymbols", text, "[]") },
+    documentColors = { text -> dispatcher("documentColors", text, "[]") },
+    inlayHints = { text, rangeJson -> dispatcher("inlayHints", text, "[$rangeJson]") },
+    codeLenses = { text -> dispatcher("codeLenses", text, "[]") },
+    // No text: a click is about a command, and the document may have moved on since the answer.
+    runCodeLensCommand = { id, argsJson ->
+        dispatcher("runCodeLensCommand", "", "[${JsonPrimitive(id)},$argsJson]")
+    },
 )
 
 /**
@@ -153,6 +195,8 @@ private object NoLanguageService : LanguageService {
  */
 private class JsProviderService(private val providers: WebLanguageProviders, override val triggerCharacters: Set<Char>) : LanguageService {
 
+    private val commands = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     /** False only after an answer of `{ suggestions, incomplete: false }`: asked once per word then. */
     var lastIncomplete = true
         private set
@@ -191,6 +235,24 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = asked {
         providers.documentColors?.invoke(document.text)
     }?.let { AardinkWeb.parseColors(document, it) }.orEmpty()
+
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> = asked {
+        providers.inlayHints?.invoke(document.text, AardinkWeb.rangeJson(document, range))
+    }?.let { AardinkWeb.parseInlayHints(document, it) }.orEmpty()
+
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> = asked {
+        providers.codeLenses?.invoke(document.text)
+    }?.let { json -> AardinkWeb.parseCodeLenses(document, json, ::runCommand) }.orEmpty()
+
+    /** A click on a lens, for the host. It has been asked for: nothing here calls it off. */
+    private fun runCommand(id: String, argsJson: String) {
+        commands.launch {
+            asked {
+                providers.runCodeLensCommand?.invoke(id, argsJson)
+                null
+            }
+        }
+    }
 
     override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String = ""
 
@@ -257,6 +319,49 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
                 it.isNotEmpty()
             },
         )
+    }
+}
+
+/**
+ * What the hosts' providers of one language offer, for [AardinkWeb.registerInlineCompletionsProvider]:
+ * all of them at once, oldest first, as Monaco's providers for a language are. One that fails costs
+ * its own answer. An answer that comes after the editor stopped waiting is dropped; a Promise has no
+ * way to be called off, so the host's work goes on, and nothing here asks it to stop.
+ */
+internal class WebInlineCompletions(private val providers: List<suspend (text: String, line: Int, column: Int) -> String?>) :
+    InlineCompletionProvider {
+
+    override suspend fun provideInlineCompletions(document: CodeDocument, cursorOffset: Int): List<InlineCompletion> = coroutineScope {
+        val (line, column) = document.offsetToLineCol(cursorOffset)
+        val text = document.text
+        providers.map { provider ->
+            async {
+                try {
+                    provider(text, line + 1, column + 1)?.let { parseInlineCompletions(document, it) }.orEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    println("Aardink: an inline completions provider failed: ${e.message}")
+                    emptyList()
+                }
+            }
+        }.awaitAll().flatten()
+    }
+}
+
+/**
+ * Monaco's `InlineCompletions`, `{ items: [{ insertText, range? }] }`, or the bare array of items. An
+ * `insertText` that is a snippet is left out: ghost text cannot fill in its stops. So is an item
+ * whose `range` is not one in [document], which would otherwise read as no range given.
+ */
+internal fun parseInlineCompletions(document: CodeDocument, json: String): List<InlineCompletion> {
+    val root = parsed(json)
+    val items = ((root as? JsonObject)?.get("items") ?: root) as? JsonArray ?: return emptyList()
+    return items.mapNotNull { element ->
+        val item = element as? JsonObject ?: return@mapNotNull null
+        val text = item.string("insertText") ?: return@mapNotNull null
+        val range = item["range"].takeUnless { it is JsonNull } ?: return@mapNotNull InlineCompletion(text)
+        rangeIn(document, range)?.let { InlineCompletion(text, it) }
     }
 }
 
@@ -392,8 +497,17 @@ private fun JsonObject.int(key: String): Int? = (this[key] as? JsonPrimitive)?.t
 /** The value at [key], unless it is absent or `null`. */
 private fun JsonObject.given(key: String): JsonElement? = this[key]?.takeIf { it !is JsonNull }
 
-/** The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. */
-internal fun languageFrom(definitionJson: String, providers: WebLanguageProviders, registry: LanguageRegistry): LanguageDefinition {
+/**
+ * The registered language [definitionJson] describes; see [AardinkWeb.registerLanguage]. Its grammar
+ * joins [grammars], by the language's id, for any grammar's `nextEmbedded` to find. Its tokenizer
+ * reads [grammars] each time it needs one, not now, so a language can embed one registered after it.
+ */
+internal fun languageFrom(
+    definitionJson: String,
+    providers: WebLanguageProviders,
+    registry: LanguageRegistry,
+    grammars: MutableMap<String, DeclarativeGrammar>,
+): LanguageDefinition {
     val root = parsed(definitionJson) as? JsonObject ?: throw IllegalArgumentException("a language is a JSON object")
     val id = root.string("id")?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("id: a language needs an id")
     val base = root.string("extends")?.let { registry.byId(it) ?: throw IllegalArgumentException("extends: no language with id '$it'") }
@@ -432,13 +546,26 @@ internal fun languageFrom(definitionJson: String, providers: WebLanguageProvider
         id = id,
         displayName = root.string("displayName") ?: id,
         fileExtensions = extensions,
-        tokenizer = DeclarativeTokenizer(grammar),
+        tokenizer = DeclarativeTokenizer(grammar) { grammars[it] },
         // A language with no folding of its own folds by indentation, as VS Code does.
         foldingProvider =
         base?.foldingProvider ?: if (schema != null) BuiltInLanguages.Xml.foldingProvider else IndentationFoldingProvider(),
-        languageService = WebLanguageService(baseService, providers, triggerCharacters, inheritCompletions),
+        languageService = baseService,
     )
-    return definition
+    // Under the providers, which answer nothing a configuration does: a language with nothing else
+    // then gets the configuration's own service, which keeps a line's indentation on Enter.
+    val configured = root.given("configuration")?.let { definition.withConfiguration(configurationFrom(it)) } ?: definition
+    grammars[id] = grammar
+    return configured.copy(
+        languageService = WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions),
+    )
+}
+
+/** A definition's `configuration`: the object, or the text of a `language-configuration.json`. */
+private fun configurationFrom(value: JsonElement): LanguageConfiguration = try {
+    LanguageConfiguration.parse((value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: value.toString())
+} catch (e: IllegalArgumentException) {
+    throw IllegalArgumentException("configuration.${e.message}", e)
 }
 
 /**

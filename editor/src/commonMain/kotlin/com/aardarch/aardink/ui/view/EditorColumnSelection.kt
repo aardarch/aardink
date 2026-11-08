@@ -20,6 +20,7 @@ import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.edit.SelectionSet
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /**
  * A column (box) selection, from an anchor to an active point, each a row on screen and an x in the
@@ -31,8 +32,9 @@ internal data class ColumnBox(val anchorRow: Int, val anchorX: Float, val active
 /**
  * The selections [box] makes: on every row from the anchor's to the active one's, the part between
  * the two x's. A row whose text ends before the box starts gets nothing, as in VS Code, unless
- * every row would get nothing; then each gets a caret at its end. The active row's selection is
- * the primary one, so the view follows it.
+ * every row would get nothing; then each gets a caret at its end. A row no caret can be on is
+ * passed over, and a box of only such rows goes to the nearest row a caret can be on. The active
+ * row's selection is the primary one, so the view follows it.
  */
 internal fun EditorView.columnSelection(box: ColumnBox): SelectionSet {
     val left = min(box.anchorX, box.activeX)
@@ -41,9 +43,13 @@ internal fun EditorView.columnSelection(box: ColumnBox): SelectionSet {
     val step = if (box.activeRow >= box.anchorRow) 1 else -1
     val ranges = ArrayList<TextRange>()
     forRows(box, step) { row ->
+        if (!isCaretRow(row)) return@forRows
         if (rowEndX(row) + slack >= left) ranges += TextRange(offsetOnRow(row, box.anchorX), offsetOnRow(row, box.activeX))
     }
-    if (ranges.isEmpty()) forRows(box, step) { row -> ranges += TextRange(offsetOnRow(row, Float.MAX_VALUE)) }
+    if (ranges.isEmpty()) {
+        forRows(box, step) { row -> if (isCaretRow(row)) ranges += TextRange(offsetOnRow(row, Float.MAX_VALUE)) }
+    }
+    if (ranges.isEmpty()) ranges += TextRange(offsetOnRow(textRowFrom(box.activeRow, step), box.activeX))
     return SelectionSet.of(ranges.asReversed())
 }
 
@@ -72,6 +78,15 @@ internal class ColumnSelector(private val view: EditorView) {
         last?.let { if (made == selections) return it }
         val primary = selections.primary
         return ColumnBox(view.rowOf(primary.start), view.caretX(primary.start), view.rowOf(primary.end), view.caretX(primary.end))
+    }
+
+    /**
+     * The row a box anchored on [anchorRow] reaches at viewport y [y]. On a row no caret can be on,
+     * the next one away from the anchor: as the column select keys do, it goes on past the row.
+     */
+    fun activeRow(anchorRow: Int, y: Float): Int {
+        val row = view.rowAt(y)
+        return view.textRowFrom(row, (row - anchorRow).sign)
     }
 
     /** Selects [box]. */

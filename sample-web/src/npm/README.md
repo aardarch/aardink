@@ -97,6 +97,67 @@ await registerLanguage({
 });
 ```
 
+A language can also take VS Code's `language-configuration.json`, as the object or its text, for
+closing pairs, surrounding a selection and indentation on Enter:
+
+```ts
+await registerLanguage({ id: 'toy', grammar, configuration: await (await fetch('/toy.configuration.json')).text() });
+```
+
+The providers go beyond completions: `provideHover`, `provideDiagnostics`, `provideDocumentSymbols`,
+`provideDocumentColors`, and, with the `inlayHints` and `codeLens` options on, `provideInlayHints`
+and `provideCodeLenses` with `runCodeLensCommand` for a lens's click:
+
+```ts
+await registerLanguage(definition, {
+  provideInlayHints: (text, range) => [{ position: { lineNumber: 3, column: 9 }, label: ': Int' }],
+  provideCodeLenses: (text) => [
+    { range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, command: { id: 'app.run', title: 'Run' } },
+  ],
+  runCodeLensCommand: (id, args) => run(id, args),
+});
+const editor = await createEditor(container, save, { language: 'toy', inlayHints: true, codeLens: true });
+```
+
+Hover, completion documentation and signature help are Markdown, shown in a card and, for the
+selected completion, in a pane beside the list. A link there, or Ctrl/Cmd+click on a URL in the
+text, opens `http` and `https` in a new tab; listen to decide for yourself, and check the target
+first, since text from a language server can hold a `javascript:` link:
+
+```ts
+const links = editor.onOpenLink((target) => {
+  if (target.startsWith('https://')) window.open(target, '_blank', 'noopener');
+});
+```
+
+Ghost text, as an assistant offers it, comes from a provider of its own, for any language. Tab
+accepts, Alt+] and Alt+[ go through what is on offer, and Escape hides it; a phone runs
+`editor.action.inlineSuggest.commit` and `.hide` from buttons through `trigger`:
+
+```ts
+import { registerInlineCompletionsProvider } from '@aardarch/aardink-web';
+
+await registerInlineCompletionsProvider('kotlin', {
+  provideInlineCompletions: async (text, line, column) => ({ items: [{ insertText: await suggest(text, line, column) }] }),
+});
+```
+
+A language server reached over a WebSocket follows every editor of a language, adding what it
+knows to what the language has; with `semanticHighlighting: true` its semantic tokens colour the
+text too:
+
+```ts
+import { connectLanguageServer } from '@aardarch/aardink-web';
+
+const server = await connectLanguageServer('wss://example.com/lsp', 'kotlin');
+// ...
+server.dispose(); // closes each document and shuts the server down
+```
+
+The socket carries one JSON-RPC message per frame, so a server that speaks over stdin and stdout
+needs a bridge in front of it. Nothing reconnects by itself, and a server never changes what typing
+does: Enter, closing pairs and surrounding stay the language's.
+
 The editor answers to your keys and actions as Monaco's does, and tells you what changed:
 
 ```ts
@@ -109,7 +170,7 @@ editor.revealLineInCenter(42);
 ```
 
 The editor fills its container, so give the container a size. `createEditor` is async because
-the first call loads the WebAssembly module (about 13 MB, 4.7 MB gzipped); every editor on the
+the first call loads the WebAssembly module (about 14 MB, 5 MB gzipped); every editor on the
 page shares that one module. If that load fails, the call rejects and the next call loads again
 (though Chrome keeps a failed module download until the page is reloaded). See
 [`index.d.ts`](./index.d.ts) for the full API, and the
@@ -152,10 +213,15 @@ Read these before adopting the package; the
 [integration guide](https://github.com/aardarch/aardink/blob/main/docs/WEB_INTEGRATION.md) has
 the measurements and the device checklist.
 
-- **A disposed editor is not fully released** (about 275 KB each) until Aardink moves to Compose
+- **A disposed editor is not fully released** (about 320 KB each) until Aardink moves to Compose
   Multiplatform 1.13. Reuse one editor with `setValue` and `updateOptions` rather than mounting
   one per view.
 - A theme rule's `background` is ignored; its `foreground` and `fontStyle` apply.
+- A language from `registerLanguage`, and the built-in language it `extends`, answer before a
+  language server: with `extends: 'json'`, JSON's formatter and outline come ahead of the server's.
+- The page has no save, so a language server never hears `willSave` or `didSave`.
+- Of the keys that type a character with Alt held, only Alt+] and Alt+[ reach the editor:
+  `addCommand('Alt+K', ...)` never runs. Use a key with Ctrl or Cmd.
 
 ## Licence
 

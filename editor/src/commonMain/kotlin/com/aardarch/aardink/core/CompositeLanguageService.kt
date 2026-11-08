@@ -16,6 +16,8 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withContext
 
 /**
  * One language service made of two: [primary], a host's own for its dialect, answers first and
@@ -24,16 +26,24 @@ import androidx.compose.ui.graphics.Color
  *
  * - **Completions:** the primary's, then the fallback's, less any fallback item with the same kind
  *   and label as one of the primary's. Only the fallback's when the primary has none. Without
+ *   [inheritCompletions], only the primary's. **Resolving a completion:** the primary's when it
+ *   changes the item, else the fallback's, since either may have offered it; without
  *   [inheritCompletions], only the primary's.
  * - **Diagnostics, code actions and references:** both, the primary's first.
- * - **Hover, definition, signature help, auto-close:** the primary's, or else the fallback's.
+ * - **Hover, definition, signature help, auto-close, surrounding a selection:** the primary's, or
+ *   else the fallback's.
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
  * - **Formatting:** the primary's when it changes anything, else the fallback's.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
- * - **Document symbols, highlights and selection ranges:** the primary's, or the fallback's when
- *   the primary has none. **Linked editing ranges:** likewise.
+ * - **Document symbols, highlights, selection ranges and semantic tokens:** the primary's, or the
+ *   fallback's when the primary has none. **Linked editing ranges:** likewise.
  * - **Document links and colours:** both, without two for the same range. **Colour
  *   presentations:** the primary's, or else the fallback's.
+ * - **Inlay hints:** both, less any of the fallback's at an offset the primary has one at. The
+ *   editor shows the primary's without waiting for ever on the fallback, which may be a language
+ *   server that is starting up or not answering.
+ * - **Code lenses:** both, less any of the fallback's with the same offset and title as one of the
+ *   primary's, and shown without waiting for ever on the fallback, as inlay hints are.
  * - **Trigger characters:** both sets, or only the primary's without [inheritCompletions].
  *
  * Open, so a subclass can change one rule and keep the rest.
@@ -65,6 +75,11 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
         }
     }
 
+    override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
+        val own = primary.resolveCompletion(item)
+        return if (own != item || !inheritCompletions) own else fallback.resolveCompletion(item)
+    }
+
     /** [own] then [inherited], less the inherited items [own] already offers by kind and label. */
     protected fun merged(own: List<CompletionItem>, inherited: List<CompletionItem>): List<CompletionItem> {
         if (own.isEmpty()) return inherited
@@ -80,6 +95,8 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? =
         primary.autoClose(document, offset, charTyped) ?: fallback.autoClose(document, offset, charTyped)
+
+    override fun surroundingClose(typed: Char): String? = primary.surroundingClose(typed) ?: fallback.surroundingClose(typed)
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? =
         primary.hoverDoc(document, offset) ?: fallback.hoverDoc(document, offset)
@@ -124,6 +141,37 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         primary.colorPresentations(document, info, color).ifEmpty { fallback.colorPresentations(document, info, color) }
+
+    override suspend fun semanticTokens(document: CodeDocument): List<Token> =
+        primary.semanticTokens(document).ifEmpty { fallback.semanticTokens(document) }
+
+    override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
+        val own = primary.inlayHints(document, range)
+        val early = currentCoroutineContext()[EarlyInlayHints] ?: return withHints(own, fallback.inlayHints(document, range))
+        // None to offer is not an offer of none: it would take a server's hints off the screen.
+        if (own.isNotEmpty()) early.offer(own)
+        val inherited = withContext(EarlyInlayHints { early.offer(withHints(own, it)) }) { fallback.inlayHints(document, range) }
+        return withHints(own, inherited)
+    }
+
+    private fun withHints(own: List<InlayHint>, inherited: List<InlayHint>): List<InlayHint> {
+        val taken = own.mapTo(HashSet()) { it.offset }
+        return own + inherited.filterNot { it.offset in taken }
+    }
+
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+        val own = primary.codeLenses(document)
+        val early = currentCoroutineContext()[EarlyCodeLenses] ?: return withLenses(own, fallback.codeLenses(document))
+        // As with hints, none to offer is not an offer of none.
+        if (own.isNotEmpty()) early.offer(own)
+        val inherited = withContext(EarlyCodeLenses { early.offer(withLenses(own, it)) }) { fallback.codeLenses(document) }
+        return withLenses(own, inherited)
+    }
+
+    private fun withLenses(own: List<CodeLens>, inherited: List<CodeLens>): List<CodeLens> {
+        val taken = own.mapTo(HashSet()) { it.offset to it.title }
+        return own + inherited.filterNot { (it.offset to it.title) in taken }
+    }
 
     override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? = renamer?.prepareRename(document, offset)
 

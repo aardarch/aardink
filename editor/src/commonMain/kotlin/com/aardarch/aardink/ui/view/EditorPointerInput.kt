@@ -58,8 +58,12 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** Runs [block] with the selection changes it makes reported as the pointer's. */
     fun <T> pointer(block: EditorPointerHandler.() -> T): T = view.state.withSelectionReason(SelectionChangeReason.Pointer) { block() }
 
-    /** Called on every press in the text, before it moves the selection: focus and the keyboard. */
-    var onPress: (touch: Boolean) -> Unit = {}
+    /**
+     * Called on every press in the text, before it moves the selection: focus and the keyboard. With
+     * [typing] false it is on something a click runs, which wants neither: on Android, focus alone
+     * can bring up the keyboard.
+     */
+    var onPress: (touch: Boolean, typing: Boolean) -> Unit = { _, _ -> }
 
     /** A single tap (touch), after it placed the caret at an offset. */
     var onTap: (offset: Int) -> Unit = {}
@@ -89,18 +93,26 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     private val state get() = view.state
 
     fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false, link: Boolean = false) {
-        onPress(touch)
-        if (clicks == 1 && !shift && !alt) {
-            val sticky = stickyLineAt(position)
-            if (sticky != null) {
-                view.openStickyLine(sticky)
-                origin = null
-                kept = null
-                box = null
-                return
-            }
-        }
+        val sticky = if (clicks == 1 && !shift && !alt) stickyLineAt(position) else null
         val hit = view.offsetAt(position)
+        // Text a click does something on, unless a pinned line is over it. It has no place to type.
+        val clickable = hit.injection?.takeIf { it.id != null && sticky == null && !shift }
+        onPress(touch, clickable == null)
+        if (sticky != null) {
+            view.openStickyLine(sticky)
+            origin = null
+            kept = null
+            box = null
+            return
+        }
+        if (clickable != null) {
+            // The second click of a double click is not a click on the text under it.
+            if (clicks == 1) view.onInjectionClick?.invoke(hit.line, clickable)
+            origin = null
+            kept = null
+            box = null
+            return
+        }
         if (hit.onFoldPlaceholder && clicks == 1 && !shift) {
             foldState?.toggle(hit.line)
             origin = null
@@ -113,7 +125,8 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
             clicks == 1 && shift && alt -> {
                 unit = SelectionUnit.Column
                 origin = null
-                val next = columns.current().copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+                val current = columns.current()
+                val next = current.copy(activeRow = columns.activeRow(current.anchorRow, position.y), activeX = columns.columnX(position.x))
                 box = next
                 columns.select(next)
             }
@@ -166,11 +179,12 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** A press with the middle button: a column selection starting where it was pressed. */
     fun columnPress(position: Offset) {
-        onPress(false)
+        onPress(false, true)
         unit = SelectionUnit.Column
         origin = null
         kept = null
-        val row = view.rowAt(position.y)
+        // A box starts on a row a caret can be on: a lens's own line is below it.
+        val row = view.textRowFrom(view.rowAt(position.y), 1)
         val x = columns.columnX(position.x)
         val next = ColumnBox(row, x, row, x)
         box = next
@@ -180,7 +194,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** The pointer moved to [position] with the button held (or the finger down after a long press). */
     fun drag(position: Offset) {
         box?.let { current ->
-            val next = current.copy(activeRow = view.rowAt(position.y), activeX = columns.columnX(position.x))
+            val next = current.copy(activeRow = columns.activeRow(current.anchorRow, position.y), activeX = columns.columnX(position.x))
             if (next != current) {
                 box = next
                 columns.select(next)
@@ -213,7 +227,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** A right click: the caret moves there unless it is inside a selection, then the menu opens. */
     fun secondaryPress(position: Offset) {
-        onPress(false)
+        onPress(false, true)
         val hit = view.offsetAt(position)
         val inside = state.currentSelections().ranges.any { !it.collapsed && hit.offset in it.min..it.max }
         if (!inside) state.replaceSelections(SelectionSet.caret(hit.offset))
