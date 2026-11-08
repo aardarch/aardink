@@ -164,6 +164,16 @@ parameters, so code compiled against 0.8 that calls them needs a recompile. A `L
   its documentation; it now follows the edits.
 - `StreamLspTransport.close()` could block behind a read on a hung process, and on Windows closing
   never reached a healthy server's input, so `stop()` could wait until the server exited.
+- Typing in a large document with a built-in regex tokenizer (Kotlin, TypeScript, CSS, TOML and
+  the others) searched the rest of the document again after every edit, for each rule that matched
+  nowhere further on: about 75 ms per edit on the web for a 5,000-line Kotlin file. That made the
+  editor give up partial passes for full ones, and each key held the page for about 230 ms. A
+  partial pass now takes about 2 ms there, and the time it took to get its turn on the browser
+  thread no longer counts as its own.
+- On the web, a disposed editor kept its Compose window and WebGL context and still answered the
+  page's `resize`. Once more than 16 were left, Chrome dropped the oldest context, and the next
+  resize threw where nothing caught it. `dispose()` now disposes the window and gives the context
+  back, and an editor disposed before Compose has started it is never started.
 
 ### Known issues
 

@@ -110,12 +110,23 @@ class IncrementalTokenizingTest {
         }
     }
 
-    private fun checkRandomEdits(id: String, tokenizer: IncrementalTokenizer, sample: String, random: Random) {
+    // Longer than a rescan looks ahead, so that where a rule was last found to match no more (a raw
+    // string or a char literal in a document with none) decides how far the next rescan searches.
+    @Test
+    fun `incremental passes agree with a full scan in a document longer than a rescan looks ahead`() {
+        for ((id, sample) in samples) {
+            val tokenizer = BuiltInLanguages.all.single { it.id == id }.tokenizer
+            val long = (sample + "\n").repeat(12)
+            checkRandomEdits(id, tokenizer, long, Random(7 + id.length), steps = 30)
+        }
+    }
+
+    private fun checkRandomEdits(id: String, tokenizer: IncrementalTokenizer, sample: String, random: Random, steps: Int = 60) {
         var text = sample
         var full = tokenizer.tokenizeFull(text)
         // What the editor passes back as previousTokens: the list the tokenizer returned last.
         var previousResult = full
-        repeat(60) { step ->
+        repeat(steps) { step ->
             val old = text
             val oldFull = full
             // One edit, as a CodeDocument reports it: the dirty lines are the ones it touched.

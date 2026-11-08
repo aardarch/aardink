@@ -96,6 +96,7 @@ import com.aardarch.aardink.ui.LocalEditorTypography
 import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.web.res.Res
 import kotlinx.browser.document
+import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -127,6 +128,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
+import org.jetbrains.skiko.InternalSkikoApi
+import org.jetbrains.skiko.wasm.awaitSkiko
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.KeyboardEvent
@@ -227,6 +230,12 @@ class AardinkEditorHandle internal constructor(
 
     /** Stops [followSize] for this editor's viewport; called by [AardinkWeb.dispose]. */
     internal var stopFollowingSize: JsAny? = null
+
+    /**
+     * Disposes the viewport's Compose window, once Compose has started it; called once, by
+     * [AardinkWeb.dispose] or, for an editor disposed before then, as soon as it starts.
+     */
+    internal var disposeWindow: (() -> Unit)? = null
 }
 
 /**
@@ -438,8 +447,24 @@ object AardinkWeb {
         container.appendChild(viewport)
         // On the way down, ahead of the input element Compose has inside.
         viewport.addEventListener("keydown", { event -> altBracketKey(handle, event as KeyboardEvent) }, true)
-        ComposeViewport(viewport) {
-            if (!handle.disposed.value) EditorContent(handle)
+        // Compose builds the viewport once Skiko has loaded, on the same promise, which can be after
+        // dispose(): an editor disposed by then is never started, so Skia does not set up WebGL on
+        // a canvas that has left the page, which can fail and throw where nothing catches it.
+        @OptIn(InternalSkikoApi::class)
+        awaitSkiko.then {
+            if (!handle.disposed.value) {
+                ComposeViewport(viewport) {
+                    val disposeWindow = composeWindowDisposal()
+                    if (handle.disposeWindow == null) {
+                        handle.disposeWindow = disposeWindow
+                        // Disposed between being started and composed: not from inside the
+                        // composition, which disposing the window would close under itself.
+                        if (handle.disposed.value) afterThisTask { disposeEditorWindow(handle, viewport) }
+                    }
+                    if (!handle.disposed.value) EditorContent(handle)
+                }
+            }
+            null
         }
         handle.viewportElement = viewport
         handle.stopFollowingSize = followSize(viewport)
@@ -1310,9 +1335,11 @@ object AardinkWeb {
         mountedEditors -= handle
         followedByServers(handle)
         // Out of the page: from Compose Multiplatform 1.13 that tears the viewport down entirely
-        // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops.
+        // (W-1); on 1.12 it takes its canvas and input elements away, and the editor stops, but
+        // the canvas keeps its WebGL context until that is given back here.
         handle.stopFollowingSize?.let(::callStop)
         handle.stopFollowingSize = null
+        handle.viewportElement?.let { disposeEditorWindow(handle, it) }
         handle.viewportElement?.remove()
         handle.viewportElement = null
         handle.onChange = null
@@ -1589,6 +1616,49 @@ private fun dispatchResize(): Unit = js("window.dispatchEvent(new Event('resize'
 
 /** Calls the function [followSize] returned. */
 private fun callStop(stop: JsAny): Unit = js("stop()")
+
+/**
+ * Disposes [handle]'s Compose window, then gives back its canvas's WebGL context, in that order:
+ * a window still running would set Skia up again on the lost context at the page's next `resize`,
+ * and throw. Nothing to do until Compose has started the window; the editor does it then.
+ */
+private fun disposeEditorWindow(handle: AardinkEditorHandle, viewport: Element) {
+    val disposeWindow = handle.disposeWindow ?: return
+    handle.disposeWindow = {}
+    runCatching(disposeWindow)
+    releaseWebGlContexts(viewport)
+}
+
+/** Runs [block] once the current task is done, outside whatever is running now. */
+private fun afterThisTask(block: () -> Unit) {
+    window.setTimeout({
+        block()
+        null
+    }, 0)
+}
+
+/**
+ * Gives back the WebGL context of each canvas in [element], a viewport whose Compose window has
+ * been disposed. Compose Multiplatform 1.12 keeps it (W-1), and a browser keeps only so many active
+ * at once (16 in Chrome) before it drops the oldest, so a page that mounts and disposes editors
+ * would run out. The canvas is in a shadow root, which a selector of [element] does not reach
+ * into. Asking a canvas for the kind of context it already has returns that one.
+ */
+private fun releaseWebGlContexts(element: Element): Unit = js(
+    """{
+    const roots = [element];
+    while (roots.length > 0) {
+        const root = roots.pop();
+        for (const node of root.querySelectorAll('*')) {
+            if (node.shadowRoot) roots.push(node.shadowRoot);
+            if (node.tagName !== 'CANVAS') continue;
+            const gl = node.getContext('webgl2') || node.getContext('webgl');
+            const lose = gl && gl.getExtension('WEBGL_lose_context');
+            if (lose && !gl.isContextLost()) lose.loseContext();
+        }
+    }
+}""",
+)
 
 /** JetBrains Mono's loading, started once and shared by every editor on the page. */
 private var bundledFont: Deferred<FontFamily?>? = null

@@ -51,23 +51,28 @@ abstract class RegexTokenizer : IncrementalTokenizer {
 
     override fun tokenizeFull(text: String): List<Token> {
         val builder = PackedTokenBuilder(text.length / 8)
-        scan(text, 0, builder, onStep = { }, converged = { false })
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { }, converged = { false })
         val raw = builder.build()
-        return remembered(text, raw, refined(text, raw, 0, raw.size))
+        return remembered(text, raw, refined(text, raw, 0, raw.size), noMatchFrom)
     }
 
     override suspend fun tokenizeFullCooperative(text: String): List<Token> {
         val pacer = CooperativePacer()
         val builder = PackedTokenBuilder(text.length / 8)
-        scan(text, 0, builder, onStep = { tokenCount -> pacer.onProgress(tokenCount) }, converged = { false })
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { tokenCount -> pacer.onProgress(tokenCount) }, converged = { false })
         val raw = builder.build()
-        return remembered(text, raw, refined(text, raw, 0, raw.size))
+        return remembered(text, raw, refined(text, raw, 0, raw.size), noMatchFrom)
     }
 
-    private fun remembered(text: String, raw: PackedTokens, result: List<Token>): List<Token> {
-        scans.remember(result, ScanSnapshot(text, raw))
+    private fun remembered(text: String, raw: PackedTokens, result: List<Token>, noMatchFrom: IntArray): List<Token> {
+        scans.remember(result, ScanSnapshot(text, raw, noMatchFrom))
         return result
     }
+
+    /** For each rule, where in a text it is known to match no more: nowhere yet. */
+    private fun unknownHorizons(): IntArray = IntArray(rules.size) { Int.MAX_VALUE }
 
     /**
      * Re-tokenizes the lines around the change since the last scan and returns their tokens: at
@@ -91,8 +96,18 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val builder = PackedTokenBuilder(old.size + 16)
         builder.addAll(old, 0, kept)
 
+        // Where each rule can match no more in the new text. Past the edit, the new text is the old
+        // one shifted by delta, so a rule that matched nowhere from some point of the old text
+        // matches nowhere from that point shifted, once far enough past the edit that what the
+        // rule looks behind at is unchanged too. Without this, a rule that never matches (a raw
+        // string in a file that has none) searched the rest of the document again on every edit.
+        val horizons = IntArray(rules.size) { i ->
+            val oldHorizon = previous.noMatchFrom.getOrElse(i) { Int.MAX_VALUE }
+            if (oldHorizon == Int.MAX_VALUE) Int.MAX_VALUE else maxOf(oldHorizon + diff.delta, diff.newEnd + RESCAN_LOOKBACK)
+        }
+        val noMatchFrom = horizons.copyOf()
         var resumeOld = -1
-        scan(text, restart, builder, onStep = { }) { end ->
+        scan(text, restart, builder, horizons, noMatchFrom, onStep = { }) { end ->
             // In step again once a token ends past the change (so even a rule that looks at the
             // character before its match sees unchanged text) where the old scan ended one.
             if (end - 1 < diff.newEnd) return@scan false
@@ -116,7 +131,7 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         }
         val fromOffset = lineStartAt(text, minOf(restart, diff.start))
         val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> refined(text, raw, from, to) }
-        return remembered(text, raw, result)
+        return remembered(text, raw, result, noMatchFrom)
     }
 
     /** Scans only the lines of [lines], with no state, for a first provisional colouring. */
@@ -135,7 +150,7 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         // The slice keeps every regex search inside the visible lines.
         val slice = text.substring(start, end)
         val builder = PackedTokenBuilder()
-        scan(slice, 0, builder, onStep = { }, converged = { false })
+        scan(slice, 0, builder, horizons = null, unknownHorizons(), onStep = { }, converged = { false })
         val raw = builder.build()
         val tokens = raw.toTokens()
         refine(slice, tokens)
@@ -146,11 +161,18 @@ abstract class RegexTokenizer : IncrementalTokenizer {
      * The scanner behind every entry point: appends the tokens of [text] from [from] to
      * [builder]. [onStep] runs before each token is sought; after each token [converged] may
      * end the scan.
+     *
+     * [horizons], for a rescan, holds where each rule is known to match no more in [text]
+     * (`Int.MAX_VALUE` where that is not known); null for a scan of the whole text. [noMatchFrom]
+     * comes back holding where each rule matches no more, as far as this scan found out, for the
+     * next rescan's horizons.
      */
     private inline fun scan(
         text: String,
         from: Int,
         builder: PackedTokenBuilder,
+        horizons: IntArray?,
+        noMatchFrom: IntArray,
         onStep: (tokenCount: Int) -> Unit,
         converged: (end: Int) -> Boolean,
     ) {
@@ -165,10 +187,19 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val nextMatch = arrayOfNulls<MatchResult>(ruleList.size)
         val exhausted = BooleanArray(ruleList.size)
 
+        // A rescan, which usually gets back in step within a few tokens, looks at a rule's few
+        // positions before its horizon, or before the best match so far, one at a time instead:
+        // find() would search on to the rule's next match, which can be the end of the document.
+        // probedTo holds how far each rule has been looked at that way and matched nowhere.
+        val probedTo = IntArray(if (horizons == null) 0 else ruleList.size)
+        var probing = horizons != null
+
         var cursor = from
         val length = text.length
         while (cursor < length) {
             onStep(builder.size)
+            // A rescan this long has not got back in step soon: the rest of it searches as a full scan does.
+            if (probing && cursor - from > MAX_PROBED_RESCAN) probing = false
             var bestStart = -1
             var bestEnd = -1
             var bestType: TokenType? = null
@@ -177,10 +208,29 @@ abstract class RegexTokenizer : IncrementalTokenizer {
                 val (regex, type) = ruleList[i]
                 var match = nextMatch[i]
                 if (match == null || match.range.first < cursor) {
-                    match = regex.find(text, cursor)
-                    if (match == null) {
-                        exhausted[i] = true
-                        continue
+                    val horizon = horizons?.get(i) ?: Int.MAX_VALUE
+                    val limit = minOf(if (bestStart >= 0) minOf(bestStart, horizon) else horizon, length)
+                    val lookFrom = if (probing) maxOf(cursor, probedTo[i]) else cursor
+                    if (probing && limit - lookFrom <= PROBE_WINDOW) {
+                        match = firstMatchBetween(regex, text, lookFrom, limit)
+                        if (match == null) {
+                            // Nothing before the limit: none at all when that is the horizon (or
+                            // the end), and none that could beat the best match otherwise.
+                            probedTo[i] = limit
+                            nextMatch[i] = null
+                            if (limit >= minOf(horizon, length)) {
+                                exhausted[i] = true
+                                noMatchFrom[i] = minOf(noMatchFrom[i], cursor)
+                            }
+                            continue
+                        }
+                    } else {
+                        match = regex.find(text, cursor)
+                        if (match == null) {
+                            exhausted[i] = true
+                            noMatchFrom[i] = minOf(noMatchFrom[i], cursor)
+                            continue
+                        }
                     }
                     nextMatch[i] = match
                 }
@@ -199,6 +249,12 @@ abstract class RegexTokenizer : IncrementalTokenizer {
             cursor = bestEnd
             if (converged(bestEnd)) break
         }
+    }
+
+    /** [regex]'s first match starting in [from, to), tried at each position: what find() would give, when it starts there. */
+    private fun firstMatchBetween(regex: Regex, text: String, from: Int, to: Int): MatchResult? {
+        for (position in from until to) regex.matchAt(text, position)?.let { return it }
+        return null
     }
 
     /** Tokens [from, to) of [raw] after [refine], which sees one raw token either side as context. */
@@ -270,6 +326,12 @@ abstract class RegexTokenizer : IncrementalTokenizer {
     /** Always false: the incremental rescan in [tokenizeLines] tracks multi-line constructs itself. */
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
 }
+
+/** How many positions a rescan tries a rule at one by one before it searches with find() instead. */
+private const val PROBE_WINDOW = 4 * RESCAN_LOOKBACK
+
+/** How far a rescan goes looking at rules position by position before it searches as a full scan does. */
+private const val MAX_PROBED_RESCAN = 8 * RESCAN_LOOKBACK
 
 /** Monaco's name for an escape sequence in a string. */
 internal val STRING_ESCAPE: TokenType = NamedTokenType("string.escape")

@@ -192,8 +192,12 @@ internal inline fun partialResult(
     return result
 }
 
-/** The text of the last complete scan and its raw tokens: what the next incremental pass diffs against. */
-internal class ScanSnapshot(val text: String, val tokens: PackedTokens)
+/**
+ * The text of the last complete scan and its raw tokens: what the next incremental pass diffs
+ * against. [noMatchFrom] holds, per rule of a [RegexTokenizer], where in [text] it matches no more
+ * (`Int.MAX_VALUE` where that is not known), for the next rescan to search no further.
+ */
+internal class ScanSnapshot(val text: String, val tokens: PackedTokens, val noMatchFrom: IntArray = IntArray(0))
 
 /**
  * The scans behind the last few token lists a tokenizer returned, looked up by the identity of

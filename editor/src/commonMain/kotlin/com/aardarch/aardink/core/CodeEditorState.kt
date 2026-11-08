@@ -1658,9 +1658,14 @@ class CodeEditorState(
         // A partial pass: only what changed since the last one, when there is a last one.
         if (dirty != null && previous != null && !(large && tokenizerIsIncremental == false)) {
             val lines = if (tokenizer.canSpanLines(dirty.first, previous)) 0..dirty.last else dirty
-            val started = TimeSource.Monotonic.markNow()
-            val updated = withContext(computeDispatcher) { tokenizer.tokenizeLines(snapshot, lines, previous) }
-            if (large) tokenizerIsIncremental = started.elapsedNow().inWholeMilliseconds < SLOW_PARTIAL_PASS_MS
+            // Timed where it runs: on a single-threaded host, getting onto the dispatcher waits
+            // for whatever the browser runs first, a frame or another editor's work, and that
+            // wait would make a quick pass look slow and give up partial passes for good.
+            val (updated, took) = withContext(computeDispatcher) {
+                val started = TimeSource.Monotonic.markNow()
+                tokenizer.tokenizeLines(snapshot, lines, previous) to started.elapsedNow()
+            }
+            if (large) tokenizerIsIncremental = took.inWholeMilliseconds < SLOW_PARTIAL_PASS_MS
             // Every edit schedules a new pass and cancels this one; the version check covers an
             // edit made straight through the public CodeDocument, which schedules nothing.
             if (document.version != version) return

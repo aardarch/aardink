@@ -18,12 +18,16 @@
 package com.aardarch.aardink.core
 
 import androidx.compose.ui.text.TextRange
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Runnable
+import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.TimeSource
 
 /**
  * How [CodeEditorState] routes tokenization through [EditorLimits]. The wasmJs paths are driven
@@ -151,6 +155,29 @@ class CodeEditorStateLimitsTest {
         state.applyEdit(0, 0, "y", TextRange(1))
 
         assertEquals(listOf("cooperative", "cooperative"), tokenizer.calls)
+    }
+
+    @Test
+    fun `waiting for the compute dispatcher does not make a partial pass slow`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
+        val tokenizer = RecordingTokenizer()
+        val state = testState(mediumText, tokenizer, mainThread = true)
+        // As on the web, where the work waits its turn behind frames and other editors.
+        state.computeDispatcher = SlowToStart
+        tokenizer.calls.clear()
+
+        state.applyEdit(0, 0, "x", TextRange(1))
+        state.applyEdit(0, 0, "y", TextRange(1))
+
+        assertEquals(listOf("lines", "lines"), tokenizer.calls)
+    }
+
+    /** Runs each block only after 80 ms of other work. */
+    private object SlowToStart : CoroutineDispatcher() {
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            val started = TimeSource.Monotonic.markNow()
+            while (started.elapsedNow().inWholeMilliseconds < 80) { /* the browser's other work */ }
+            block.run()
+        }
     }
 
     @Test
