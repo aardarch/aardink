@@ -81,7 +81,7 @@ jobs:
         run: ./gradlew :sample-web:wasmJsBrowserDistribution :sample-web:npmPackage :sample-web:verifyExportsMatchTemplate
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@v6.1.1
         with:
           version: 12
 
