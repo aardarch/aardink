@@ -120,6 +120,7 @@ internal class MinimapTiles(private val view: EditorView) {
         var tokenVersion: Int,
         var totalRows: Int,
         var injectionVersion: Int,
+        var textRowsVersion: Int,
     )
 
     private val tiles = LinkedHashMap<Int, Tile>()
@@ -137,15 +138,18 @@ internal class MinimapTiles(private val view: EditorView) {
         val tokenVersion = state.tokenVersion
         val totalRows = view.totalRows
         val injectionVersion = view.injectionVersion
+        val textRowsVersion = view.textRowsVersion
         val cached = tiles.remove(index)
         if (cached != null && cached.rowUnits == rowUnits) {
             val current = cached.documentVersion == documentVersion && cached.tokenVersion == tokenVersion &&
-                cached.totalRows == totalRows && cached.injectionVersion == injectionVersion
+                cached.totalRows == totalRows && cached.injectionVersion == injectionVersion &&
+                cached.textRowsVersion == textRowsVersion
             if (current || matches(cached, index)) {
                 cached.documentVersion = documentVersion
                 cached.tokenVersion = tokenVersion
                 cached.totalRows = totalRows
                 cached.injectionVersion = injectionVersion
+                cached.textRowsVersion = textRowsVersion
                 // Back in as the most recently used.
                 tiles[index] = cached
                 return cached.image
@@ -176,7 +180,7 @@ internal class MinimapTiles(private val view: EditorView) {
     private fun lineOnRow(row: Int): Int {
         if (row >= view.totalRows) return -1
         val line = view.lineMap.lineAtRow(row)
-        return if (view.lineMap.firstRowOf(line) + view.rowsAbove(line) == row) line else -1
+        return if (view.textRowOf(line) == row) line else -1
     }
 
     /** A hash of the part of [line] the minimap shows. */
@@ -250,6 +254,7 @@ internal class MinimapTiles(private val view: EditorView) {
             state.tokenVersion,
             view.totalRows,
             view.injectionVersion,
+            view.textRowsVersion,
         )
     }
 

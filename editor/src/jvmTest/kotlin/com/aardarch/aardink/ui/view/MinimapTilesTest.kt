@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.TokenType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,7 @@ class MinimapTilesTest {
 
     private val measurer = TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 0)
 
-    private fun viewOf(text: String): EditorView {
+    private fun viewOf(text: String, softWrap: Boolean = false): EditorView {
         val state = CodeEditorState(initialText = "", tokenizeDebounceMs = 0, scope = CoroutineScope(Dispatchers.Unconfined)).apply {
             computeDispatcher = Dispatchers.Unconfined
             loadText(text)
@@ -60,7 +61,7 @@ class MinimapTilesTest {
                     paddingStart = 8f,
                     paddingEnd = 8f,
                 ),
-                softWrap = false,
+                softWrap = softWrap,
             )
             attach()
             prepare(400, 400)
@@ -112,6 +113,23 @@ class MinimapTilesTest {
         tiles.tile(0, 2, color, 4)
         tiles.tile(1, 2, color, 4)
         assertEquals(4, tiles.rendered)
+    }
+
+    @Test
+    fun `a line's text is drawn on the row it starts on below a lens that wraps`() {
+        val view = viewOf("first\nsecond\nthird", softWrap = true)
+        view.state.publishCodeLenses(listOf(CodeLens(6, "a long lens title ".repeat(8))))
+        view.prepare(400, 400)
+        val textRow = view.layoutFor(1).textRow
+        assertTrue(textRow > 1, "the lens takes more than one row")
+        val tiles = MinimapTiles(view)
+        val pixels = tiles.tile(0, rowUnits = 2, color = color, tabSize = 4).toPixelMap()
+        val lensRow = view.lineMap.firstRowOf(1)
+        for (row in lensRow until lensRow + textRow) assertTrue(!pixels.drawn(0, row * 2), "lens row $row")
+        assertTrue(pixels.drawn(0, (lensRow + textRow) * 2), "the text's first row")
+        assertTrue(pixels.drawn(0, (lensRow + textRow + 1) * 2), "the next line")
+        tiles.tile(0, 2, color, 4)
+        assertEquals(1, tiles.rendered, "nothing changed")
     }
 
     @Test

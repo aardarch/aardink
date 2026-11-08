@@ -566,7 +566,30 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             val range = visible.first().line..visible.last().line
             if (state.visibleLines != range) state.visibleLines = range
         }
+        noteMeasuredTextRows(visible)
         frame = ViewFrame(visible, scrollX, scrollY, width, height, metrics, lineCount)
+    }
+
+    /** Moves [textRowsVersion] on when the lines on screen whose text row is not the estimate change. */
+    private fun noteMeasuredTextRows(visible: List<VisibleLine>) {
+        val lookup = injections
+        var measured = NO_ROWS
+        if (lookup != null) {
+            var count = 0
+            for (shown in visible) {
+                val injected = lookup(shown.line) ?: continue
+                val row = shown.layout.textRow
+                if (row == estimatedRowsAbove(injected)) continue
+                if (count + 2 > measured.size) measured = measured.copyOf(max(8, measured.size * 2))
+                measured[count++] = shown.line
+                measured[count++] = row
+            }
+            if (count < measured.size) measured = measured.copyOf(count)
+        }
+        if (!measured.contentEquals(measuredTextRows)) {
+            measuredTextRows = measured
+            textRowsVersion++
+        }
     }
 
     private fun captureAnchor(scrollY: Float, metrics: EditorMetrics) {
@@ -601,8 +624,32 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         return contentTop(line, metrics) + rows * metrics.lineHeight
     }
 
-    /** The rows injected above [line]'s text, known without laying it out; a row that wraps counts once. */
-    fun rowsAbove(line: Int): Int = injections?.invoke(line)?.rowsAbove ?: 0
+    /**
+     * The row [line]'s text starts on, below the rows injected above it: as measured for a line on
+     * screen, and estimated for any other, as [estimateRows] counts them, without laying it out.
+     */
+    fun textRowOf(line: Int): Int {
+        val first = lineMap.firstRowOf(line)
+        val injected = injections?.invoke(line) ?: return first
+        return first + (frame.find(line)?.layout?.textRow ?: estimatedRowsAbove(injected))
+    }
+
+    /**
+     * Counts changes to what [textRowOf] answers without the rows changing: a line whose text
+     * starts on another row than estimated, coming on screen or leaving it.
+     */
+    var textRowsVersion = 0
+        private set
+
+    /** The lines on screen whose measured text row is not the estimate, and those rows, in pairs. */
+    private var measuredTextRows = NO_ROWS
+
+    /** Rows above the line's text that [injected] takes, a row wider than the view taking more than one. */
+    private fun estimatedRowsAbove(injected: LineInjections): Int {
+        val style = style
+        if (style == null || !style.softWrap || wrapWidth <= 0) return injected.rowsAbove
+        return max(injected.rowsAbove, ceil(injected.charsAbove * style.metrics.charWidth / wrapWidth).toInt())
+    }
 
     private fun lineLength(line: Int): Int = document.lineEnd(line) - document.lineStart(line)
 
@@ -621,8 +668,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val placeholder = folds.startingAt(line)?.let { it.placeholder.length + 1 } ?: 0
         val chars = min(lineLength(line), MAX_RENDERED_LINE_CHARS) + placeholder + (injected?.inlineChars ?: 0)
         // A row above that is wider than the view takes more rows than the break that makes it.
-        val wrappedAbove = ceil((injected?.charsAbove ?: 0) * style.metrics.charWidth / wrapWidth).toInt() - (injected?.rowsAbove ?: 0)
-        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added + max(0, wrappedAbove)
+        val wrappedAbove = if (injected == null) 0 else estimatedRowsAbove(injected) - injected.rowsAbove
+        return max(1, ceil(chars * style.metrics.charWidth / wrapWidth).toInt()) + added + wrappedAbove
     }
 
     /** The characters of [line] that are laid out: its text, cut at [MAX_RENDERED_LINE_CHARS]. */
@@ -1053,5 +1100,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
 
         /** The style of an indentation's glyphs: there, but not drawn. */
         private val HIDDEN = SpanStyle(color = Color.Transparent)
+
+        private val NO_ROWS = IntArray(0)
     }
 }
