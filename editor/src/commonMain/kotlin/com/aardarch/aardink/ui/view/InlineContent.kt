@@ -310,7 +310,7 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         val lines = HashMap<Int, Pending>()
         val wide = ArrayList<WideColor>()
         state.forEachInlineDecoration { addDecoration(it, lines, wide) }
-        for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false)
+        for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false, tooltip = hint.tooltip)
         return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
     }
 
@@ -382,11 +382,18 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
      * [text] at [offset], on one row. Columns come from offsets, so none is past its line's end, and
      * what is past the column a long line is cut at is dropped here, for the row estimates.
      */
-    private fun inject(lines: HashMap<Int, Pending>, offset: Int, text: String, style: SpanStyle?, caretAfter: Boolean) {
+    private fun inject(
+        lines: HashMap<Int, Pending>,
+        offset: Int,
+        text: String,
+        style: SpanStyle?,
+        caretAfter: Boolean,
+        tooltip: String? = null,
+    ) {
         if (text.isEmpty()) return
         val (line, column) = document.offsetToLineCol(offset)
         if (column > EditorView.MAX_RENDERED_LINE_CHARS) return
-        lines.getOrPut(line) { Pending() }.items += Injection(column, oneRow(text), style, caretAfter)
+        lines.getOrPut(line) { Pending() }.items += Injection(column, oneRow(text), style, caretAfter, tooltip = tooltip)
     }
 
     private fun oneRow(text: String): String = if (text.none { it < ' ' }) {

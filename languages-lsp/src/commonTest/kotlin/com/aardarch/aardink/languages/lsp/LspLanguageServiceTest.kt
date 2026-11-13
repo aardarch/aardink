@@ -463,7 +463,7 @@ class LspLanguageServiceTest {
     // ── Code actions ─────────────────────────────────────────────────────────
 
     @Test
-    fun `codeActions omit an action whose command runs after its edit`() = withServer("val x = 1") {
+    fun `an action's command runs on the server after its edit`() = withServer("val x = 1") {
         val server = async {
             respond(
                 "textDocument/codeAction",
@@ -480,8 +480,35 @@ class LspLanguageServiceTest {
         val actions = service.codeActions(doc, 1..1)
         server.await()
 
-        // Applying the edit alone would do half of what "Import and organize" promises.
-        assertEquals(listOf("Import only"), actions.map { it.title })
+        assertEquals(listOf("Import and organize", "Import only"), actions.map { it.title })
+        assertEquals(listOf(TextEdit(0 until 0, "import foo\n")), actions[0].edits)
+        assertNull(actions[1].onApply, "an edit alone needs nothing more")
+        actions[0].onApply!!()
+        val sent = nextSent()
+        assertEquals("workspace/executeCommand", sent["method"]!!.jsonPrimitive.content)
+        assertEquals("kotlin.organize", sent.params["command"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a command the server does not run leaves its action out`() = withServer("val x = 1") {
+        serverDeclares("""{"codeActionProvider":true,"executeCommandProvider":{"commands":["kotlin.organize"]}}""")
+        val server = async {
+            respond(
+                "textDocument/codeAction",
+                """[
+                  {"title":"Client's own","command":"editor.action.showReferences","arguments":[]},
+                  {"title":"Organize","command":"kotlin.organize","arguments":[1]}
+                ]""",
+            )
+        }
+
+        val actions = service.codeActions(doc, 1..1)
+        server.await()
+
+        assertEquals(listOf("Organize"), actions.map { it.title })
+        assertTrue(actions.single().edits.isEmpty())
+        actions.single().onApply!!()
+        assertEquals("[1]", nextSent().params["arguments"].toString())
     }
 
     @Test
@@ -568,7 +595,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `codeActions keep only actions with edits for this document`() = withServer("val x = 1") {
+    fun `codeActions keep commands and edits for this document`() = withServer("val x = 1") {
         publish(URI, """[{"range":${range(0, 0, 0, 3)},"message":"prefer var","severity":3}]""")
         val server = async {
             respond(
@@ -596,12 +623,14 @@ class LspLanguageServiceTest {
         assertEquals(range(0, 1, 0, 2), sent.params["range"].toString())
         assertEquals(1, sent.params["context"]!!.jsonObject["diagnostics"]!!.jsonArray.size, "overlapping diagnostics are forwarded")
 
-        assertEquals(listOf("Import foo", "Organize imports"), actions.map { it.title })
-        assertEquals(CodeActionKind.QuickFix, actions[0].kind)
-        assertTrue(actions[0].isPreferred)
-        assertEquals(listOf(TextEdit(0 until 0, "import foo\n")), actions[0].edits)
-        assertEquals(CodeActionKind.SourceOrganizeImports, actions[1].kind)
-        assertEquals(listOf(TextEdit(0..2, "var")), actions[1].edits)
+        // Another file's edit needs a state attached, through which this one's part is applied.
+        assertEquals(listOf("Run command", "Import foo", "Organize imports"), actions.map { it.title })
+        assertTrue(actions[0].edits.isEmpty())
+        assertEquals(CodeActionKind.QuickFix, actions[1].kind)
+        assertTrue(actions[1].isPreferred)
+        assertEquals(listOf(TextEdit(0 until 0, "import foo\n")), actions[1].edits)
+        assertEquals(CodeActionKind.SourceOrganizeImports, actions[2].kind)
+        assertEquals(listOf(TextEdit(0..2, "var")), actions[2].edits)
     }
 
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -867,7 +896,7 @@ class LspLanguageServiceTest {
     }
 
     @Test
-    fun `codeActions refuse an action whose edit reaches another file`() = withServer("val x = 1") {
+    fun `codeActions refuse an action whose edit reaches another file with no state attached`() = withServer("val x = 1") {
         val server = async {
             respond(
                 "textDocument/codeAction",

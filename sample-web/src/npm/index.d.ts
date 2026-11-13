@@ -757,6 +757,8 @@ export interface AardinkCodeLens {
 export interface AardinkInlayHint {
   position: AardinkPosition;
   label: string;
+  /** Shown, as Markdown, in a card under a mouse resting on the label; Monaco's `{ value }` too. */
+  tooltip?: string | { value: string };
 }
 
 /** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */

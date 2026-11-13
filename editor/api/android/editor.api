@@ -1,16 +1,18 @@
 public final class com/aardarch/aardink/core/CodeAction {
 	public static final field $stable I
-	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;Z)V
-	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZLkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Lcom/aardarch/aardink/core/CodeActionKind;
 	public final fun component3 ()Ljava/util/List;
 	public final fun component4 ()Z
-	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;Z)Lcom/aardarch/aardink/core/CodeAction;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/CodeAction;Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZILjava/lang/Object;)Lcom/aardarch/aardink/core/CodeAction;
+	public final fun component5 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZLkotlin/jvm/functions/Function1;)Lcom/aardarch/aardink/core/CodeAction;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/CodeAction;Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/aardarch/aardink/core/CodeAction;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEdits ()Ljava/util/List;
 	public final fun getKind ()Lcom/aardarch/aardink/core/CodeActionKind;
+	public final fun getOnApply ()Lkotlin/jvm/functions/Function1;
 	public final fun getTitle ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun isPreferred ()Z
@@ -112,6 +114,7 @@ public final class com/aardarch/aardink/core/CodeEditorState {
 	public final fun outdentSelection ()V
 	public final fun pushUndoStop ()V
 	public final fun redo ()Ljava/lang/String;
+	public final fun refreshLanguageFeatures ()V
 	public final fun removeContentListener (Lkotlin/jvm/functions/Function1;)V
 	public final fun removeSelectionListener (Lkotlin/jvm/functions/Function2;)V
 	public final fun replaceText (Ljava/lang/String;)Z
@@ -1232,14 +1235,17 @@ public final class com/aardarch/aardink/core/IncrementalTokenizer$DefaultImpls {
 
 public final class com/aardarch/aardink/core/InlayHint {
 	public static final field $stable I
-	public fun <init> (ILjava/lang/String;)V
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
 	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (ILjava/lang/String;)Lcom/aardarch/aardink/core/InlayHint;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/InlayHint;ILjava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/InlayHint;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;)Lcom/aardarch/aardink/core/InlayHint;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/InlayHint;ILjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/aardarch/aardink/core/InlayHint;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLabel ()Ljava/lang/String;
 	public final fun getOffset ()I
+	public final fun getTooltip ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -2029,7 +2035,7 @@ public final class com/aardarch/aardink/ui/GutterAnnotationKind : java/lang/Enum
 }
 
 public final class com/aardarch/aardink/ui/HoverDocPopupKt {
-	public static final fun HoverDocPopup (Lcom/aardarch/aardink/core/HoverDoc;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+	public static final fun HoverDocPopup (Lcom/aardarch/aardink/core/HoverDoc;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 }
 
 public final class com/aardarch/aardink/ui/KeyChord {
@@ -2166,7 +2172,7 @@ public final class com/aardarch/aardink/ui/RenderWhitespace : java/lang/Enum {
 }
 
 public final class com/aardarch/aardink/ui/SignatureHelpPopupKt {
-	public static final fun SignatureHelpPopup (Lcom/aardarch/aardink/core/SignatureHelp;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+	public static final fun SignatureHelpPopup (Lcom/aardarch/aardink/core/SignatureHelp;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 }
 
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt {

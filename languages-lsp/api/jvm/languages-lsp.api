@@ -683,6 +683,7 @@ public final class com/aardarch/aardink/languages/lsp/LspLanguageService : com/a
 	public fun surroundingClose (C)Ljava/lang/String;
 	public final fun typeDefinition (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun willSave (Lcom/aardarch/aardink/languages/lsp/LspSaveReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun willSaveWaitUntil (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/languages/lsp/LspSaveReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/aardarch/aardink/languages/lsp/LspLanguageService$Companion {

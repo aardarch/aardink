@@ -610,6 +610,23 @@ class WebLanguagesTest {
     }
 
     @Test
+    fun `a host's hint tooltip is a string or Monaco's markdown string`() = runTest {
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-hint-tips", "grammar": { "tokenizer": { "root": [] } } }""",
+            WebLanguageProviders(
+                inlayHints = { _, _ ->
+                    """[{ "position": { "lineNumber": 1, "column": 1 }, "label": "a", "tooltip": "**plain**" },
+                        { "position": { "lineNumber": 1, "column": 2 }, "label": "b", "tooltip": { "value": "*md*" } },
+                        { "position": { "lineNumber": 1, "column": 2 }, "label": "c" }]"""
+                },
+            ),
+        )
+        val document = CodeDocument("ab")
+        val hints = AardinkWeb.registry.byId("toy-hint-tips")!!.languageService!!.inlayHints(document, 0 until 2)
+        assertEquals(listOf("**plain**", "*md*", null), hints.map { it.tooltip })
+    }
+
+    @Test
     fun `no inlay hint provider, or one that gives nothing or fails, is no hints`() = runTest {
         val document = CodeDocument("ab")
         AardinkWeb.registerLanguage("""{ "id": "toy-no-hints", "grammar": { "tokenizer": { "root": [] } } }""", WebLanguageProviders())

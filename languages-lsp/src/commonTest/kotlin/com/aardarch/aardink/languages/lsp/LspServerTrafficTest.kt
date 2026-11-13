@@ -357,6 +357,40 @@ class LspServerTrafficTest {
         assertTrue(host.edits.isEmpty(), "listing an action is not choosing it")
     }
 
+    @Test
+    fun `a chosen code action reaching another file goes to the host, then this document's part`() = withHost("") { host ->
+        serverDeclares("""{$INCREMENTAL_SYNC,"codeActionProvider":true}""")
+        val state = editorState("val x = 1")
+        service.attach(state)
+        assertEquals("textDocument/didOpen", nextSent().method)
+
+        val listing = async { service.codeActions(state.document.snapshot(), 0..0) }
+        respond("textDocument/codeAction", """[{"title":"Fix everywhere","edit":${renameAnswer()}}]""")
+        val action = listing.await().single()
+        assertTrue(action.edits.isEmpty(), "this document's part waits for the host")
+        assertTrue(host.edits.isEmpty(), "listing an action is not choosing it")
+
+        action.onApply!!()
+
+        assertEquals(1, host.edits.size)
+        assertEquals("val y = 1", state.document.text)
+    }
+
+    @Test
+    fun `a host that refuses the other files leaves this document as it was`() = withHost("") { host ->
+        serverDeclares("""{$INCREMENTAL_SYNC,"codeActionProvider":true}""")
+        host.onApply = { false }
+        val state = editorState("val x = 1")
+        service.attach(state)
+        nextSent()
+
+        val listing = async { service.codeActions(state.document.snapshot(), 0..0) }
+        respond("textDocument/codeAction", """[{"title":"Fix everywhere","edit":${renameAnswer()}}]""")
+        listing.await().single().onApply!!()
+
+        assertEquals("val x = 1", state.document.text)
+    }
+
     // ── Messages and progress ────────────────────────────────────────────────
 
     @Test

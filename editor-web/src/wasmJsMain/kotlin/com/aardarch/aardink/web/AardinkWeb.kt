@@ -1085,7 +1085,7 @@ object AardinkWeb {
         json.encodeToString(WebRange.serializer(), webRange(document, range))
 
     /**
-     * A JSON array of `{ position: { lineNumber, column }, label }` (Monaco's position, 1-based) as
+     * A JSON array of `{ position: { lineNumber, column }, label, tooltip? }` (Monaco's position, 1-based) as
      * hints in [document]; those it cannot read are left out.
      */
     internal fun parseInlayHints(document: CodeDocument, hintsJson: String): List<InlayHint> =
@@ -1094,7 +1094,13 @@ object AardinkWeb {
             val position = item["position"]?.let { runCatching { json.decodeFromJsonElement(WebPosition.serializer(), it) }.getOrNull() }
                 ?: return@mapNotNull null
             val label = (item["label"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
-            InlayHint(offsetOf(document, position.lineNumber, position.column), label)
+            // Monaco's `string | IMarkdownString`: a string is plain text there, but read as Markdown here, as hover is.
+            val tooltip = when (val given = item["tooltip"]) {
+                is JsonPrimitive -> given.takeIf { it.isString }?.content
+                is JsonObject -> (given["value"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                else -> null
+            }
+            InlayHint(offsetOf(document, position.lineNumber, position.column), label, tooltip)
         }
 
     /**

@@ -357,7 +357,7 @@ private fun CodeEditorLayoutContent(
             state.publishSymbols(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(SYMBOLS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val list = if (state.exceedsAnalysisLimit) {
@@ -632,7 +632,7 @@ private fun CodeEditorLayoutContent(
     // ── Folding: recompute foldable ranges when text changes ─────────────────
     if (foldState != null) {
         LaunchedEffect(foldState, state, foldingProvider) {
-            snapshotFlow { state.textVersion }.collectLatest {
+            snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
                 delay(200)
                 currentFoldableRanges(state, foldingProvider)?.let(foldState::updateFoldableRanges)
             }
@@ -645,7 +645,7 @@ private fun CodeEditorLayoutContent(
     var ownStickyRanges by remember { mutableStateOf<List<FoldRange>>(emptyList()) }
     if (options.stickyScroll && foldState == null) {
         LaunchedEffect(state, foldingProvider) {
-            snapshotFlow { state.textVersion }.collectLatest {
+            snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
                 delay(200)
                 currentFoldableRanges(state, foldingProvider)?.let { ownStickyRanges = it }
             }
@@ -745,7 +745,7 @@ private fun CodeEditorLayoutContent(
         if (service == null || service !== state.semanticSource) state.clearSemanticTokens()
         state.semanticSource = service
         if (service == null) return@LaunchedEffect
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(SEMANTIC_TOKENS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
                 state.clearSemanticTokens()
@@ -775,8 +775,8 @@ private fun CodeEditorLayoutContent(
                 frame.lineCount,
             )
             asked = window
-            state.textVersion to window
-        }.filterNotNull().collectLatest { (_, window) ->
+            Triple(state.textVersion, state.languageRefreshes, window)
+        }.filterNotNull().collectLatest { (_, _, window) ->
             delay(INLAY_HINTS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
                 state.publishInlayHints(emptyList())
@@ -795,13 +795,13 @@ private fun CodeEditorLayoutContent(
         // As with hints: what is here came from a service, and a change of either ends that.
         state.publishCodeLenses(emptyList())
         val service = languageService.takeIf { options.codeLens } ?: return@LaunchedEffect
-        var answered: Int? = null
+        var answered: Pair<Int, Int>? = null
         // A first answer may leave the same lines waiting as before it, which alone asks nothing.
         var firstAnswers by mutableIntStateOf(0)
         snapshotFlow {
             state.codeLenses
             val waiting = view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
-            Triple(state.textVersion, waiting, firstAnswers)
+            Triple(state.textVersion to state.languageRefreshes, waiting, firstAnswers)
         }.collectLatest { (version, waiting) ->
             if (version == answered && waiting.isEmpty()) return@collectLatest
             delay(CODE_LENSES_DEBOUNCE_MS)
@@ -866,7 +866,7 @@ private fun CodeEditorLayoutContent(
             colorTracker.replace(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(COLORS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val found = if (state.exceedsAnalysisLimit) {
@@ -943,8 +943,15 @@ private fun CodeEditorLayoutContent(
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
             val hit = view.offsetAt(at)
+            if (hover?.holding == true) return@collectLatest
+            // An inlay hint with a tooltip is about itself, not the text it stands in front of.
+            val tooltip = hit.injection?.tooltip
+            if (tooltip != null) {
+                hover = HoverShown(HoverDoc(hit.injection.text.trim(), tooltip), hit.offset, hit.offset, restedAt = at)
+                return@collectLatest
+            }
             // What a click does something on says it itself, and is not the text of the line under it.
-            if (hover?.holding != true && hit.injection?.id == null) showHover(hit.offset, at)
+            if (hit.injection?.id == null) showHover(hit.offset, at)
         }
     }
     // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
@@ -1079,7 +1086,7 @@ private fun CodeEditorLayoutContent(
             linkTracker.replace(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(LINKS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val links = if (state.exceedsAnalysisLimit) {
@@ -1884,6 +1891,7 @@ private fun CodeEditorLayoutContent(
                             onSelectAction = { action ->
                                 state.applyTextEdits(action.edits)
                                 showCodeActionsMenu = false
+                                action.onApply?.let { rest -> coroutineScope.launch { applyRestOf(rest) } }
                             },
                             onDismiss = { showCodeActionsMenu = false },
                         )
@@ -1998,6 +2006,16 @@ private suspend fun askForInlineCompletions(
     throw e
 } catch (_: Exception) {
     emptyList()
+}
+
+/** A chosen [CodeAction.onApply]; a failure costs the rest of the action, not the editor. */
+private suspend fun applyRestOf(onApply: suspend () -> Unit) {
+    try {
+        onApply()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+    }
 }
 
 /**

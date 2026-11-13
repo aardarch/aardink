@@ -36,17 +36,17 @@ import com.aardarch.aardink.core.HoverDoc
  * Floating popup showing hover documentation for the token under the cursor.
  *
  * Positioned by the Popup system near the current anchor. The caller dismisses it
- * via [onDismiss] (typically when the cursor moves or a key is pressed). Links in the documentation
- * show as their text here: only the editor's own hover, through [CodeEditorLayout]'s `onOpenLink`,
- * opens them.
+ * via [onDismiss] (typically when the cursor moves or a key is pressed). A link in the
+ * documentation, clicked or tapped, goes to [onOpenLink] with its target; without one, the
+ * default, links show as their text.
  */
 @Composable
-fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun HoverDocPopup(doc: HoverDoc, onDismiss: () -> Unit, modifier: Modifier = Modifier, onOpenLink: ((target: String) -> Unit)? = null) {
     Popup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = false),
     ) {
-        HoverDocCard(doc, modifier)
+        HoverDocCard(doc, modifier, onOpenLink)
     }
 }
 

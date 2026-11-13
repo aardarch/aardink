@@ -22,6 +22,7 @@ import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.LanguageService
 import kotlinx.coroutines.async
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -620,11 +621,11 @@ class LspCodeLensTest {
     // ── What the client declares ─────────────────────────────────────────────
 
     @Test
-    fun `the client says it takes lenses and runs commands, and not that it can be told to refresh them`() {
+    fun `the client says it takes lenses, runs commands, and can be told to refresh them`() {
         val capabilities = DefaultClientCapabilities
         assertTrue("codeLens" in capabilities["textDocument"]!!.jsonObject)
         val workspace = capabilities["workspace"]!!.jsonObject
         assertTrue("executeCommand" in workspace)
-        assertFalse("codeLens" in workspace)
+        assertTrue(workspace["codeLens"]!!.jsonObject["refreshSupport"]!!.jsonPrimitive.boolean)
     }
 }

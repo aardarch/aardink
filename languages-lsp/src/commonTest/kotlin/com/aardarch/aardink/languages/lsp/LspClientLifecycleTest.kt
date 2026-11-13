@@ -656,7 +656,7 @@ class LspClientLifecycleTest {
         val resolved = completionItem["resolveSupport"]!!.jsonObject["properties"]!!.jsonArray.map { it.jsonPrimitive.content }
 
         assertFalse("additionalTextEdits" in resolved, "accepting an item does not wait for resolve, so the import would be lost")
-        assertFalse("willSaveWaitUntil" in textDocument["synchronization"]!!.jsonObject, "not in 0.9")
+        assertTrue(textDocument["synchronization"]!!.jsonObject["willSaveWaitUntil"]!!.jsonPrimitive.boolean)
         assertFalse(
             "resourceOperations" in DefaultClientCapabilities["workspace"]!!.jsonObject["workspaceEdit"]!!.jsonObject,
             "the adapter refuses file operations",

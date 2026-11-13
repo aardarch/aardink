@@ -333,6 +333,23 @@ class CodeEditorState(
         revalidations++
     }
 
+    /** Bumped by [refreshLanguageFeatures]; the layout asks again for everything it shows from the service. */
+    internal var languageRefreshes by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Asks the language service again, without waiting for an edit, for everything the editor
+     * shows from it: diagnostics, document symbols, folds, colours, links, semantic tokens, inlay
+     * hints and code lenses, each as the options have it on. For when what they depend on outside
+     * the text has changed: a language server sends `workspace/inlayHint/refresh` and the like for
+     * this, and `:languages-lsp`'s `LspLanguageService` calls this on the state it is attached to. Each is asked on its usual schedule, after its pause; what shows stays until the
+     * answer. Safe from any thread.
+     */
+    fun refreshLanguageFeatures() {
+        languageRefreshes++
+        revalidations++
+    }
+
     // ── Change events ─────────────────────────────────────────────────────────
 
     /**
