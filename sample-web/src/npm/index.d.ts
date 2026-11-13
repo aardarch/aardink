@@ -73,6 +73,12 @@ export interface AardinkOptions {
    * default, where Monaco's is on.
    */
   codeLens?: boolean;
+  /**
+   * Typing one of `autoFormatTriggerCharacters` asks `provideOnTypeFormattingEdits` (or a language
+   * server) to tidy the text around it, as Monaco's `formatOnType`. Undo takes the edits back and
+   * keeps what was typed. Off by default.
+   */
+  formatOnType?: boolean;
 }
 
 /**
@@ -715,6 +721,30 @@ export interface AardinkLanguageProviders {
    * command registry behind this: a lens does what this does with its `id`.
    */
   runCodeLensCommand?(id: string, args: unknown[]): void | Promise<void>;
+  /**
+   * The characters whose typing asks `provideOnTypeFormattingEdits`, as on Monaco's
+   * `OnTypeFormattingEditProvider`: `'}'`, `';'`, or `'\n'` for Enter.
+   */
+  autoFormatTriggerCharacters?: string[];
+  /**
+   * Edits that tidy the text around what was just typed, as Monaco's `provideOnTypeFormattingEdits`,
+   * with the `formatOnType` option on. `line` and `column` are the caret's, after the character `ch`;
+   * the edits are applied as an undo step of their own, and dropped if the text changed while they
+   * were worked out. With `extends`, the base language's apply when this answers none.
+   */
+  provideOnTypeFormattingEdits?(
+    text: string,
+    line: number,
+    column: number,
+    ch: string,
+    options: { tabSize: number; insertSpaces: boolean },
+  ): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+}
+
+/** Monaco's `TextEdit`: `text` in place of `range`. */
+export interface AardinkTextEdit {
+  range: AardinkRange;
+  text: string | null;
 }
 
 /** Monaco's `CodeLens`, with the command it must have here: a title in a row above the line `range` starts on. */

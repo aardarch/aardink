@@ -33,7 +33,9 @@ import kotlinx.coroutines.withContext
  * - **Hover, definition, signature help, auto-close, surrounding a selection:** the primary's, or
  *   else the fallback's.
  * - **Enter indentation:** the primary's, or the fallback's when the primary gives none (`""`).
- * - **Formatting:** the primary's when it changes anything, else the fallback's.
+ * - **Formatting:** the primary's when it changes anything, else the fallback's. **Formatting on
+ *   type:** likewise, each asked only for its own [LanguageService.formatOnTypeCharacters], which
+ *   unite.
  * - **Rename:** by whichever of the two [LanguageService.supportsRename], the primary first.
  * - **Document symbols, highlights, selection ranges and semantic tokens:** the primary's, or the
  *   fallback's when the primary has none. **Linked editing ranges:** likewise.
@@ -108,6 +110,15 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
 
     override suspend fun formatRange(document: CodeDocument, range: IntRange, options: FormattingOptions): List<TextEdit> =
         primary.formatRange(document, range, options).ifEmpty { fallback.formatRange(document, range, options) }
+
+    override val formatOnTypeCharacters: Set<Char>
+        get() = primary.formatOnTypeCharacters + fallback.formatOnTypeCharacters
+
+    override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+        val own = if (typed in primary.formatOnTypeCharacters) primary.formatOnType(document, offset, typed, options) else emptyList()
+        if (own.isNotEmpty() || typed !in fallback.formatOnTypeCharacters) return own
+        return fallback.formatOnType(document, offset, typed, options)
+    }
 
     override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> =
         primary.codeActions(document, range) + fallback.codeActions(document, range)

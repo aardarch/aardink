@@ -21,12 +21,14 @@ import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.CompletionKind
 import com.aardarch.aardink.core.DocumentSymbol
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.core.SymbolKind
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenFontStyle
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.BuiltInLanguages
@@ -741,5 +743,43 @@ class WebLanguagesTest {
         val lenses = AardinkWeb.registry.byId("toy-lens-dialect")!!.languageService!!.codeLenses(CodeDocument("ab"))
 
         assertEquals(listOf("t", "u", "base"), lenses.map { it.title }, "the base's own \"t\" at the same offset is the same lens")
+    }
+
+    @Test
+    fun `a host formats on type for its own characters, in Monaco's shape`() = runTest {
+        var asked: List<Any>? = null
+        AardinkWeb.registerLanguage(
+            """{ "id": "toy-on-type", "grammar": { "tokenizer": { "root": [] } }, "autoFormatTriggerCharacters": ["}", "\n"] }""",
+            WebLanguageProviders(
+                formatOnType = { text, line, column, ch, options ->
+                    asked = listOf(text, line, column, ch, options)
+                    """[{ "range": { "startLineNumber": 2, "startColumn": 1, "endLineNumber": 2, "endColumn": 5 }, "text": "" },
+                        { "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 }, "text": null },
+                        { "range": "not a range", "text": "lost" }]"""
+                },
+            ),
+        )
+        val service = AardinkWeb.registry.byId("toy-on-type")!!.languageService!!
+        val document = CodeDocument("a {\n    }")
+        assertEquals(setOf('}', '\n'), service.formatOnTypeCharacters)
+
+        val edits = service.formatOnType(document, 9, '}', FormattingOptions(tabSize = 2, insertSpaces = false))
+
+        assertEquals(listOf(TextEdit(4 until 8, ""), TextEdit(0 until 0, "")), edits)
+        assertEquals(listOf<Any>("a {\n    }", 2, 6, "}", """{"tabSize":2,"insertSpaces":false}"""), asked)
+    }
+
+    @Test
+    fun `trigger characters without a provider to ask format nothing on type`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            register("toy-on-type-bad", """, "autoFormatTriggerCharacters": ["}}"]""")
+        }
+        assertTrue(error.message!!.startsWith("autoFormatTriggerCharacters:"), error.message)
+        assertEquals(emptySet(), register("toy-on-type-none", """, "autoFormatTriggerCharacters": ["}"]""").formatOnTypeCharacters)
+        val own = AardinkWeb.registerLanguage(
+            """{ "id": "toy-on-type-own", "extends": "json", "grammar": { "tokenizer": { "root": [] } }, "autoFormatTriggerCharacters": [";"] }""",
+            WebLanguageProviders(formatOnType = { _, _, _, _, _ -> null }),
+        )
+        assertEquals(setOf(';'), AardinkWeb.registry.byId(own)!!.languageService!!.formatOnTypeCharacters)
     }
 }

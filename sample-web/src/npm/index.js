@@ -162,6 +162,7 @@ const PROVIDERS = new Map([
   ['codeLenses', (providers) => providers.provideCodeLenses],
   // A click is about a command, so no text comes with it.
   ['runCodeLensCommand', (providers) => providers.runCodeLensCommand && ((_text, id, args) => providers.runCodeLensCommand(id, args))],
+  ['formatOnType', (providers) => providers.provideOnTypeFormattingEdits],
 ]);
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
@@ -191,6 +192,7 @@ export async function registerLanguage(definition, providers = {}) {
       configuration: JSON.parse(JSON.stringify(definition.configuration ?? null, regexAsPattern)),
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
+      autoFormatTriggerCharacters: providers.provideOnTypeFormattingEdits ? providers.autoFormatTriggerCharacters : undefined,
       grammar,
     }),
     (method, text, argsJson) => answer(PROVIDERS.get(method)?.(providers), text, ...JSON.parse(argsJson)),
@@ -273,7 +275,7 @@ function toKotlinOptions(options) {
   if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
   if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
-  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens']) {
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens', 'formatOnType']) {
     if (options[key] !== undefined) out[key] = !!options[key];
   }
   if (options.inlayHints !== undefined) {

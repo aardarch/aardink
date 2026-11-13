@@ -120,6 +120,7 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         }
         feature("formatting")
         feature("rangeFormatting")
+        feature("onTypeFormatting")
         feature("rename") {
             put("prepareSupport", true)
             put("prepareSupportDefaultBehavior", 1)

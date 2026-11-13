@@ -1141,6 +1141,18 @@ In this order, each to 1.0 or a 0.10 patch: Groovy, Dockerfile, diff, SCSS and L
 preview and search history; drag and drop; `semanticTokens/range`; inlay hint tooltips; Kotlin's
 hover and signature help.
 
+### 16.1 As built
+
+The 0.10 work follows the ledger above, with these differences and additions, each forced by the
+design or found while building it.
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| Format on type: edits join that keystroke's undo step | An undo step of their own, as VS Code's: the first undo takes the formatting back and keeps what was typed. Asked with a single caret only, not while an input method composes, and cancelled by the next keystroke | A server's answer comes after the keystroke's step is recorded, and VS Code's behaviour is what users expect from undo |
+| `LanguageService.formatOnType(document, offset, typed, options)` | `offset` is the caret after the character and after what the editor added at once (Enter's indentation, an auto-closed bracket after the caret), as LSP's `position`. `CompositeLanguageService` asks each side only for its own characters | |
+| LSP `onTypeFormatting` | `formatOnTypeCharacters` from `documentOnTypeFormattingProvider`, declared or registered, worked out once per change of either; none while the capabilities are unknown. `textDocument.onTypeFormatting` is declared in `DefaultClientCapabilities` | Read at every keystroke |
+| `provideOnTypeFormattingEdits` (with `autoFormatTriggerCharacters`) | `provideOnTypeFormattingEdits(text, line, column, ch, { tabSize, insertSpaces })`, answering Monaco's `TextEdit`s (npm `AardinkTextEdit`); `autoFormatTriggerCharacters` goes with the definition, as `triggerCharacters` does, and counts only with the provider. `WebLanguageProviders.formatOnType: suspend (text, line, column, ch, optionsJson) -> String?`, through the dispatcher as `formatOnType` | The shape of the other providers, which take the text and a 1-based place rather than a model |
+
 ## 13. Verification
 
 - **Per PR:** `pwsh ./scripts/pre-push.ps1 -NoFix`, CI green on `main` before the next merge, the

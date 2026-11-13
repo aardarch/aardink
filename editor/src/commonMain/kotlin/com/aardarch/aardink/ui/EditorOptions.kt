@@ -97,6 +97,11 @@ import com.aardarch.aardink.core.LineEnding
  *   a click or a tap away from what it does, and asked for after each pause in typing. The row is
  *   not part of the document: a caret passes over it. Off by default, and nothing is asked for
  *   while off.
+ * @property formatOnType Typing one of the language service's `formatOnTypeCharacters` (a `}`, a
+ *   `;`, Enter) with a single caret asks its `formatOnType` to tidy the text around it, as VS
+ *   Code's `editor.formatOnType`. The answer is applied as an undo step of its own, so undo takes
+ *   it back and keeps what was typed, and only if nothing was typed while it was being worked
+ *   out. Off by default, and nothing is asked for while off.
  */
 @Immutable
 data class EditorOptions(
@@ -130,6 +135,7 @@ data class EditorOptions(
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
     val codeLens: Boolean = false,
+    val formatOnType: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

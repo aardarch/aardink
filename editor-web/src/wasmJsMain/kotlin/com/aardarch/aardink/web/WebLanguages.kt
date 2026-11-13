@@ -103,6 +103,10 @@ import kotlinx.serialization.json.jsonObject
  * - [runCodeLensCommand]: a lens was clicked. It gets the command's `id` and its `arguments` as a
  *   JSON array, `[]` for none, and what it answers is not read. A click comes back here because an
  *   answer is JSON, and a language's service has no hold of any one editor.
+ * - [formatOnType]: one of the definition's `autoFormatTriggerCharacters` was typed, with the caret
+ *   after it at the position given and `options` as `{ tabSize, insertSpaces }`: an array of Monaco's
+ *   `TextEdit`, `{ range, text }`, for the editor to apply with the `formatOnType` option on. Enter
+ *   is `"\n"`.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -119,6 +123,7 @@ class WebLanguageProviders(
     val inlayHints: (suspend (text: String, rangeJson: String) -> String?)? = null,
     val codeLenses: (suspend (text: String) -> String?)? = null,
     val runCodeLensCommand: (suspend (id: String, argsJson: String) -> Unit)? = null,
+    val formatOnType: (suspend (text: String, line: Int, column: Int, ch: String, optionsJson: String) -> String?)? = null,
 )
 
 /**
@@ -139,6 +144,9 @@ internal fun dispatchedProviders(dispatcher: suspend (method: String, text: Stri
     runCodeLensCommand = { id, argsJson ->
         dispatcher("runCodeLensCommand", "", "[${JsonPrimitive(id)},$argsJson]")
     },
+    formatOnType = { text, line, column, ch, optionsJson ->
+        dispatcher("formatOnType", text, "[$line,$column,${JsonPrimitive(ch)},$optionsJson]")
+    },
 )
 
 /**
@@ -155,8 +163,9 @@ internal class WebLanguageService(
     providers: WebLanguageProviders,
     ownTriggerCharacters: Set<Char>? = null,
     inheritCompletions: Boolean = true,
+    autoFormatTriggerCharacters: Set<Char> = emptySet(),
 ) : CompositeLanguageService(
-    primary = JsProviderService(providers, ownTriggerCharacters ?: base?.triggerCharacters.orEmpty()),
+    primary = JsProviderService(providers, ownTriggerCharacters ?: base?.triggerCharacters.orEmpty(), autoFormatTriggerCharacters),
     fallback = base ?: NoLanguageService,
     inheritCompletions = inheritCompletions,
 ) {
@@ -192,8 +201,16 @@ private object NoLanguageService : LanguageService {
 /**
  * What a host's JavaScript providers answer, and nothing else: completions, hover and diagnostics.
  * [triggerCharacters] are the definition's own, or the extended language's when it gave none.
+ * [formatOnTypeCharacters] are the definition's `autoFormatTriggerCharacters`, and none without a
+ * provider to ask.
  */
-private class JsProviderService(private val providers: WebLanguageProviders, override val triggerCharacters: Set<Char>) : LanguageService {
+private class JsProviderService(
+    private val providers: WebLanguageProviders,
+    override val triggerCharacters: Set<Char>,
+    autoFormatTriggerCharacters: Set<Char>,
+) : LanguageService {
+
+    override val formatOnTypeCharacters: Set<Char> = if (providers.formatOnType == null) emptySet() else autoFormatTriggerCharacters
 
     private val commands = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -259,6 +276,14 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
     override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
+
+    override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+        val (line, column) = document.offsetToLineCol(offset)
+        val optionsJson = """{"tabSize":${options.tabSize},"insertSpaces":${options.insertSpaces}}"""
+        return asked {
+            providers.formatOnType?.invoke(document.text, line + 1, column + 1, typed.toString(), optionsJson)
+        }?.let { AardinkWeb.parseTextEdits(document, it) }.orEmpty()
+    }
 
     /** What a host's provider answered; nothing when it failed (a rejected Promise), which costs its answer, not the editor. */
     private suspend fun asked(provider: suspend () -> String?): String? = try {
@@ -518,13 +543,15 @@ internal fun languageFrom(
         throw IllegalArgumentException("grammar.${e.message}", e)
     }
     val extensions = (root["extensions"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.removePrefix(".") }.orEmpty()
-    val triggerCharacters = root.given("triggerCharacters")?.let { value ->
+    fun characters(name: String): Set<Char>? = root.given(name)?.let { value ->
         val given = (value as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
         if (given == null || given.any { it == null || it.length != 1 }) {
-            throw IllegalArgumentException("triggerCharacters: an array of one-character strings")
+            throw IllegalArgumentException("$name: an array of one-character strings")
         }
         given.mapTo(LinkedHashSet()) { it!!.single() }
     }
+    val triggerCharacters = characters("triggerCharacters")
+    val autoFormatTriggerCharacters = characters("autoFormatTriggerCharacters").orEmpty()
     val inheritCompletions = root.given("inheritCompletions")?.let {
         (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull
             ?: throw IllegalArgumentException("inheritCompletions: true or false")
@@ -557,7 +584,8 @@ internal fun languageFrom(
     val configured = root.given("configuration")?.let { definition.withConfiguration(configurationFrom(it)) } ?: definition
     grammars[id] = grammar
     return configured.copy(
-        languageService = WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions),
+        languageService =
+        WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions, autoFormatTriggerCharacters),
     )
 }
 

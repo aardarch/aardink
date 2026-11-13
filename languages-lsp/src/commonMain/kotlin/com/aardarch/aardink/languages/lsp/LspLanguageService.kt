@@ -543,6 +543,49 @@ class LspLanguageService(
     }
 
     /**
+     * The server's `firstTriggerCharacter` and `moreTriggerCharacter`, declared or registered; none
+     * while its capabilities are unknown, so nothing is asked before the handshake. Read at each
+     * keystroke, so worked out once per change of capabilities or registrations.
+     */
+    override val formatOnTypeCharacters: Set<Char>
+        get() {
+            val capabilities = client.serverCapabilities
+            val registrations = client.registrations
+            onTypeCharacters?.let { (forCapabilities, forRegistrations, characters) ->
+                if (forCapabilities === capabilities && forRegistrations === registrations) return characters
+            }
+            val characters = if (!supports("documentOnTypeFormattingProvider")) {
+                emptySet()
+            } else {
+                val declared = (capabilities as? JsonObject)?.get("documentOnTypeFormattingProvider") as? JsonObject
+                val method = methodOf("documentOnTypeFormattingProvider")
+                val offers = listOfNotNull(declared) + registrations.filter { it.method == method }.mapNotNull { it.options }
+                offers.flatMapTo(HashSet()) { offer ->
+                    val first = (offer["firstTriggerCharacter"] as? JsonPrimitive)?.contentOrNull
+                    val more = (offer["moreTriggerCharacter"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                    (listOfNotNull(first) + more).mapNotNull { it.singleOrNull() }
+                }
+            }
+            onTypeCharacters = Triple(capabilities, registrations, characters)
+            return characters
+        }
+
+    /** [formatOnTypeCharacters] with what it was worked out from. */
+    private var onTypeCharacters: Triple<Any?, Any?, Set<Char>>? = null
+
+    /** `textDocument/onTypeFormatting`, with the position after the typed character as LSP has it. */
+    override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+        val params = LspDocumentOnTypeFormattingParams(textDocument, positionOf(document, offset), typed.toString(), options.toLsp())
+        val result = request(
+            "documentOnTypeFormattingProvider",
+            "textDocument/onTypeFormatting",
+            encode(LspDocumentOnTypeFormattingParams.serializer(), params),
+        ) ?: return emptyList()
+        val edits = decodeOrNull(ListSerializer(LspTextEdit.serializer()), result) ?: return emptyList()
+        return toTextEdits(document, edits)
+    }
+
+    /**
      * Code actions whose workspace edit touches this document, and whose whole effect is that edit.
      *
      * Four shapes are omitted, all for the same reason — the editor would perform only part of what

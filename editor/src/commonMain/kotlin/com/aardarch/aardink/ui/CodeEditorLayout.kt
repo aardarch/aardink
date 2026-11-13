@@ -1254,10 +1254,24 @@ private fun CodeEditorLayoutContent(
         }
     }
     val currentHandleSingleCharacterInsert = rememberUpdatedState(handleSingleCharacterInsert)
+    // Format on type: asked off the typing path with a single caret, and dropped by the next
+    // keystroke, which cancels it, or by any edit made while it was being worked out.
+    val currentFormatOnType = rememberUpdatedState(options.formatOnType)
+    var formatOnTypeJob by remember { mutableStateOf<Job?>(null) }
+    val askFormatOnType: (CodeEditorState.TypedInput) -> Unit = ask@{ typed ->
+        formatOnTypeJob?.cancel()
+        val service = currentLanguageService.value ?: return@ask
+        if (!currentFormatOnType.value || typed.composing || typed.char !in service.formatOnTypeCharacters) return@ask
+        val caret = state.selections.singleOrNull()?.takeIf { it.collapsed } ?: return@ask
+        val document = state.document.snapshot()
+        formatOnTypeJob = coroutineScope.launch { formatAfterTyping(state, service, document, caret.start, typed.char) }
+    }
     val onInput: (CodeEditorState.TypedInput?) -> Unit = { typed ->
         if (typed != null) {
             currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
+            askFormatOnType(typed)
         } else {
+            formatOnTypeJob?.cancel()
             showCompletion = false
         }
     }
@@ -1984,6 +1998,23 @@ private suspend fun askForInlineCompletions(
     throw e
 } catch (_: Exception) {
     emptyList()
+}
+
+/**
+ * Applies what [service] answers to [typed] at [offset] in [document], as an undo step of its own,
+ * if the text is still [document]: an answer about older text would land in the wrong place. A
+ * failure costs the formatting, not the editor.
+ */
+private suspend fun formatAfterTyping(state: CodeEditorState, service: LanguageService, document: CodeDocument, offset: Int, typed: Char) {
+    val edits = try {
+        withContext(state.computeDispatcher) { service.formatOnType(document, offset, typed, state.formattingOptions) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        return
+    }
+    if (edits.isEmpty() || state.document.version != document.version) return
+    state.applyTextEdits(edits)
 }
 
 // ── Completion acceptance ──────────────────────────────────────────────────────

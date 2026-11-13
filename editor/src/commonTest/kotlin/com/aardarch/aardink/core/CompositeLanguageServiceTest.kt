@@ -45,6 +45,8 @@ class CompositeLanguageServiceTest {
         override val completionsAreIncomplete: Boolean = true,
         val tokens: List<Token> = emptyList(),
         val hints: List<InlayHint> = emptyList(),
+        override val formatOnTypeCharacters: Set<Char> = emptySet(),
+        val onType: List<TextEdit> = emptyList(),
     ) : LanguageService {
         override suspend fun completions(document: CodeDocument, cursorOffset: Int) = items
 
@@ -65,6 +67,13 @@ class CompositeLanguageServiceTest {
         override suspend fun semanticTokens(document: CodeDocument) = tokens
 
         override suspend fun inlayHints(document: CodeDocument, range: IntRange) = hints
+
+        var askedOnType = 0
+
+        override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+            askedOnType++
+            return onType
+        }
     }
 
     private fun item(label: String, kind: CompletionKind = CompletionKind.Element) = CompletionItem(label, kind, label)
@@ -466,5 +475,21 @@ class CompositeLanguageServiceTest {
         runCurrent()
 
         assertTrue(shown.isEmpty())
+    }
+
+    @Test
+    fun `formatting on type is the primary's, or the fallback's when the primary has none, each for its own characters`() = runTest {
+        val primary = Fake(formatOnTypeCharacters = setOf('}'), onType = listOf(TextEdit(0..0, "p")))
+        val fallback = Fake(formatOnTypeCharacters = setOf('}', ';'), onType = listOf(TextEdit(0..0, "f")))
+        val composite = CompositeLanguageService(primary, fallback)
+        assertEquals(setOf('}', ';'), composite.formatOnTypeCharacters)
+        assertEquals("p", composite.formatOnType(doc, 1, '}', FormattingOptions()).single().newText)
+        assertEquals(0, fallback.askedOnType)
+        assertEquals("f", composite.formatOnType(doc, 1, ';', FormattingOptions()).single().newText)
+        assertEquals(1, primary.askedOnType, "the primary is not asked about a character it did not list")
+
+        val silent = Fake(formatOnTypeCharacters = setOf('}'))
+        assertEquals("f", CompositeLanguageService(silent, fallback).formatOnType(doc, 1, '}', FormattingOptions()).single().newText)
+        assertTrue(CompositeLanguageService(silent, Fake()).formatOnType(doc, 1, '}', FormattingOptions()).isEmpty())
     }
 }

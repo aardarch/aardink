@@ -1067,6 +1067,19 @@ object AardinkWeb {
             ColorInfo(offsets, Color(red, green, blue, alpha))
         }
 
+    /**
+     * A JSON array of Monaco's `TextEdit`, `{ range, text }` (`text` null or absent deletes), as
+     * edits of [document]; those it cannot read are left out.
+     */
+    internal fun parseTextEdits(document: CodeDocument, editsJson: String): List<TextEdit> =
+        (parsedJson(editsJson) as? JsonArray).orEmpty().mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val range = item["range"]?.let { runCatching { json.decodeFromJsonElement(WebRange.serializer(), it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val text = (item["text"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+            TextEdit(rangeOf(document, range), text)
+        }
+
     /** An inclusive [range] of [document] as a [WebRange] in JSON, for a provider asked about one. */
     internal fun rangeJson(document: CodeDocument, range: IntRange): String =
         json.encodeToString(WebRange.serializer(), webRange(document, range))
@@ -1537,6 +1550,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                     semanticHighlighting = options.semanticHighlighting,
                     inlayHints = options.inlayHints,
                     codeLens = options.codeLens,
+                    formatOnType = options.formatOnType,
                 ),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },

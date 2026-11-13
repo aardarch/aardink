@@ -51,6 +51,9 @@ import kotlinx.serialization.Serializable
  * @property codeLens What `provideCodeLenses` or a language server says, in a row above its lines,
  *   each a click or a tap away from what it does. Off by default, where Monaco's is on, and nothing
  *   is asked for while off.
+ * @property formatOnType Typing one of a provider's `autoFormatTriggerCharacters`, or a language
+ *   server's, asks for edits that tidy the text around it, as Monaco's `formatOnType`. Off by
+ *   default, as Monaco's.
  */
 @Serializable
 data class WebEditorOptions(
@@ -79,6 +82,7 @@ data class WebEditorOptions(
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
     val codeLens: Boolean = false,
+    val formatOnType: Boolean = false,
 )
 
 /**

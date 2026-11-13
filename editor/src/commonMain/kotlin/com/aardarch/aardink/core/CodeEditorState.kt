@@ -1307,7 +1307,7 @@ class CodeEditorState(
     // ── Input (the editor's own renderer) ────────────────────────────────────
 
     /** A character [applyInput] typed at [offset], and how many characters were auto-closed after it. */
-    internal class TypedInput(val offset: Int, val char: Char, val autoCloseLength: Int)
+    internal class TypedInput(val offset: Int, val char: Char, val autoCloseLength: Int, val composing: Boolean = false)
 
     /**
      * Text from the keyboard or an input method: replaces [start, end) with [text] and places the
@@ -1406,7 +1406,7 @@ class CodeEditorState(
             it.version = textVersion
         }
         if (!composing) inlineCompletions.askAgain()
-        return typed?.let { TypedInput(from, it, autoCloseLength) }
+        return typed?.let { TypedInput(from, it, autoCloseLength, composing) }
     }
 
     /**
