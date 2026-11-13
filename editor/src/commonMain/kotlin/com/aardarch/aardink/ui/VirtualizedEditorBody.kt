@@ -84,6 +84,7 @@ import com.aardarch.aardink.ui.view.EditorMetrics
 import com.aardarch.aardink.ui.view.EditorSelectionHandles
 import com.aardarch.aardink.ui.view.EditorTouchMenu
 import com.aardarch.aardink.ui.view.EditorViewport
+import com.aardarch.aardink.ui.view.Guides
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.INDENT_GLYPH
 import com.aardarch.aardink.ui.view.MinimapView
@@ -258,7 +259,44 @@ internal fun VirtualizedEditorBody(
         // Monaco's editor.snippetTabstopHighlightBackground.
         snippetTabStop = Color(0x4D7C7C7C),
         background = theme.background,
+        // VS Code's dark theme draws its indent guides at about 20 %, the active one at about 45 %.
+        indentGuide = textColor.copy(alpha = 0.16f),
+        activeIndentGuide = textColor.copy(alpha = 0.45f),
+        ruler = textColor.copy(alpha = 0.2f),
+        bracketGuides = theme.bracketPairColors.map { it.copy(alpha = it.alpha * 0.5f) },
     )
+    // The guides around the view: worked out again when the text, its tokens or the tab size
+    // change, or the view scrolls out of the lines last worked out, not on every frame.
+    val indentGuides = options.indentGuides
+    val bracketPairGuides = options.bracketPairGuides
+    val guideTabSize = options.tabSize
+    val guides by remember(state, view, indentGuides, bracketPairGuides, guideTabSize) {
+        var last: Guides? = null
+        var lastVersion = -1 to -1
+        derivedStateOf {
+            if (!indentGuides && !bracketPairGuides) return@derivedStateOf null
+            val shown = view.frame.lines
+            if (shown.isEmpty()) return@derivedStateOf last
+            val version = state.textVersion to state.tokenVersion
+            val from = shown.first().line
+            val to = shown.last().line
+            val document = state.document
+            last?.takeIf { lastVersion == version && it.covers(from, to, document.lineCount) }?.let { return@derivedStateOf it }
+            Guides.compute(document, from, to, guideTabSize, bracketPairGuides) { line, action ->
+                state.brackets.forEachBracket(line, action)
+            }.also {
+                last = it
+                lastVersion = version
+            }
+        }
+    }
+    val activeGuide by remember(state) {
+        derivedStateOf {
+            val shown = guides ?: return@derivedStateOf null
+            val document = state.document
+            shown.activeGuide(document.offsetToLineCol(state.selection.end.coerceIn(0, document.length)).first)
+        }
+    }
     // The pair the caret touches, worked out when the caret, the text or its tokens change, not
     // on every frame the content draws (scrolling redraws it every frame).
     val matchBrackets = rememberUpdatedState(options.matchBrackets)
@@ -370,6 +408,11 @@ internal fun VirtualizedEditorBody(
                         }.orEmpty(),
                         hostDecorations = state.shownDecorations,
                         colorSwatches = colorSwatches(),
+                        guides = guides,
+                        indentGuides = indentGuides,
+                        bracketPairGuides = bracketPairGuides,
+                        activeGuide = activeGuide,
+                        rulers = options.rulers,
                     )
                 },
                 carets = { if (controller.focused) state.selections else emptyList() },

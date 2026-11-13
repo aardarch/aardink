@@ -108,6 +108,14 @@ import com.aardarch.aardink.core.LineEnding
  * @property cursorStyle The caret's shape, as VS Code's `editor.cursorStyle`; a line, the default.
  * @property cursorBlinking How the caret blinks while the editor has focus, as VS Code's
  *   `editor.cursorBlinking`; [CursorBlinking.Blink], the default, as it always has.
+ * @property indentGuides A faint line down each level of indentation, the one of the block holding
+ *   the caret stronger, as VS Code's `editor.guides.indentation` with `highlightActiveIndentation`.
+ *   A blank line takes its neighbours' levels. Off by default.
+ * @property bracketPairGuides A line down the lines between a bracket pair that opens and closes
+ *   on different lines, in the pair's colour from `EditorTheme.bracketPairColors`, as VS Code's
+ *   `editor.guides.bracketPairs`. Pairs are found within 500 lines of those on screen. Off by default.
+ * @property rulers Columns to draw a vertical line at, as VS Code's `editor.rulers`: `listOf(80, 120)`.
+ *   None by default.
  */
 @Immutable
 data class EditorOptions(
@@ -145,6 +153,9 @@ data class EditorOptions(
     val lineNumbers: LineNumberStyle = LineNumberStyle.Absolute,
     val cursorStyle: CursorStyle = CursorStyle.Line,
     val cursorBlinking: CursorBlinking = CursorBlinking.Blink,
+    val indentGuides: Boolean = false,
+    val bracketPairGuides: Boolean = false,
+    val rulers: List<Int> = emptyList(),
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

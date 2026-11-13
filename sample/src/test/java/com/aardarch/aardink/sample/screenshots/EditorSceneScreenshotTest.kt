@@ -440,6 +440,18 @@ class EditorSceneScreenshotTest {
     }
 
     @Test
+    fun guides() {
+        // Indent guides with the block holding the caret highlighted, and a ruler at 30. Bracket-pair
+        // guides, drawn at the same columns in properly indented code, are left to the unit tests.
+        val state = stateOf(code)
+        val document = state.document
+        val options = EditorOptions(indentGuides = true, rulers = listOf(30))
+        capture("guides", state, editorOptions = options) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(6, 12))))
+        }
+    }
+
+    @Test
     fun material() {
         // The editor in an app's Material 3 colours.
         val scheme = lightColorScheme(primary = Color(0xFF00658E), secondary = Color(0xFF4F616E), tertiary = Color(0xFF7C4E7E))

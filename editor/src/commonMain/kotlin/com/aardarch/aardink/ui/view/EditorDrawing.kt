@@ -57,6 +57,13 @@ internal data class EditorColors(
     val snippetTabStop: Color = Color.Transparent,
     /** The editor's background, laid over unnecessary code to fade it. */
     val background: Color = Color.Transparent,
+    /** Indent guides, and the one of the block holding the caret. */
+    val indentGuide: Color = Color.Transparent,
+    val activeIndentGuide: Color = Color.Transparent,
+    /** The vertical lines at [EditorDecorations.rulers]. */
+    val ruler: Color = Color.Transparent,
+    /** Bracket-pair guides by depth; none drawn without them. */
+    val bracketGuides: List<Color> = emptyList(),
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -80,6 +87,14 @@ internal class EditorDecorations(
     val hostDecorations: List<Decoration> = emptyList(),
     /** The colours in the text, each drawn as a swatch bar under it. */
     val colorSwatches: List<ColorInfo> = emptyList(),
+    /** Indentation and bracket pairs around the view; null draws no guides. */
+    val guides: Guides? = null,
+    val indentGuides: Boolean = false,
+    val bracketPairGuides: Boolean = false,
+    /** The indent guide to highlight. */
+    val activeGuide: ActiveGuide? = null,
+    /** Columns with a vertical line. */
+    val rulers: List<Int> = emptyList(),
 )
 
 /**
@@ -114,6 +129,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         drawBracketBox(frame, open, colors, left)
         drawBracketBox(frame, close, colors, left)
     }
+    drawGuides(frame, decorations, colors)
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         for (decoration in shownDecorations) {
@@ -424,6 +440,41 @@ private fun DrawScope.drawBracketBox(frame: ViewFrame, offset: Int, colors: Edit
         box.size,
         style = Stroke(1.dp.toPx()),
     )
+}
+
+/**
+ * The rulers, then the indent guides and bracket-pair guides down the lines on screen, each over all
+ * of a line's text rows. A guide's x is its column times a character's width: indentation is
+ * spaces and tabs, which a monospaced font lays out on that grid.
+ */
+private fun DrawScope.drawGuides(frame: ViewFrame, decorations: EditorDecorations, colors: EditorColors) {
+    val left = frame.textLeft
+    val charWidth = frame.metrics.charWidth
+    val width = 1.dp.toPx().coerceAtLeast(1f)
+    for (column in decorations.rulers) {
+        drawRect(colors.ruler, Offset(left + column * charWidth, 0f), Size(width, size.height))
+    }
+    val guides = decorations.guides ?: return
+    val lineHeight = frame.metrics.lineHeight
+    val active = decorations.activeGuide
+    for (line in frame.lines) {
+        val top = line.textBandTop(frame)
+        val height = line.layout.textRows * lineHeight
+        if (decorations.indentGuides) {
+            for (level in 0 until guides.level(line.line)) {
+                val strong = active != null && active.level == level && line.line in active.fromLine..active.toLine
+                val x = left + level * guides.tabSize * charWidth
+                drawRect(if (strong) colors.activeIndentGuide else colors.indentGuide, Offset(x, top), Size(width, height))
+            }
+        }
+        if (decorations.bracketPairGuides && colors.bracketGuides.isNotEmpty()) {
+            for (pair in guides.pairs) {
+                if (line.line !in pair.fromLine..pair.toLine) continue
+                val color = colors.bracketGuides[pair.depth % colors.bracketGuides.size]
+                drawRect(color, Offset(left + pair.column * charWidth, top), Size(width, height))
+            }
+        }
+    }
 }
 
 /** Viewport y of the first row of this line's text: below any rows injected above it. */
