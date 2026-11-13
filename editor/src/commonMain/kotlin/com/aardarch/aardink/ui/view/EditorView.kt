@@ -30,6 +30,7 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.em
 import com.aardarch.aardink.core.CodeEditorState
@@ -39,6 +40,8 @@ import com.aardarch.aardink.core.TokenStore
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.core.text.DocumentChange
 import com.aardarch.aardink.core.text.DocumentChangeListener
+import com.aardarch.aardink.ui.WrappingIndent
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -85,7 +88,20 @@ internal data class ViewStyle(
      * glyph as wide as a space: a monospace one.
      */
     val joinIndentation: Boolean = false,
+    /** Room below the last line to scroll it to the top of the view. */
+    val scrollBeyondLastLine: Boolean = false,
+    /** Lines kept between a revealed caret and the view's edge; 0 for one. */
+    val cursorSurroundingLines: Int = 0,
+    /** A reveal that moves the view by more than half a line animates, through [EditorView.smoothScroll]. */
+    val smoothScrolling: Boolean = false,
+    /** Where a wrapped line's later rows start; only with [softWrap] and a monospaced font ([columnWidthEm] above 0). */
+    val wrappingIndent: WrappingIndent = WrappingIndent.None,
+    /** Wrap at this column, or the view's edge if that comes first; null for the edge. */
+    val wordWrapColumn: Int? = null,
 )
+
+/** Where a smooth reveal is to scroll to; a new one for every reveal, so the same target animates again. */
+internal class SmoothScroll(val y: Float)
 
 /**
  * What a wrapped line's leading spaces and tabs are measured as. Android's line breaker starts
@@ -454,10 +470,12 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         if (scroll.viewportHeight != height) scroll.viewportHeight = height
 
         val wrap = if (style.softWrap) {
-            max(
+            val edge = max(
                 (width - metrics.paddingStart - metrics.paddingEnd).toInt(),
                 metrics.charWidth.toInt().coerceAtLeast(1),
             )
+            val column = style.wordWrapColumn
+            if (column == null) edge else min(edge, ceil(column * metrics.charWidth).toInt().coerceAtLeast(1))
         } else {
             0
         }
@@ -491,15 +509,21 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             val rect = contentCaretRect(target, metrics)
             val maxY = (contentHeight - height).coerceAtLeast(0f)
             val visible = rect.top >= scrollY && rect.bottom <= scrollY + height
-            scrollY = if (revealCenter && !visible) {
+            val revealedY = if (revealCenter && !visible) {
                 (rect.center.y - height / 2f).coerceIn(0f, maxY)
             } else {
-                val margin = lineHeight.coerceAtMost(((height - rect.height) / 2f).coerceAtLeast(0f))
+                val surrounding = lineHeight * style.cursorSurroundingLines.coerceAtLeast(1)
+                val margin = surrounding.coerceAtMost(((height - rect.height) / 2f).coerceAtLeast(0f))
                 when {
                     rect.top - margin < scrollY -> (rect.top - margin).coerceIn(0f, maxY)
                     rect.bottom + margin > scrollY + height -> (rect.bottom + margin - height).coerceIn(0f, maxY)
                     else -> scrollY
                 }
+            }
+            if (style.smoothScrolling && abs(revealedY - scrollY) > lineHeight / 2f) {
+                smoothScroll = SmoothScroll(revealedY)
+            } else {
+                scrollY = revealedY
             }
             if (!style.softWrap && width > 0) {
                 val marginX = (metrics.charWidth * 4).coerceAtMost(width / 3f)
@@ -611,8 +635,14 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
     }
 
     /** The height of every row, with the padding around them. */
-    private fun rowsHeight(metrics: EditorMetrics): Float =
-        metrics.paddingTop + lineMap.totalRows * metrics.lineHeight + metrics.paddingBottom
+    private fun rowsHeight(metrics: EditorMetrics): Float {
+        val beyond = if (style?.scrollBeyondLastLine == true) (scroll.viewportHeight - metrics.lineHeight).coerceAtLeast(0f) else 0f
+        return metrics.paddingTop + lineMap.totalRows * metrics.lineHeight + metrics.paddingBottom + beyond
+    }
+
+    /** The last reveal that is to animate rather than jump: set in the layout pass, animated by the body. */
+    var smoothScroll by mutableStateOf<SmoothScroll?>(null)
+        private set
 
     /** Content y of [line]'s first row. */
     fun contentTop(line: Int, metrics: EditorMetrics = style?.metrics ?: EditorMetrics.Zero): Float =
@@ -705,6 +735,31 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val semantic: TokenStore.LineTokens?,
     )
 
+    /**
+     * Where [text]'s wrapped rows start, as [ViewStyle.wrappingIndent] says, or null for the left edge:
+     * also with no wrapping, a font that is not monospaced, or an indent that would leave less than
+     * half the width.
+     */
+    private fun wrappedRowsIndent(style: ViewStyle, text: String): TextIndent? {
+        if (!style.softWrap || style.wrappingIndent == WrappingIndent.None || style.columnWidthEm <= 0f || text.isBlank()) return null
+        var columns = 0
+        for (c in text) {
+            columns = when (c) {
+                ' ' -> columns + 1
+                '\t' -> (columns / style.tabSize + 1) * style.tabSize
+                else -> break
+            }
+        }
+        columns += when (style.wrappingIndent) {
+            WrappingIndent.Indent -> style.tabSize
+            WrappingIndent.DeepIndent -> 2 * style.tabSize
+            else -> 0
+        }
+        val charWidth = style.metrics.charWidth
+        if (columns == 0 || columns * charWidth > wrapWidth / 2f) return null
+        return TextIndent(restLine = (columns * style.columnWidthEm).em)
+    }
+
     private fun measureLine(
         style: ViewStyle,
         line: Int,
@@ -774,7 +829,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         val column = if (indent > 0) hideIndentation(builder, text, indent, style, map.charIndex(0)) else 0
         val result = style.measurer.measure(
             text = builder.toAnnotatedString(),
-            style = style.textStyle,
+            style = wrappedRowsIndent(style, text)?.let { style.textStyle.copy(textIndent = it) } ?: style.textStyle,
             softWrap = style.softWrap,
             constraints = if (style.softWrap) Constraints(maxWidth = wrapWidth) else Constraints(),
             placeholders = tabStops(text, style, indent, column, map),

@@ -116,6 +116,27 @@ import com.aardarch.aardink.core.LineEnding
  *   `editor.guides.bracketPairs`. Pairs are found within 500 lines of those on screen. Off by default.
  * @property rulers Columns to draw a vertical line at, as VS Code's `editor.rulers`: `listOf(80, 120)`.
  *   None by default.
+ * @property scrollBeyondLastLine The view scrolls on until the last line is at its top, as VS Code's
+ *   `editor.scrollBeyondLastLine`. Off by default, where VS Code's is on: the editor has always
+ *   stopped at the last line.
+ * @property cursorSurroundingLines How many lines the editor keeps between the caret and the top or
+ *   bottom of the view when it scrolls to the caret, as VS Code's `editor.cursorSurroundingLines`;
+ *   at most half the view. 0, the default, keeps one, as it always has.
+ * @property smoothScrolling The scrolls the editor makes itself, to keep the caret in view (arrow
+ *   keys, Page Up and Down, Go to Line), are animated, as VS Code's `editor.smoothScrolling`. A
+ *   wheel, a touch and a fling scroll as the platform does. Off by default.
+ * @property wrappingIndent Where a wrapped line's later rows start, with [softWrap] on, as VS Code's
+ *   `editor.wrappingIndent`: at the left edge ([WrappingIndent.None], the default, as the editor has
+ *   always wrapped), under the line's text, or one or two indents further in. An indent that would
+ *   leave less than half the width for text falls back to none.
+ * @property wordWrapColumn With [softWrap] on, lines wrap at this column, or at the edge of the view
+ *   if that comes first, as VS Code's `wordWrap: 'bounded'` with `editor.wordWrapColumn`. Null, the
+ *   default, wraps at the edge.
+ * @property dragAndDrop A selection pressed with the mouse and dragged moves its text to where it is
+ *   let go, and Ctrl (Alt on macOS) held at that moment copies it, as VS Code's
+ *   `editor.dragAndDrop`; one undo step, with the text selected where it went. A press in a selection
+ *   that does not move places the caret, as a click does. Not with touch, nor read-only. Off by
+ *   default, where VS Code's is on.
  */
 @Immutable
 data class EditorOptions(
@@ -156,9 +177,17 @@ data class EditorOptions(
     val indentGuides: Boolean = false,
     val bracketPairGuides: Boolean = false,
     val rulers: List<Int> = emptyList(),
+    val scrollBeyondLastLine: Boolean = false,
+    val cursorSurroundingLines: Int = 0,
+    val smoothScrolling: Boolean = false,
+    val wrappingIndent: WrappingIndent = WrappingIndent.None,
+    val wordWrapColumn: Int? = null,
+    val dragAndDrop: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
+        require(wordWrapColumn == null || wordWrapColumn > 0) { "wordWrapColumn must be positive, was $wordWrapColumn" }
+        require(cursorSurroundingLines >= 0) { "cursorSurroundingLines must not be negative, was $cursorSurroundingLines" }
     }
 }
 
@@ -205,6 +234,21 @@ enum class CursorBlinking {
 
     /** Never: always shown while the editor has focus. */
     Solid,
+}
+
+/** Where a wrapped line's later rows start, [EditorOptions.wrappingIndent]; VS Code's `editor.wrappingIndent` values. */
+enum class WrappingIndent {
+    /** At the left edge. */
+    None,
+
+    /** Under the line's first character. */
+    Same,
+
+    /** One indent further in than the line. */
+    Indent,
+
+    /** Two indents further in than the line. */
+    DeepIndent,
 }
 
 /** Which whitespace [EditorOptions.renderWhitespace] draws; the values of VS Code's setting. */

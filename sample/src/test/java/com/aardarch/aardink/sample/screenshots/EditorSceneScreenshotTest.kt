@@ -61,6 +61,7 @@ import com.aardarch.aardink.ui.LineNumberStyle
 import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
+import com.aardarch.aardink.ui.WrappingIndent
 import com.aardarch.aardink.ui.fromColorScheme
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -437,6 +438,19 @@ class EditorSceneScreenshotTest {
         capture("caret-line-numbers", state, editorOptions = options) {
             state.setSelections(listOf(TextRange(document.lineColToOffset(5, 8)), TextRange(document.lineEnd(9))))
         }
+    }
+
+    @Test
+    fun wrappingIndent() {
+        // Wrapped rows one indent in from their line, with whitespace drawn.
+        val text = """
+            |<effect
+            |      palette="#3A1C71,#D76D77,#FFAF7B,#FF6E40,#3A1C71,#D76D77"
+            |	url="https://example.invalid/a/very/long/path/that/wraps/around"
+            |
+        """.trimMargin()
+        val options = EditorOptions(softWrap = true, wrappingIndent = WrappingIndent.Indent, renderWhitespace = RenderWhitespace.All)
+        capture("wrapping-indent", stateOf(text), editorOptions = options)
     }
 
     @Test

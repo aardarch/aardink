@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -181,7 +182,18 @@ internal fun VirtualizedEditorBody(
         tabSize = options.tabSize,
         columnWidthEm = columnWidthEm,
         joinIndentation = joinIndentation,
+        scrollBeyondLastLine = options.scrollBeyondLastLine,
+        cursorSurroundingLines = options.cursorSurroundingLines,
+        smoothScrolling = options.smoothScrolling,
+        wrappingIndent = options.wrappingIndent,
+        wordWrapColumn = options.wordWrapColumn,
     )
+    // A reveal with smooth scrolling on: animated here, and called off by the next.
+    LaunchedEffect(view) {
+        snapshotFlow { view.smoothScroll }.collectLatest { target ->
+            if (target != null) view.scroll.animateScrollToY(target.y)
+        }
+    }
     // Faint, so that it does not read as the document's text; a hint gets a ground as well, as VS
     // Code's, to tell it from what surrounds it.
     val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
@@ -199,6 +211,7 @@ internal fun VirtualizedEditorBody(
         view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle, ghostStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
+        controller.pointer.dragAndDrop = options.dragAndDrop && !options.readOnly
         controller.clipboard = clipboard
         controller.requestFocus = { runCatching { focusRequester.requestFocus() } }
     }
@@ -415,7 +428,14 @@ internal fun VirtualizedEditorBody(
                         rulers = options.rulers,
                     )
                 },
-                carets = { if (controller.focused) state.selections else emptyList() },
+                carets = {
+                    if (controller.focused) {
+                        val drop = controller.pointer.dropCaret
+                        if (drop == null) state.selections else state.selections + TextRange(drop)
+                    } else {
+                        emptyList()
+                    }
+                },
                 colors = colors,
                 caretStyle = options.cursorStyle,
                 caretAlpha = { caretAlpha },

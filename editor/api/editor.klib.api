@@ -283,6 +283,19 @@ final enum class com.aardarch.aardink.ui/RenderWhitespace : kotlin/Enum<com.aard
     final fun values(): kotlin/Array<com.aardarch.aardink.ui/RenderWhitespace> // com.aardarch.aardink.ui/RenderWhitespace.values|values#static(){}[0]
 }
 
+final enum class com.aardarch.aardink.ui/WrappingIndent : kotlin/Enum<com.aardarch.aardink.ui/WrappingIndent> { // com.aardarch.aardink.ui/WrappingIndent|null[0]
+    enum entry DeepIndent // com.aardarch.aardink.ui/WrappingIndent.DeepIndent|null[0]
+    enum entry Indent // com.aardarch.aardink.ui/WrappingIndent.Indent|null[0]
+    enum entry None // com.aardarch.aardink.ui/WrappingIndent.None|null[0]
+    enum entry Same // com.aardarch.aardink.ui/WrappingIndent.Same|null[0]
+
+    final val entries // com.aardarch.aardink.ui/WrappingIndent.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.aardarch.aardink.ui/WrappingIndent> // com.aardarch.aardink.ui/WrappingIndent.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.aardarch.aardink.ui/WrappingIndent // com.aardarch.aardink.ui/WrappingIndent.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.aardarch.aardink.ui/WrappingIndent> // com.aardarch.aardink.ui/WrappingIndent.values|values#static(){}[0]
+}
+
 abstract fun interface com.aardarch.aardink.core/DiffProvider { // com.aardarch.aardink.core/DiffProvider|null[0]
     abstract fun diff(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>): kotlin.collections/List<com.aardarch.aardink.core/LineDiff> // com.aardarch.aardink.core/DiffProvider.diff|diff(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>){}[0]
 }
@@ -1475,7 +1488,7 @@ final class com.aardarch.aardink.ui/EditorMenuItem { // com.aardarch.aardink.ui/
 }
 
 final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/EditorOptions|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<com.aardarch.aardink.ui/EditorKeyBinding> = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/LineNumberStyle = ..., com.aardarch.aardink.ui/CursorStyle = ..., com.aardarch.aardink.ui/CursorBlinking = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<kotlin/Int> = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<com.aardarch.aardink.ui.EditorKeyBinding>;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;com.aardarch.aardink.ui.LineNumberStyle;com.aardarch.aardink.ui.CursorStyle;com.aardarch.aardink.ui.CursorBlinking;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<kotlin.Int>){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<com.aardarch.aardink.ui/EditorKeyBinding> = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/LineNumberStyle = ..., com.aardarch.aardink.ui/CursorStyle = ..., com.aardarch.aardink.ui/CursorBlinking = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<kotlin/Int> = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/WrappingIndent = ..., kotlin/Int? = ..., kotlin/Boolean = ...) // com.aardarch.aardink.ui/EditorOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<com.aardarch.aardink.ui.EditorKeyBinding>;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;com.aardarch.aardink.ui.LineNumberStyle;com.aardarch.aardink.ui.CursorStyle;com.aardarch.aardink.ui.CursorBlinking;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<kotlin.Int>;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.WrappingIndent;kotlin.Int?;kotlin.Boolean){}[0]
 
     final val bracketPairColorization // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization|{}bracketPairColorization[0]
         final fun <get-bracketPairColorization>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.bracketPairColorization.<get-bracketPairColorization>|<get-bracketPairColorization>(){}[0]
@@ -1491,6 +1504,10 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
         final fun <get-cursorBlinking>(): com.aardarch.aardink.ui/CursorBlinking // com.aardarch.aardink.ui/EditorOptions.cursorBlinking.<get-cursorBlinking>|<get-cursorBlinking>(){}[0]
     final val cursorStyle // com.aardarch.aardink.ui/EditorOptions.cursorStyle|{}cursorStyle[0]
         final fun <get-cursorStyle>(): com.aardarch.aardink.ui/CursorStyle // com.aardarch.aardink.ui/EditorOptions.cursorStyle.<get-cursorStyle>|<get-cursorStyle>(){}[0]
+    final val cursorSurroundingLines // com.aardarch.aardink.ui/EditorOptions.cursorSurroundingLines|{}cursorSurroundingLines[0]
+        final fun <get-cursorSurroundingLines>(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.cursorSurroundingLines.<get-cursorSurroundingLines>|<get-cursorSurroundingLines>(){}[0]
+    final val dragAndDrop // com.aardarch.aardink.ui/EditorOptions.dragAndDrop|{}dragAndDrop[0]
+        final fun <get-dragAndDrop>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.dragAndDrop.<get-dragAndDrop>|<get-dragAndDrop>(){}[0]
     final val eol // com.aardarch.aardink.ui/EditorOptions.eol|{}eol[0]
         final fun <get-eol>(): com.aardarch.aardink.core/LineEnding? // com.aardarch.aardink.ui/EditorOptions.eol.<get-eol>|<get-eol>(){}[0]
     final val fontLigatures // com.aardarch.aardink.ui/EditorOptions.fontLigatures|{}fontLigatures[0]
@@ -1531,6 +1548,8 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
         final fun <get-renderWhitespace>(): com.aardarch.aardink.ui/RenderWhitespace // com.aardarch.aardink.ui/EditorOptions.renderWhitespace.<get-renderWhitespace>|<get-renderWhitespace>(){}[0]
     final val rulers // com.aardarch.aardink.ui/EditorOptions.rulers|{}rulers[0]
         final fun <get-rulers>(): kotlin.collections/List<kotlin/Int> // com.aardarch.aardink.ui/EditorOptions.rulers.<get-rulers>|<get-rulers>(){}[0]
+    final val scrollBeyondLastLine // com.aardarch.aardink.ui/EditorOptions.scrollBeyondLastLine|{}scrollBeyondLastLine[0]
+        final fun <get-scrollBeyondLastLine>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.scrollBeyondLastLine.<get-scrollBeyondLastLine>|<get-scrollBeyondLastLine>(){}[0]
     final val semanticHighlighting // com.aardarch.aardink.ui/EditorOptions.semanticHighlighting|{}semanticHighlighting[0]
         final fun <get-semanticHighlighting>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.semanticHighlighting.<get-semanticHighlighting>|<get-semanticHighlighting>(){}[0]
     final val showDiagnosticAnnotations // com.aardarch.aardink.ui/EditorOptions.showDiagnosticAnnotations|{}showDiagnosticAnnotations[0]
@@ -1545,12 +1564,18 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
         final fun <get-showLineNumbers>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.showLineNumbers.<get-showLineNumbers>|<get-showLineNumbers>(){}[0]
     final val showMinimap // com.aardarch.aardink.ui/EditorOptions.showMinimap|{}showMinimap[0]
         final fun <get-showMinimap>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.showMinimap.<get-showMinimap>|<get-showMinimap>(){}[0]
+    final val smoothScrolling // com.aardarch.aardink.ui/EditorOptions.smoothScrolling|{}smoothScrolling[0]
+        final fun <get-smoothScrolling>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.smoothScrolling.<get-smoothScrolling>|<get-smoothScrolling>(){}[0]
     final val softWrap // com.aardarch.aardink.ui/EditorOptions.softWrap|{}softWrap[0]
         final fun <get-softWrap>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.softWrap.<get-softWrap>|<get-softWrap>(){}[0]
     final val stickyScroll // com.aardarch.aardink.ui/EditorOptions.stickyScroll|{}stickyScroll[0]
         final fun <get-stickyScroll>(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.stickyScroll.<get-stickyScroll>|<get-stickyScroll>(){}[0]
     final val tabSize // com.aardarch.aardink.ui/EditorOptions.tabSize|{}tabSize[0]
         final fun <get-tabSize>(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.tabSize.<get-tabSize>|<get-tabSize>(){}[0]
+    final val wordWrapColumn // com.aardarch.aardink.ui/EditorOptions.wordWrapColumn|{}wordWrapColumn[0]
+        final fun <get-wordWrapColumn>(): kotlin/Int? // com.aardarch.aardink.ui/EditorOptions.wordWrapColumn.<get-wordWrapColumn>|<get-wordWrapColumn>(){}[0]
+    final val wrappingIndent // com.aardarch.aardink.ui/EditorOptions.wrappingIndent|{}wrappingIndent[0]
+        final fun <get-wrappingIndent>(): com.aardarch.aardink.ui/WrappingIndent // com.aardarch.aardink.ui/EditorOptions.wrappingIndent.<get-wrappingIndent>|<get-wrappingIndent>(){}[0]
 
     final fun component1(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component1|component1(){}[0]
     final fun component10(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component10|component10(){}[0]
@@ -1583,13 +1608,19 @@ final class com.aardarch.aardink.ui/EditorOptions { // com.aardarch.aardink.ui/E
     final fun component35(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component35|component35(){}[0]
     final fun component36(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component36|component36(){}[0]
     final fun component37(): kotlin.collections/List<kotlin/Int> // com.aardarch.aardink.ui/EditorOptions.component37|component37(){}[0]
+    final fun component38(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component38|component38(){}[0]
+    final fun component39(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.component39|component39(){}[0]
     final fun component4(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component4|component4(){}[0]
+    final fun component40(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component40|component40(){}[0]
+    final fun component41(): com.aardarch.aardink.ui/WrappingIndent // com.aardarch.aardink.ui/EditorOptions.component41|component41(){}[0]
+    final fun component42(): kotlin/Int? // com.aardarch.aardink.ui/EditorOptions.component42|component42(){}[0]
+    final fun component43(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component43|component43(){}[0]
     final fun component5(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component5|component5(){}[0]
     final fun component6(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component6|component6(){}[0]
     final fun component7(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component7|component7(){}[0]
     final fun component8(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component8|component8(){}[0]
     final fun component9(): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.component9|component9(){}[0]
-    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<com.aardarch.aardink.ui/EditorKeyBinding> = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/LineNumberStyle = ..., com.aardarch.aardink.ui/CursorStyle = ..., com.aardarch.aardink.ui/CursorBlinking = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<kotlin/Int> = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<com.aardarch.aardink.ui.EditorKeyBinding>;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;com.aardarch.aardink.ui.LineNumberStyle;com.aardarch.aardink.ui.CursorStyle;com.aardarch.aardink.ui.CursorBlinking;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<kotlin.Int>){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/RenderWhitespace = ..., com.aardarch.aardink.core/LineEnding? = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<com.aardarch.aardink.ui/EditorKeyBinding> = ..., androidx.compose.ui.unit/TextUnit = ..., androidx.compose.ui.unit/TextUnit = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/LineNumberStyle = ..., com.aardarch.aardink.ui/CursorStyle = ..., com.aardarch.aardink.ui/CursorBlinking = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/List<kotlin/Int> = ..., kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Boolean = ..., com.aardarch.aardink.ui/WrappingIndent = ..., kotlin/Int? = ..., kotlin/Boolean = ...): com.aardarch.aardink.ui/EditorOptions // com.aardarch.aardink.ui/EditorOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.RenderWhitespace;com.aardarch.aardink.core.LineEnding?;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<com.aardarch.aardink.ui.EditorKeyBinding>;androidx.compose.ui.unit.TextUnit;androidx.compose.ui.unit.TextUnit;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;com.aardarch.aardink.ui.LineNumberStyle;com.aardarch.aardink.ui.CursorStyle;com.aardarch.aardink.ui.CursorBlinking;kotlin.Boolean;kotlin.Boolean;kotlin.collections.List<kotlin.Int>;kotlin.Boolean;kotlin.Int;kotlin.Boolean;com.aardarch.aardink.ui.WrappingIndent;kotlin.Int?;kotlin.Boolean){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.ui/EditorOptions.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.ui/EditorOptions.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.ui/EditorOptions.toString|toString(){}[0]
