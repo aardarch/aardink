@@ -53,9 +53,11 @@ import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeBlock
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.CursorStyle
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LineNumberStyle
 import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
@@ -424,6 +426,17 @@ class EditorSceneScreenshotTest {
     fun zoom() {
         // A larger font, set through the options, with ligatures off.
         capture("zoom", stateOf(code), editorOptions = EditorOptions(fontSize = 20.sp, fontLigatures = false))
+    }
+
+    @Test
+    fun caretAndLineNumbers() {
+        // Line numbers counted from the caret's line, and block carets, one at the end of a line.
+        val state = stateOf(code)
+        val document = state.document
+        val options = EditorOptions(lineNumbers = LineNumberStyle.Relative, cursorStyle = CursorStyle.Block)
+        capture("caret-line-numbers", state, editorOptions = options) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(5, 8)), TextRange(document.lineEnd(9))))
+        }
     }
 
     @Test

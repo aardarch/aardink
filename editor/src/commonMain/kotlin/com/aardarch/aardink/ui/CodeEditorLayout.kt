@@ -1733,6 +1733,8 @@ private fun CodeEditorLayoutContent(
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
+                    lineNumbers = options.lineNumbers,
+                    caretLine = { state.document.offsetToLineCol(state.selection.end.coerceIn(0, state.document.length)).first },
                     onLineNumberTap = { line ->
                         val document = state.document
                         val end = if (line + 1 < document.lineCount) document.lineStart(line + 1) else document.length

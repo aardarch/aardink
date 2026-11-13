@@ -31,6 +31,7 @@ import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.ui.CursorStyle
 import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.ui.drawSquiggleLine
 import kotlin.math.max
@@ -445,9 +446,8 @@ internal fun ViewFrame.lineContaining(offset: Int): VisibleLine? {
     return found?.takeIf { offset <= it.end }
 }
 
-/** A caret at the active end of every selection that is on screen. */
-internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>, color: Color) {
-    val width = 2.dp.toPx()
+/** A caret at the active end of every selection that is on screen, in [style]. */
+internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>, color: Color, style: CursorStyle = CursorStyle.Line) {
     val left = frame.textLeft
     for (selection in selections) {
         val line = frame.lineContaining(selection.end) ?: continue
@@ -455,7 +455,44 @@ internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>,
         val layout = line.layout
         val rect = layout.cursorRect(column)
         val top = line.top - frame.scrollY + layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
-        // Like the text field: the caret starts at its x and is drawn rightwards.
-        drawRect(color, Offset(left + rect.left, top + rect.top), Size(width, rect.height))
+        val x = left + rect.left
+        val y = top + rect.top
+        // The character's width, or a space's at the end of the line, where there is none.
+        val charWidth = if (column < line.shownLength) {
+            layout.charBox(column).width.takeIf { it > 0f } ?: frame.metrics.charWidth
+        } else {
+            frame.metrics.charWidth
+        }
+        when (style) {
+            // Like the text field: the caret starts at its x and is drawn rightwards.
+            CursorStyle.Line -> drawRect(color, Offset(x, y), Size(2.dp.toPx(), rect.height))
+
+            CursorStyle.LineThin -> drawRect(color, Offset(x, y), Size(1.dp.toPx(), rect.height))
+
+            CursorStyle.Block -> drawRect(color.copy(alpha = color.alpha * BLOCK_CARET_ALPHA), Offset(x, y), Size(charWidth, rect.height))
+
+            CursorStyle.BlockOutline -> {
+                val stroke = 1.dp.toPx()
+                drawRect(
+                    color,
+                    Offset(x + stroke / 2f, y + stroke / 2f),
+                    Size(charWidth - stroke, rect.height - stroke),
+                    style = Stroke(stroke),
+                )
+            }
+
+            CursorStyle.Underline -> {
+                val height = 2.dp.toPx()
+                drawRect(color, Offset(x, y + rect.height - height), Size(charWidth, height))
+            }
+
+            CursorStyle.UnderlineThin -> {
+                val height = 1.dp.toPx()
+                drawRect(color, Offset(x, y + rect.height - height), Size(charWidth, height))
+            }
+        }
     }
 }
+
+/** How strongly a [CursorStyle.Block] caret fills the character's box: enough to see, not to hide it. */
+private const val BLOCK_CARET_ALPHA = 0.5f

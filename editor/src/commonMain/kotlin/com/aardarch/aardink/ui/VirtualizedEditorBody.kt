@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -200,13 +203,23 @@ internal fun VirtualizedEditorBody(
     }
 
     // The carets blink while the editor has focus, and show solid again after every change.
-    var caretOn by remember { mutableStateOf(true) }
-    LaunchedEffect(controller) {
+    var caretAlpha by remember { mutableFloatStateOf(1f) }
+    val blinking = options.cursorBlinking
+    LaunchedEffect(controller, blinking) {
         snapshotFlow { Triple(controller.focused, state.selections, state.textVersion) }.collectLatest { (focused) ->
-            caretOn = true
+            caretAlpha = 1f
+            if (blinking == CursorBlinking.Solid) return@collectLatest
             while (focused) {
                 delay(CARET_BLINK_MS)
-                caretOn = !caretOn
+                if (blinking == CursorBlinking.Smooth) {
+                    animate(1f, 0f, animationSpec = tween(CARET_FADE_MS)) { value, _ -> caretAlpha = value }
+                    delay(CARET_BLINK_MS - CARET_FADE_MS)
+                    animate(0f, 1f, animationSpec = tween(CARET_FADE_MS)) { value, _ -> caretAlpha = value }
+                } else {
+                    caretAlpha = 0f
+                    delay(CARET_BLINK_MS)
+                    caretAlpha = 1f
+                }
             }
         }
     }
@@ -359,8 +372,10 @@ internal fun VirtualizedEditorBody(
                         colorSwatches = colorSwatches(),
                     )
                 },
-                carets = { if (controller.focused && caretOn) state.selections else emptyList() },
+                carets = { if (controller.focused) state.selections else emptyList() },
                 colors = colors,
+                caretStyle = options.cursorStyle,
+                caretAlpha = { caretAlpha },
                 softWrap = softWrap,
                 modifier = Modifier
                     .fillMaxSize()
@@ -449,6 +464,9 @@ private suspend fun PointerInputScope.trackHover(controller: EditorController) {
 
 /** Half a caret blink: VS Code's default, 1.06 s a cycle. */
 private const val CARET_BLINK_MS = 530L
+
+/** How long a smooth blink takes to fade out or in. */
+private const val CARET_FADE_MS = 200
 
 /** Measured to find the advance of one character of the (monospace) editor font. */
 private const val CHAR_WIDTH_SAMPLE = "0000000000000000000000000000000000000000000000000000000000000000"

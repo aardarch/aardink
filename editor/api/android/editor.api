@@ -1863,6 +1863,27 @@ public final class com/aardarch/aardink/ui/ComposableSingletons$VirtualizedEdito
 	public final fun getLambda$258456501$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 
+public final class com/aardarch/aardink/ui/CursorBlinking : java/lang/Enum {
+	public static final field Blink Lcom/aardarch/aardink/ui/CursorBlinking;
+	public static final field Smooth Lcom/aardarch/aardink/ui/CursorBlinking;
+	public static final field Solid Lcom/aardarch/aardink/ui/CursorBlinking;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/CursorBlinking;
+	public static fun values ()[Lcom/aardarch/aardink/ui/CursorBlinking;
+}
+
+public final class com/aardarch/aardink/ui/CursorStyle : java/lang/Enum {
+	public static final field Block Lcom/aardarch/aardink/ui/CursorStyle;
+	public static final field BlockOutline Lcom/aardarch/aardink/ui/CursorStyle;
+	public static final field Line Lcom/aardarch/aardink/ui/CursorStyle;
+	public static final field LineThin Lcom/aardarch/aardink/ui/CursorStyle;
+	public static final field Underline Lcom/aardarch/aardink/ui/CursorStyle;
+	public static final field UnderlineThin Lcom/aardarch/aardink/ui/CursorStyle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/CursorStyle;
+	public static fun values ()[Lcom/aardarch/aardink/ui/CursorStyle;
+}
+
 public final class com/aardarch/aardink/ui/EditorAttributionBadgeKt {
 	public static final fun EditorAttributionBadge (Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
@@ -1901,8 +1922,8 @@ public final class com/aardarch/aardink/ui/EditorMenuItem {
 public final class com/aardarch/aardink/ui/EditorOptions {
 	public static final field $stable I
 	public fun <init> ()V
-	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Z
 	public final fun component10 ()Z
 	public final fun component11 ()Z
@@ -1928,19 +1949,24 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun component3 ()Z
 	public final fun component30 ()Z
 	public final fun component31 ()Z
+	public final fun component32 ()Lcom/aardarch/aardink/ui/LineNumberStyle;
+	public final fun component33 ()Lcom/aardarch/aardink/ui/CursorStyle;
+	public final fun component34 ()Lcom/aardarch/aardink/ui/CursorBlinking;
 	public final fun component4 ()Z
 	public final fun component5 ()Z
 	public final fun component6 ()Z
 	public final fun component7 ()Z
 	public final fun component8 ()Z
 	public final fun component9 ()Z
-	public final fun copy-7RsIXy0 (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZ)Lcom/aardarch/aardink/ui/EditorOptions;
-	public static synthetic fun copy-7RsIXy0$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public final fun copy-_Fcsovw (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public static synthetic fun copy-_Fcsovw$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;IILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBracketPairColorization ()Z
 	public final fun getBreadcrumbs ()Z
 	public final fun getCodeLens ()Z
 	public final fun getColorDecorators ()Z
+	public final fun getCursorBlinking ()Lcom/aardarch/aardink/ui/CursorBlinking;
+	public final fun getCursorStyle ()Lcom/aardarch/aardink/ui/CursorStyle;
 	public final fun getEol ()Lcom/aardarch/aardink/core/LineEnding;
 	public final fun getFontLigatures ()Z
 	public final fun getFontSize-XSAIIZE ()J
@@ -1950,6 +1976,7 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun getInsertSpaces ()Z
 	public final fun getKeyBindings ()Ljava/util/List;
 	public final fun getLineHeight-XSAIIZE ()J
+	public final fun getLineNumbers ()Lcom/aardarch/aardink/ui/LineNumberStyle;
 	public final fun getLinkedEditing ()Z
 	public final fun getMatchBrackets ()Z
 	public final fun getOccurrencesHighlight ()Z
@@ -2152,6 +2179,15 @@ public final class com/aardarch/aardink/ui/KeyboardToolbarStyle {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/ui/LineNumberStyle : java/lang/Enum {
+	public static final field Absolute Lcom/aardarch/aardink/ui/LineNumberStyle;
+	public static final field Interval Lcom/aardarch/aardink/ui/LineNumberStyle;
+	public static final field Relative Lcom/aardarch/aardink/ui/LineNumberStyle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/aardarch/aardink/ui/LineNumberStyle;
+	public static fun values ()[Lcom/aardarch/aardink/ui/LineNumberStyle;
+}
+
 public final class com/aardarch/aardink/ui/LocalEditorThemeKt {
 	public static final fun getLocalEditorTheme ()Landroidx/compose/runtime/ProvidableCompositionLocal;
 }
@@ -2203,6 +2239,6 @@ public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorViewp
 	public fun <init> ()V
 	public final fun getLambda$-1336372763$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1431152387$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$2033591960$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$896854781$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 

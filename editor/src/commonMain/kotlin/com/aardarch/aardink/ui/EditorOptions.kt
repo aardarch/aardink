@@ -102,6 +102,12 @@ import com.aardarch.aardink.core.LineEnding
  *   Code's `editor.formatOnType`. The answer is applied as an undo step of its own, so undo takes
  *   it back and keeps what was typed, and only if nothing was typed while it was being worked
  *   out. Off by default, and nothing is asked for while off.
+ * @property lineNumbers How the gutter numbers lines, with [showLineNumbers] on, as VS Code's
+ *   `editor.lineNumbers`: [LineNumberStyle.Absolute], the default, or counted from the caret's line,
+ *   or every tenth line.
+ * @property cursorStyle The caret's shape, as VS Code's `editor.cursorStyle`; a line, the default.
+ * @property cursorBlinking How the caret blinks while the editor has focus, as VS Code's
+ *   `editor.cursorBlinking`; [CursorBlinking.Blink], the default, as it always has.
  */
 @Immutable
 data class EditorOptions(
@@ -136,10 +142,58 @@ data class EditorOptions(
     val inlayHints: Boolean = false,
     val codeLens: Boolean = false,
     val formatOnType: Boolean = false,
+    val lineNumbers: LineNumberStyle = LineNumberStyle.Absolute,
+    val cursorStyle: CursorStyle = CursorStyle.Line,
+    val cursorBlinking: CursorBlinking = CursorBlinking.Blink,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
     }
+}
+
+/** How [EditorOptions.lineNumbers] numbers the gutter's lines; VS Code's `editor.lineNumbers` values. */
+enum class LineNumberStyle {
+    /** Each line's own number. */
+    Absolute,
+
+    /** The caret's line its own number, every other line how far it is from it. */
+    Relative,
+
+    /** Every tenth line's number, and the caret's line's. */
+    Interval,
+}
+
+/** The caret's shape, [EditorOptions.cursorStyle]; VS Code's `editor.cursorStyle` values. */
+enum class CursorStyle {
+    /** A bar 2 dp wide in front of the character. */
+    Line,
+
+    /** The character's box, filled at half strength so the character shows through. */
+    Block,
+
+    /** A bar 2 dp high under the character. */
+    Underline,
+
+    /** A bar 1 dp wide in front of the character. */
+    LineThin,
+
+    /** The outline of the character's box. */
+    BlockOutline,
+
+    /** A bar 1 dp high under the character. */
+    UnderlineThin,
+}
+
+/** How the caret blinks, [EditorOptions.cursorBlinking]; a subset of VS Code's `editor.cursorBlinking`. */
+enum class CursorBlinking {
+    /** On and off, half a second each. */
+    Blink,
+
+    /** Fading out and in, on the same beat. */
+    Smooth,
+
+    /** Never: always shown while the editor has focus. */
+    Solid,
 }
 
 /** Which whitespace [EditorOptions.renderWhitespace] draws; the values of VS Code's setting. */
