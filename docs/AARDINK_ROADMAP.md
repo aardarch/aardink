@@ -29,7 +29,7 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Still open after release: the Android device check (§15.1) and the aardflex apps' builds against 0.9 (§13); the two opt-in performance costs are in §8.4. |
-| 0.10 | Ledger drafted 2026-11-14 (§16), awaiting approval; branch `feat/0.10` | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
+| 0.10 | In progress on branch `feat/0.10`. Ledger approved as a whole 2026-11-14 (§16) | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
 ## 1. Where 0.6.2 stands
@@ -1035,8 +1035,9 @@ check is not carried into 0.10 (decided 2026-11-14); it belongs to §9.6.
 ## 16. API ledger for 0.10
 
 Drafted on 2026-11-14 from §8, and from what 0.7 to 0.9 left open, against commit `fafec9e`
-(`main` after `v0.9.0`). **Not yet approved.** What is built where it differs, and the symbols it
-does not name, go in §16.1 as the work lands.
+(`main` after `v0.9.0`), and approved as a whole the same day, with the Android and bundle choices
+below. What is built where it differs, and the symbols it does not name, go in §16.1 as the work
+lands.
 
 ### Carried in from earlier versions
 
@@ -1074,8 +1075,8 @@ Not carried:
 | A host, then a server, then the base language (§8.2) | `WebLanguageService` splits into the host's providers and its base; `servedLanguage` composes host, server, base, with `exclusive` and `inheritCompletions` applied at the first step | Internal: no symbol changes |
 | Wheel and keyboard scroll animation (`smoothScrolling`) | On the scroll the editor already owns; touch flings are unchanged | |
 | New options' defaults | Off, or what the editor does today, except `wordWrap` on the web (§8.2) | An upgrade changes nothing on screen, as in 0.8 |
-| The wasm bundle (§8.4) | Record `aardink-web.wasm` and `skiko.wasm`, raw and gzipped, per release and fail the build above the recorded size plus 2%; measure Brotli and skiko's options; drop the 3 MB target | `skiko.wasm` alone is 3.3 MB gzipped, so 3 MB cannot be reached from this repo |
-| Android performance (§8.4) | Awaiting a decision (see the question in the 0.10 kickoff) | A baseline profile and an Android gate need an emulator or a device |
+| The wasm bundle (§8.4) | Record `aardink-web.wasm` and `skiko.wasm`, raw and gzipped, per release and fail the build above the recorded size plus 2%; measure Brotli and skiko's options; drop the 3 MB target (agreed 2026-11-14) | `skiko.wasm` alone is 3.3 MB gzipped, so 3 MB cannot be reached from this repo |
+| Android performance (§8.4) | An Android emulator job in CI generates `:sample`'s baseline profile and runs the Android gate (agreed 2026-11-14). The gate compares against a baseline measured on the same runner image, not fixed milliseconds. A JVM gate runs beside it | An emulator stands in for the device checks dropped from 0.10; its timings are only comparable with itself |
 
 ### `:editor`, new
 
