@@ -16,7 +16,7 @@
 
 # Aardink roadmap: 0.6.3 to 1.0
 
-Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-13. Continues
+Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-14. Continues
 [`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §10, facts
 about the code are as of `v0.6.2` (commit `3fbaef6`) and facts about the aardflex apps are as of
 the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 0.6.2 open).
@@ -29,7 +29,7 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Still open after release: the Android device check (§15.1) and the aardflex apps' builds against 0.9 (§13); the two opt-in performance costs are in §8.4. |
-| 0.10 | Planned | §8: more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
+| 0.10 | Ledger drafted 2026-11-14 (§16), awaiting approval; branch `feat/0.10` | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
 ## 1. Where 0.6.2 stands
@@ -93,7 +93,9 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
   CI's 156.0.8078.47 measures 15 ms with the same code (2026-10-21, the v0.6.3 run included), so
   the gate is unchanged; a machine still on Chrome 155 fails it locally until Chrome updates. If
   key to idle comes back on a later Chrome, trace the pass that follows the debounce.
-- The manual Gboard, Samsung, TalkBack and NVDA passes have not been run.
+- The manual Gboard, Samsung, TalkBack and NVDA passes have not been run. Not carried into 0.10
+  (decided 2026-11-14): checks on devices and by hand belong to 1.0's platform validation (§9.6)
+  alone.
 - TypeScript regexp literals are not tokenized.
 - The KDoc of `AardinkWeb.updateOptions` says a language change starts a fresh undo history; the
   code keeps it.
@@ -540,7 +542,8 @@ About fifteen PRs.
   release.
 - Coverage gaps from the audit: golden tokens for TypeScript, CSS, HTML and Markdown; screenshot
   scenes for the popups and the find panel; tests for `RenameDialog`, `GoToLineDialog` and
-  `KeyboardToolbarRow`; an LSP server through the web path.
+  `KeyboardToolbarRow`; an LSP server through the web path (done in 0.9: `smoke.mjs` runs
+  `connectLanguageServer` against `loopback-lsp.mjs`). The rest are in 0.10 (§16).
 - Each minor keeps its API ledger in this document (or in a per-version plan once its wave
   starts) and gets a `MIGRATION_0.x.md` only when something breaks. The ledger pointer in
   `AGENTS.md` changes in the same PR as the first 0.7 API change.
@@ -1000,7 +1003,8 @@ held earlier 0.9 work.
 
 #### Still open
 
-0.9 shipped on 2026-11-08 with these open; the performance items are carried in §8.4.
+0.9 shipped on 2026-11-08 with these open; the performance items are carried in §8.4. The device
+check is not carried into 0.10 (decided 2026-11-14); it belongs to §9.6.
 
 - **Android on a device.** Code lens rows and multi-line ghost text rest on hard breaks inside a
   line's layout. They pass under Robolectric with native graphics, but the spike's device check
@@ -1027,6 +1031,114 @@ held earlier 0.9 work.
     against the 50 ms gate); CI's run is the gate. One `--gate` run read key-to-change p95 at
     19.2 ms, under the 20 ms target. In seven runs 0.9 has shown two such slow keys (13.8 and
     19.2 ms) and 0.8.0 none in six, which is too few runs to tell from noise.
+
+## 16. API ledger for 0.10
+
+Drafted on 2026-11-14 from §8, and from what 0.7 to 0.9 left open, against commit `fafec9e`
+(`main` after `v0.9.0`). **Not yet approved.** What is built where it differs, and the symbols it
+does not name, go in §16.1 as the work lands.
+
+### Carried in from earlier versions
+
+| Item | From | In 0.10 |
+| --- | --- | --- |
+| Colour swatch before the token, now that inline content exists; the 3 dp bar goes | §6.6, §14.1 | §8.3, no new symbol |
+| A Monaco rule's `background` drawn | §11.1, §15 | §8.2 |
+| A server's `inlayHint/refresh`, `codeLens/refresh`, `semanticTokens/refresh` and `diagnostic/refresh` honoured, with `refreshSupport` declared | §15.1 (`DefaultClientCapabilities`; KDoc at `LspLanguageService.kt:835`, `:878`) | One `:editor` symbol, below |
+| `semanticTokens/delta` and `/range` | §15, Not in 0.9 | §8.4, internal |
+| Inlay hint tooltips; padding as space, not text | §15, Not in 0.9 | `InlayHint.tooltip`; label parts' commands and locations stay out |
+| `willSaveWaitUntil` | §15, Not in 0.9 | `:languages-lsp` |
+| JS providers for semantic tokens and `resolveCompletion`; `resolveCodeLens`; `{ snippet }` inline completions | §15, §15.1 | §8.2 |
+| Code actions that reach other files or run a server command | §15.1 (rename and `workspace/applyEdit`) | `CodeAction.onApply` |
+| Links in the public `HoverDocPopup` and `SignatureHelpPopup` | §15.1 (`onOpenLink`) | A defaulted `onOpenLink` on each |
+| `serverCapabilities` after a host's own `sendRequest("initialize")` | §15.1, Known limits | Internal |
+| A colour for inlay hints, lenses and ghost text in the theme | §15.1 (`InlayHint`) | §8.2's theme keys |
+| Token tests for TypeScript, JSON, CSS, Markdown and HTML; tests for `RenameDialog`, `GoToLineDialog`, `KeyboardToolbarRow`; Roborazzi scenes for the find panel, rename, go to line, signature help and the keyboard toolbar | §10 | Tests only |
+
+Not carried:
+
+- Checks on devices and by hand: 0.9's Android device check and the Gboard, Samsung, TalkBack and
+  NVDA passes (decided 2026-11-14). They belong to §9.6.
+- CMP 1.13 and a W-1 heap check that fails on a leak (§4). 1.13 is at `1.13.0-beta02` on
+  2026-11-14 and still goes in the patch after its stable release, not tied to 0.10.
+
+### Choices behind the ledger
+
+| Choice | Proposed | Why |
+| --- | --- | --- |
+| How 0.10 lands | One `feat/0.10` branch and one PR, as 0.8 and 0.9 | |
+| Grammar-as-data languages | `DeclarativeGrammar` JSON plus a `LanguageConfiguration`, both as internal Kotlin string constants in `:languages`, parsed on first use | No resource loading on wasm, no new dependency; a language that is never opened costs nothing |
+| CSS and JS inside HTML | The HTML tokenizer hands `<style>` and `<script>` bodies to the built-in CSS and TypeScript tokenizers through its line state. Internal; HTML stays hand-written | Rewriting HTML, CSS and TypeScript as data first, as §8.1 assumed, would replace three tested tokenizers to reach the same colours |
+| TypeScript regexp literals | `RegexTokenizer.scan` sees the previous significant token (internal); measured on wasm against the key-to-change gate | `refine` can retype a token but not split one, and `/a"b/` must be one token |
+| Format on type | Asked after the typed character, off the typing path. Its edits apply only if nothing was typed since, and join that keystroke's undo step | A server's answer cannot be awaited inside a keystroke; a late edit must not land on newer text |
+| A host, then a server, then the base language (§8.2) | `WebLanguageService` splits into the host's providers and its base; `servedLanguage` composes host, server, base, with `exclusive` and `inheritCompletions` applied at the first step | Internal: no symbol changes |
+| Wheel and keyboard scroll animation (`smoothScrolling`) | On the scroll the editor already owns; touch flings are unchanged | |
+| New options' defaults | Off, or what the editor does today, except `wordWrap` on the web (§8.2) | An upgrade changes nothing on screen, as in 0.8 |
+| The wasm bundle (§8.4) | Record `aardink-web.wasm` and `skiko.wasm`, raw and gzipped, per release and fail the build above the recorded size plus 2%; measure Brotli and skiko's options; drop the 3 MB target | `skiko.wasm` alone is 3.3 MB gzipped, so 3 MB cannot be reached from this repo |
+| Android performance (§8.4) | Awaiting a decision (see the question in the 0.10 kickoff) | A baseline profile and an Android gate need an emulator or a device |
+
+### `:editor`, new
+
+| Symbol | Item |
+| --- | --- |
+| `LanguageService.formatOnType(document, offset, typed: Char, options: FormattingOptions): List<TextEdit>` (suspend, default empty); `LanguageService.formatOnTypeCharacters: Set<Char>` (default empty); `EditorOptions.formatOnType` (false) | §8.3 |
+| `EditorOptions.lineNumbers: LineNumberStyle` (`Absolute`, `Relative`, `Interval`; `Absolute`); `showLineNumbers` stays the switch | §8.3 |
+| `EditorOptions.indentGuides`, `bracketPairGuides` (false); `rulers: List<Int>` (empty) | §8.3 |
+| `EditorOptions.cursorStyle: CursorStyle` (`Line`, `Block`, `Underline`, `LineThin`, `BlockOutline`, `UnderlineThin`; `Line`), `cursorBlinking: CursorBlinking` (`Blink`, `Smooth`, `Solid`; `Blink`) | §8.3 |
+| `EditorOptions.smoothScrolling` (false), `scrollBeyondLastLine` (false), `cursorSurroundingLines` (0), `dragAndDrop` (false) | §8.3 |
+| `EditorOptions.wrappingIndent: WrappingIndent` (`None`, `Same`, `Indent`, `DeepIndent`; today's), `wordWrapColumn: Int?` (null) | §8.3 |
+| `FindReplaceState.inSelection`, `preserveCase`; `CodeEditorLayout(onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)?)` | §8.3. The search history and the replace preview are internal |
+| `EditorTheme.chromeColors: ChromeColors(minimapBackground, minimapSlider, scrollbarSlider, scrollbarSliderHover, indentGuide, activeIndentGuide, bracketPairGuide, ruler, widgetBackground, widgetForeground, widgetBorder, inlayHint, inlayHintBackground, codeLens, ghostText)`, unspecified colours following the theme; `EditorTheme.tokenBackgrounds: Map<TokenType, Color>` (empty) | §8.2, read by the parser from Monaco's keys |
+| `EditorThemes.HighContrastDark`, `HighContrastLight` | §8.2 |
+| `InlayHint.tooltip: String?` (Markdown, null) | Carried in |
+| `CodeAction.onApply: (suspend () -> Unit)?` (null), run after `edits` when the action is chosen | Carried in |
+| `CodeEditorState.refreshLanguageFeatures()`: ask again for diagnostics, hints, lenses, semantic tokens and folds | Carried in |
+| `HoverDocPopup(onOpenLink)`, `SignatureHelpPopup(onOpenLink)`, defaulted to links as text | Carried in |
+
+Each new `LanguageService` member gets a merge rule on `CompositeLanguageService`. `formatOnType`
+follows `format`: the primary's when it has edits, else the fallback's. The characters are united.
+
+### `:languages`, new
+
+| Symbol | Item |
+| --- | --- |
+| `BuiltInLanguages.Yaml`, `Properties`, `Ini`, `Shell`, `Python`, `Sql`, `Java`, `Groovy` (also `.gradle`), `Dockerfile`, `Diff`, `Scss`, `Less`, in `all` and `LanguageRegistry.withBuiltIns()` | §8.1 |
+| No new symbol: services for TypeScript, CSS and Markdown from configurations, a CSS formatter, Markdown table formatting, hover and signature help for Kotlin's catalogue, CSS and JS inside HTML, TypeScript regexp literals | §8.1 |
+
+### `:languages-lsp`, new
+
+| Symbol | Item |
+| --- | --- |
+| Overrides of `formatOnType` and `formatOnTypeCharacters` from `documentOnTypeFormattingProvider` | §8.3 |
+| `LspLanguageService.willSaveWaitUntil(reason: LspSaveReason): List<TextEdit>` (suspend) | Carried in |
+| No new symbol: `semanticTokens/delta` and `/range`, refresh requests through `attach`'s state, code actions with a `command` or other files through `onApply` and `LspClientHost.applyWorkspaceEdit`, inlay hint tooltips, the answer parse in slices | §8.4, Carried in |
+
+### `:editor-web` and the npm package, new
+
+| Symbol | Item |
+| --- | --- |
+| `provideDefinition`, `provideReferences`, `provideDocumentFormattingEdits`, `provideDocumentRangeFormattingEdits`, `provideSignatureHelp` (with `signatureHelpTriggerCharacters`), `provideCodeActions`, `provideRenameEdits` and `resolveRenameLocation`, `provideFoldingRanges`, `provideOnTypeFormattingEdits` (with `autoFormatTriggerCharacters`), `provideDocumentSemanticTokens` (with a `legend`), `resolveCompletionItem`, `resolveCodeLens` in `registerLanguage`'s providers, in Monaco's shapes; the matching `WebLanguageProviders` fields, all through the 0.9 dispatcher | §8.2, Carried in |
+| `{ snippet }` inline completion items, inserted as snippets | Carried in |
+| `registerFont(name, urlOrBytes)` returning a `Promise`; `fontFamily` option; `AardinkWeb.registerFont(name, bytes)`; template export `aardinkRegisterFont` | §8.2 |
+| `WebEditorOptions` and npm options in Monaco's names: `lineNumbers` (`'on'`, `'off'`, `'relative'`, `'interval'`), `rulers`, `guides: { indentation, bracketPairs }`, `cursorStyle`, `cursorBlinking`, `smoothScrolling`, `scrollBeyondLastLine`, `wrappingIndent`, `wordWrapColumn` with `wordWrap: 'wordWrapColumn'`, `cursorSurroundingLines`, `dragAndDrop`, `formatOnType`, `fontFamily` | §8.2, §8.3 |
+| Built-in themes `hc-black` and `hc-light`; `defineTheme` reads the chrome keys and a rule's `background` | §8.2 |
+| `editor.onSearchWorkspace(listener)`, returning a disposable | §8.3 |
+
+### Breaking
+
+| Symbol | Change | Item |
+| --- | --- | --- |
+| `wordWrap` on the web | Defaults to off, as in Monaco. `MIGRATION_0.10.md` | §8.2 |
+| `EditorOptions`, `EditorTheme`, `InlayHint`, `CodeAction`, `FindReplaceState`, `WebEditorOptions`, `WebLanguageProviders` | Gain fields (data class signatures) | All |
+| `CodeEditorLayout`, `HoverDocPopup`, `SignatureHelpPopup` | Gain a defaulted parameter (recompile) | §8.3, Carried in |
+| `BuiltInLanguages.all` | Lists the new languages, so a host that offers every language offers more | §8.1 |
+| Template copies | Copy `aardinkRegisterFont` | §8.2 |
+
+### If the wave overruns
+
+In this order, each to 1.0 or a 0.10 patch: Groovy, Dockerfile, diff, SCSS and LESS; the replace
+preview and search history; drag and drop; `semanticTokens/range`; inlay hint tooltips; Kotlin's
+hover and signature help.
 
 ## 13. Verification
 
