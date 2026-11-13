@@ -16,7 +16,7 @@
 
 # Aardink roadmap: 0.6.3 to 1.0
 
-Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-07. Continues
+Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-13. Continues
 [`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §10, facts
 about the code are as of `v0.6.2` (commit `3fbaef6`) and facts about the aardflex apps are as of
 the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 0.6.2 open).
@@ -28,7 +28,7 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
-| 0.9 | Built on branch `feat/0.9`, not yet released | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Open before release: the full gate on the merged branch, and the Android device check (§15.1). |
+| 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Still open after release: the Android device check (§15.1) and the aardflex apps' builds against 0.9 (§13); the two opt-in performance costs are in §8.4. |
 | 0.10 | Planned | §8: more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
@@ -81,7 +81,9 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 
 - Compose Multiplatform was pinned at 1.12.1; 1.12.2 came out on 2026-10-15. 1.13, which fixes
   the W-1 leak (about 320 KB per disposed web editor), is at `1.13.0-alpha02` (published
-  2026-10-06), so the leak stays until 1.13 is stable. The 50-cycle heap test in `checklist.mjs` is still owed.
+  2026-10-06), so the leak stays until 1.13 is stable. `checklist.mjs` W-1 already measures the
+  heap over 50 mount and dispose cycles, but only reports it; a check that fails on a leak is owed
+  with 1.13.
 - **Chrome 155 broke the web performance gate**, which failed on `main` from 2026-10-07 to
   2026-10-21. The same 0.6.1 code measured key to idle p95 16 ms on Chrome 154.0.8037.92 and
   232 ms on 155.0.8059.39; `setValueToIdleMs` went from 18 to about 85 ms and the longest task
@@ -193,8 +195,8 @@ About five small PRs.
 4. Fix the stale `AardinkWeb.updateOptions` KDoc and the matching comment near line 103.
 5. Compose Multiplatform 1.12.2 (the canary is green on it).
 
-Separately, in whichever patch follows the first **stable** CMP 1.13: adopt it, add the 50-cycle
-heap test to `checklist.mjs`, remove the "reuse one editor" guidance from the README and
+Separately, in whichever patch follows the first **stable** CMP 1.13: adopt it, make
+`checklist.mjs` W-1 (which already measures the 50-cycle heap) fail on a leak, remove the "reuse one editor" guidance from the README and
 `WEB_INTEGRATION.md`, and run the canary with `cmp-version` pinned to the candidate as the
 pre-release gate. This is not tied to 0.7.
 
@@ -997,6 +999,8 @@ gzip's default level, 1,693,769 for 0.9). The 5,201,007 above was a mid-wave bas
 held earlier 0.9 work.
 
 #### Still open
+
+0.9 shipped on 2026-11-08 with these open; the performance items are carried in §8.4.
 
 - **Android on a device.** Code lens rows and multi-line ghost text rest on hard breaks inside a
   line's layout. They pass under Robolectric with native graphics, but the spike's device check
