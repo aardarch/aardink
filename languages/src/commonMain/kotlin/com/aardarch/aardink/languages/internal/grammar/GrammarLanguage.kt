@@ -50,6 +50,7 @@ internal fun grammarLanguage(
     folding: FoldingProvider,
     toolbar: List<Char>,
     service: LanguageService? = null,
+    fileNames: List<String> = emptyList(),
 ): LanguageDefinition = LanguageDefinition(
     id = id,
     displayName = displayName,
@@ -66,6 +67,7 @@ internal fun grammarLanguage(
         }
     },
     keyboardToolbarChars = toolbar,
+    fileNames = fileNames,
 )
 
 /** A [DeclarativeTokenizer] for [grammar], parsed at its first use. */

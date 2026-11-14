@@ -184,6 +184,7 @@ object BuiltInLanguages {
         comments = CommentSyntax(line = ";"),
         folding = TomlFoldingProvider,
         toolbar = listOf('[', ']', '=', ';', '"', '.'),
+        fileNames = listOf(".gitconfig", ".gitmodules"),
     )
 
     /** POSIX shell and Bash. */
@@ -196,6 +197,7 @@ object BuiltInLanguages {
         comments = HASH_COMMENTS,
         folding = IndentationFoldingProvider().withRegionMarkers(FoldingRegionMarkers.HashComment),
         toolbar = listOf('$', '{', '}', '(', ')', '"', '\'', '|', '&', ';', '-', '/'),
+        fileNames = listOf(".bashrc", ".bash_profile", ".bash_aliases", ".bash_logout", ".profile", ".zshrc", ".zprofile", ".zshenv"),
     )
 
     val Python: LanguageDefinition = grammarLanguage(
@@ -233,7 +235,7 @@ object BuiltInLanguages {
         toolbar = listOf('{', '}', '(', ')', ';', '"', '.', '<', '>', '=', '@'),
     )
 
-    /** Groovy, and so Gradle's `.gradle` build scripts. */
+    /** Groovy, and so Gradle's `.gradle` build scripts and Jenkinsfiles. */
     val Groovy: LanguageDefinition = grammarLanguage(
         id = "groovy",
         displayName = "Groovy",
@@ -243,21 +245,20 @@ object BuiltInLanguages {
         comments = C_COMMENTS,
         folding = BraceFoldingProvider(supportsTripleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
         toolbar = listOf('{', '}', '(', ')', '"', '\'', '.', '$', '=', '[', ']', '-', '>'),
+        fileNames = listOf("Jenkinsfile"),
     )
 
-    /**
-     * Dockerfiles. A file named `Dockerfile` has no extension, so a host looks it up by the name:
-     * `byExtension("Dockerfile")` finds this, as does a `.dockerfile` file.
-     */
+    /** Dockerfiles and Containerfiles, by name (`Dockerfile`, `Dockerfile.dev`) or as `.dockerfile`. */
     val Dockerfile: LanguageDefinition = grammarLanguage(
         id = "dockerfile",
         displayName = "Dockerfile",
-        fileExtensions = listOf("dockerfile", "containerfile"),
+        fileExtensions = listOf("dockerfile"),
         grammar = DOCKERFILE_GRAMMAR,
         configuration = DOCKERFILE_CONFIGURATION,
         comments = HASH_COMMENTS,
         folding = IndentationFoldingProvider().withRegionMarkers(FoldingRegionMarkers.HashComment),
         toolbar = listOf('$', '{', '}', '[', ']', '"', '=', '-', '\\', '&', '/', ':'),
+        fileNames = listOf("Dockerfile", "Dockerfile.*", "Containerfile", "Containerfile.*"),
     )
 
     /** Unified diffs and patches: each file and each hunk folds. */

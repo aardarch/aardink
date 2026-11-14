@@ -272,12 +272,14 @@ final class com.aardarch.aardink.languages/LanguageConfiguration { // com.aardar
 }
 
 final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.aardink.languages/LanguageDefinition|null[0]
-    constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<kotlin/String>, com.aardarch.aardink.core/IncrementalTokenizer, com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...) // com.aardarch.aardink.languages/LanguageDefinition.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<kotlin/String>, com.aardarch.aardink.core/IncrementalTokenizer, com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ..., kotlin.collections/List<kotlin/String> = ...) // com.aardarch.aardink.languages/LanguageDefinition.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>;kotlin.collections.List<kotlin.String>){}[0]
 
     final val displayName // com.aardarch.aardink.languages/LanguageDefinition.displayName|{}displayName[0]
         final fun <get-displayName>(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.displayName.<get-displayName>|<get-displayName>(){}[0]
     final val fileExtensions // com.aardarch.aardink.languages/LanguageDefinition.fileExtensions|{}fileExtensions[0]
         final fun <get-fileExtensions>(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/LanguageDefinition.fileExtensions.<get-fileExtensions>|<get-fileExtensions>(){}[0]
+    final val fileNames // com.aardarch.aardink.languages/LanguageDefinition.fileNames|{}fileNames[0]
+        final fun <get-fileNames>(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/LanguageDefinition.fileNames.<get-fileNames>|<get-fileNames>(){}[0]
     final val foldingProvider // com.aardarch.aardink.languages/LanguageDefinition.foldingProvider|{}foldingProvider[0]
         final fun <get-foldingProvider>(): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.languages/LanguageDefinition.foldingProvider.<get-foldingProvider>|<get-foldingProvider>(){}[0]
     final val id // com.aardarch.aardink.languages/LanguageDefinition.id|{}id[0]
@@ -296,7 +298,8 @@ final class com.aardarch.aardink.languages/LanguageDefinition { // com.aardarch.
     final fun component5(): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.languages/LanguageDefinition.component5|component5(){}[0]
     final fun component6(): com.aardarch.aardink.core/LanguageService? // com.aardarch.aardink.languages/LanguageDefinition.component6|component6(){}[0]
     final fun component7(): kotlin.collections/List<kotlin/Char> // com.aardarch.aardink.languages/LanguageDefinition.component7|component7(){}[0]
-    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<kotlin/String> = ..., com.aardarch.aardink.core/IncrementalTokenizer = ..., com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ...): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.copy|copy(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>){}[0]
+    final fun component8(): kotlin.collections/List<kotlin/String> // com.aardarch.aardink.languages/LanguageDefinition.component8|component8(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<kotlin/String> = ..., com.aardarch.aardink.core/IncrementalTokenizer = ..., com.aardarch.aardink.core/FoldingProvider = ..., com.aardarch.aardink.core/LanguageService? = ..., kotlin.collections/List<kotlin/Char> = ..., kotlin.collections/List<kotlin/String> = ...): com.aardarch.aardink.languages/LanguageDefinition // com.aardarch.aardink.languages/LanguageDefinition.copy|copy(kotlin.String;kotlin.String;kotlin.collections.List<kotlin.String>;com.aardarch.aardink.core.IncrementalTokenizer;com.aardarch.aardink.core.FoldingProvider;com.aardarch.aardink.core.LanguageService?;kotlin.collections.List<kotlin.Char>;kotlin.collections.List<kotlin.String>){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.languages/LanguageDefinition.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.languages/LanguageDefinition.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.languages/LanguageDefinition.toString|toString(){}[0]
@@ -314,6 +317,7 @@ final class com.aardarch.aardink.languages/LanguageRegistry { // com.aardarch.aa
         final fun <get-all>(): kotlin.collections/List<com.aardarch.aardink.languages/LanguageDefinition> // com.aardarch.aardink.languages/LanguageRegistry.all.<get-all>|<get-all>(){}[0]
 
     final fun byExtension(kotlin/String): com.aardarch.aardink.languages/LanguageDefinition? // com.aardarch.aardink.languages/LanguageRegistry.byExtension|byExtension(kotlin.String){}[0]
+    final fun byFileName(kotlin/String): com.aardarch.aardink.languages/LanguageDefinition? // com.aardarch.aardink.languages/LanguageRegistry.byFileName|byFileName(kotlin.String){}[0]
     final fun byId(kotlin/String): com.aardarch.aardink.languages/LanguageDefinition? // com.aardarch.aardink.languages/LanguageRegistry.byId|byId(kotlin.String){}[0]
     final fun override(kotlin/String, kotlin/Function1<com.aardarch.aardink.languages/LanguageDefinition, com.aardarch.aardink.languages/LanguageDefinition>): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.override|override(kotlin.String;kotlin.Function1<com.aardarch.aardink.languages.LanguageDefinition,com.aardarch.aardink.languages.LanguageDefinition>){}[0]
     final fun register(com.aardarch.aardink.languages/LanguageDefinition): com.aardarch.aardink.languages/LanguageRegistry // com.aardarch.aardink.languages/LanguageRegistry.register|register(com.aardarch.aardink.languages.LanguageDefinition){}[0]

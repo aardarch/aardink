@@ -92,4 +92,54 @@ class LanguageRegistryTest {
         assertNull(registry.byId("plaintext"))
         assertEquals(BuiltInLanguages.all.size - 1, registry.all.size)
     }
+
+    @Test
+    fun `byFileName reads a file's name before its extension`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        for ((path, id) in listOf(
+            "Dockerfile" to "dockerfile",
+            "docker/Dockerfile.dev" to "dockerfile",
+            "containerfile" to "dockerfile",
+            "web.dockerfile" to "dockerfile",
+            "Jenkinsfile" to "groovy",
+            "build.gradle" to "groovy",
+            "~/.bashrc" to "shell",
+            "C:\\Users\\me\\.gitconfig" to "ini",
+            ".editorconfig" to "ini",
+            "src\\Main.kt" to "kotlin",
+            "README.md" to "markdown",
+        )) {
+            assertEquals(id, registry.byFileName(path)?.id, path)
+        }
+        assertNull(registry.byFileName("Makefile"))
+        assertNull(registry.byFileName("notes."))
+        assertNull(registry.byFileName("dir/"))
+    }
+
+    @Test
+    fun `a registered language's file names come before a built-in's extension`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        val log = LanguageDefinition(
+            id = "buildlog",
+            displayName = "Build log",
+            fileExtensions = listOf("log"),
+            tokenizer = PlainTextTokenizer,
+            fileNames = listOf("build*.txt"),
+        )
+        registry.register(log)
+        assertSame(log, registry.byFileName("build-2026.txt"))
+        assertEquals("plaintext", registry.byFileName("notes.txt")?.id)
+    }
+
+    @Test
+    fun `file name patterns match whole names, without regard to case`() {
+        assertTrue(fileNameMatches("Dockerfile", "dockerfile"))
+        assertTrue(fileNameMatches("Dockerfile.*", "Dockerfile.prod"))
+        assertTrue(fileNameMatches("*.Dockerfile", "web.dockerfile"))
+        assertTrue(fileNameMatches("a*b*c", "aXbYbZc"))
+        assertTrue(fileNameMatches("*", ""))
+        assertTrue(!fileNameMatches("Dockerfile", "Dockerfile.dev"))
+        assertTrue(!fileNameMatches("Dockerfile.*", "MyDockerfile.dev"))
+        assertTrue(!fileNameMatches("a*b", "aXbY"))
+    }
 }
