@@ -366,7 +366,7 @@ What the server knows joins what the language has:
 
 | | Who answers |
 | --- | --- |
-| A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
+| A language from `registerLanguage` | The host's providers first, then the server, then the language it extends. `exclusive` and `inheritCompletions: false` leave out the extended language's completions, not the server's. |
 | A built-in language | The server first, then the language. |
 | Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. A server never changes what typing does, so an editor with no language service, such as plain text or a language this page does not know, types as it does without one. |
 | Completions, diagnostics, code actions, references, links, colours | Both, as above. |
@@ -620,20 +620,8 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
 - A language server connection does not reconnect, and the host hears of its end only on the
   console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
-- A language from `registerLanguage` answers before a language server, and so does the built-in
-  language it extends. With `extends: 'json'` (or `xml`, `toml`, `kotlin`), that language's formatter
-  and outline come ahead of a connected server's, which fills in only what they leave empty. A
-  server's formatter and outline win only for a built-in language used as it is.
 - The page has no save, so a server is never sent `willSave` or `didSave`. A server that reports
   only when a file is saved shows nothing.
-- Of the keys that type a character with Alt held, only Alt+] and Alt+[ reach the editor's bindings:
-  the browser input Compose uses takes any other as typing. So `addCommand('Alt+K', ...)` never runs,
-  and neither do the default Shift+Alt+A (block comment) and Shift+Alt+I (carets at line ends). Bind
-  such commands to a key with Ctrl or Cmd, or run them with `trigger`
-  (`editor.action.blockComment`, `editor.action.insertCursorAtEndOfEachLineSelected`).
-- Inlay hints, code lenses and semantic tokens are not asked for again when a server says they are
-  out of date (`workspace/inlayHint/refresh` and the like). The editor asks again only for reasons of
-  its own: an edit; for hints, scrolling or a fold; for lenses, one without a title coming on screen.
 - Semantic highlighting from a language server asks for the whole document after each edit, and its
   answer is parsed in one piece: on a 5,000-line file each answer holds the page for about 70 ms as
   it lands, and a key pressed then waits for it. Code lenses are asked about the whole document too,

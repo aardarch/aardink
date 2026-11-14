@@ -230,39 +230,54 @@ internal fun providedIn(definitionJson: String): Set<String>? =
     }
 
 /**
- * A registered language's service: the host's providers ([JsProviderService]) first, then what
- * [base] (the language it extends) has, by [CompositeLanguageService]'s rules. With
- * [inheritCompletions] the base's completions follow the host's, and [ownTriggerCharacters] (those
- * the definition gave, if any) add to the base's; without it, they replace them. On top of the
- * composite's rules: an answer `{ suggestions, exclusive: true }` leaves out the base's
- * completions for that request, and whether the list is asked for again on each keystroke is the
- * host's answer's `incomplete` alone.
+ * A registered language's service: the host's providers ([JsProviderService]) first, then a
+ * language [server]'s if one follows the editor, then what [base] (the language it extends) has,
+ * each by [CompositeLanguageService]'s rules. With [inheritCompletions] the base's completions come
+ * last, and [ownTriggerCharacters] (those the definition gave, if any) add to the base's; without
+ * it, they replace them. On top of the composite's rules: an answer `{ suggestions, exclusive: true }`
+ * leaves out the base's completions for that request (a server's still come), and whether the list
+ * is asked for again on each keystroke is the host's answer's `incomplete` alone.
  */
-internal class WebLanguageService(
-    base: LanguageService?,
-    providers: WebLanguageProviders,
-    ownTriggerCharacters: Set<Char>? = null,
-    inheritCompletions: Boolean = true,
-    autoFormatTriggerCharacters: Set<Char> = emptySet(),
-    semanticLegend: WebSemanticLegend? = null,
+internal class WebLanguageService private constructor(
+    private val js: JsProviderService,
+    private val base: LanguageService,
+    private val server: LanguageService?,
+    inheritCompletions: Boolean,
 ) : CompositeLanguageService(
-    primary = JsProviderService(
-        providers,
-        ownTriggerCharacters ?: base?.triggerCharacters.orEmpty(),
-        autoFormatTriggerCharacters,
-        semanticLegend,
-    ),
-    fallback = base ?: NoLanguageService,
+    primary = js,
+    fallback = server?.let { CompositeLanguageService(it, base) } ?: base,
     inheritCompletions = inheritCompletions,
 ) {
-    private val js: JsProviderService get() = primary as JsProviderService
+    constructor(
+        base: LanguageService?,
+        providers: WebLanguageProviders,
+        ownTriggerCharacters: Set<Char>? = null,
+        inheritCompletions: Boolean = true,
+        autoFormatTriggerCharacters: Set<Char> = emptySet(),
+        semanticLegend: WebSemanticLegend? = null,
+    ) : this(
+        js = JsProviderService(
+            providers,
+            ownTriggerCharacters ?: base?.triggerCharacters.orEmpty(),
+            autoFormatTriggerCharacters,
+            semanticLegend,
+        ),
+        base = base ?: NoLanguageService,
+        server = null,
+        inheritCompletions = inheritCompletions,
+    )
+
+    /** This language with [server] between the host's providers and the base: the host, then the server, then the base. */
+    fun withServer(server: LanguageService): WebLanguageService = WebLanguageService(js, base, server, inheritCompletions)
 
     override val completionsAreIncomplete: Boolean
         get() = js.lastIncomplete
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val own = js.completions(document, cursorOffset)
-        if (!inheritCompletions || js.lastExclusive) return own
+        if (!inheritCompletions || js.lastExclusive) {
+            return server?.let { merged(own, it.completions(document, cursorOffset)) } ?: own
+        }
         return merged(own, fallback.completions(document, cursorOffset))
     }
 }

@@ -348,6 +348,27 @@ class WebLanguageServerTest {
         awaitDiagnostics(handle, "host's", "server's")
     }
 
+    @Test
+    fun `a server answers after the host's providers and before the language they extend`() = runTest {
+        language("toy-order-base", WebLanguageProviders(hover = { _, _, _ -> """{ "contents": "from the base" }""" }))
+        language(
+            "toy-order",
+            WebLanguageProviders(hover = { _, _, column -> if (column == 1) """{ "contents": "from the host" }""" else null }),
+            extends = "toy-order-base",
+        )
+        val handle = mount("name", "toy-order")
+        val server = FakeServer { method -> if (method == "textDocument/hover") """{"contents":"from the server"}""" else null }
+        connect("toy-order", server)
+        served(handle)
+        val service = assertNotNull(handle.languageService)
+        val snapshot = handle.state.value.document.snapshot()
+
+        withContext(Dispatchers.Main) {
+            assertEquals("from the host", service.hoverDoc(snapshot, 0)?.content)
+            assertEquals("from the server", service.hoverDoc(snapshot, 2)?.content, "ahead of the base")
+        }
+    }
+
     /** Waits for the service to have exactly [messages]; pushed ones come in their own time. */
     private suspend fun awaitDiagnostics(handle: AardinkEditorHandle, vararg messages: String) {
         var last = emptyList<String>()

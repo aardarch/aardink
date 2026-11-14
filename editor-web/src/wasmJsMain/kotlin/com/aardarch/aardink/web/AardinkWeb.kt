@@ -356,9 +356,9 @@ object AardinkWeb {
      * unknown language shows plain text, but the server still follows it.
      *
      * What the server knows joins what the language has rather than replacing it. A language from
-     * [registerLanguage] keeps the first word, so the host's providers answer first and the server
-     * fills in; a built-in one's answers come after the server's, though it keeps Enter and closing
-     * pairs. Completions, diagnostics, code actions, references, links and colours come from both.
+     * [registerLanguage] keeps the first word, so the host's providers answer first, the server
+     * fills in, and the language it extends comes last; a built-in one's answers come after the
+     * server's, though it keeps Enter and closing pairs. Completions, diagnostics, code actions, references, links and colours come from both.
      * Folding is the server's if it folds. Connecting a second server to a language adds to the
      * first, which answers first.
      *
