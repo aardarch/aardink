@@ -57,15 +57,7 @@ internal fun grammarLanguage(
     fileExtensions = fileExtensions,
     tokenizer = LazyGrammarTokenizer(grammar, comments, toolbar),
     foldingProvider = folding,
-    languageService = LazyConfiguredService(configuration, comments).let {
-        if (service ==
-            null
-        ) {
-            it
-        } else {
-            CompositeLanguageService(it, service)
-        }
-    },
+    languageService = lazyConfiguredService(configuration, comments, service),
     keyboardToolbarChars = toolbar,
     fileNames = fileNames,
 )
@@ -88,6 +80,16 @@ internal class LazyGrammarTokenizer(
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = tokenizer.canSpanLines(lineIndex, tokens)
 
     override fun keyboardToolbarChars(): List<Char> = toolbar
+}
+
+/**
+ * What [configuration] says about typing, read at its first use, over [service] when there is one:
+ * the configuration answers for typing, and [service] for the rest (and for what typing the
+ * configuration has no rule for).
+ */
+internal fun lazyConfiguredService(configuration: String, comments: CommentSyntax?, service: LanguageService? = null): LanguageService {
+    val configured = LazyConfiguredService(configuration, comments)
+    return if (service == null) configured else CompositeLanguageService(configured, service)
 }
 
 /** What [configuration] says about typing (closing pairs, surrounding, Enter), read at its first use. */

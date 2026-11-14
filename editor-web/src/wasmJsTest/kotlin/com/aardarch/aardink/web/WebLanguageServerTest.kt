@@ -463,18 +463,19 @@ class WebLanguageServerTest {
     @Test
     fun `a language's empty indentation on Enter stands, with a real server behind it`() = runTest {
         val kotlin = mount("  foo\n}", "kotlin")
-        val markdown = mount("    code\n", "markdown")
+        // After `return`, Python's configuration outdents to nothing.
+        val python = mount("    return x\n", "python")
         connect("kotlin", FakeServer())
-        connect("markdown", FakeServer())
+        connect("python", FakeServer())
         val kotlinAdapter = served(kotlin)
-        val markdownAdapter = served(markdown)
+        val pythonAdapter = served(python)
         val closing = CodeDocument("  foo\n}")
-        val code = CodeDocument("    code\n")
+        val returned = CodeDocument("    return x\n")
 
         assertEquals("  ", kotlinAdapter.smartIndent(closing, 1, FormattingOptions()))
-        assertEquals("    ", markdownAdapter.smartIndent(code, 1, FormattingOptions()))
+        assertEquals("    ", pythonAdapter.smartIndent(returned, 1, FormattingOptions()))
         assertEquals("", kotlin.languageService!!.smartIndent(closing, 1, FormattingOptions()))
-        assertEquals("", markdown.languageService!!.smartIndent(code, 1, FormattingOptions()))
+        assertEquals("", python.languageService!!.smartIndent(returned, 1, FormattingOptions()))
     }
 
     @Test

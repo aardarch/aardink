@@ -19,14 +19,28 @@ import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.ColorPresentation
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.HexColors
 
-/** CSS's service: the hex colours in its declarations, for the editor's colour swatches and picker. */
-internal object CssLanguageService : BaseLanguageService() {
+/**
+ * The hex colours in a style sheet's declarations, for the editor's colour swatches and picker:
+ * CSS's, and SCSS's and LESS's, which have no formatter of their own (CSS's would misread their
+ * `//` comments and nesting).
+ */
+internal open class CssColorService : BaseLanguageService() {
 
     override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.cssTokens(document.text)
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         HexColors.presentation(document, info, color, alphaFirst = false)
+}
+
+/** SCSS's and LESS's service: the colours alone. */
+internal object StyleSheetColorService : CssColorService()
+
+/** CSS's service: its colours, and [CssFormatter]. */
+internal object CssLanguageService : CssColorService() {
+
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = CssFormatter.format(document.text, options)
 }

@@ -224,8 +224,8 @@ private fun StartScreen(
             if (advanced.isNotEmpty()) {
                 item("section-advanced") {
                     SectionHeader(
-                        title = "Full language support",
-                        subtitle = "Diagnostics, completions, hover, formatting",
+                        title = "Built-in languages",
+                        subtitle = "Highlighting, folding and typing; diagnostics, completions and more for some",
                     )
                 }
                 items(items = advanced, key = { it.id }) { def ->

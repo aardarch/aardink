@@ -20,11 +20,13 @@ import com.aardarch.aardink.core.NoOpFoldingProvider
 import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.languages.internal.css.CssLanguageService
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
+import com.aardarch.aardink.languages.internal.css.StyleSheetColorService
 import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.DiffFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.TagFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.TomlFoldingProvider
+import com.aardarch.aardink.languages.internal.grammar.CSS_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.C_LIKE_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.DIFF_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.DIFF_GRAMMAR
@@ -35,6 +37,7 @@ import com.aardarch.aardink.languages.internal.grammar.INI_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.INI_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.JAVA_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.LESS_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.MARKDOWN_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.PYTHON_CONFIGURATION
@@ -45,9 +48,11 @@ import com.aardarch.aardink.languages.internal.grammar.SHELL_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.SQL_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.SQL_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.STYLE_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.TYPESCRIPT_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.grammarLanguage
+import com.aardarch.aardink.languages.internal.grammar.lazyConfiguredService
 import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonLanguageService
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
@@ -89,6 +94,7 @@ object BuiltInLanguages {
         fileExtensions = listOf("ts", "tsx", "js", "jsx", "mjs", "cjs"),
         tokenizer = TypeScriptTokenizer,
         foldingProvider = BraceFoldingProvider(supportsTripleQuoted = false).withRegionMarkers(FoldingRegionMarkers.LineComment),
+        languageService = lazyConfiguredService(TYPESCRIPT_CONFIGURATION, TypeScriptTokenizer.commentSyntax),
     )
 
     val Json: LanguageDefinition = LanguageDefinition(
@@ -140,7 +146,7 @@ object BuiltInLanguages {
             supportsLineComments = false,
             supportsSingleQuoted = true,
         ).withRegionMarkers(FoldingRegionMarkers.BlockComment),
-        languageService = CssLanguageService,
+        languageService = lazyConfiguredService(CSS_CONFIGURATION, CssTokenizer.commentSyntax, CssLanguageService),
     )
 
     val Markdown: LanguageDefinition = LanguageDefinition(
@@ -149,7 +155,7 @@ object BuiltInLanguages {
         fileExtensions = listOf("md", "markdown"),
         tokenizer = MarkdownTokenizer,
         foldingProvider = MarkdownFoldingProvider.withRegionMarkers(FoldingRegionMarkers.XmlComment),
-        languageService = MarkdownLanguageService,
+        languageService = lazyConfiguredService(MARKDOWN_CONFIGURATION, MarkdownTokenizer.commentSyntax, MarkdownLanguageService),
     )
 
     val Yaml: LanguageDefinition = grammarLanguage(
@@ -283,7 +289,7 @@ object BuiltInLanguages {
         comments = C_COMMENTS,
         folding = BraceFoldingProvider(supportsSingleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
         toolbar = listOf('{', '}', ':', ';', '$', '.', '&', '#', '(', ')', '@', '%'),
-        service = CssLanguageService,
+        service = StyleSheetColorService,
     )
 
     /** LESS, with CSS's colour swatches. */
@@ -296,7 +302,7 @@ object BuiltInLanguages {
         comments = C_COMMENTS,
         folding = BraceFoldingProvider(supportsSingleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
         toolbar = listOf('{', '}', ':', ';', '@', '.', '&', '#', '(', ')', '~', '%'),
-        service = CssLanguageService,
+        service = StyleSheetColorService,
     )
 
     val PlainText: LanguageDefinition = LanguageDefinition(
