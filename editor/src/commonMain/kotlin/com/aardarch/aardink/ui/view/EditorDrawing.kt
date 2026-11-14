@@ -87,7 +87,7 @@ internal class EditorDecorations(
     val snippetTabStops: List<TextRange> = emptyList(),
     /** The host's decorations, in order of where they start. */
     val hostDecorations: List<Decoration> = emptyList(),
-    /** The colours in the text, each drawn as a swatch bar under it. */
+    /** The colours in the text, each drawn as a swatch in the room inline content leaves before it. */
     val colorSwatches: List<ColorInfo> = emptyList(),
     /** Indentation and bracket pairs around the view; null draws no guides. */
     val guides: Guides? = null,
@@ -359,27 +359,23 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
 }
 
 /**
- * A colour's swatch: a bar in the colour under its text, over a contrasting edge so a colour
- * close to the background still shows. Drawn below the text, so nothing is laid out again.
+ * A colour's swatch, as VS Code's: a square in the colour in the room inline content leaves before
+ * it ([SWATCH_ROOM]), over a contrasting edge so a colour close to the background still shows.
  */
 private fun DrawScope.drawSwatch(line: VisibleLine, swatch: ColorInfo, left: Float, top: Float, lineHeight: Float) {
-    val layout = line.layout
-    val a = (swatch.range.first - line.start).coerceIn(0, line.shownLength)
-    val b = (swatch.range.last + 1 - line.start).coerceIn(a, line.shownLength)
-    if (b <= a) return
-    val height = 3.dp.toPx()
+    val column = swatch.range.first - line.start
+    if (column !in 0..line.shownLength) return
+    val (room, row) = line.layout.injectedBoxBefore(column, InlineContent.SwatchSlot) ?: return
     val edge = 1.dp.toPx()
-    val firstRow = layout.charRow(a)
-    val lastRow = layout.charRow(b - 1)
-    for (row in firstRow..lastRow) {
-        if (layout.isInjectedRow(row)) continue
-        val x0 = if (row == firstRow) layout.charLeft(a) else layout.getLineLeft(row)
-        val x1 = if (row == lastRow) layout.charBox(b - 1).right else layout.getLineRight(row)
-        val y = top + layout.rowShift(row, lineHeight) + layout.getLineBottom(row) - height
-        drawRect(Color.Gray, Offset(left + x0 - edge, y - edge), Size(x1 - x0 + 2 * edge, height + 2 * edge))
-        drawRect(swatch.color, Offset(left + x0, y), Size(x1 - x0, height))
-    }
+    val side = minOf(room.width * SWATCH_FILL, room.height * SWATCH_FILL)
+    val x = left + room.left + (room.width - side) / 2f
+    val y = top + line.layout.rowShift(row, lineHeight) + room.top + (room.height - side) / 2f
+    drawRect(Color.Gray, Offset(x - edge, y - edge), Size(side + 2 * edge, side + 2 * edge))
+    drawRect(swatch.color, Offset(x, y), Size(side, side))
 }
+
+/** How much of its room a swatch fills: about VS Code's 0.8 em square in two columns. */
+private const val SWATCH_FILL = 0.6f
 
 /** The decorations in [all] (in order of where they start) that reach a line of [frame]. */
 internal fun visibleDecorations(frame: ViewFrame, all: List<Decoration>): List<Decoration> {

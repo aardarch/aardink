@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.ColorInfo
 import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.IncrementalTokenizer
@@ -670,5 +671,44 @@ class InlineContentTest {
         state.applyEdit(0, 0, "x", TextRange(1))
 
         assertEquals(2..2, state.decorations("test").single().range)
+    }
+
+    // ── Colour swatches ──────────────────────────────────────────────────────
+
+    @Test
+    fun `a colour gets room for its swatch before it, after a hint at the same column, and it moves with edits`() {
+        val view = viewOf("color: #ff0000;")
+        view.state.publishInlayHints(listOf(InlayHint(7, "h")))
+        view.state.publishDocumentColors(listOf(ColorInfo(7..13, Color.Red)))
+        view.prepare(width, height)
+
+        assertEquals("color: h${SWATCH_ROOM}#ff0000;", view.laidOut())
+        view.edit(0, 0, "  ")
+        assertEquals(9..15, view.state.documentColors.single().range)
+        assertEquals("  color: h${SWATCH_ROOM}#ff0000;", view.laidOut())
+    }
+
+    @Test
+    fun `a click on a swatch reports its colour's offset`() {
+        val view = viewOf("a\ncolor: #ff0000;")
+        view.state.publishDocumentColors(listOf(ColorInfo(9..15, Color.Red)))
+        view.prepare(width, height)
+        var clicked = -1
+        view.inline.onSwatchClick = { clicked = it }
+
+        view.inline.clicked(1, Injection(7, SWATCH_ROOM, id = InlineContent.SwatchSlot))
+
+        assertEquals(9, clicked)
+    }
+
+    @Test
+    fun `no colours, no room`() {
+        val view = viewOf("color: #ff0000;")
+        view.state.publishDocumentColors(listOf(ColorInfo(7..13, Color.Red)))
+        view.prepare(width, height)
+        view.state.publishDocumentColors(emptyList())
+        view.prepare(width, height)
+
+        assertEquals("color: #ff0000;", view.laidOut())
     }
 }

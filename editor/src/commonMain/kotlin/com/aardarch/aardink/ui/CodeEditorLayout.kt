@@ -889,18 +889,11 @@ private fun CodeEditorLayoutContent(
         }
     }
 
-    // ── Colours: swatches under the colours the language service finds, and their picker ─
-    val colorTracker = remember(state) {
-        TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
-    }
-    DisposableEffect(colorTracker) {
-        state.document.addChangeListener(colorTracker)
-        onDispose { state.document.removeChangeListener(colorTracker) }
-    }
-    LaunchedEffect(colorTracker, languageService, options.colorDecorators) {
+    // ── Colours: a swatch before each colour the language service finds, and their picker ─
+    LaunchedEffect(state, languageService, options.colorDecorators) {
         val service = languageService
         if (service == null || !options.colorDecorators) {
-            colorTracker.replace(emptyList())
+            state.publishDocumentColors(emptyList())
             return@LaunchedEffect
         }
         snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
@@ -913,14 +906,16 @@ private fun CodeEditorLayoutContent(
                     service.documentColors(document)
                 }
             }
-            if (state.document.version == document.version) colorTracker.replace(found)
+            if (state.document.version == document.version) state.publishDocumentColors(found)
         }
     }
     val colorAt: (Int) -> ColorInfo? = { offset ->
-        colorTracker.items.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
+        state.documentColors.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
     }
     // The colour the picker is open for, while it is.
     var pickingColor by remember { mutableStateOf<ColorInfo?>(null) }
+    // A click on a swatch opens the picker for its colour, as a hover on VS Code's does.
+    SideEffect { view.inline.onSwatchClick = { offset -> colorAt(offset)?.let { pickingColor = it } } }
     val applyColor: (ColorInfo, Color) -> Unit = { info, color ->
         pickingColor = null
         val service = languageService
@@ -1826,7 +1821,7 @@ private fun CodeEditorLayoutContent(
             options = options,
             textColor = textColor,
             stickyRanges = stickyRanges,
-            colorSwatches = { colorTracker.items },
+            colorSwatches = { state.documentColors },
             onZoom = zoom?.zoomBy,
             modifier = Modifier
                 .weight(1f)

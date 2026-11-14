@@ -419,7 +419,7 @@ class EditorSceneScreenshotTest {
 
     @Test
     fun colors() {
-        // Colour resources: each hex value gets a swatch under it, alpha first as Android writes them.
+        // Colour resources: each hex value gets a swatch before it, alpha first as Android writes them.
         val xml = LanguageRegistry.withBuiltIns().all.first { it.id == "xml" }
         val text = """
             |<resources>

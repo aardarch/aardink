@@ -105,6 +105,9 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         }
     }
 
+    /** What a click on a colour's swatch is reported with; the swatch is drawn in its room. */
+    data object SwatchSlot
+
     /** What a click on a lens is reported with: which of its line's lenses it is. By value, as the row is part of what a layout shows. */
     private data class LensSlot(val index: Int)
 
@@ -163,11 +166,18 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         refresh(restyled)
     }
 
+    /** A swatch was clicked: the offset of the colour it stands before. */
+    var onSwatchClick: ((offset: Int) -> Unit)? = null
+
     /** Whether [line] has a lens that has no title yet. */
     fun isWaiting(line: Int): Boolean = lensesOn(line).any { it.title.isBlank() }
 
     /** Injected text on [line] was clicked: what the lens it is part of does, if it is one. */
     fun clicked(line: Int, injection: Injection) {
+        if (injection.id == SwatchSlot) {
+            if (line in 0 until document.lineCount) onSwatchClick?.invoke(document.lineStart(line) + injection.column)
+            return
+        }
         val slot = injection.id as? LensSlot ?: return
         lensesOn(line).filter { it.title.isNotBlank() }.getOrNull(slot.index)?.onClick?.invoke()
     }
@@ -311,6 +321,10 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         val wide = ArrayList<WideColor>()
         state.forEachInlineDecoration { addDecoration(it, lines, wide) }
         for (hint in state.inlayHints) inject(lines, hint.offset, hint.label, hintStyle, caretAfter = false, tooltip = hint.tooltip)
+        // Last at their column, so each is right before its colour's first character, where the view draws it.
+        for (color in state.documentColors) {
+            if (!color.range.isEmpty()) inject(lines, color.range.first, SWATCH_ROOM, null, caretAfter = false, id = SwatchSlot)
+        }
         return Answer(lines.mapValues { (_, line) -> LineInjections.of(line.items, line.colors) }, wide)
     }
 
@@ -389,11 +403,12 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         style: SpanStyle?,
         caretAfter: Boolean,
         tooltip: String? = null,
+        id: Any? = null,
     ) {
         if (text.isEmpty()) return
         val (line, column) = document.offsetToLineCol(offset)
         if (column > EditorView.MAX_RENDERED_LINE_CHARS) return
-        lines.getOrPut(line) { Pending() }.items += Injection(column, oneRow(text), style, caretAfter, tooltip = tooltip)
+        lines.getOrPut(line) { Pending() }.items += Injection(column, oneRow(text), style, caretAfter, id = id, tooltip = tooltip)
     }
 
     private fun oneRow(text: String): String = if (text.none { it < ' ' }) {
@@ -538,3 +553,6 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
         }
     }
 }
+
+/** The room a colour's swatch is drawn in, before the colour: two columns, as wide as VS Code's swatch and its margin. */
+internal const val SWATCH_ROOM = "\u00A0\u00A0"
