@@ -28,6 +28,12 @@ export interface AardinkOptions {
   /** In CSS pixels. */
   fontSize?: number;
   /**
+   * Monaco's `fontFamily`, a CSS font list: the first name in it given to `registerFont` is the
+   * editor's font, else the bundled JetBrains Mono. A font the page has only in CSS is not seen: the
+   * editor draws on a canvas, with the fonts it was given.
+   */
+  fontFamily?: string;
+  /**
    * Monaco's `wordWrap`: `'on'` wraps at the edge of the view, `'wordWrapColumn'` and `'bounded'`
    * at `wordWrapColumn` or the edge, whichever comes first. `'off'` by default, as Monaco's (on
    * before 0.10).
@@ -1043,6 +1049,12 @@ export function registerInlineCompletionsProvider(
 
 /** Monaco's name for `registerTheme`. */
 export const defineTheme: typeof registerTheme;
+
+/**
+ * Adds a font for the `fontFamily` option: a TrueType or OpenType file, by URL (fetched) or as its
+ * bytes. Editors naming it change to it at once. A monospaced font is meant.
+ */
+export function registerFont(name: string, urlOrBytes: string | URL | ArrayBuffer | ArrayBufferView): Promise<void>;
 
 /**
  * Mounts an editor that fills `container`. Loads the WebAssembly module on first use (see

@@ -284,6 +284,9 @@ object AardinkWeb {
      */
     internal val registeredGrammars: MutableMap<String, DeclarativeGrammar> = HashMap()
 
+    /** The fonts [registerFont] added, by name. */
+    internal val registeredFonts: MutableMap<String, FontFamily> = HashMap()
+
     /** The built-in themes and every one [registerTheme] added. */
     internal val registeredThemes: MutableMap<String, EditorTheme> = builtInThemes.toMutableMap()
 
@@ -409,6 +412,20 @@ object AardinkWeb {
      */
     fun registerTheme(name: String, themeJson: String) {
         registeredThemes[name] = themeFrom(themeJson, registeredThemes)
+        registrations.intValue++
+    }
+
+    /**
+     * Adds (or replaces) a font, a TrueType or OpenType file's [bytes], for [WebEditorOptions.fontFamily]
+     * to name. Editors naming it change to it at once. The editor draws on a canvas, so a font the
+     * page loads in CSS is not one it can use: this is how it gets one. A monospaced font is meant;
+     * any other draws, with columns that do not line up. Throws [IllegalArgumentException] for bytes
+     * that are not a TrueType or OpenType file (or collection) by their first four, as a page served
+     * in place of a missing file is not.
+     */
+    fun registerFont(name: String, bytes: ByteArray) {
+        require(isFontFile(bytes)) { "$name: not a TrueType or OpenType font" }
+        registeredFonts[name] = FontFamily(Font(name, bytes))
         registrations.intValue++
     }
 
@@ -1508,16 +1525,19 @@ private fun EditorContent(handle: AardinkEditorHandle) {
         }
     }
 
-    // Nothing until the font is there (or has had its time): no flash of another font.
-    val fontFamily = rememberBundledMonoFont()
+    // Registering a theme, language or font again changes what this editor shows.
+    val registrations = AardinkWeb.registrations.intValue
+    // A registered font named by the options, at once; else the bundled one. Nothing until that is
+    // there (or has had its time): no flash of another font.
+    val registeredFont = remember(options.fontFamily, registrations) { registeredFontIn(options.fontFamily) }
+    val bundledFont = rememberBundledMonoFont()
+    val fontFamily = registeredFont ?: bundledFont
     val typography = EditorTypography(
         fontFamily = fontFamily ?: FontFamily.Monospace,
         fontSize = options.fontSize.sp,
         lineHeight = (options.fontSize * 20f / 14f).sp,
     )
 
-    // Registering a theme or language again changes what this editor shows.
-    val registrations = AardinkWeb.registrations.intValue
     val theme = remember(options.theme, registrations) { handle.themes[options.theme] ?: EditorThemes.VsCodeDark }
 
     // A focus() made before the editor is on screen (it waits for its font) is kept until it is.
@@ -1762,6 +1782,21 @@ private fun rememberBundledMonoFont(): FontFamily? {
     }
     return family
 }
+
+/** Whether [bytes] start as a TrueType or OpenType file, or a collection of them, does. */
+internal fun isFontFile(bytes: ByteArray): Boolean {
+    if (bytes.size < 12) return false
+    val tag = bytes.copyOfRange(0, 4)
+    return tag.contentEquals(byteArrayOf(0, 1, 0, 0)) || tag.decodeToString() in setOf("OTTO", "true", "ttcf")
+}
+
+/**
+ * The first font in [fontFamily], a CSS font list (`"'Fira Code', monospace"`), that
+ * [AardinkWeb.registerFont] registered; null for none.
+ */
+internal fun registeredFontIn(fontFamily: String?): FontFamily? = fontFamily?.split(',')
+    ?.map { it.trim().removeSurrounding("'").removeSurrounding("\"") }
+    ?.firstNotNullOfOrNull { AardinkWeb.registeredFonts[it] }
 
 /** How long a new editor waits for its font before showing in the fallback. */
 private const val FONT_WAIT_MS = 500L

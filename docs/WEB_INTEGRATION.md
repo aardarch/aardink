@@ -466,7 +466,8 @@ files to apply them to.
 | `CompletionItemProvider.resolveCompletionItem` | `resolveCompletionItem(item)` | Called with the item as you gave it when it is selected in the list; its `documentation` and `detail` replace the item's. |
 | `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |
 | `KeyMod.chord(...)` | The same, or `'CtrlCmd+K CtrlCmd+S'` | In `addCommand` and `addAction`. |
-| `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
+| `fontFamily` | The same | The first name in the list given to `registerFont`; see [Your own font](#your-own-font). |
+| `automaticLayout` | None | The editor always follows its container's size. |
 
 ## Fonts
 
@@ -486,6 +487,25 @@ A new editor waits up to half a second for the font before it shows, rather than
 fallback and then jumping to JetBrains Mono (W-9); `preloadAardink()` starts the fetch early, so
 usually it waits for nothing. If the font takes longer, the editor shows in the fallback and
 switches when the font arrives.
+
+### Your own font
+
+A font the page loads with CSS (`@font-face`) is not one the editor can draw with: it draws on a
+canvas, with the fonts it was given. Give it one with `registerFont(name, urlOrBytes)`, a TrueType
+or OpenType file by URL or as its bytes, and name it in the `fontFamily` option, Monaco's CSS font
+list:
+
+```js
+import { createEditor, registerFont } from '@aardarch/aardink-web';
+
+await registerFont('Fira Code', '/fonts/FiraCode-Regular.ttf');
+const editor = await createEditor(container, undefined, { fontFamily: "'Fira Code', monospace" });
+```
+
+The first name in the list that was registered is the font; with none, the bundled JetBrains Mono.
+Editors already naming a font change to it when it is registered. What is not a TrueType or
+OpenType file (a server's error page in place of a missing file, say) is refused. From Kotlin,
+`AardinkWeb.registerFont(name, bytes)`; the template's export is `aardinkRegisterFont`.
 
 ## Host page CSS
 

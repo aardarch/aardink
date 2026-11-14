@@ -24,8 +24,10 @@ import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.ui.EditorThemes
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** 0.10's web options, themes, workspace search and Alt keys. */
 class WebOptionsTest {
@@ -106,5 +108,21 @@ class WebOptionsTest {
         assertNull(characterKeyAt("ArrowUp"))
         assertNull(characterKeyAt("KeyAB"))
         assertNull(characterKeyAt("F5"))
+    }
+
+    @Test
+    fun `fontFamily names a registered font by the first of its names that was registered`() {
+        assertNull(registeredFontIn("'Toy Mono', monospace"))
+        val truetype = byteArrayOf(0, 1, 0, 0) + ByteArray(12)
+        assertFailsWith<IllegalArgumentException> { AardinkWeb.registerFont("Toy Mono", "<!doctype html><html>".encodeToByteArray()) }
+        assertNull(registeredFontIn("'Toy Mono', monospace"), "what is not a font is not registered")
+        assertTrue(isFontFile("OTTO........".encodeToByteArray()))
+        AardinkWeb.registerFont("Toy Mono", truetype)
+        val font = AardinkWeb.registeredFonts.getValue("Toy Mono")
+        assertEquals(font, registeredFontIn("'Toy Mono', monospace"))
+        assertEquals(font, registeredFontIn("Other, \"Toy Mono\""))
+        assertNull(registeredFontIn("monospace"))
+        assertNull(registeredFontIn(null))
+        assertNull(AardinkWeb.parseOptions("{}").fontFamily)
     }
 }

@@ -262,6 +262,24 @@ export async function registerTheme(name, theme) {
 /** Monaco's name for registerTheme. */
 export const defineTheme = registerTheme;
 
+/**
+ * Adds a font for the `fontFamily` option, from a URL (fetched) or a font file's bytes (an
+ * ArrayBuffer or a typed array). Resolves once the editors can use it; rejects for what is not a
+ * TrueType or OpenType font.
+ */
+export async function registerFont(name, urlOrBytes) {
+  const k = await load();
+  let bytes = urlOrBytes;
+  if (typeof urlOrBytes === 'string' || urlOrBytes instanceof URL) {
+    const response = await fetch(urlOrBytes);
+    if (!response.ok) throw new Error(`Aardink: could not fetch the font ${name}: ${response.status}`);
+    bytes = await response.arrayBuffer();
+  }
+  const view = ArrayBuffer.isView(bytes) ? new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new Int8Array(bytes);
+  const error = k.aardinkRegisterFont(name, view);
+  if (error) throw new Error(`Aardink: ${error}`);
+}
+
 /** Monaco's names for the built-in themes, as Aardink's. */
 const MONACO_THEMES = { vs: 'vscode-light', 'vs-dark': 'vscode-dark' };
 
@@ -296,7 +314,7 @@ function toKotlinOptions(options) {
     // Monaco's { column, color } rulers keep their column; one colour comes from the theme.
     out.rulers = (options.rulers ?? []).map((r) => (typeof r === 'number' ? r : r?.column)).filter((c) => Number.isInteger(c));
   }
-  for (const key of ['cursorStyle', 'cursorBlinking', 'wrappingIndent', 'cursorSurroundingLines']) {
+  for (const key of ['cursorStyle', 'cursorBlinking', 'wrappingIndent', 'cursorSurroundingLines', 'fontFamily']) {
     if (options[key] !== undefined) out[key] = options[key];
   }
   for (const key of ['smoothScrolling', 'scrollBeyondLastLine', 'dragAndDrop']) {

@@ -78,6 +78,10 @@ import kotlinx.serialization.Serializable
  * @property cursorSurroundingLines Lines kept visible above and below the caret as it moves.
  * @property dragAndDrop A selection dragged with the mouse moves (Ctrl, or Alt on macOS, copies).
  *   Off by default, where Monaco's is on.
+ * @property fontFamily Monaco's `fontFamily`, a CSS font list: the first name in it that
+ *   [AardinkWeb.registerFont] registered is the editor's font. Null, or no registered name in it,
+ *   is the bundled JetBrains Mono. A font the page has only in CSS is not seen: the editor draws on
+ *   a canvas, with the fonts it was given.
  */
 @Serializable
 data class WebEditorOptions(
@@ -119,6 +123,7 @@ data class WebEditorOptions(
     val wordWrapColumn: Int? = null,
     val cursorSurroundingLines: Int = 0,
     val dragAndDrop: Boolean = false,
+    val fontFamily: String? = null,
 )
 
 /**

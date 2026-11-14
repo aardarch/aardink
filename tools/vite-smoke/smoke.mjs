@@ -930,6 +930,35 @@ async function interactionChecks(page) {
  * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
  */
 /**
+ * registerFont through the npm package: the bundled font, by the URL the page already loaded it
+ * from, registered under another name and named by fontFamily; a URL that is not there rejects.
+ */
+async function fontCheck(page) {
+  setPhase('registerFont');
+  // A missing font's 404, if the server gives one, which the browser logs.
+  expectedConsole = [/Failed to load resource/];
+  const result = await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerFont } = window.__aardink;
+    const url = performance.getEntriesByType('resource').map((entry) => entry.name).find((name) => name.includes('jetbrains_mono_regular'));
+    if (!url) return { url: false };
+    await registerFont('Smoke Mono', url);
+    let rejected = false;
+    await registerFont('Missing Mono', '/no-such-font.ttf').catch(() => { rejected = true; });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'font', fontFamily: "'Smoke Mono', monospace" });
+    return { url: true, rejected };
+  }, MOUNT);
+  await sleep(800);
+  expectedConsole = [];
+  const value = await page.evaluate(() => window.__smokeEditor.getValue());
+  return {
+    'registerFont takes a font by URL, and fontFamily names it': result.url && value === 'font',
+    'registerFont rejects what is not a font (a page served for a missing file)': result.rejected === true,
+  };
+}
+
+/**
  * 0.10's providers through the npm package: formatting and go to definition answer through the
  * dispatcher, and a language without provideRenameEdits offers no rename.
  */
@@ -1164,6 +1193,7 @@ try {
     ...(await linkCheck(desktop)),
     ...(await searchAndAltKeyCheck(desktop)),
     ...(await providersCheck(desktop)),
+    ...(await fontCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);

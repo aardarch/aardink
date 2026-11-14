@@ -24,6 +24,8 @@ import com.aardarch.aardink.web.AardinkEditorHandle
 import com.aardarch.aardink.web.AardinkWeb
 import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.await
+import org.khronos.webgl.Int8Array
+import org.khronos.webgl.get
 import kotlin.js.Promise
 
 private val handles = mutableMapOf<Int, AardinkEditorHandle>()
@@ -206,6 +208,18 @@ fun aardinkRegisterTheme(name: String, themeJson: String): String = try {
     ""
 } catch (e: IllegalArgumentException) {
     e.message ?: "not a theme"
+}
+
+/**
+ * Adds a font from a TrueType or OpenType file's bytes, for the `fontFamily` option to name; see
+ * `AardinkWeb.registerFont`. Returns "" when it worked, else what was wrong.
+ */
+@JsExport
+fun aardinkRegisterFont(name: String, bytes: Int8Array): String = try {
+    AardinkWeb.registerFont(name, ByteArray(bytes.length) { bytes[it] })
+    ""
+} catch (e: IllegalArgumentException) {
+    e.message ?: "not a font"
 }
 
 /**
