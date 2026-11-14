@@ -40,6 +40,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -543,6 +544,15 @@ class LspClientLifecycleTest {
         val returned = initializing.await()
         assertEquals(returned, client.serverCapabilities)
         assertTrue(client.serverCapabilities!!.jsonObject["hoverProvider"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun `a host's own initialize request sets serverCapabilities too`() = withServer("") {
+        val initializing = async { client.sendRequest("initialize", buildJsonObject { put("capabilities", buildJsonObject { }) }) }
+        respond("initialize", """{"capabilities":{"renameProvider":true}}""")
+
+        initializing.await()
+        assertTrue(client.serverCapabilities!!.jsonObject["renameProvider"]!!.jsonPrimitive.boolean)
     }
 
     @Test
