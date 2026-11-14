@@ -399,11 +399,16 @@ files to apply them to.
 | --- | --- | --- |
 | `value` | `value` | `createEditor` only; afterwards `setValue`. |
 | `language` | `language` | `kotlin`, `typescript`, `json`, `toml`, `xml`, `html`, `css`, `markdown`, `plaintext`, plus any you register. |
-| `theme` | `theme` | Aardink's theme keys, or your own (see the template). |
+| `theme` | `theme` | Aardink's theme keys, or your own (see the template). Monaco's `vs`, `vs-dark`, `hc-black` and `hc-light` work too. |
 | `fontSize` | `fontSize` | CSS pixels; line height scales with it. |
-| `wordWrap` (`'on'` / `'off'`) | `wordWrap` | Same values. |
+| `wordWrap` (`'on'`, `'off'`, `'wordWrapColumn'`, `'bounded'`), `wordWrapColumn` | The same | Same values. `'off'` by default from 0.10, as Monaco's. Both `'wordWrapColumn'` and `'bounded'` wrap at the column or the edge, whichever comes first. |
+| `wrappingIndent` | The same | `'none'` by default, where Monaco's is `'same'`. |
 | `readOnly` | `readOnly` | |
-| `lineNumbers` (`'on'` / `'off'`) | `showLineNumbers` | Boolean. |
+| `lineNumbers` (`'on'`, `'off'`, `'relative'`, `'interval'`) | The same, or `showLineNumbers` | Monaco's function form is not taken. |
+| `rulers`, `guides: { indentation, bracketPairs }` | The same | Off by default, where Monaco's indentation guides are on. A ruler's colour is the theme's `editorRuler.foreground`; `bracketPairs: 'active'` shows them all. |
+| `cursorStyle`, `cursorBlinking`, `cursorSurroundingLines`, `smoothScrolling` | The same | `'phase'` and `'expand'` blink as `'smooth'`. `smoothScrolling` animates the editor's own scrolls, not the wheel. |
+| `scrollBeyondLastLine`, `dragAndDrop` | The same | Off by default, where Monaco's are on. |
+| `formatOnType` | The same | With `provideOnTypeFormattingEdits` or a language server. Off by default, as Monaco's. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
 | `minimap: { enabled }` | `minimap` | The same object, or a boolean. Blocks rather than characters, as with Monaco's `renderCharacters: false`. |
@@ -412,6 +417,8 @@ files to apply them to.
 | `renderLineHighlight` | `renderLineHighlight` / `highlightCurrentLine` | Anything but `'none'` highlights each caret's line. |
 | `tabSize`, `insertSpaces` | `tabSize`, `insertSpaces` | |
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
+| Keys with Alt and a character | The same | Read by the key's place on the keyboard, as Monaco reads them (Shift+Alt+A, Alt+]). Option on a Mac, and AltGr, still type their characters where no binding takes the key. |
+| VS Code's Find in Files (Ctrl/Cmd+Shift+F) | `onSearchWorkspace(listener)`, returning a disposable | Called with `{ query, isRegex, isCaseSensitive, matchWholeWord }`, the query being the selection on one line, else the find panel's. Also the find panel's "Search all files" button and `trigger(null, 'workbench.action.findInFiles')`. Without a listener the key is the page's. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush, changes }`. `changes` are Monaco's `IModelContentChange`s, each in the text the ones before it left, so applying them in order rebuilds the text. |
 | `onDidChangeCursorSelection` | The same | `{ selection, secondarySelections, reason, source }`; `reason` is a word (`'keyboard'`, `'pointer'`, `'edit'`, `'undo'`, `'redo'`, `'flush'`, `'api'`). |
 | `onDidFocusEditorText`, `onDidBlurEditorText` | The same | |
@@ -429,7 +436,7 @@ files to apply them to.
 | `monaco.editor.tokenize` | `tokenize` | Same arguments and shape: a grammar's own names, and Monaco's names for the built-in languages' tokens (`keyword.flow`, `comment.doc`, `string.escape`, ...). |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Monaco's `IMarkerData` as it is: `startLineNumber` to `endLineNumber`, `MarkerSeverity` numbers, `code` (or `{ value, target }`), `tags`, `relatedInformation`. `null` shows the language's own again. One owner. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
-| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground` and `fontStyle` apply; its `background` is ignored. |
+| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground`, `fontStyle` and `background` apply. `colors` takes the chrome's keys too: minimap, scrollbar slider, indent guides, ruler, widget background, foreground and border, inlay hints, code lenses, ghost text. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | Re-running a model's validation | `revalidate()` | Monaco has no single call; this asks the language's diagnostics again without an edit. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |

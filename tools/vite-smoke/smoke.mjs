@@ -929,6 +929,57 @@ async function interactionChecks(page) {
  * provider for completions when typed. Accepting one is left to the unit tests: this page has a
  * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
  */
+/**
+ * 0.10's keys on the web: Ctrl+Shift+F and trigger('workbench.action.findInFiles') hand the
+ * selection to onSearchWorkspace, and stop once its listener is gone; Shift+Alt+A, an Alt key
+ * Compose's web input would type, comments the selection.
+ */
+async function searchAndAltKeyCheck(page) {
+  setPhase('workspace search and Alt keys');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor } = window.__aardink;
+    window.__searches = [];
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'hello world', language: 'typescript' });
+    window.__stopSearch = window.__smokeEditor.onSearchWorkspace((search) => window.__searches.push(search));
+  }, MOUNT);
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  await sleep(800);
+  await page.mouse.click(300, 12);
+  await page.evaluate(() => window.__smokeEditor.setSelections([{
+    selectionStartLineNumber: 1, selectionStartColumn: 7, positionLineNumber: 1, positionColumn: 12,
+  }]));
+  await sleep(100);
+  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('KeyF');
+  await page.keyboard.up('Shift');
+  await page.keyboard.up('Control');
+  await sleep(300);
+  const byKey = await page.evaluate(() => window.__searches.slice());
+  const triggered = await page.evaluate(() => window.__smokeEditor.trigger(null, 'workbench.action.findInFiles'));
+  await page.evaluate(() => window.__stopSearch.dispose());
+  await sleep(300);
+  const afterDispose = await page.evaluate(() => window.__smokeEditor.trigger(null, 'workbench.action.findInFiles'));
+  const searches = await page.evaluate(() => window.__searches.length);
+
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyA');
+  await page.keyboard.up('Alt');
+  await page.keyboard.up('Shift');
+  await sleep(300);
+  const commented = await value();
+  return {
+    'Ctrl+Shift+F hands the selection to onSearchWorkspace':
+      byKey.length === 1 && byKey[0].query === 'world' && byKey[0].isRegex === false,
+    'trigger(workbench.action.findInFiles) runs it, and not once its listener is disposed':
+      triggered === true && afterDispose === false && searches === 2,
+    'Shift+Alt+A comments the selection': commented.includes('/*') && commented.includes('world') && !commented.includes('A'),
+  };
+}
+
 async function triggerCheck(page) {
   setPhase('trigger characters');
   await page.evaluate(async (mount) => {
@@ -1074,6 +1125,7 @@ try {
     ...(await languageServerCheck(desktop)),
     ...(await serverTypingCheck(desktop)),
     ...(await linkCheck(desktop)),
+    ...(await searchAndAltKeyCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);

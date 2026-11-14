@@ -16,6 +16,8 @@
 package com.aardarch.aardink.web
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
+import com.aardarch.aardink.core.ChromeColors
 import com.aardarch.aardink.core.CodeAction
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeLens
@@ -597,13 +599,18 @@ private fun configurationFrom(value: JsonElement): LanguageConfiguration = try {
 }
 
 /**
- * A theme from VS Code theme JSON. What it does not set comes from its base: `base` (a theme key)
- * if given, else by its `type`, `vscode-light` for light themes and `vscode-dark` otherwise. Its
- * rules' scopes stay in its token colours by name (`tag.aardflex`), which the editor resolves by
- * dotted prefix as Monaco does.
+ * A theme from VS Code theme JSON, or from Monaco's `defineTheme` data (`{ base, inherit, rules,
+ * colors }`, told apart by its `rules`), which [EditorThemeParser.fromMonacoJson] reads with its
+ * rules' backgrounds and its `hc-black` and `hc-light` bases. What VS Code JSON does not set comes
+ * from its base: `base` (a theme key) if given, else by its `type`, `vscode-light` for light themes
+ * and `vscode-dark` otherwise. Its rules' scopes stay in its token colours by name (`tag.aardflex`),
+ * which the editor resolves by dotted prefix as Monaco does.
  */
 internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): EditorTheme {
     val root = parsed(themeJson) as? JsonObject ?: throw IllegalArgumentException("a theme is a JSON object")
+    if (root["rules"] is JsonArray) {
+        return EditorThemeParser.fromMonacoJson(themeJson) ?: throw IllegalArgumentException("not Monaco theme data")
+    }
     val parsed = EditorThemeParser.fromJson(themeJson) ?: throw IllegalArgumentException("not a VS Code theme")
     val base = root.string("base")?.let { themes[it] ?: throw IllegalArgumentException("base: no theme named '$it'") }
         ?: if (root.string("type") == "light") EditorThemes.VsCodeLight else EditorThemes.VsCodeDark
@@ -639,6 +646,30 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Edi
         errorColor = pick("editorError.foreground", parsed.errorColor, base.errorColor),
         warningColor = pick("editorWarning.foreground", parsed.warningColor, base.warningColor),
         infoColor = pick("editorInfo.foreground", parsed.infoColor, base.infoColor),
+        chromeColors = parsed.chromeColors.orElse(base.chromeColors),
+        tokenBackgrounds = base.tokenBackgrounds + parsed.tokenBackgrounds,
     )
     return theme
+}
+
+/** Each of these colours the theme set, else [base]'s. */
+private fun ChromeColors.orElse(base: ChromeColors): ChromeColors {
+    fun Color.or(other: Color) = takeOrElse { other }
+    return ChromeColors(
+        minimapBackground = minimapBackground.or(base.minimapBackground),
+        minimapSlider = minimapSlider.or(base.minimapSlider),
+        scrollbarSlider = scrollbarSlider.or(base.scrollbarSlider),
+        scrollbarSliderHover = scrollbarSliderHover.or(base.scrollbarSliderHover),
+        indentGuide = indentGuide.or(base.indentGuide),
+        activeIndentGuide = activeIndentGuide.or(base.activeIndentGuide),
+        bracketPairGuide = bracketPairGuide.or(base.bracketPairGuide),
+        ruler = ruler.or(base.ruler),
+        widgetBackground = widgetBackground.or(base.widgetBackground),
+        widgetForeground = widgetForeground.or(base.widgetForeground),
+        widgetBorder = widgetBorder.or(base.widgetBorder),
+        inlayHint = inlayHint.or(base.inlayHint),
+        inlayHintBackground = inlayHintBackground.or(base.inlayHintBackground),
+        codeLens = codeLens.or(base.codeLens),
+        ghostText = ghostText.or(base.ghostText),
+    )
 }

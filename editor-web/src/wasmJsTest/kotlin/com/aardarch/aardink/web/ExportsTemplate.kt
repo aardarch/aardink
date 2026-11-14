@@ -132,6 +132,12 @@ fun aardinkSetModelMarkers(id: Int, owner: String, diagnosticsJson: String) =
  */
 @JsExport fun aardinkOnOpenLink(id: Int, callback: ((String) -> Unit)?) = AardinkWeb.onOpenLink(handle(id), callback)
 
+/**
+ * Called with VS Code's Find in Files arguments as JSON when the editor hands a search to the page,
+ * or `null` to stop; see `AardinkWeb.onSearchWorkspace`.
+ */
+@JsExport fun aardinkOnSearchWorkspace(id: Int, callback: ((String) -> Unit)?) = AardinkWeb.onSearchWorkspace(handle(id), callback)
+
 /** Measures the container again now. */
 @JsExport fun aardinkLayout(id: Int) = AardinkWeb.layout(handle(id))
 

@@ -63,6 +63,7 @@ import com.aardarch.aardink.core.DiagnosticTag
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.FoldingProvider
@@ -82,6 +83,8 @@ import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.languages.lsp.LspTransport
 import com.aardarch.aardink.languages.lsp.WebSocketLspTransport
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.CursorBlinking
+import com.aardarch.aardink.ui.CursorStyle
 import com.aardarch.aardink.ui.EditorKeyBindings
 import com.aardarch.aardink.ui.EditorMenuItem
 import com.aardarch.aardink.ui.EditorOptions
@@ -90,10 +93,12 @@ import com.aardarch.aardink.ui.EditorTypography
 import com.aardarch.aardink.ui.GoToLineDialog
 import com.aardarch.aardink.ui.KeyChord
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LineNumberStyle
 import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.LocalEditorTypography
 import com.aardarch.aardink.ui.RenderWhitespace
+import com.aardarch.aardink.ui.WrappingIndent
 import com.aardarch.aardink.web.res.Res
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -179,6 +184,9 @@ class AardinkEditorHandle internal constructor(
 
     internal var onScrollChange: ((String) -> Unit)? = null
     internal var onOpenLink: ((String) -> Unit)? = null
+
+    /** The host's workspace search, as state: whether there is one decides whether the command can run. */
+    internal val onSearchWorkspace: MutableState<((String) -> Unit)?> = mutableStateOf(null)
     internal val disposed: MutableState<Boolean> = mutableStateOf(false)
 
     /**
@@ -256,6 +264,8 @@ object AardinkWeb {
         "material-light" to EditorThemes.MaterialLight,
         "midnight-ocean" to EditorThemes.MidnightOcean,
         "solarized-dark" to EditorThemes.SolarizedDark,
+        "hc-black" to EditorThemes.HighContrastDark,
+        "hc-light" to EditorThemes.HighContrastLight,
     )
 
     private val json = Json {
@@ -446,7 +456,7 @@ object AardinkWeb {
         }
         container.appendChild(viewport)
         // On the way down, ahead of the input element Compose has inside.
-        viewport.addEventListener("keydown", { event -> altBracketKey(handle, event as KeyboardEvent) }, true)
+        viewport.addEventListener("keydown", { event -> altCharacterKey(handle, event as KeyboardEvent) }, true)
         // Compose builds the viewport once Skiko has loaded, on the same promise, which can be after
         // dispose(): an editor disposed by then is never started, so Skia does not set up WebGL on
         // a canvas that has left the page, which can fail and throw where nothing catches it.
@@ -909,6 +919,17 @@ object AardinkWeb {
         handle.onOpenLink = callback
     }
 
+    /**
+     * Registers the single workspace search listener, replacing any previous one; `null` removes
+     * it. Called by Ctrl/Cmd+Shift+F, the find panel's "Search all files" button and
+     * `trigger('workbench.action.findInFiles')`, with JSON as VS Code's Find in Files takes it:
+     * `{ query, isRegex, isCaseSensitive, matchWholeWord }`, the query being the selection on one
+     * line, else the find panel's. With no listener the key is left to the page.
+     */
+    fun onSearchWorkspace(handle: AardinkEditorHandle, callback: ((json: String) -> Unit)?) {
+        handle.onSearchWorkspace.value = callback
+    }
+
     /** What the editor does with a link: see [onOpenLink]. */
     internal fun openLink(handle: AardinkEditorHandle, target: String) {
         val listener = handle.onOpenLink
@@ -1368,6 +1389,7 @@ object AardinkWeb {
         handle.onSelectionChange = null
         handle.onFocusChange = null
         handle.onOpenLink = null
+        handle.onSearchWorkspace.value = null
         handle.hostActions.clear()
         handle.pendingChanges.clear()
         handle.scope.cancel()
@@ -1536,8 +1558,20 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 options = EditorOptions(
                     readOnly = options.readOnly,
                     softWrap = options.wordWrap,
+                    wordWrapColumn = options.wordWrapColumn?.takeIf { it > 0 },
                     showGutter = options.showGutter,
-                    showLineNumbers = options.showLineNumbers,
+                    showLineNumbers = options.showLineNumbers && options.lineNumbers != "off",
+                    lineNumbers = lineNumberStyleOf(options.lineNumbers),
+                    rulers = options.rulers.filter { it > 0 },
+                    indentGuides = options.indentGuides,
+                    bracketPairGuides = options.bracketPairGuides,
+                    cursorStyle = cursorStyleOf(options.cursorStyle),
+                    cursorBlinking = cursorBlinkingOf(options.cursorBlinking),
+                    smoothScrolling = options.smoothScrolling,
+                    scrollBeyondLastLine = options.scrollBeyondLastLine,
+                    wrappingIndent = wrappingIndentOf(options.wrappingIndent),
+                    cursorSurroundingLines = options.cursorSurroundingLines.coerceAtLeast(0),
+                    dragAndDrop = options.dragAndDrop,
                     showFoldMarkers = options.showFoldMarkers,
                     showMinimap = options.minimap,
                     stickyScroll = options.stickyScroll,
@@ -1561,6 +1595,9 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },
                 inlineCompletionProvider = inlineCompletions,
+                onSearchWorkspace = handle.onSearchWorkspace.value?.let { listener ->
+                    { query, find -> listener(searchWorkspaceJson(query, find)) }
+                },
             )
         }
     }
@@ -1818,21 +1855,16 @@ private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
 }
 
 /**
- * Alt+] and Alt+[, which Compose never hands over as keys: to its web input, a key that makes a
- * character and has neither Ctrl nor Cmd held is typing, and Alt is not looked at. So they are read
- * here from the page, by the same bindings every other key goes by, the host's first. Left alone
- * when nothing runs, a key goes on to type what it types.
+ * Alt with a character key (Alt+], Shift+Alt+A), which Compose never hands over as keys: to its web
+ * input, a key that makes a character and has neither Ctrl nor Cmd held is typing, and Alt is not
+ * looked at. So they are read here from the page, by the key's place on the keyboard ([KeyboardEvent.code],
+ * as Monaco reads them), by the same bindings every other key goes by, the host's first. Left
+ * alone when nothing runs, a key goes on to type what it types: Option on a Mac, or AltGr (which
+ * holds Ctrl too) elsewhere, still types its characters.
  */
-private fun altBracketKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
-    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-    val chord = KeyChord(
-        key = when (event.code) {
-            "BracketLeft" -> Key.LeftBracket
-            "BracketRight" -> Key.RightBracket
-            else -> return
-        },
-        alt = true,
-    )
+private fun altCharacterKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
+    if (!event.altKey || event.ctrlKey || event.metaKey) return
+    val chord = KeyChord(key = characterKeyAt(event.code) ?: return, shift = event.shiftKey, alt = true)
     val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it == listOf(chord) } }
     val command = EditorKeyBindings.Default.firstOrNull { it.chord == listOf(chord) }?.command
     when {
@@ -1841,6 +1873,76 @@ private fun altBracketKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
     }
     event.preventDefault()
     event.stopPropagation()
+}
+
+/** The key at a [KeyboardEvent.code] that makes a character: a letter, a digit or punctuation. */
+internal fun characterKeyAt(code: String): Key? = when {
+    code.length == 4 && code.startsWith("Key") && code[3] in 'A'..'Z' -> LETTER_KEYS[code[3] - 'A']
+    code.length == 6 && code.startsWith("Digit") && code[5] in '0'..'9' -> DIGIT_KEYS[code[5] - '0']
+    else -> PUNCTUATION_KEYS[code]
+}
+
+private val LETTER_KEYS = listOf(
+    Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G, Key.H, Key.I, Key.J, Key.K, Key.L, Key.M,
+    Key.N, Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U, Key.V, Key.W, Key.X, Key.Y, Key.Z,
+)
+
+private val DIGIT_KEYS = listOf(
+    Key.Zero, Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine,
+)
+
+private val PUNCTUATION_KEYS = mapOf(
+    "BracketLeft" to Key.LeftBracket,
+    "BracketRight" to Key.RightBracket,
+    "Backslash" to Key.Backslash,
+    "Semicolon" to Key.Semicolon,
+    "Quote" to Key.Apostrophe,
+    "Backquote" to Key.Grave,
+    "Comma" to Key.Comma,
+    "Period" to Key.Period,
+    "Slash" to Key.Slash,
+    "Minus" to Key.Minus,
+    "Equal" to Key.Equals,
+)
+
+/** What a workspace search hands the page: VS Code's Find in Files arguments. */
+internal fun searchWorkspaceJson(query: String, options: FindEngine.Options): String = buildJsonObject {
+    put("query", query)
+    put("isRegex", options.useRegex)
+    put("isCaseSensitive", options.caseSensitive)
+    put("matchWholeWord", options.wholeWord)
+}.toString()
+
+/** Monaco's `lineNumbers`. */
+private fun lineNumberStyleOf(name: String): LineNumberStyle = when (name) {
+    "relative" -> LineNumberStyle.Relative
+    "interval" -> LineNumberStyle.Interval
+    else -> LineNumberStyle.Absolute
+}
+
+/** Monaco's `cursorStyle`. */
+private fun cursorStyleOf(name: String): CursorStyle = when (name) {
+    "block" -> CursorStyle.Block
+    "underline" -> CursorStyle.Underline
+    "line-thin" -> CursorStyle.LineThin
+    "block-outline" -> CursorStyle.BlockOutline
+    "underline-thin" -> CursorStyle.UnderlineThin
+    else -> CursorStyle.Line
+}
+
+/** Monaco's `cursorBlinking`; `phase` and `expand` fade, as `smooth` does. */
+private fun cursorBlinkingOf(name: String): CursorBlinking = when (name) {
+    "smooth", "phase", "expand" -> CursorBlinking.Smooth
+    "solid" -> CursorBlinking.Solid
+    else -> CursorBlinking.Blink
+}
+
+/** Monaco's `wrappingIndent`. */
+private fun wrappingIndentOf(name: String): WrappingIndent = when (name) {
+    "same" -> WrappingIndent.Same
+    "indent" -> WrappingIndent.Indent
+    "deepIndent" -> WrappingIndent.DeepIndent
+    else -> WrappingIndent.None
 }
 
 /** Keys that are only modifiers, which do not complete a chord. */

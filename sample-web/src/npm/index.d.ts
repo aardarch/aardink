@@ -20,11 +20,51 @@ export interface AardinkOptions {
   value?: string;
   /** A language id: kotlin, typescript, json, toml, xml, html, css, markdown, plaintext. */
   language?: string;
-  /** vscode-dark, vscode-light, material-dark, material-light, midnight-ocean, solarized-dark. */
+  /**
+   * vscode-dark (or Monaco's `vs-dark`), vscode-light (or `vs`), hc-black, hc-light, material-dark,
+   * material-light, midnight-ocean, solarized-dark, or a name given to `defineTheme`.
+   */
   theme?: string;
   /** In CSS pixels. */
   fontSize?: number;
-  wordWrap?: 'on' | 'off';
+  /**
+   * Monaco's `wordWrap`: `'on'` wraps at the edge of the view, `'wordWrapColumn'` and `'bounded'`
+   * at `wordWrapColumn` or the edge, whichever comes first. `'off'` by default, as Monaco's (on
+   * before 0.10).
+   */
+  wordWrap?: 'on' | 'off' | 'wordWrapColumn' | 'bounded';
+  /** Where `wordWrap: 'wordWrapColumn'` or `'bounded'` wraps. 80 by default. */
+  wordWrapColumn?: number;
+  /** How wrapped rows are indented, as Monaco's. `'none'` by default, where Monaco's is `'same'`. */
+  wrappingIndent?: 'none' | 'same' | 'indent' | 'deepIndent';
+  /**
+   * Monaco's `lineNumbers`: `'relative'` counts from the caret's line, `'interval'` shows every
+   * tenth and the caret's. Monaco's function form is not taken: it counts as `'on'`.
+   */
+  lineNumbers?: 'on' | 'off' | 'relative' | 'interval';
+  /** Columns with a vertical line. Monaco's `{ column, color }` takes its column; the colour is the theme's. */
+  rulers?: Array<number | { column: number; color?: string | null }>;
+  /**
+   * Monaco's `guides`: `indentation`, a faint line down each level of indentation (the caret's
+   * block's stronger), and `bracketPairs`, a line from each bracket to its partner (`'active'`
+   * shows them all). Both off by default, where Monaco's indentation guides are on.
+   */
+  guides?: { indentation?: boolean; bracketPairs?: boolean | 'active' };
+  /** The caret's shape. `'line'` by default. */
+  cursorStyle?: 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin';
+  /** How the caret blinks; `'phase'` and `'expand'` fade as `'smooth'` does. `'blink'` by default. */
+  cursorBlinking?: 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
+  /** The editor's own scrolls (to the caret, Page Up and Down) animate. Off by default. */
+  smoothScrolling?: boolean;
+  /** The last line can scroll up to the top of the view. Off by default, where Monaco's is on. */
+  scrollBeyondLastLine?: boolean;
+  /** Lines kept visible above and below the caret as it moves. 0 by default. */
+  cursorSurroundingLines?: number;
+  /**
+   * A selection dragged with the mouse moves; with Ctrl (Alt on macOS) held, copies. Off by
+   * default, where Monaco's is on.
+   */
+  dragAndDrop?: boolean;
   readOnly?: boolean;
   showGutter?: boolean;
   showLineNumbers?: boolean;
@@ -79,6 +119,14 @@ export interface AardinkOptions {
    * keeps what was typed. Off by default.
    */
   formatOnType?: boolean;
+}
+
+/** What `onSearchWorkspace` is called with: VS Code's Find in Files arguments. */
+export interface AardinkWorkspaceSearch {
+  query: string;
+  isRegex: boolean;
+  isCaseSensitive: boolean;
+  matchWholeWord: boolean;
 }
 
 /**
@@ -253,7 +301,8 @@ export interface AardinkEditor {
    * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
    * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
    * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext`,
-   * `.showPrevious` and `.hide`, and
+   * `.showPrevious` and `.hide`, VS Code's `workbench.action.findInFiles` (with an
+   * `onSearchWorkspace` listener), and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -306,6 +355,14 @@ export interface AardinkEditor {
    * nothing. Returns a disposable.
    */
   onOpenLink(listener: (target: string) => void): { dispose(): void };
+  /**
+   * Called when the editor hands a search to the page, by Ctrl/Cmd+Shift+F, the find panel's
+   * "Search all files" button or `trigger('workbench.action.findInFiles')`, with VS Code's Find in
+   * Files arguments: the selection on one line, else the find panel's query, and its options. While
+   * there is no listener, the button is not shown and the key is left to the page. Returns a
+   * disposable.
+   */
+  onSearchWorkspace(listener: (search: AardinkWorkspaceSearch) => void): { dispose(): void };
   /** Measures the container again now; the editor follows its container's size by itself. */
   layout(): void;
   /**
@@ -774,7 +831,12 @@ export function registerLanguage(definition: AardinkLanguageDefinition, provider
  * Monaco's `defineTheme` data. Token rules name tokens as Monaco does, and the longest matching
  * prefix wins: `tag` also colours `tag.aardflex`, `comment.doc` only documentation comments. A
  * rule's `fontStyle` (`'bold'`, `'italic'`, `'underline'`, `'strikethrough'`, or `''` for none)
- * applies too; its `background` is accepted, so Monaco theme data passes as it is, and ignored.
+ * applies too, and its `background` is drawn behind the token's text; the empty token's sets the
+ * editor's. `colors` takes VS Code's keys, the editor's chrome too (`minimap.background`,
+ * `scrollbarSlider.background`, `editorIndentGuide.background1`, `editorRuler.foreground`,
+ * `editorWidget.background`, `.foreground` and `.border`, `editorInlayHint.foreground`,
+ * `editorCodeLens.foreground`, `editorGhostText.foreground`...). `hc-black` and `hc-light` fill in
+ * from the high-contrast themes.
  */
 export interface AardinkThemeData {
   base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
