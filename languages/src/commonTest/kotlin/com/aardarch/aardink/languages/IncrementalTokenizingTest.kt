@@ -143,6 +143,22 @@ class IncrementalTokenizingTest {
         checkRandomEdits("html", HtmlTokenizer, (sample + "\n").repeat(8), Random(11), steps = 40, fragments = markup)
     }
 
+    // Whether a `/` divides or starts a regular expression depends on the token before it, so an
+    // edit can change how a later line reads without changing that line.
+    @Test
+    fun `incremental passes agree with a full scan where a slash divides or starts a regular expression`() {
+        val sample = """
+            const r = /a"b/g; // c
+            let q = a / b / c;
+            if (/^\d+$/.test(s)) { x = f(y) / 2; }
+            s.replace(/[/]x/i, "/") /* d */ / k
+        """.trimIndent()
+        val slashes = fragments + listOf("/", " / ", "/x/g", "(", ")", "=", "return ", "]", "\n/")
+        val tokenizer = BuiltInLanguages.TypeScript.tokenizer
+        repeat(6) { seed -> checkRandomEdits("typescript", tokenizer, sample, Random(seed * 13 + 5), fragments = slashes) }
+        checkRandomEdits("typescript", tokenizer, (sample + "\n").repeat(10), Random(23), steps = 40, fragments = slashes)
+    }
+
     private fun checkRandomEdits(
         id: String,
         tokenizer: IncrementalTokenizer,

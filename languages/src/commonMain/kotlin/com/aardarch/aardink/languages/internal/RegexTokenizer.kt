@@ -125,8 +125,11 @@ abstract class RegexTokenizer : IncrementalTokenizer {
             // character before its match sees unchanged text) where the old scan ended one.
             if (end - 1 < diff.newEnd) return@scan false
             val index = old.indexEndingAt(end - diff.delta)
-            if (index >= 0) resumeOld = index + 1
-            index >= 0
+            // With contextual tokens, also only on a token the old scan had as it is, so the next
+            // token sees the same token before it.
+            val inStep = index >= 0 && (!contextualTokens || sameToken(builder, builder.size - 1, previous.text, old, index, text))
+            if (inStep) resumeOld = index + 1
+            inStep
         }
         val rescannedUntil = builder.size
         if (resumeOld >= 0) builder.addAll(old, resumeOld, old.size, diff.delta)
@@ -145,6 +148,22 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val fromOffset = lineStartAt(text, minOf(restart, diff.start))
         val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> refined(text, raw, from, to) }
         return remembered(text, raw, result, noMatchFrom)
+    }
+
+    /** Whether token [newIndex] of [builder], in [text], is token [oldIndex] of [old], in [oldText]: not a comment, same type, same text. */
+    private fun sameToken(
+        builder: PackedTokenBuilder,
+        newIndex: Int,
+        oldText: String,
+        old: PackedTokens,
+        oldIndex: Int,
+        text: String,
+    ): Boolean {
+        val type = builder.type(newIndex)
+        if (type != old.types[oldIndex] || isComment(type)) return false
+        val start = builder.start(newIndex)
+        val length = builder.end(newIndex) - start
+        return length == old.ends[oldIndex] - old.starts[oldIndex] && text.regionMatches(start, oldText, old.starts[oldIndex], length)
     }
 
     /** Scans only the lines of [lines], with no state, for a first provisional colouring. */
@@ -207,6 +226,21 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         val probedTo = IntArray(if (horizons == null) 0 else ruleList.size)
         var probing = horizons != null
 
+        // The last token before the cursor that is not a comment, for contextual().
+        val contextual = contextualTokens
+        var previousType: TokenType? = null
+        var previousStart = 0
+        var previousEnd = 0
+        if (contextual) {
+            for (k in builder.size - 1 downTo 0) {
+                if (isComment(builder.type(k))) continue
+                previousType = builder.type(k)
+                previousStart = builder.start(k)
+                previousEnd = builder.end(k)
+                break
+            }
+        }
+
         var cursor = from
         val length = text.length
         while (cursor < length) {
@@ -258,7 +292,20 @@ abstract class RegexTokenizer : IncrementalTokenizer {
                 }
             }
             if (bestStart == -1 || bestType == null) break
-            builder.add(bestStart, bestEnd, bestType)
+            var tokenType: TokenType = bestType
+            if (contextual) {
+                val instead = contextual(text, bestStart, bestEnd, tokenType, previousType, previousStart, previousEnd)
+                if (instead != null) {
+                    bestEnd = instead.end
+                    tokenType = instead.type
+                }
+                if (!isComment(tokenType)) {
+                    previousType = tokenType
+                    previousStart = bestStart
+                    previousEnd = bestEnd
+                }
+            }
+            builder.add(bestStart, bestEnd, tokenType)
             cursor = bestEnd
             if (converged(bestEnd)) break
         }
@@ -317,6 +364,31 @@ abstract class RegexTokenizer : IncrementalTokenizer {
     }
 
     /**
+     * Whether [contextual] is asked about each token the rules find. Off by default, so that a
+     * tokenizer with no use for it pays nothing.
+     */
+    internal open val contextualTokens: Boolean = false
+
+    /**
+     * What the token the rules found from [start] to [end], typed [type], is instead, by the last
+     * token before it that is not a comment ([previousType] from [previousStart] to [previousEnd];
+     * null at the start of what is scanned): a token from [start], to the end and of the type to
+     * take in its place, or null to keep it. For what only the token before can tell, such as a
+     * regular expression literal from a division in JavaScript, which a rule could tell only by a
+     * lookbehind (slow on wasm, see [refine]) and [refine] cannot, as it cannot split a token or
+     * join several. Asked only when [contextualTokens] says so.
+     */
+    internal open fun contextual(
+        text: String,
+        start: Int,
+        end: Int,
+        type: TokenType,
+        previousType: TokenType?,
+        previousStart: Int,
+        previousEnd: Int,
+    ): Token? = null
+
+    /**
      * Adjusts the scanned [tokens] in place before they are returned. Override it for context a
      * rule would otherwise need a lookbehind for: Kotlin/wasm's regex engine evaluates a
      * lookbehind at every candidate position, which makes such a rule orders of magnitude slower
@@ -339,6 +411,9 @@ abstract class RegexTokenizer : IncrementalTokenizer {
     /** Always false: the incremental rescan in [tokenizeLines] tracks multi-line constructs itself. */
     override fun canSpanLines(lineIndex: Int, tokens: List<Token>): Boolean = false
 }
+
+/** Whether [type] is a comment, which [RegexTokenizer.contextual] looks past. */
+private fun isComment(type: TokenType): Boolean = type == TokenType.Comment || (type is NamedTokenType && type.name.startsWith("comment"))
 
 /** How many positions a rescan tries a rule at one by one before it searches with find() instead. */
 private const val PROBE_WINDOW = 4 * RESCAN_LOOKBACK
