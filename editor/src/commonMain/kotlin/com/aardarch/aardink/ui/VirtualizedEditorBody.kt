@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -196,10 +197,19 @@ internal fun VirtualizedEditorBody(
     }
     // Faint, so that it does not read as the document's text; a hint gets a ground as well, as VS
     // Code's, to tell it from what surrounds it.
+    // The theme's chromeColors take the place of each.
+    val chrome = theme.chromeColors
     val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
-    val hintStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f), background = textColor.copy(alpha = 0.08f)) }
+    val lensStyle = remember(textColor, chrome.codeLens) { SpanStyle(color = chrome.codeLens.takeOrElse { textColor.copy(alpha = 0.6f) }) }
+    val hintStyle = remember(textColor, chrome.inlayHint, chrome.inlayHintBackground) {
+        SpanStyle(
+            color = chrome.inlayHint.takeOrElse { textColor.copy(alpha = 0.6f) },
+            background = chrome.inlayHintBackground.takeOrElse { textColor.copy(alpha = 0.08f) },
+        )
+    }
     // Fainter than either, as Monaco's `editorGhostText.foreground`, and with no ground: it is about to be text.
-    val ghostStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.45f)) }
+    val ghostStyle =
+        remember(textColor, chrome.ghostText) { SpanStyle(color = chrome.ghostText.takeOrElse { textColor.copy(alpha = 0.45f) }) }
     // Whether the mouse is on text a click does something on: asked as it moves, changing rarely.
     val onClickable by remember(controller, view) {
         derivedStateOf { controller.hoverAt?.let { view.offsetAt(it).injection?.id != null } == true }
@@ -208,7 +218,7 @@ internal fun VirtualizedEditorBody(
     val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
-        view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle, ghostStyle)
+        view.inline.setStyles(hintStyle, decorationTextStyle, lensStyle, ghostStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
         controller.pointer.dragAndDrop = options.dragAndDrop && !options.readOnly
@@ -273,10 +283,14 @@ internal fun VirtualizedEditorBody(
         snippetTabStop = Color(0x4D7C7C7C),
         background = theme.background,
         // VS Code's dark theme draws its indent guides at about 20 %, the active one at about 45 %.
-        indentGuide = textColor.copy(alpha = 0.16f),
-        activeIndentGuide = textColor.copy(alpha = 0.45f),
-        ruler = textColor.copy(alpha = 0.2f),
-        bracketGuides = theme.bracketPairColors.map { it.copy(alpha = it.alpha * 0.5f) },
+        indentGuide = chrome.indentGuide.takeOrElse { textColor.copy(alpha = 0.16f) },
+        activeIndentGuide = chrome.activeIndentGuide.takeOrElse { textColor.copy(alpha = 0.45f) },
+        ruler = chrome.ruler.takeOrElse { textColor.copy(alpha = 0.2f) },
+        bracketGuides = if (chrome.bracketPairGuide.isSpecified) {
+            listOf(chrome.bracketPairGuide)
+        } else {
+            theme.bracketPairColors.map { it.copy(alpha = it.alpha * 0.5f) }
+        },
     )
     // The guides around the view: worked out again when the text, its tokens or the tab size
     // change, or the view scrolls out of the lines last worked out, not on every frame.
@@ -473,7 +487,15 @@ internal fun VirtualizedEditorBody(
                 },
             )
         },
-        scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        scrollbars = {
+            EditorScrollbars(
+                view.scroll,
+                horizontal = !softWrap,
+                slider = chrome.scrollbarSlider,
+                sliderHover = chrome.scrollbarSliderHover,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
         overviewRuler = {
             if (showRuler) {
                 OverviewRuler(
@@ -490,8 +512,8 @@ internal fun VirtualizedEditorBody(
                 MinimapView(
                     view = view,
                     tokenColor = { type -> (tokenStyles.color(type) ?: textColor).copy(alpha = 0.7f) },
-                    background = theme.background,
-                    slider = textColor.copy(alpha = 0.12f),
+                    background = chrome.minimapBackground.takeOrElse { theme.background },
+                    slider = chrome.minimapSlider.takeOrElse { textColor.copy(alpha = 0.12f) },
                     tabSize = options.tabSize,
                     marks = { minimapMarks },
                 )

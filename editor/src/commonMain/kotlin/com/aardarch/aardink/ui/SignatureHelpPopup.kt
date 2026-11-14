@@ -72,6 +72,7 @@ internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifie
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Annotated signature label highlighting the active parameter

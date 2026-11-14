@@ -466,6 +466,29 @@ class EditorSceneScreenshotTest {
     }
 
     @Test
+    fun highContrast() {
+        // The high-contrast dark theme with what its chrome colours reach: indent guides with the
+        // caret's block highlighted, a ruler, a lens and an inlay hint.
+        val hinted = object : LanguageService by kotlin.languageService!! {
+            override suspend fun codeLenses(document: CodeDocument) = listOf(CodeLens(code.indexOf("class Greeter"), "2 references"))
+
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) =
+                listOf(InlayHint(code.indexOf("names)") + 5, ": List<String>"))
+        }
+        val state = stateOf(code)
+        val document = state.document
+        capture(
+            "high-contrast",
+            state,
+            editorOptions = EditorOptions(indentGuides = true, rulers = listOf(30), codeLens = true, inlayHints = true),
+            languageService = hinted,
+            theme = EditorThemes.HighContrastDark,
+        ) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(6, 12))))
+        }
+    }
+
+    @Test
     fun material() {
         // The editor in an app's Material 3 colours.
         val scheme = lightColorScheme(primary = Color(0xFF00658E), secondary = Color(0xFF4F616E), tertiary = Color(0xFF7C4E7E))

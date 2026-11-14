@@ -1,3 +1,45 @@
+public final class com/aardarch/aardink/core/ChromeColors {
+	public static final field $stable I
+	public fun <init> ()V
+	public synthetic fun <init> (JJJJJJJJJJJJJJJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJJJJJJJJJJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-0d7_KjU ()J
+	public final fun component10-0d7_KjU ()J
+	public final fun component11-0d7_KjU ()J
+	public final fun component12-0d7_KjU ()J
+	public final fun component13-0d7_KjU ()J
+	public final fun component14-0d7_KjU ()J
+	public final fun component15-0d7_KjU ()J
+	public final fun component2-0d7_KjU ()J
+	public final fun component3-0d7_KjU ()J
+	public final fun component4-0d7_KjU ()J
+	public final fun component5-0d7_KjU ()J
+	public final fun component6-0d7_KjU ()J
+	public final fun component7-0d7_KjU ()J
+	public final fun component8-0d7_KjU ()J
+	public final fun component9-0d7_KjU ()J
+	public final fun copy-sQnm1Ko (JJJJJJJJJJJJJJJ)Lcom/aardarch/aardink/core/ChromeColors;
+	public static synthetic fun copy-sQnm1Ko$default (Lcom/aardarch/aardink/core/ChromeColors;JJJJJJJJJJJJJJJILjava/lang/Object;)Lcom/aardarch/aardink/core/ChromeColors;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveIndentGuide-0d7_KjU ()J
+	public final fun getBracketPairGuide-0d7_KjU ()J
+	public final fun getCodeLens-0d7_KjU ()J
+	public final fun getGhostText-0d7_KjU ()J
+	public final fun getIndentGuide-0d7_KjU ()J
+	public final fun getInlayHint-0d7_KjU ()J
+	public final fun getInlayHintBackground-0d7_KjU ()J
+	public final fun getMinimapBackground-0d7_KjU ()J
+	public final fun getMinimapSlider-0d7_KjU ()J
+	public final fun getRuler-0d7_KjU ()J
+	public final fun getScrollbarSlider-0d7_KjU ()J
+	public final fun getScrollbarSliderHover-0d7_KjU ()J
+	public final fun getWidgetBackground-0d7_KjU ()J
+	public final fun getWidgetBorder-0d7_KjU ()J
+	public final fun getWidgetForeground-0d7_KjU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/CodeAction {
 	public static final field $stable I
 	public fun <init> (Ljava/lang/String;Lcom/aardarch/aardink/core/CodeActionKind;Ljava/util/List;ZLkotlin/jvm/functions/Function1;)V
@@ -1024,8 +1066,8 @@ public final class com/aardarch/aardink/core/EditorLimits {
 public final class com/aardarch/aardink/core/EditorTheme {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/core/EditorTheme$Companion;
-	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;Lcom/aardarch/aardink/core/ChromeColors;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;Lcom/aardarch/aardink/core/ChromeColors;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-0d7_KjU ()J
 	public final fun component10-0d7_KjU ()J
 	public final fun component11-0d7_KjU ()J
@@ -1033,6 +1075,8 @@ public final class com/aardarch/aardink/core/EditorTheme {
 	public final fun component13-0d7_KjU ()J
 	public final fun component14 ()Ljava/util/Map;
 	public final fun component15 ()Lcom/aardarch/aardink/core/OverviewRulerColors;
+	public final fun component16 ()Lcom/aardarch/aardink/core/ChromeColors;
+	public final fun component17 ()Ljava/util/Map;
 	public final fun component2-0d7_KjU ()J
 	public final fun component3-0d7_KjU ()J
 	public final fun component4-0d7_KjU ()J
@@ -1041,11 +1085,12 @@ public final class com/aardarch/aardink/core/EditorTheme {
 	public final fun component7-0d7_KjU ()J
 	public final fun component8 ()Ljava/util/Map;
 	public final fun component9-0d7_KjU ()J
-	public final fun copy-Z74cYgM (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;)Lcom/aardarch/aardink/core/EditorTheme;
-	public static synthetic fun copy-Z74cYgM$default (Lcom/aardarch/aardink/core/EditorTheme;JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun copy-Sv62p74 (JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;Lcom/aardarch/aardink/core/ChromeColors;Ljava/util/Map;)Lcom/aardarch/aardink/core/EditorTheme;
+	public static synthetic fun copy-Sv62p74$default (Lcom/aardarch/aardink/core/EditorTheme;JJJJJJJLjava/util/Map;JJJLjava/util/List;JLjava/util/Map;Lcom/aardarch/aardink/core/OverviewRulerColors;Lcom/aardarch/aardink/core/ChromeColors;Ljava/util/Map;ILjava/lang/Object;)Lcom/aardarch/aardink/core/EditorTheme;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBackground-0d7_KjU ()J
 	public final fun getBracketPairColors ()Ljava/util/List;
+	public final fun getChromeColors ()Lcom/aardarch/aardink/core/ChromeColors;
 	public final fun getCursorColor-0d7_KjU ()J
 	public final fun getErrorColor-0d7_KjU ()J
 	public final fun getFindMatchColor-0d7_KjU ()J
@@ -1055,6 +1100,7 @@ public final class com/aardarch/aardink/core/EditorTheme {
 	public final fun getLineHighlight-0d7_KjU ()J
 	public final fun getOverviewRulerColors ()Lcom/aardarch/aardink/core/OverviewRulerColors;
 	public final fun getSelectionColor-0d7_KjU ()J
+	public final fun getTokenBackgrounds ()Ljava/util/Map;
 	public final fun getTokenColors ()Ljava/util/Map;
 	public final fun getTokenFontStyles ()Ljava/util/Map;
 	public final fun getWarningColor-0d7_KjU ()J
@@ -2031,6 +2077,8 @@ public final class com/aardarch/aardink/ui/EditorThemeParser {
 public final class com/aardarch/aardink/ui/EditorThemes {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorThemes;
+	public final fun getHighContrastDark ()Lcom/aardarch/aardink/core/EditorTheme;
+	public final fun getHighContrastLight ()Lcom/aardarch/aardink/core/EditorTheme;
 	public final fun getMaterialDark ()Lcom/aardarch/aardink/core/EditorTheme;
 	public final fun getMaterialLight ()Lcom/aardarch/aardink/core/EditorTheme;
 	public final fun getMidnightOcean ()Lcom/aardarch/aardink/core/EditorTheme;

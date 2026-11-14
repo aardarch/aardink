@@ -132,6 +132,7 @@ internal fun SymbolPickerCard(
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column {
                 BasicTextField(

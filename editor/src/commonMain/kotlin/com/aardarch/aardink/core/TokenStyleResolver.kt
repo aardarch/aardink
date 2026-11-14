@@ -35,6 +35,7 @@ internal class TokenStyleResolver(private val theme: EditorTheme) {
 
     private val colorsByScope = byScope(theme.tokenColors)
     private val stylesByScope = byScope(theme.tokenFontStyles)
+    private val backgroundsByScope = byScope(theme.tokenBackgrounds)
     private val spanStyles = HashMap<TokenType, SpanStyle?>()
 
     /** The colour of [type], or null for the default text colour. */
@@ -43,12 +44,17 @@ internal class TokenStyleResolver(private val theme: EditorTheme) {
     /** The font style of [type], or null for upright and regular. */
     fun fontStyle(type: TokenType): TokenFontStyle? = resolve(type, theme.tokenFontStyles, stylesByScope)
 
+    /** The background of [type], or null for none. */
+    fun background(type: TokenType): Color? =
+        if (theme.tokenBackgrounds.isEmpty()) null else resolve(type, theme.tokenBackgrounds, backgroundsByScope)
+
     /** What a [type] token's text is drawn with, or null when it is plain text. */
     fun spanStyle(type: TokenType): SpanStyle? {
         if (spanStyles.containsKey(type)) return spanStyles[type]
         val color = color(type)
         val font = fontStyle(type)?.takeIf { it != TokenFontStyle.None }
-        val style = if (color == null && font == null) {
+        val background = background(type)
+        val style = if (color == null && font == null && background == null) {
             null
         } else {
             val decorations = listOfNotNull(
@@ -60,6 +66,7 @@ internal class TokenStyleResolver(private val theme: EditorTheme) {
                 fontWeight = if (font?.bold == true) FontWeight.Bold else null,
                 fontStyle = if (font?.italic == true) FontStyle.Italic else null,
                 textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
+                background = background ?: Color.Unspecified,
             )
         }
         spanStyles[type] = style

@@ -113,6 +113,7 @@ fun FindReplacePanel(
             }
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = editorWidgetBorder(),
                 tonalElevation = 2.dp,
                 modifier = Modifier
                     .fillMaxWidth()

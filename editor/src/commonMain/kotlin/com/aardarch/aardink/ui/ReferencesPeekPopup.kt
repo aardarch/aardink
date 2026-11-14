@@ -98,6 +98,7 @@ internal fun ReferencesPeekCard(
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column {
                 Text(

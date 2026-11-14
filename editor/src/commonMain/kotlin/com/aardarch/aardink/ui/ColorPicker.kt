@@ -144,6 +144,7 @@ internal fun ColorPickerCard(initial: Color, onPick: (Color) -> Unit, onDismiss:
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Before and after.
