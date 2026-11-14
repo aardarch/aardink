@@ -55,7 +55,12 @@ import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -189,6 +194,7 @@ fun CodeEditorLayout(
     onOpenLink: (target: String) -> Unit = NoOpenLink,
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
     inlineCompletionProvider: InlineCompletionProvider? = null,
+    onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)? = null,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -241,6 +247,7 @@ fun CodeEditorLayout(
             contextMenuItems = contextMenuItems,
             onOpenLink = onOpenLink,
             inlineCompletionProvider = inlineCompletionProvider,
+            onSearchWorkspace = onSearchWorkspace,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -279,6 +286,7 @@ private fun CodeEditorLayoutContent(
     contextMenuItems: List<EditorMenuItem>,
     onOpenLink: (target: String) -> Unit,
     inlineCompletionProvider: InlineCompletionProvider?,
+    onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)?,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
@@ -598,6 +606,33 @@ private fun CodeEditorLayoutContent(
 
     // ── Find/Replace: re-run search on query/option/text changes (debounced) ──
     if (findReplaceState != null) {
+        // Find in selection: the place searched follows the text, and is taken from the selection
+        // when the option goes on, and on each opening of the panel with text selected.
+        DisposableEffect(findReplaceState, state) {
+            val document = state.document
+            document.addChangeListener(findReplaceState.scopeTracker)
+            onDispose { document.removeChangeListener(findReplaceState.scopeTracker) }
+        }
+        LaunchedEffect(findReplaceState, state) {
+            snapshotFlow { findReplaceState.inSelection to findReplaceState.showRequests }.collect { (on, _) ->
+                if (!on) {
+                    findReplaceState.scopeTracker.replace(emptyList())
+                    return@collect
+                }
+                val selection = state.selection
+                val selected = selection.min until selection.max
+                val isAMatch = findReplaceState.matches.getOrNull(findReplaceState.currentMatchIndex) == selected
+                when {
+                    !selection.collapsed && !isAMatch -> findReplaceState.scopeTracker.replace(listOf(selected))
+
+                    findReplaceState.scopeTracker.items.isEmpty() -> {
+                        val document = state.document
+                        val line = document.offsetToLineCol(selection.end.coerceIn(0, document.length)).first
+                        findReplaceState.scopeTracker.replace(listOf(document.lineStart(line) until document.lineEnd(line)))
+                    }
+                }
+            }
+        }
         LaunchedEffect(findReplaceState, state) {
             snapshotFlow {
                 listOf(
@@ -606,6 +641,7 @@ private fun CodeEditorLayoutContent(
                     findReplaceState.caseSensitive,
                     findReplaceState.wholeWord,
                     findReplaceState.useRegex,
+                    findReplaceState.scope,
                     state.textVersion,
                 )
             }.collectLatest { _ ->
@@ -619,8 +655,9 @@ private fun CodeEditorLayoutContent(
                 delay(200)
                 val text = state.document.text
                 val opts = findReplaceState.toOptions()
+                val scope = findReplaceState.scope
                 val found = withContext(state.computeDispatcher) {
-                    FindEngine.findAllCooperatively(text, findReplaceState.query, opts, EditorLimits.maxFindMatches)
+                    FindEngine.findAllCooperatively(text, findReplaceState.query, opts, EditorLimits.maxFindMatches, scope)
                 }
                 findReplaceState.matches = found.matches
                 findReplaceState.matchesCapped = found.capped
@@ -1347,6 +1384,25 @@ private fun CodeEditorLayoutContent(
             if ('\n' !in selected) find.query = selected
         }
     }
+    // Ctrl+Shift+F, and the find panel's button: the host's search of its workspace, for the
+    // selection on one line, else what the find panel has.
+    val currentOnSearchWorkspace = rememberUpdatedState(onSearchWorkspace)
+    val searchWorkspace: (() -> Unit)? = if (onSearchWorkspace == null) {
+        null
+    } else {
+        {
+            val selection = state.selection
+            val selected = if (!selection.collapsed && selection.length <= FIND_SEED_LIMIT) {
+                state.document.subSequence(selection.min, selection.max).toString().takeIf { '\n' !in it }
+            } else {
+                null
+            }
+            val find = findReplaceState
+            find?.remember()
+            currentOnSearchWorkspace.value?.invoke(selected ?: find?.query.orEmpty(), find?.toOptions() ?: FindEngine.Options())
+        }
+    }
+    SideEffect { controller.searchWorkspace = searchWorkspace }
     // F3 / Shift+F3: the next or previous match; with none to go to, the find panel.
     val findNext: (Boolean) -> Boolean = next@{ forward ->
         val find = findReplaceState ?: return@next false
@@ -1622,17 +1678,26 @@ private fun CodeEditorLayoutContent(
     ) {
         // ── Find/Replace panel (slides down from the top) ────────────────────
         if (findReplaceState != null) {
+            val previewColors = remember(theme) { EditorChromeColors(theme) }
+            val replacePreview by remember(findReplaceState, state, previewColors.error, previewColors.accent) {
+                derivedStateOf {
+                    replacePreviewOf(findReplaceState, state.document.also { state.textVersion }, previewColors.error, previewColors.accent)
+                }
+            }
             FindReplacePanel(
                 state = findReplaceState,
                 onNext = {
+                    findReplaceState.remember()
                     val match = findReplaceState.nextMatch() ?: return@FindReplacePanel
                     state.navigateTo(match.first, TextRange(match.first, match.last + 1))
                 },
                 onPrev = {
+                    findReplaceState.remember()
                     val match = findReplaceState.prevMatch() ?: return@FindReplacePanel
                     state.navigateTo(match.first, TextRange(match.first, match.last + 1))
                 },
                 onReplace = {
+                    findReplaceState.remember(replaced = true)
                     val idx = findReplaceState.currentMatchIndex
                     val match = findReplaceState.matches.getOrNull(idx) ?: return@FindReplacePanel
                     val edit = findReplaceState.replaceEdits(state.text, listOf(match)).firstOrNull()
@@ -1641,6 +1706,7 @@ private fun CodeEditorLayoutContent(
                     state.applyEdit(match.first, match.last - match.first + 1, edit.newText, newSel)
                 },
                 onReplaceAll = {
+                    findReplaceState.remember(replaced = true)
                     val all = findReplaceState.matches
                     if (all.isEmpty()) return@FindReplacePanel
                     // One batch: one undo step for the whole replacement.
@@ -1652,6 +1718,8 @@ private fun CodeEditorLayoutContent(
                     controller.requestFocus()
                 },
                 modifier = Modifier.fillMaxWidth(),
+                onSearchWorkspace = searchWorkspace,
+                replacePreview = replacePreview,
             )
         }
 
@@ -2263,3 +2331,33 @@ internal fun symbolStickyRanges(symbols: List<DocumentSymbol>, document: CodeDoc
     }
     return out
 }
+
+/**
+ * The replace preview: the current match's line, the match struck through and the replacement
+ * after it, cut to [REPLACE_PREVIEW_CONTEXT] characters either side. Null with nothing to replace.
+ * Reads one line of [document], never the whole text.
+ */
+internal fun replacePreviewOf(find: FindReplaceState, document: CodeDocument, removed: Color, added: Color): AnnotatedString? {
+    if (!find.visible || !find.replaceMode) return null
+    val match = find.matches.getOrNull(find.currentMatchIndex) ?: return null
+    if (match.isEmpty() || match.last >= document.length) return null
+    val newText = find.replaceEdits(document, listOf(match)).firstOrNull()?.newText ?: return null
+    val line = document.offsetToLineCol(match.first).first
+    val lineStart = document.lineStart(line)
+    val lineEnd = document.lineEnd(line)
+    val from = maxOf(lineStart, match.first - REPLACE_PREVIEW_CONTEXT)
+    val to = minOf(lineEnd, match.last + 1 + REPLACE_PREVIEW_CONTEXT).coerceAtLeast(match.last + 1)
+    return buildAnnotatedString {
+        if (from > lineStart) append("…")
+        append(document.subSequence(from, match.first).toString().trimStart())
+        withStyle(SpanStyle(color = removed, textDecoration = TextDecoration.LineThrough)) {
+            append(document.subSequence(match.first, match.last + 1).toString())
+        }
+        withStyle(SpanStyle(color = added)) { append(newText.replace("\n", "⏎")) }
+        append(document.subSequence(match.last + 1, minOf(to, document.length)).toString())
+        if (to < lineEnd) append("…")
+    }
+}
+
+/** How much of the line the replace preview shows either side of the match. */
+private const val REPLACE_PREVIEW_CONTEXT = 30

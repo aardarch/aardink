@@ -64,6 +64,8 @@ internal data class EditorColors(
     val ruler: Color = Color.Transparent,
     /** Bracket-pair guides by depth; none drawn without them. */
     val bracketGuides: List<Color> = emptyList(),
+    /** Behind the text find in selection searches, as Monaco's `editor.findRangeHighlightBackground`. */
+    val findScope: Color = Color.Transparent,
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -95,6 +97,8 @@ internal class EditorDecorations(
     val activeGuide: ActiveGuide? = null,
     /** Columns with a vertical line. */
     val rulers: List<Int> = emptyList(),
+    /** Where find in selection searches, shaded; null for none. */
+    val findScope: IntRange? = null,
 )
 
 /**
@@ -148,6 +152,10 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
                 top,
                 lineHeight,
             )
+        }
+        decorations.findScope?.let { scope ->
+            if (scope.isEmpty() || scope.last < line.start || scope.first > line.end) return@let
+            drawRange(line, scope.first - line.start, scope.last + 1 - line.start, colors.findScope, left, top, lineHeight)
         }
         for (stop in decorations.snippetTabStops) {
             if (stop.collapsed || stop.max <= line.start || stop.min > line.end) continue

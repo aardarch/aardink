@@ -281,6 +281,23 @@ class EditorSceneScreenshotTest {
     }
 
     @Test
+    fun findReplace() {
+        // The panel replacing within a selection: the place searched shaded, preserve case on, and
+        // under the replace row the current match's line with the replacement made.
+        val state = stateOf(code)
+        val document = state.document
+        state.selection = TextRange(document.lineStart(4), document.lineEnd(9))
+        val find = FindReplaceState().apply {
+            show(replace = true)
+            inSelection = true
+            preserveCase = true
+            query = "name"
+            replacement = "person"
+        }
+        capture("find-replace", state, findReplaceState = find)
+    }
+
+    @Test
     fun multicursor() {
         val state = stateOf(code)
         val document = state.document

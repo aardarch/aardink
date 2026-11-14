@@ -286,6 +286,7 @@ internal fun VirtualizedEditorBody(
         indentGuide = chrome.indentGuide.takeOrElse { textColor.copy(alpha = 0.16f) },
         activeIndentGuide = chrome.activeIndentGuide.takeOrElse { textColor.copy(alpha = 0.45f) },
         ruler = chrome.ruler.takeOrElse { textColor.copy(alpha = 0.2f) },
+        findScope = textColor.copy(alpha = 0.1f),
         bracketGuides = if (chrome.bracketPairGuide.isSpecified) {
             listOf(chrome.bracketPairGuide)
         } else {
@@ -440,6 +441,7 @@ internal fun VirtualizedEditorBody(
                         bracketPairGuides = bracketPairGuides,
                         activeGuide = activeGuide,
                         rulers = options.rulers,
+                        findScope = findReplaceState?.takeIf { it.visible }?.scope,
                     )
                 },
                 carets = {

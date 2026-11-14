@@ -20,12 +20,14 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,11 +57,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.FindReplaceState
+import com.aardarch.aardink.core.SearchHistory
 
 /**
  * Slide-down find/replace panel anchored to the top of the editor.
@@ -70,7 +75,9 @@ import com.aardarch.aardink.core.FindReplaceState
  * It takes the keyboard focus when it opens and on every [FindReplaceState.show]: the find field,
  * or the replace field when opened for replacing with something already to find. In its fields,
  * Enter goes to the next match (Shift+Enter to the previous one, and Enter in the replace field
- * replaces the current match), and Escape closes the panel.
+ * replaces the current match), Up and Down step through what was searched for (or replaced with)
+ * before, and Escape closes the panel. Its options are VS Code's: match case, whole word, regular
+ * expression, find in selection, and in the replace row, preserve case.
  *
  * @param state The state holder backing this panel.
  * @param onNext User pressed the "next match" arrow — host should scroll/select that match.
@@ -88,6 +95,26 @@ fun FindReplacePanel(
     onReplaceAll: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+) {
+    FindReplacePanel(state, onNext, onPrev, onReplace, onReplaceAll, onClose, modifier, onSearchWorkspace = null, replacePreview = null)
+}
+
+/**
+ * [FindReplacePanel] as [CodeEditorLayout] shows it: with a button that hands the search to the
+ * host's [onSearchWorkspace], and under the replace row, the current match's line with the
+ * replacement made ([replacePreview]).
+ */
+@Composable
+internal fun FindReplacePanel(
+    state: FindReplaceState,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+    onReplace: () -> Unit,
+    onReplaceAll: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier,
+    onSearchWorkspace: (() -> Unit)?,
+    replacePreview: AnnotatedString?,
 ) {
     EditorChromeTheme {
         AnimatedVisibility(
@@ -160,7 +187,8 @@ fun FindReplacePanel(
                                 .weight(1f)
                                 .focusRequester(findFocus)
                                 .testTag(EditorTestTags.FIND_FIELD)
-                                .onEnterKey { shift -> if (shift) onPrev() else onNext() },
+                                .onEnterKey { shift -> if (shift) onPrev() else onNext() }
+                                .onHistoryKeys(state.queryHistory, { state.query }, { state.query = it }),
                         )
                         Text(
                             text = matchLabel(state),
@@ -191,11 +219,20 @@ fun FindReplacePanel(
                     // Replace row, in replace mode only (Ctrl+H, or the toggle above)
                     if (state.replaceMode) {
                         ReplaceRow(state, onReplace, onReplaceAll, replaceFocus)
+                        if (replacePreview != null) {
+                            Text(
+                                text = replacePreview,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalEditorTypography.current.fontFamily),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag(EditorTestTags.REPLACE_PREVIEW),
+                            )
+                        }
                     }
 
-                    // Options row
+                    // Options row: scrolls sideways where the panel is narrower than its options.
                     Row(
-
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -214,6 +251,21 @@ fun FindReplacePanel(
                             onClick = { state.useRegex = !state.useRegex },
                             label = { Text(".*") },
                         )
+                        FilterChip(
+                            selected = state.inSelection,
+                            onClick = { state.inSelection = !state.inSelection },
+                            label = { Text("In selection", maxLines = 1, softWrap = false) },
+                        )
+                        if (state.replaceMode) {
+                            FilterChip(
+                                selected = state.preserveCase,
+                                onClick = { state.preserveCase = !state.preserveCase },
+                                label = { Text("Preserve case", maxLines = 1, softWrap = false) },
+                            )
+                        }
+                        if (onSearchWorkspace != null) {
+                            TextButton(onClick = onSearchWorkspace) { Text("Search all files", maxLines = 1, softWrap = false) }
+                        }
                     }
                 }
             }
@@ -239,7 +291,8 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
                 .weight(1f)
                 .focusRequester(focus)
                 .testTag(EditorTestTags.REPLACE_FIELD)
-                .onEnterKey { onReplace() },
+                .onEnterKey { onReplace() }
+                .onHistoryKeys(state.replaceHistory, { state.replacement }, { state.replacement = it }),
         )
         TextButton(
             onClick = onReplace,
@@ -251,6 +304,17 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
         ) { Text("All") }
     }
 }
+
+/** Up and Down step through [history], from what [current] holds, into [set]. */
+private fun Modifier.onHistoryKeys(history: SearchHistory, current: () -> String, set: (String) -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (event.key) {
+            Key.DirectionUp -> true.also { history.older(current())?.let(set) }
+            Key.DirectionDown -> true.also { history.newer()?.let(set) }
+            else -> false
+        }
+    }
 
 /** Runs [action] on Enter, with whether Shift is down, and keeps the key from the field. */
 private fun Modifier.onEnterKey(action: (shift: Boolean) -> Unit): Modifier = onPreviewKeyEvent { event ->
