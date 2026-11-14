@@ -163,7 +163,30 @@ const PROVIDERS = new Map([
   // A click is about a command, so no text comes with it.
   ['runCodeLensCommand', (providers) => providers.runCodeLensCommand && ((_text, id, args) => providers.runCodeLensCommand(id, args))],
   ['formatOnType', (providers) => providers.provideOnTypeFormattingEdits],
+  ['definition', (providers) => providers.provideDefinition],
+  ['references', (providers) => providers.provideReferences],
+  ['formatDocument', (providers) => providers.provideDocumentFormattingEdits],
+  ['formatRange', (providers) => providers.provideDocumentRangeFormattingEdits],
+  ['signatureHelp', (providers) => providers.provideSignatureHelp],
+  // Monaco's context: the markers as Monaco has them.
+  ['codeActions', (providers) => providers.provideCodeActions &&
+    ((text, range, markers) => providers.provideCodeActions(text, range, { markers: markers.map(fromKotlinDiagnostic) }))],
+  ['rename', (providers) => providers.provideRenameEdits],
+  ['resolveRename', (providers) => providers.resolveRenameLocation],
+  ['foldingRanges', (providers) => providers.provideFoldingRanges],
+  // A Uint32Array's JSON is an object, so the numbers go as an array.
+  ['semanticTokens', (providers) => providers.provideDocumentSemanticTokens &&
+    ((text) => Promise.resolve(providers.provideDocumentSemanticTokens(text))
+      .then((tokens) => (tokens == null ? null : { ...tokens, data: Array.from(tokens.data ?? []) })))],
+  ['resolveCompletionItem', (providers) => providers.resolveCompletionItem && ((_text, item) => providers.resolveCompletionItem(item))],
+  ['resolveCodeLens', (providers) => providers.resolveCodeLens],
 ]);
+
+/** Monaco's legend of a semantic tokens provider: `getLegend()`, or a `legend` given as data. */
+function semanticLegend(providers) {
+  if (!providers.provideDocumentSemanticTokens) return undefined;
+  return typeof providers.getLegend === 'function' ? providers.getLegend() : providers.legend;
+}
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
@@ -193,6 +216,9 @@ export async function registerLanguage(definition, providers = {}) {
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
       autoFormatTriggerCharacters: providers.provideOnTypeFormattingEdits ? providers.autoFormatTriggerCharacters : undefined,
+      semanticTokensLegend: semanticLegend(providers),
+      // Which providers there are: whether there is one decides whether a rename is offered and whose folds show.
+      provided: [...PROVIDERS.keys()].filter((name) => PROVIDERS.get(name)(providers)),
       grammar,
     }),
     (method, text, argsJson) => answer(PROVIDERS.get(method)?.(providers), text, ...JSON.parse(argsJson)),

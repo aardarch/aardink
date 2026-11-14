@@ -767,15 +767,17 @@ export interface AardinkLanguageProviders {
    * What is shown in a row above the line each `range` starts on, as Monaco's `provideCodeLenses`,
    * with the `codeLens` option on. It is about the whole text, and asked after a pause in typing;
    * between answers each lens moves with its text. Lenses on one line share a row. An array, with no
-   * `{ lenses }` around it, and each lens with its `command`: there is no `resolveCodeLens`. With
+   * `{ lenses }` around it. A lens without a `command` is given to `resolveCodeLens`, if there is
+   * one, as the answer comes (at most 100 of them), and left out if it still has none. With
    * `extends`, the base language's are added, less any with this one's position and title. With a
    * language server these are shown after a second if it has not answered by then.
    */
   provideCodeLenses?(text: string): AardinkCodeLens[] | null | Promise<AardinkCodeLens[] | null>;
   /**
-   * A lens from `provideCodeLenses` was clicked or tapped: its command's `id`, and its `arguments`,
-   * `[]` when it has none. As they passed through JSON, they hold only what JSON can. There is no
-   * command registry behind this: a lens does what this does with its `id`.
+   * A lens from `provideCodeLenses` was clicked or tapped, or a code action from `provideCodeActions`
+   * with a `command` chosen (after its edits): the command's `id`, and its `arguments`, `[]` when it
+   * has none. As they passed through JSON, they hold only what JSON can. There is no command
+   * registry behind this: a lens or an action does what this does with its `id`.
    */
   runCodeLensCommand?(id: string, args: unknown[]): void | Promise<void>;
   /**
@@ -796,6 +798,116 @@ export interface AardinkLanguageProviders {
     ch: string,
     options: { tabSize: number; insertSpaces: boolean },
   ): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /**
+   * Where the symbol at a 1-based `line` and `column` is defined, as Monaco's `provideDefinition`,
+   * for F12 and Ctrl/Cmd+click: a location, an array of them (the first is followed) or Monaco's
+   * `LocationLink`s. A location without `uri` is in this text; one with a `uri` is another file's,
+   * which the editor does not open.
+   */
+  provideDefinition?(text: string, line: number, column: number): AardinkLocation | AardinkLocation[] | null | Promise<AardinkLocation | AardinkLocation[] | null>;
+  /** The references to the symbol at a place, as Monaco's `provideReferences`, for Shift+F12's list. */
+  provideReferences?(text: string, line: number, column: number): AardinkLocation[] | null | Promise<AardinkLocation[] | null>;
+  /**
+   * Edits that format the whole text, as Monaco's `provideDocumentFormattingEdits`, for Format
+   * Document (Shift+Alt+F) and `format()`. With `extends`, the base language formats when this
+   * changes nothing.
+   */
+  provideDocumentFormattingEdits?(text: string, options: { tabSize: number; insertSpaces: boolean }): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /** Edits that format `range`, as Monaco's `provideDocumentRangeFormattingEdits`, for Format Selection. */
+  provideDocumentRangeFormattingEdits?(
+    text: string,
+    range: AardinkRange,
+    options: { tabSize: number; insertSpaces: boolean },
+  ): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /**
+   * Accepted for Monaco's shape. The editor asks `provideSignatureHelp` whenever the caret is
+   * inside a call's arguments, so no character has to start it.
+   */
+  signatureHelpTriggerCharacters?: string[];
+  /**
+   * The signatures of the call at a place, as Monaco's `provideSignatureHelp`: its
+   * `SignatureHelpResult` (`{ value }`) or the `SignatureHelp` in it. A parameter's `label` is its
+   * text or `[start, end]` in the signature's label.
+   */
+  provideSignatureHelp?(text: string, line: number, column: number): AardinkSignatureHelp | { value: AardinkSignatureHelp } | null | Promise<AardinkSignatureHelp | { value: AardinkSignatureHelp } | null>;
+  /**
+   * Quick fixes and refactorings for `range`, as Monaco's `provideCodeActions`, with the markers of
+   * `provideDiagnostics`' last answer that touch it. An action with edits to another file (a
+   * `resource`) is left out; its `command` goes to `runCodeLensCommand` after its edits.
+   */
+  provideCodeActions?(
+    text: string,
+    range: AardinkRange,
+    context: { markers: AardinkDiagnostic[] },
+  ): AardinkCodeAction[] | { actions: AardinkCodeAction[] } | null | Promise<AardinkCodeAction[] | { actions: AardinkCodeAction[] } | null>;
+  /**
+   * The edits that rename the symbol at a place to `newName`, as Monaco's `provideRenameEdits`, for
+   * F2. Its presence offers rename. `{ rejectReason }`, or edits to another file, rename nothing.
+   */
+  provideRenameEdits?(text: string, line: number, column: number, newName: string): AardinkWorkspaceEdit | { rejectReason: string } | null | Promise<AardinkWorkspaceEdit | { rejectReason: string } | null>;
+  /**
+   * What F2 would rename at a place, as Monaco's `resolveRenameLocation`: `{ range, text }`, or
+   * `{ rejectReason }` where nothing can be. Without it, the word at the caret.
+   */
+  resolveRenameLocation?(text: string, line: number, column: number): { range: AardinkRange; text: string } | { rejectReason: string } | null | Promise<{ range: AardinkRange; text: string } | { rejectReason: string } | null>;
+  /**
+   * The text's folds, as Monaco's `provideFoldingRanges`: 1-based `start` and `end` lines. They
+   * replace the language's own (by indentation, or the base language's).
+   */
+  provideFoldingRanges?(text: string): { start: number; end: number; kind?: 'comment' | 'imports' | 'region' }[] | null | Promise<{ start: number; end: number; kind?: 'comment' | 'imports' | 'region' }[] | null>;
+  /**
+   * What `provideDocumentSemanticTokens` numbers stand for, as Monaco's `getLegend()`. The token
+   * types are named as a theme colours them, as a language server's are: `class` as `type.class`,
+   * `parameter` as `variable.parameter`, `method` as `function.method`.
+   */
+  getLegend?(): { tokenTypes: string[]; tokenModifiers: string[] };
+  /** The legend as data, in place of `getLegend`. */
+  legend?: { tokenTypes: string[]; tokenModifiers: string[] };
+  /**
+   * The text's semantic tokens, as Monaco's `provideDocumentSemanticTokens`: `{ data }`, five
+   * integers a token, coloured over the syntax's with the `semanticHighlighting` option on.
+   */
+  provideDocumentSemanticTokens?(text: string): { data: ArrayLike<number>; resultId?: string } | null | Promise<{ data: ArrayLike<number>; resultId?: string } | null>;
+  /**
+   * More of an item, as Monaco's `resolveCompletionItem`: called with the item as
+   * `provideCompletionItems` gave it when it is selected in the list; its `documentation` and
+   * `detail` replace what the item had.
+   */
+  resolveCompletionItem?(item: AardinkCompletionItem): AardinkCompletionItem | null | Promise<AardinkCompletionItem | null>;
+  /** A lens that came without a `command`, with one, as Monaco's `resolveCodeLens`. */
+  resolveCodeLens?(text: string, lens: AardinkCodeLens): AardinkCodeLens | null | Promise<AardinkCodeLens | null>;
+}
+
+/** Monaco's `Location`: `uri` left out for a place in this text. */
+export interface AardinkLocation {
+  uri?: string;
+  range: AardinkRange;
+}
+
+/** Monaco's `SignatureHelp`. */
+export interface AardinkSignatureHelp {
+  signatures: {
+    label: string;
+    documentation?: string | { value: string };
+    parameters: { label: string | [number, number]; documentation?: string | { value: string } }[];
+  }[];
+  activeSignature: number;
+  activeParameter: number;
+}
+
+/** Monaco's `WorkspaceEdit`, for this text: an edit with a `resource` is another file's. */
+export interface AardinkWorkspaceEdit {
+  edits: { resource?: unknown; textEdit: AardinkTextEdit }[];
+}
+
+/** Monaco's `CodeAction`, as far as the editor reads one. */
+export interface AardinkCodeAction {
+  title: string;
+  /** `'quickfix'`, `'refactor...'` or `'source.organizeImports'`. */
+  kind?: string;
+  isPreferred?: boolean;
+  edit?: AardinkWorkspaceEdit;
+  command?: { id: string; title?: string; arguments?: unknown[] };
 }
 
 /** Monaco's `TextEdit`: `text` in place of `range`. */
@@ -804,10 +916,13 @@ export interface AardinkTextEdit {
   text: string | null;
 }
 
-/** Monaco's `CodeLens`, with the command it must have here: a title in a row above the line `range` starts on. */
+/**
+ * Monaco's `CodeLens`: a title in a row above the line `range` starts on. One without a `command`
+ * is shown once `resolveCodeLens` gives it one.
+ */
 export interface AardinkCodeLens {
   range: AardinkRange;
-  command: { id: string; title: string; arguments?: unknown[] };
+  command?: { id: string; title: string; arguments?: unknown[] };
 }
 
 /** Monaco's `InlayHint`, as far as the editor draws it: a label at a position, in front of the character there. */
@@ -875,8 +990,9 @@ export interface AardinkInlineCompletions {
 }
 
 /**
- * Monaco's `InlineCompletion`, as far as the editor shows it. `insertText` is a string: a
- * `{ snippet }` is left out, as ghost text cannot fill in its stops.
+ * Monaco's `InlineCompletion`, as far as the editor shows it. A `{ snippet }` shows and goes in as
+ * its text: a placeholder as its default text, a choice as its first, tab stops and variables as
+ * nothing.
  *
  * `range` is what it replaces, and must hold the caret. What `insertText` repeats of it is not shown
  * again: over `)`, the text `x) {` shows `x` before the bracket and ` {` after it, which is how ghost
@@ -890,7 +1006,7 @@ export interface AardinkInlineCompletions {
  * or past it, shows nothing.
  */
 export interface AardinkInlineCompletion {
-  insertText: string;
+  insertText: string | { snippet: string };
   range?: AardinkRange;
 }
 

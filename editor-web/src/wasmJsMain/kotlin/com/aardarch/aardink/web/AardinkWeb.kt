@@ -342,7 +342,7 @@ object AardinkWeb {
      * that a template written for this version still works when a later one asks for more.
      */
     fun registerLanguage(definitionJson: String, dispatcher: suspend (method: String, text: String, argsJson: String) -> String?): String =
-        registerLanguage(definitionJson, dispatchedProviders(dispatcher))
+        registerLanguage(definitionJson, dispatchedProviders(dispatcher, providedIn(definitionJson)))
 
     /**
      * Connects to the language server at the WebSocket [url], which carries one JSON-RPC message per
@@ -1100,6 +1100,9 @@ object AardinkWeb {
             val text = (item["text"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
             TextEdit(rangeOf(document, range), text)
         }
+
+    /** [diagnostics] as a JSON array, for a code action provider's `markers`. */
+    internal fun diagnosticsJson(diagnostics: List<WebDiagnostic>): String = json.encodeToString(diagnosticsJsonSerializer, diagnostics)
 
     /** An inclusive [range] of [document] as a [WebRange] in JSON, for a provider asked about one. */
     internal fun rangeJson(document: CodeDocument, range: IntRange): String =

@@ -930,6 +930,43 @@ async function interactionChecks(page) {
  * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
  */
 /**
+ * 0.10's providers through the npm package: formatting and go to definition answer through the
+ * dispatcher, and a language without provideRenameEdits offers no rename.
+ */
+async function providersCheck(page) {
+  setPhase('0.10 providers');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    await registerLanguage(
+      { id: 'toy-providers', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+      {
+        provideDocumentFormattingEdits: (text, options) => [{
+          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+          text: options.insertSpaces ? '// formatted\n' : '// tabs\n',
+        }],
+        provideDefinition: () => ({ range: { startLineNumber: 2, startColumn: 5, endLineNumber: 2, endColumn: 8 } }),
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'use foo\nfun foo', language: 'toy-providers' });
+  }, MOUNT);
+  await sleep(800);
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 6 }));
+  const defined = await page.evaluate(() => window.__smokeEditor.trigger(null, 'editor.action.revealDefinition'));
+  await sleep(300);
+  const position = await page.evaluate(() => window.__smokeEditor.getPosition());
+  const formatted = await page.evaluate(() => window.__smokeEditor.format());
+  const value = await page.evaluate(() => window.__smokeEditor.getValue());
+  const rename = await page.evaluate(() => window.__smokeEditor.getAction('editor.action.rename').isSupported());
+  return {
+    'provideDefinition moves the caret to what it answers': defined === true && position.lineNumber === 2 && position.column >= 5,
+    'provideDocumentFormattingEdits formats through format()': formatted === true && value.startsWith('// formatted\nuse foo'),
+    'no provideRenameEdits, no rename': rename === false,
+  };
+}
+
+/**
  * 0.10's keys on the web: Ctrl+Shift+F and trigger('workbench.action.findInFiles') hand the
  * selection to onSearchWorkspace, and stop once its listener is gone; Shift+Alt+A, an Alt key
  * Compose's web input would type, comments the selection.
@@ -1126,6 +1163,7 @@ try {
     ...(await serverTypingCheck(desktop)),
     ...(await linkCheck(desktop)),
     ...(await searchAndAltKeyCheck(desktop)),
+    ...(await providersCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);
