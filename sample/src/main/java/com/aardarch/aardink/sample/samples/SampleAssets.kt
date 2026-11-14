@@ -35,8 +35,188 @@ object SampleAssets {
         "css" -> CSS
         "markdown" -> MARKDOWN
         "plaintext" -> PLAIN_TEXT
+        "yaml" -> YAML
+        "properties" -> PROPERTIES
+        "ini" -> INI
+        "shell" -> SHELL
+        "python" -> PYTHON
+        "sql" -> SQL
+        "java" -> JAVA
         else -> ""
     }
+
+    private val YAML: String = """
+        # A CI workflow, the kind of YAML an editor opens most.
+        name: build
+        on:
+          push:
+            branches: [main, "release/*"]
+          pull_request: {}
+
+        env:
+          JAVA_VERSION: 17
+          CACHE: true
+
+        jobs:
+          test: &defaults
+            runs-on: ubuntu-latest
+            timeout-minutes: 30
+            steps:
+              - uses: actions/checkout@v4
+              - name: Run the checks
+                run: ./gradlew check --no-daemon
+              - name: 'Upload reports'
+                if: failure()
+          lint:
+            <<: *defaults
+            steps:
+              - run: ./gradlew spotlessCheck
+    """.trimIndent()
+
+    private val PROPERTIES: String = """
+        # Application settings
+        ! Lines starting with ! are comments too.
+        app.name = Aardink Sample
+        app.version=0.10.0
+        app.description = A long value that goes on \
+            over a second line, \
+            and a third.
+
+        server.port: 8080
+        server.address = 127.0.0.1
+        greeting.unicode = caf\u00e9
+        path.windows = C:\\Users\\demo
+    """.trimIndent()
+
+    private val INI: String = """
+        ; Editor settings, as an .editorconfig or a classic INI file has them.
+        root = true
+
+        [*]
+        indent_style = space
+        indent_size = 4
+        charset = "utf-8"
+        trim_trailing_whitespace = true
+
+        [*.{yml,yaml}]
+        indent_size = 2
+
+        # Make files want tabs
+        [Makefile]
+        indent_style = tab
+    """.trimIndent()
+
+    private val SHELL: String = """
+        #!/usr/bin/env bash
+        # Builds the project and copies the artifacts.
+        set -euo pipefail
+
+        readonly OUT="${'$'}{1:-build/dist}"
+        VERSION=${'$'}(git describe --tags)
+
+        build() {
+          local target="${'$'}1"
+          echo "Building ${'$'}target (${'$'}VERSION)"
+          ./gradlew "${'$'}target" --quiet
+        }
+
+        if [ ! -d "${'$'}OUT" ]; then
+          mkdir -p "${'$'}OUT"
+        fi
+
+        for module in editor languages; do
+          build ":${'$'}module:assemble" || exit 1
+        done
+        cp -r */build/outputs/* "${'$'}OUT" && echo 'done'
+    """.trimIndent()
+
+    private val PYTHON: String = """
+        # A tiny inventory, to show classes, decorators and strings.
+        from dataclasses import dataclass, field
+
+
+        @dataclass
+        class Item:
+            name: str
+            price: float = 0.0
+            tags: list[str] = field(default_factory=list)
+
+            def label(self) -> str:
+                # f-strings and escapes
+                return f"{self.name}: {self.price:.2f}\n"
+
+
+        def total(items: list[Item], tax=0.25) -> float:
+            if not items:
+                return 0
+            return sum(item.price for item in items) * (1 + tax)
+
+
+        if __name__ == "__main__":
+            stock = [Item("pen", 1.5), Item('ink', 0x10)]
+            print(total(stock), len(stock))
+    """.trimIndent()
+
+    private val SQL: String = """
+        -- Monthly revenue per customer, the largest first.
+        WITH monthly AS (
+            SELECT
+                customer_id,
+                date_trunc('month', ordered_at) AS month,
+                SUM(amount) AS revenue
+            FROM orders
+            WHERE status <> 'cancelled'
+              AND ordered_at >= '2026-01-01'
+            GROUP BY customer_id, month
+        )
+        SELECT c.name, m.month, m.revenue
+        FROM monthly m
+        INNER JOIN customers c ON c.id = m.customer_id
+        WHERE m.revenue > 1000 /* only the large ones */
+        ORDER BY m.revenue DESC
+        LIMIT 20;
+
+        CREATE TABLE notes (
+            id SERIAL PRIMARY KEY,
+            body TEXT NOT NULL DEFAULT 'it''s empty'
+        );
+    """.trimIndent()
+
+    private val JAVA: String = """
+        package com.example.inventory;
+
+        import java.util.List;
+        import java.util.Optional;
+
+        /**
+         * A shelf of items, with a total.
+         *
+         * @param <T> what the shelf holds
+         */
+        public final class Shelf<T extends Item> {
+            private final List<T> items;
+
+            public Shelf(List<T> items) {
+                this.items = List.copyOf(items);
+            }
+
+            @Override
+            public String toString() {
+                return "Shelf of " + items.size() + " items\n";
+            }
+
+            public Optional<T> cheapest() {
+                // The first with the lowest price.
+                return items.stream().min((a, b) -> Double.compare(a.price(), b.price()));
+            }
+
+            public double total() {
+                double sum = 0.0d;
+                for (T item : items) sum += item.price();
+                return sum * 1.25;
+            }
+        }
+    """.trimIndent()
 
     private val KOTLIN: String = """
         /*

@@ -27,9 +27,9 @@ import kotlin.test.assertTrue
 class LanguageRegistryTest {
 
     @Test
-    fun `withBuiltIns includes all 9 built-in languages`() {
+    fun `withBuiltIns includes every built-in language`() {
         val registry = LanguageRegistry.withBuiltIns()
-        assertEquals(9, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size, registry.all.size)
         assertNotNull(registry.byId("kotlin"))
         assertNotNull(registry.byId("typescript"))
         assertNotNull(registry.byId("json"))
@@ -64,7 +64,7 @@ class LanguageRegistryTest {
             tokenizer = PlainTextTokenizer,
         )
         registry.register(custom)
-        assertEquals(10, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size + 1, registry.all.size)
         assertSame(custom, registry.byId("log"))
         assertSame(custom, registry.byExtension("log"))
     }
@@ -74,7 +74,7 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         registry.override("kotlin") { it.copy(displayName = "Kotlin (custom)") }
         assertEquals("Kotlin (custom)", registry.byId("kotlin")?.displayName)
-        assertEquals(9, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size, registry.all.size)
     }
 
     @Test
@@ -90,6 +90,6 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         assertTrue(registry.unregister("plaintext"))
         assertNull(registry.byId("plaintext"))
-        assertEquals(8, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size - 1, registry.all.size)
     }
 }

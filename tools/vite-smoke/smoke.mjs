@@ -602,7 +602,8 @@ async function serverTypingCheck(page) {
   const server = await startLoopbackLsp('', { answers: { 'textDocument/completion': () => ({ isIncomplete: false, items: [] }) } });
   try {
     const expected = '  word don\'t (a) [b] {c} "d"\n(';
-    for (const language of ['python', 'plaintext']) {
+    // A language this page does not know (no service at all), and one it knows with none.
+    for (const language of ['cobol', 'plaintext']) {
       const without = await typedIn(language, null);
       const opened = server.count('textDocument/didOpen');
       const served = await typedIn(language, server);
