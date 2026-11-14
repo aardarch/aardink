@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlin.random.Random
 import kotlin.test.Test
@@ -121,7 +122,35 @@ class IncrementalTokenizingTest {
         }
     }
 
-    private fun checkRandomEdits(id: String, tokenizer: IncrementalTokenizer, sample: String, random: Random, steps: Int = 60) {
+    // A style or script element's opening tag and body are one construct, so a rescan converges
+    // only past the body, and an edit to the tag recolours it.
+    @Test
+    fun `incremental passes agree with a full scan in HTML with style and script elements`() {
+        val sample = """
+            <html><head>
+            <style>
+              .a { color: #fff; } /* c */
+            </style>
+            <script type="module">
+              const s = "</p>"; if (a < b) { f(`t`); }
+            </script>
+            </head><body><p>x</p>
+            <script type="importmap">{ "a": 1 }</script>
+            </body></html>
+        """.trimIndent()
+        val markup = fragments + listOf("<style>", "</style>", "<script>", "</script>", "script", "style", " type=\"x\"", "/>")
+        repeat(4) { seed -> checkRandomEdits("html", HtmlTokenizer, sample, Random(seed * 17 + 3), fragments = markup) }
+        checkRandomEdits("html", HtmlTokenizer, (sample + "\n").repeat(8), Random(11), steps = 40, fragments = markup)
+    }
+
+    private fun checkRandomEdits(
+        id: String,
+        tokenizer: IncrementalTokenizer,
+        sample: String,
+        random: Random,
+        steps: Int = 60,
+        fragments: List<String> = this.fragments,
+    ) {
         var text = sample
         var full = tokenizer.tokenizeFull(text)
         // What the editor passes back as previousTokens: the list the tokenizer returned last.

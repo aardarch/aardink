@@ -66,6 +66,19 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         return remembered(text, raw, refined(text, raw, 0, raw.size), noMatchFrom)
     }
 
+    /**
+     * [text]'s tokens, as [tokenizeFull] gives them, but not remembered for an incremental pass:
+     * for a language embedded in another, whose own tokenizer keeps the scans. Remembered, they
+     * would push this tokenizer's own documents' scans out of its few.
+     */
+    internal fun tokenizeEmbedded(text: String): List<Token> {
+        val builder = PackedTokenBuilder(text.length / 8)
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { }, converged = { false })
+        val raw = builder.build()
+        return refined(text, raw, 0, raw.size)
+    }
+
     private fun remembered(text: String, raw: PackedTokens, result: List<Token>, noMatchFrom: IntArray): List<Token> {
         scans.remember(result, ScanSnapshot(text, raw, noMatchFrom))
         return result
