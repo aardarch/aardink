@@ -220,12 +220,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     /** The host's bindings ([com.aardarch.aardink.ui.EditorOptions.keyBindings]), before the editor's own. */
     var keyBindings: List<EditorKeyBinding> = emptyList()
 
-    /**
-     * Ctrl+Shift+F (Cmd+Shift+F on macOS), when the host searches its workspace: after the
-     * bindings, so a host binding of the key wins.
-     */
-    var searchWorkspace: (() -> Unit)? = null
-
     private fun handleKey(event: KeyEvent): Boolean {
         val isMac = PlatformInfo.isMacOs
         linkModifier = if (isMac) event.isMetaPressed else event.isCtrlPressed
@@ -261,11 +255,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             KeyBindingMatch.Unbound -> return typeKey(event)
 
             null -> {}
-        }
-        val search = searchWorkspace
-        if (search != null && SEARCH_WORKSPACE.matches(event, isMac)) {
-            search()
-            return true
         }
         val binding = KeyTable.resolve(event, isMac)
         if (binding != null && execute(binding)) {
@@ -595,9 +584,6 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
         return box.translate(Offset(frame.textLeft, line.top - frame.scrollY + shift) + coordinates.localToRoot(Offset.Zero))
     }
 }
-
-/** The key that hands a search to the host, VS Code's Search: Find in Files. */
-private val SEARCH_WORKSPACE = KeyChord(Key.F, ctrlCmd = true, shift = true)
 
 /** Keys that are only modifiers, which do not complete a chord. */
 private val MODIFIER_KEYS = setOf(

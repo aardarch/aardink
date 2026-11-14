@@ -2089,6 +2089,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.Rename.toString|toString(){}[0]
     }
 
+    final object SearchWorkspace : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.SearchWorkspace|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.SearchWorkspace.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.SearchWorkspace.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.SearchWorkspace.toString|toString(){}[0]
+    }
+
     final object SelectAllOccurrences : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.SelectAllOccurrences|null[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.SelectAllOccurrences.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.SelectAllOccurrences.hashCode|hashCode(){}[0]
@@ -2389,6 +2395,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rena
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Reveal$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop[0]
@@ -2533,6 +2540,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rena
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter|com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter|com_aardarch_aardink_core_EditorCommand_SelectAllOccurrences$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop_getter|com_aardarch_aardink_core_EditorCommand_SelectLine$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ShowCodeActions$stableprop_getter(){}[0]

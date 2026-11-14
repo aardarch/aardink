@@ -80,6 +80,13 @@ sealed class EditorCommand {
     /** Ctrl+H: the find panel with its replace row. */
     data object ShowReplace : EditorCommand()
 
+    /**
+     * Ctrl/Cmd+Shift+F: hands a search to the host's `onSearchWorkspace`, VS Code's Find in Files,
+     * with the selection on one line, else the find panel's query, and the panel's options. Runs
+     * only in an editor given `onSearchWorkspace`; elsewhere the key is left to the host.
+     */
+    data object SearchWorkspace : EditorCommand()
+
     /** Ctrl+G: asks the host for its go-to-line dialog. */
     data object GoToLine : EditorCommand()
 

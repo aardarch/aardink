@@ -1379,8 +1379,8 @@ private fun CodeEditorLayoutContent(
             if ('\n' !in selected) find.query = selected
         }
     }
-    // Ctrl+Shift+F, and the find panel's button: the host's search of its workspace, for the
-    // selection on one line, else what the find panel has.
+    // EditorCommand.SearchWorkspace (Ctrl+Shift+F), and the find panel's button: the host's search
+    // of its workspace, for the selection on one line, else what the find panel has.
     val currentOnSearchWorkspace = rememberUpdatedState(onSearchWorkspace)
     val searchWorkspace: (() -> Unit)? = if (onSearchWorkspace == null) {
         null
@@ -1397,7 +1397,6 @@ private fun CodeEditorLayoutContent(
             currentOnSearchWorkspace.value?.invoke(selected ?: find?.query.orEmpty(), find?.toOptions() ?: FindEngine.Options())
         }
     }
-    SideEffect { controller.searchWorkspace = searchWorkspace }
     // F3 / Shift+F3: the next or previous match; with none to go to, the find panel.
     val findNext: (Boolean) -> Boolean = next@{ forward ->
         val find = findReplaceState ?: return@next false
@@ -1460,6 +1459,8 @@ private fun CodeEditorLayoutContent(
                 it.show()
             } != null
 
+            EditorCommand.SearchWorkspace -> searchWorkspace?.invoke() != null
+
             EditorCommand.ShowReplace -> findReplaceState?.let {
                 seedFind(it)
                 it.show(replace = true)
@@ -1516,6 +1517,7 @@ private fun CodeEditorLayoutContent(
         }
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
+        if (onSearchWorkspace != null) add(EditorCommand.SearchWorkspace)
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
         if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))

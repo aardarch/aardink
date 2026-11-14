@@ -37,10 +37,13 @@ import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.CodeEditorState
+import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.FindEngine
 import com.aardarch.aardink.core.FindReplaceState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /** Find in selection, preserve case, the search history, the replace preview and `onSearchWorkspace`. */
 class FindExtrasUiTest {
@@ -166,6 +169,48 @@ class FindExtrasUiTest {
         waitForIdle()
         assertEquals("world" to FindEngine.Options(caseSensitive = true), asked)
         assertEquals("hello world", state.document.text)
+    }
+
+    @Test
+    fun `SearchWorkspace can be rebound, and runs through execute`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        val find = FindReplaceState().apply { query = "wor" }
+        val asked = ArrayList<String>()
+        setContent {
+            CodeEditorLayout(
+                state = state,
+                findReplaceState = find,
+                options = EditorOptions(
+                    keyBindings = listOf(
+                        EditorKeyBinding(KeyChord(Key.F, ctrlCmd = true, shift = true), null),
+                        EditorKeyBinding(KeyChord(Key.F7, shift = true), EditorCommand.SearchWorkspace),
+                    ),
+                ),
+                onSearchWorkspace = { query, _ -> asked += query },
+                modifier = Modifier.size(700.dp, 400.dp),
+            )
+        }
+        waitForIdle()
+        val editor = onNodeWithTag(EditorTestTags.EDITOR)
+        editor.requestFocus()
+        editor.performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } } }
+        waitForIdle()
+        assertEquals(emptyList(), asked, "the host took Ctrl+Shift+F away")
+        editor.performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.F7) } }
+        waitForIdle()
+        assertEquals(listOf("wor"), asked)
+
+        assertTrue(state.canExecute(EditorCommand.SearchWorkspace))
+        runOnIdle { state.execute(EditorCommand.SearchWorkspace) }
+        assertEquals(listOf("wor", "wor"), asked)
+    }
+
+    @Test
+    fun `without onSearchWorkspace the command cannot run`() = runComposeUiTest {
+        val state = CodeEditorState("hello")
+        show(state, FindReplaceState())
+        assertFalse(state.canExecute(EditorCommand.SearchWorkspace))
+        assertFalse(runOnIdle { state.execute(EditorCommand.SearchWorkspace) })
     }
 
     @Test

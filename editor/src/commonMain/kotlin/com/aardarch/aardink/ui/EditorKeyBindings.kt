@@ -143,6 +143,7 @@ object EditorKeyBindings {
         add(bind(KeyChord(Key.L, ctrlCmd = true, shift = true), EditorCommand.SelectAllOccurrences))
         add(bind(KeyChord(Key.F, ctrlCmd = true), EditorCommand.ShowFind))
         add(bind(KeyChord(Key.H, ctrlCmd = true), EditorCommand.ShowReplace))
+        add(bind(KeyChord(Key.F, ctrlCmd = true, shift = true), EditorCommand.SearchWorkspace))
         add(bind(KeyChord(Key.G, ctrlCmd = true), EditorCommand.GoToLine))
         add(bind(KeyChord(Key.Spacebar, winCtrl = true), EditorCommand.TriggerSuggest))
         add(bind(KeyChord(Key.F12), EditorCommand.GoToDefinition))

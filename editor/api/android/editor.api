@@ -886,6 +886,14 @@ public final class com/aardarch/aardink/core/EditorCommand$ScrollTo : com/aardar
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/aardarch/aardink/core/EditorCommand$SearchWorkspace : com/aardarch/aardink/core/EditorCommand {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$SearchWorkspace;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/aardarch/aardink/core/EditorCommand$SelectAllOccurrences : com/aardarch/aardink/core/EditorCommand {
 	public static final field $stable I
 	public static final field INSTANCE Lcom/aardarch/aardink/core/EditorCommand$SelectAllOccurrences;
