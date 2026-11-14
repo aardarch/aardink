@@ -42,6 +42,11 @@ object SampleAssets {
         "python" -> PYTHON
         "sql" -> SQL
         "java" -> JAVA
+        "groovy" -> GROOVY
+        "dockerfile" -> DOCKERFILE
+        "diff" -> DIFF
+        "scss" -> SCSS
+        "less" -> LESS
         else -> ""
     }
 
@@ -215,6 +220,133 @@ object SampleAssets {
                 for (T item : items) sum += item.price();
                 return sum * 1.25;
             }
+        }
+    """.trimIndent()
+
+    private val GROOVY: String = """
+        // A Gradle build script, the Groovy most people open.
+        plugins {
+            id 'java-library'
+            id 'maven-publish'
+        }
+
+        group = 'com.example'
+        version = '1.2.0'
+
+        def libs = [junit: '5.11.0', kotest: "5.9.1"]
+
+        dependencies {
+            testImplementation "org.junit.jupiter:junit-jupiter:${'$'}{libs.junit}"
+        }
+
+        tasks.register('greet') {
+            doLast {
+                def name = project.findProperty('who') ?: 'world'
+                println "Hello, ${'$'}name, from ${'$'}{project.name}!"
+                assert name ==~ /\w+/
+                (1..3).each { n -> println n * 2 }
+            }
+        }
+    """.trimIndent()
+
+    private val DOCKERFILE: String = """
+        # syntax=docker/dockerfile:1
+        FROM node:20-alpine AS build
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci --no-audit && \
+            npm cache clean --force
+        COPY . .
+        RUN npm run build
+
+        FROM nginx:1.27-alpine
+        ARG PORT=8080
+        ENV NGINX_PORT=${'$'}{PORT} TZ="Europe/Stockholm"
+        COPY --from=build /app/dist /usr/share/nginx/html
+        EXPOSE 8080/tcp
+        HEALTHCHECK --interval=30s CMD wget -q -O - "http://localhost:${'$'}PORT/" || exit 1
+        CMD ["nginx", "-g", "daemon off;"]
+    """.trimIndent()
+
+    private val DIFF: String = """
+        diff --git a/src/Greeter.kt b/src/Greeter.kt
+        index 3b18e51..a9c4d2f 100644
+        --- a/src/Greeter.kt
+        +++ b/src/Greeter.kt
+        @@ -1,7 +1,8 @@ package demo
+         class Greeter(private val name: String) {
+        -    fun greet() = "Hello, " + name
+        +    fun greet(loud: Boolean = false): String =
+        +        if (loud) "HELLO, ${'$'}{name.uppercase()}!" else "Hello, ${'$'}name"
+
+             companion object {
+        -        const val DEFAULT = "world"
+        +        const val DEFAULT = "World"
+             }
+         }
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -3 +3 @@
+        -Run `./gradlew run`.
+        +Run `./gradlew run --args=--loud`.
+        \ No newline at end of file
+    """.trimIndent()
+
+    private val SCSS: String = """
+        @use 'sass:math';
+
+        // Design tokens
+        ${'$'}gap: 8px !default;
+        ${'$'}brand: #3b82f6;
+        ${'$'}breakpoints: (small: 576px, large: 992px);
+
+        @mixin respond(${'$'}size) {
+          @media (min-width: map-get(${'$'}breakpoints, ${'$'}size)) { @content; }
+        }
+
+        %card-base {
+          border-radius: math.div(${'$'}gap, 2);
+          background: url("/img/paper.png") repeat;
+        }
+
+        .card {
+          @extend %card-base;
+          color: darken(${'$'}brand, 10%);
+          padding: ${'$'}gap * 2;
+
+          &:hover { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+          &__title { font-weight: 600; }
+
+          @include respond(large) {
+            #{${'$'}prop}-left: ${'$'}gap;
+          }
+        }
+    """.trimIndent()
+
+    private val LESS: String = """
+        @import (reference) "base.less";
+
+        // Variables and a guarded mixin
+        @brand: #22c55e;
+        @radius: 4px;
+        @selector: ~".panel";
+
+        .rounded(@r: @radius) when (@r > 0) {
+          border-radius: @r;
+        }
+
+        @{selector} {
+          .rounded(6px);
+          color: darken(@brand, 15%);
+          background: fade(@brand, 10%);
+
+          &:hover { color: @brand; }
+          .title { font-size: 1.25em; content: "@{selector} title"; }
+
+          @media (max-width: 600px) {
+            padding: (@radius * 2);
+          }
         }
     """.trimIndent()
 

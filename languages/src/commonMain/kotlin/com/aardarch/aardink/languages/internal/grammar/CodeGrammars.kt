@@ -273,3 +273,173 @@ internal const val C_LIKE_CONFIGURATION = """
   ]
 }
 """
+
+/**
+ * Groovy, and so Gradle's build scripts: Java's words and Groovy's own, the four quotes with `$`
+ * and `${}` in the double ones, and slashy strings after `~`, `=~` and `==~` (anywhere else a `/`
+ * is division) and `$/ /$`.
+ */
+internal const val GROOVY_GRAMMAR = """
+{
+  "tokenPostfix": ".groovy",
+  "comments": { "lineComment": "//", "blockComment": ["/*", "*/"] },
+  "keywords": [
+    "abstract", "as", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const", "continue",
+    "def", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float", "for", "goto", "if",
+    "implements", "import", "in", "instanceof", "int", "interface", "long", "native", "new", "package", "private",
+    "protected", "public", "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+    "threadsafe", "throw", "throws", "trait", "transient", "try", "var", "void", "volatile", "while", "yield",
+    "record", "sealed", "permits", "true", "false", "null"
+  ],
+  "tokenizer": {
+    "root": [
+      ["^#!.*$", "metatag"],
+      { "include": "@whitespace" },
+      ["@\\s*[A-Za-z_][\\w.]*", "annotation"],
+      ["(==~|=~|~)(\\s*)(/)", ["operator", "", { "token": "regexp", "next": "@slashy" }]],
+      ["\\$/", "regexp", "@dollarSlashy"],
+      ["'''", "string", "@tripleSingle"],
+      ["\"\"\"", "string", "@tripleDouble"],
+      ["'", "string", "@single"],
+      ["\"", "string", "@double"],
+      ["0[xX][0-9a-fA-F_]+[lLgGiI]?", "number.hex"],
+      ["0[bB][01_]+[lLgGiI]?", "number"],
+      ["(?:\\d[\\d_]*(?:\\.\\d[\\d_]*)?|\\.\\d[\\d_]*)(?:[eE][-+]?\\d+)?[gGlLiIdDfF]?", "number"],
+      ["(def)(\\s+)([A-Za-z_]\\w*)(?=\\s*\\()", ["keyword", "", "function"]],
+      ["[a-z_$][\\w$]*(?=\\s*\\()", { "cases": { "@keywords": "keyword", "@default": "function" } }],
+      ["[A-Z][\\w$]*", { "cases": { "@keywords": "keyword", "@default": "type" } }],
+      ["[a-z_$][\\w$]*", { "cases": { "@keywords": "keyword", "@default": "identifier" } }],
+      ["[{}()\\[\\]]", "@brackets"],
+      ["\\.\\.<?|\\?\\.|\\?:|\\*\\.|\\.&|\\.@|->|<=>|\\*\\*=?|\\+\\+|--|&&|\\|\\||<<=?|>>>?=?|[-+*/%&|^!=<>]=?|[?~:]", "operator"],
+      ["[;,.]", "delimiter"]
+    ],
+    "whitespace": [
+      ["\\s+", ""],
+      ["/\\*\\*(?!/)", "comment.doc", "@javadoc"],
+      ["/\\*", "comment", "@comment"],
+      ["//.*$", "comment"]
+    ],
+    "comment": [
+      ["[^*/]+", "comment"],
+      ["\\*/", "comment", "@pop"],
+      ["[*/]", "comment"]
+    ],
+    "javadoc": [
+      ["@\\w+", "comment.doc.tag"],
+      ["[^*@]+", "comment.doc"],
+      ["\\*/", "comment.doc", "@pop"],
+      ["[*@]", "comment.doc"]
+    ],
+    "single": [
+      ["[^\\\\']+", { "cases": { "@eos": { "token": "string", "next": "@pop" }, "@default": "string" } }],
+      ["\\\\.", "string.escape"],
+      ["'", "string", "@pop"]
+    ],
+    "tripleSingle": [
+      ["[^\\\\']+", "string"],
+      ["\\\\.", "string.escape"],
+      ["'''", "string", "@pop"],
+      ["['\\\\]", "string"]
+    ],
+    "double": [
+      ["[^\\\\\"$]+", { "cases": { "@eos": { "token": "string", "next": "@pop" }, "@default": "string" } }],
+      ["\\\\.", "string.escape"],
+      { "include": "@gstring" },
+      ["\"", "string", "@pop"]
+    ],
+    "tripleDouble": [
+      ["[^\\\\\"$]+", "string"],
+      ["\\\\.", "string.escape"],
+      { "include": "@gstring" },
+      ["\"\"\"", "string", "@pop"],
+      ["[\"\\\\]", "string"]
+    ],
+    "gstring": [
+      ["\\$\\{", "delimiter.bracket", "@interpolation"],
+      ["\\$[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*", "variable"],
+      ["\\$", "string"]
+    ],
+    "interpolation": [
+      ["\\}", "delimiter.bracket", "@pop"],
+      ["\\{", "@brackets", "@braces"],
+      { "include": "@root" }
+    ],
+    "braces": [
+      ["\\{", "@brackets", "@push"],
+      ["\\}", "@brackets", "@pop"],
+      { "include": "@root" }
+    ],
+    "slashy": [
+      ["[^/\\\\$]+", "regexp"],
+      ["\\\\.", "regexp.escape"],
+      ["\\$\\{", "delimiter.bracket", "@interpolation"],
+      ["\\$[A-Za-z_]\\w*", "variable"],
+      ["\\$", "regexp"],
+      ["/", "regexp", "@pop"]
+    ],
+    "dollarSlashy": [
+      ["[^/$]+", "regexp"],
+      ["/\\$", "regexp", "@pop"],
+      ["\\$\\$|\\$/", "regexp.escape"],
+      ["\\$\\{", "delimiter.bracket", "@interpolation"],
+      ["\\$[A-Za-z_]\\w*", "variable"],
+      ["[/$]", "regexp"]
+    ]
+  }
+}
+"""
+
+/**
+ * Dockerfiles: instructions at the start of a line, parser directives, a stage's name after `AS`,
+ * variables, quotes, flags and the JSON form's brackets. What `RUN` runs is not read as shell.
+ */
+internal const val DOCKERFILE_GRAMMAR = """
+{
+  "tokenPostfix": ".dockerfile",
+  "comments": { "lineComment": "#" },
+  "instructions": "FROM|RUN|CMD|LABEL|MAINTAINER|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|STOPSIGNAL|HEALTHCHECK|SHELL|from|run|cmd|label|maintainer|expose|env|add|copy|entrypoint|volume|user|workdir|arg|onbuild|stopsignal|healthcheck|shell",
+  "tokenizer": {
+    "root": [
+      ["^(\\s*)(#\\s*(?:syntax|escape|check)\\s*=.*)$", ["", "metatag"]],
+      ["^\\s*#.*$", "comment"],
+      ["^(\\s*)(@instructions)(?=\\s|$)", ["", "keyword"]],
+      ["(\\s+)(AS|as)(\\s+)([\\w.-]+)(\\s*)$", ["", "keyword", "", "type", ""]],
+      ["\\s+", ""],
+      ["\\$\\{[^}]*\\}|\\$[A-Za-z_]\\w*", "variable"],
+      ["\"", "string", "@double"],
+      ["'", "string", "@single"],
+      ["--[\\w-]+", "attribute.name"],
+      ["[A-Za-z_][\\w.-]*(?==)", "variable"],
+      ["\\b\\d+(?:/(?:tcp|udp))?\\b", "number"],
+      ["\\\\$", "delimiter"],
+      ["[\\[\\],=]", "delimiter"],
+      ["&&|\\|\\||[|;<>]", "operator"],
+      ["[^\\s\"'$\\\\\\[\\],=&|;<>]+", ""]
+    ],
+    "double": [
+      ["[^\\\\\"$]+", "string"],
+      ["\\\\.", "string.escape"],
+      ["\\$\\{[^}]*\\}|\\$[A-Za-z_]\\w*", "variable"],
+      ["[$\\\\]", "string"],
+      ["\"", "string", "@pop"]
+    ],
+    "single": [
+      ["[^']+", "string"],
+      ["'", "string", "@pop"]
+    ]
+  }
+}
+"""
+
+internal const val DOCKERFILE_CONFIGURATION = """
+{
+  "comments": { "lineComment": "#" },
+  "brackets": [["{", "}"], ["[", "]"], ["(", ")"]],
+  "autoClosingPairs": [
+    ["{", "}"], ["[", "]"], ["(", ")"],
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "'", "close": "'", "notIn": ["string", "comment"] }
+  ],
+  "surroundingPairs": [["{", "}"], ["[", "]"], ["(", ")"], ["\"", "\""], ["'", "'"]]
+}
+"""

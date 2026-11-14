@@ -17,9 +17,11 @@ package com.aardarch.aardink.languages.internal.grammar
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.IncrementalTokenizer
+import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.languages.DeclarativeGrammar
 import com.aardarch.aardink.languages.DeclarativeTokenizer
@@ -35,7 +37,8 @@ import com.aardarch.aardink.languages.internal.ConfigurationLanguageService
  * at the first key that asks it something.
  *
  * [comments] stand for the grammar's and the configuration's (they say the same), so toggling a
- * comment reads neither. [folding] and [toolbar] are given here for the same reason.
+ * comment reads neither. [folding] and [toolbar] are given here for the same reason. [service], when
+ * given, answers what the configuration does not (CSS's colours for SCSS and LESS).
  */
 internal fun grammarLanguage(
     id: String,
@@ -46,13 +49,22 @@ internal fun grammarLanguage(
     comments: CommentSyntax?,
     folding: FoldingProvider,
     toolbar: List<Char>,
+    service: LanguageService? = null,
 ): LanguageDefinition = LanguageDefinition(
     id = id,
     displayName = displayName,
     fileExtensions = fileExtensions,
     tokenizer = LazyGrammarTokenizer(grammar, comments, toolbar),
     foldingProvider = folding,
-    languageService = LazyConfiguredService(configuration, comments),
+    languageService = LazyConfiguredService(configuration, comments).let {
+        if (service ==
+            null
+        ) {
+            it
+        } else {
+            CompositeLanguageService(it, service)
+        }
+    },
     keyboardToolbarChars = toolbar,
 )
 

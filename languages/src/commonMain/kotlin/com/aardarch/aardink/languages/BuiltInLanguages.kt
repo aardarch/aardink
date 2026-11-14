@@ -21,21 +21,30 @@ import com.aardarch.aardink.core.PlainTextTokenizer
 import com.aardarch.aardink.languages.internal.css.CssLanguageService
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.folding.BraceFoldingProvider
+import com.aardarch.aardink.languages.internal.folding.DiffFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.MarkdownFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.TagFoldingProvider
 import com.aardarch.aardink.languages.internal.folding.TomlFoldingProvider
 import com.aardarch.aardink.languages.internal.grammar.C_LIKE_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DIFF_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DIFF_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.DOCKERFILE_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DOCKERFILE_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.GROOVY_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.INI_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.INI_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.JAVA_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.LESS_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.PYTHON_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PYTHON_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.SCSS_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.SHELL_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.SHELL_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.SQL_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.SQL_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.STYLE_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.grammarLanguage
@@ -224,6 +233,71 @@ object BuiltInLanguages {
         toolbar = listOf('{', '}', '(', ')', ';', '"', '.', '<', '>', '=', '@'),
     )
 
+    /** Groovy, and so Gradle's `.gradle` build scripts. */
+    val Groovy: LanguageDefinition = grammarLanguage(
+        id = "groovy",
+        displayName = "Groovy",
+        fileExtensions = listOf("groovy", "gradle", "gvy", "gy", "gsh"),
+        grammar = GROOVY_GRAMMAR,
+        configuration = C_LIKE_CONFIGURATION,
+        comments = C_COMMENTS,
+        folding = BraceFoldingProvider(supportsTripleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
+        toolbar = listOf('{', '}', '(', ')', '"', '\'', '.', '$', '=', '[', ']', '-', '>'),
+    )
+
+    /**
+     * Dockerfiles. A file named `Dockerfile` has no extension, so a host looks it up by the name:
+     * `byExtension("Dockerfile")` finds this, as does a `.dockerfile` file.
+     */
+    val Dockerfile: LanguageDefinition = grammarLanguage(
+        id = "dockerfile",
+        displayName = "Dockerfile",
+        fileExtensions = listOf("dockerfile", "containerfile"),
+        grammar = DOCKERFILE_GRAMMAR,
+        configuration = DOCKERFILE_CONFIGURATION,
+        comments = HASH_COMMENTS,
+        folding = IndentationFoldingProvider().withRegionMarkers(FoldingRegionMarkers.HashComment),
+        toolbar = listOf('$', '{', '}', '[', ']', '"', '=', '-', '\\', '&', '/', ':'),
+    )
+
+    /** Unified diffs and patches: each file and each hunk folds. */
+    val Diff: LanguageDefinition = grammarLanguage(
+        id = "diff",
+        displayName = "Diff",
+        fileExtensions = listOf("diff", "patch"),
+        grammar = DIFF_GRAMMAR,
+        configuration = DIFF_CONFIGURATION,
+        comments = null,
+        folding = DiffFoldingProvider,
+        toolbar = listOf('+', '-', '@', '\\'),
+    )
+
+    /** SCSS, with CSS's colour swatches. */
+    val Scss: LanguageDefinition = grammarLanguage(
+        id = "scss",
+        displayName = "SCSS",
+        fileExtensions = listOf("scss"),
+        grammar = SCSS_GRAMMAR,
+        configuration = STYLE_CONFIGURATION,
+        comments = C_COMMENTS,
+        folding = BraceFoldingProvider(supportsSingleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
+        toolbar = listOf('{', '}', ':', ';', '$', '.', '&', '#', '(', ')', '@', '%'),
+        service = CssLanguageService,
+    )
+
+    /** LESS, with CSS's colour swatches. */
+    val Less: LanguageDefinition = grammarLanguage(
+        id = "less",
+        displayName = "LESS",
+        fileExtensions = listOf("less"),
+        grammar = LESS_GRAMMAR,
+        configuration = STYLE_CONFIGURATION,
+        comments = C_COMMENTS,
+        folding = BraceFoldingProvider(supportsSingleQuoted = true).withRegionMarkers(FoldingRegionMarkers.LineComment),
+        toolbar = listOf('{', '}', ':', ';', '@', '.', '&', '#', '(', ')', '~', '%'),
+        service = CssLanguageService,
+    )
+
     val PlainText: LanguageDefinition = LanguageDefinition(
         id = "plaintext",
         displayName = "Plain Text",
@@ -250,6 +324,11 @@ object BuiltInLanguages {
         Python,
         Sql,
         Java,
+        Groovy,
+        Dockerfile,
+        Diff,
+        Scss,
+        Less,
         PlainText,
     )
 }

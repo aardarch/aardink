@@ -206,3 +206,40 @@ internal const val SQL_CONFIGURATION = """
   "folding": { "markers": { "start": "^\\s*--\\s*#?region\\b", "end": "^\\s*--\\s*#?endregion\\b" } }
 }
 """
+
+/**
+ * Unified diffs and patches, and the `<` and `>` lines of a plain diff. A file's headers come
+ * before its first hunk; in a hunk, a line is what its first character says, so `--- x` there is
+ * a removed line. Inserted lines are `string.inserted` and removed ones `invalid.deleted`, as the
+ * built-in themes have no colour of their own for either.
+ */
+internal const val DIFF_GRAMMAR = """
+{
+  "tokenPostfix": ".diff",
+  "tokenizer": {
+    "root": [
+      ["^diff\\b.*$", "keyword"],
+      ["^(?:---|\\+\\+\\+|\\*\\*\\*)(?:\\s.*)?$", "type"],
+      ["^(@@[^@]*@@)(.*)$", ["metatag", { "token": "function", "next": "@hunk" }]],
+      ["^(?:index|similarity|dissimilarity|rename|copy|new|deleted|old|Binary|Only in)\\b.*$", "comment"],
+      { "include": "@lines" },
+      [".+", ""]
+    ],
+    "hunk": [
+      ["^(@@[^@]*@@)(.*)$", ["metatag", "function"]],
+      { "include": "@lines" },
+      ["^ .*$", ""],
+      ["^(?=.)", { "token": "@rematch", "next": "@pop" }]
+    ],
+    "lines": [
+      ["^[-<].*$", "invalid.deleted"],
+      ["^[+>].*$", "string.inserted"],
+      ["^!.*$", "keyword.changed"],
+      ["^\\\\.*$", "comment"]
+    ]
+  }
+}
+"""
+
+/** A diff closes nothing as it is typed: its lines are other files' text. */
+internal const val DIFF_CONFIGURATION = "{}"

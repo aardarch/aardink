@@ -16,23 +16,33 @@
 package com.aardarch.aardink.languages
 
 import com.aardarch.aardink.core.CodeDocument
+import com.aardarch.aardink.core.FoldRange
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.languages.internal.grammar.C_LIKE_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DIFF_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DIFF_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.DOCKERFILE_CONFIGURATION
+import com.aardarch.aardink.languages.internal.grammar.DOCKERFILE_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.GROOVY_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.INI_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.INI_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.JAVA_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.LESS_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PROPERTIES_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.PYTHON_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.PYTHON_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.SCSS_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.SHELL_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.SHELL_GRAMMAR
 import com.aardarch.aardink.languages.internal.grammar.SQL_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.SQL_GRAMMAR
+import com.aardarch.aardink.languages.internal.grammar.STYLE_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_CONFIGURATION
 import com.aardarch.aardink.languages.internal.grammar.YAML_GRAMMAR
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** 0.10's grammar-as-data languages: each parses, and colours what it should. */
@@ -51,7 +61,10 @@ class GrammarLanguagesTest {
 
     @Test
     fun `every grammar and configuration parses`() {
-        for (grammar in listOf(YAML_GRAMMAR, PROPERTIES_GRAMMAR, INI_GRAMMAR, SHELL_GRAMMAR, PYTHON_GRAMMAR, SQL_GRAMMAR, JAVA_GRAMMAR)) {
+        for (grammar in listOf(
+            YAML_GRAMMAR, PROPERTIES_GRAMMAR, INI_GRAMMAR, SHELL_GRAMMAR, PYTHON_GRAMMAR, SQL_GRAMMAR, JAVA_GRAMMAR,
+            GROOVY_GRAMMAR, DOCKERFILE_GRAMMAR, DIFF_GRAMMAR, SCSS_GRAMMAR, LESS_GRAMMAR,
+        )) {
             DeclarativeGrammar.parse(grammar)
         }
         for (configuration in listOf(
@@ -62,6 +75,9 @@ class GrammarLanguagesTest {
             PYTHON_CONFIGURATION,
             SQL_CONFIGURATION,
             C_LIKE_CONFIGURATION,
+            DOCKERFILE_CONFIGURATION,
+            DIFF_CONFIGURATION,
+            STYLE_CONFIGURATION,
         )) {
             LanguageConfiguration.parse(configuration)
         }
@@ -78,6 +94,11 @@ class GrammarLanguagesTest {
             "python" to "py",
             "sql" to "sql",
             "java" to "java",
+            "groovy" to "gradle",
+            "dockerfile" to "Dockerfile",
+            "diff" to "patch",
+            "scss" to "scss",
+            "less" to "less",
         )) {
             assertEquals(id, registry.byId(id)?.id)
             assertEquals(id, registry.byExtension(extension)?.id, extension)
@@ -180,6 +201,137 @@ class GrammarLanguagesTest {
         assertScope(java, text, "\\n", "string.escape")
         assertScope(java, text, "1L", "number")
         assertScope(java, text, "// c", "comment")
+    }
+
+    @Test
+    fun groovy() {
+        val text = "plugins { id 'java' }\ndef greet(name) {\n  println \"Hi \${name.trim()} and \$who\"\n" +
+            "  def pattern = ~/a\\d+/\n  return 1..10\n}"
+        val groovy = BuiltInLanguages.Groovy
+        assertScope(groovy, text, "'java'", "string")
+        assertScope(groovy, text, "def", "keyword")
+        assertScope(groovy, text, "greet", "function")
+        assertScope(groovy, text, "println", "identifier")
+        assertScope(groovy, text, "\${", "delimiter.bracket")
+        assertScope(groovy, text, "trim", "function")
+        assertScope(groovy, text, "\$who", "variable")
+        assertScope(groovy, text, "/a", "regexp")
+        assertScope(groovy, text, "..", "operator")
+        assertScope(groovy, text, "10", "number")
+    }
+
+    @Test
+    fun `a Groovy interpolation ends at its own brace`() {
+        val text = "\"\${list.collect { it * 2 }} done\"\nx"
+        assertScope(BuiltInLanguages.Groovy, text, " done\"", "string")
+        assertScope(BuiltInLanguages.Groovy, text, "x", "identifier")
+    }
+
+    @Test
+    fun dockerfile() {
+        val text = "# syntax=docker/dockerfile:1\nFROM node:20  AS build\n# step\nENV PORT=8080\n" +
+            "COPY --from=build /app \"\$HOME/app\"\nRUN npm ci && \\\n    npm run build\nEXPOSE 8080/tcp"
+        val docker = BuiltInLanguages.Dockerfile
+        assertScope(docker, text, "# syntax=docker/dockerfile:1", "metatag")
+        assertScope(docker, text, "FROM", "keyword")
+        assertScope(docker, text, "AS", "keyword")
+        assertScope(docker, text, "build", "type")
+        assertScope(docker, text, "# step", "comment")
+        assertScope(docker, text, "PORT", "variable")
+        assertScope(docker, text, "--from", "attribute.name")
+        assertScope(docker, text, "\$HOME", "variable")
+        assertScope(docker, text, "&&", "operator")
+        assertTrue(scopes(docker, text).none { it.first == "run" }, "a continued line's words are not instructions")
+        assertScope(docker, text, "8080/tcp", "number")
+    }
+
+    @Test
+    fun diff() {
+        val text = "diff --git a/x.txt b/x.txt\nindex 1..2 100644\n--- a/x.txt\n+++ b/x.txt\n" +
+            "@@ -1,3 +1,3 @@ fun main\n keep\n--- removed\n+added\n\\ No newline at end of file\ndiff --git a/y b/y"
+        val diff = BuiltInLanguages.Diff
+        assertScope(diff, text, "diff --git a/x.txt b/x.txt", "keyword")
+        assertScope(diff, text, "index 1..2 100644", "comment")
+        assertScope(diff, text, "--- a/x.txt", "type")
+        assertScope(diff, text, "+++ b/x.txt", "type")
+        assertScope(diff, text, "@@ -1,3 +1,3 @@", "metatag")
+        assertScope(diff, text, " fun main", "function")
+        assertScope(diff, text, "--- removed", "invalid.deleted")
+        assertScope(diff, text, "+added", "string.inserted")
+        assertScope(diff, text, "\\ No newline at end of file", "comment")
+        assertScope(diff, text, "diff --git a/y b/y", "keyword")
+    }
+
+    @Test
+    fun `a diff folds by file and by hunk, counting the hunk's lines`() {
+        val text = listOf(
+            "diff --git a/x b/x", // 0
+            "--- a/x",
+            "+++ b/x",
+            "@@ -1,2 +1,2 @@", // 3
+            " same",
+            "--- gone",
+            "+++ new", // 6: still the hunk, by its counts
+            "@@ -9 +9,2 @@", // 7
+            "-old",
+            "+new",
+            "+more", // 10
+            "diff --git a/y b/y", // 11
+            "--- a/y",
+            "+++ b/y",
+            "@@ -1 +1 @@", // 14
+            "-a",
+            "+b",
+        ).joinToString("\n")
+        val ranges = BuiltInLanguages.Diff.foldingProvider.foldableRanges(CodeDocument(text))
+        assertEquals(
+            listOf(FoldRange(0, 10), FoldRange(3, 6), FoldRange(7, 10), FoldRange(11, 16), FoldRange(14, 16)),
+            ranges.sortedWith(compareBy({ it.startLine }, { -it.endLine })),
+        )
+    }
+
+    @Test
+    fun scss() {
+        val text = "@use 'sass:math';\n\$gap: 8px !default;\n// note\n.card {\n  color: #ff0000;\n" +
+            "  &:hover { margin: math.div(\$gap, 2); }\n  #{\$side}-x: 1em;\n  a:hover { b: 0 }\n}"
+        val scss = BuiltInLanguages.Scss
+        assertScope(scss, text, "@use", "annotation")
+        assertScope(scss, text, "\$gap", "variable")
+        assertScope(scss, text, "8px", "number")
+        assertScope(scss, text, "!default", "annotation")
+        assertScope(scss, text, "// note", "comment")
+        assertScope(scss, text, ".card", "type")
+        assertScope(scss, text, "color", "keyword")
+        assertScope(scss, text, "#ff0000", "number")
+        assertScope(scss, text, ":hover", "function")
+        assertScope(scss, text, "#{", "delimiter.bracket")
+        assertScope(scss, text, "a", "identifier")
+        assertScope(scss, text, "div", "function")
+    }
+
+    @Test
+    fun less() {
+        val text = "@import \"base\";\n@width: 10px;\n.box { width: @width; .mixin(); }\n" +
+            ".m() when (iscolor(@c)) { color: ~\"@{name}\"; }\n@media screen { a { b: 1 } }"
+        val less = BuiltInLanguages.Less
+        assertScope(less, text, "@import", "annotation")
+        assertScope(less, text, "@width", "variable")
+        assertScope(less, text, "10px", "number")
+        assertScope(less, text, ".box", "type")
+        assertScope(less, text, "width", "keyword")
+        assertScope(less, text, ".mixin", "type")
+        assertScope(less, text, "when", "keyword")
+        assertScope(less, text, "iscolor", "function")
+        assertScope(less, text, "@{name}", "variable")
+        assertScope(less, text, "@media", "annotation")
+    }
+
+    @Test
+    fun `SCSS and LESS show CSS's colours, and a diff closes nothing`() = kotlinx.coroutines.test.runTest {
+        val document = CodeDocument("a { color: #00ff00; }")
+        assertEquals(1, BuiltInLanguages.Scss.languageService!!.documentColors(document).size)
+        assertEquals(1, BuiltInLanguages.Less.languageService!!.documentColors(document).size)
+        assertNull(BuiltInLanguages.Diff.languageService!!.autoClose(CodeDocument("("), 0, '('))
     }
 
     @Test
