@@ -119,6 +119,7 @@ internal fun CompletionDetailCard(item: CompletionItem, onOpenLink: ((String) ->
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (detail != null) {

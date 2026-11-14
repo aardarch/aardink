@@ -602,7 +602,8 @@ async function serverTypingCheck(page) {
   const server = await startLoopbackLsp('', { answers: { 'textDocument/completion': () => ({ isIncomplete: false, items: [] }) } });
   try {
     const expected = '  word don\'t (a) [b] {c} "d"\n(';
-    for (const language of ['python', 'plaintext']) {
+    // A language this page does not know (no service at all), and one it knows with none.
+    for (const language of ['cobol', 'plaintext']) {
       const without = await typedIn(language, null);
       const opened = server.count('textDocument/didOpen');
       const served = await typedIn(language, server);
@@ -929,6 +930,123 @@ async function interactionChecks(page) {
  * provider for completions when typed. Accepting one is left to the unit tests: this page has a
  * touch screen, so completions show in the strip above the keyboard, which Enter does not reach.
  */
+/**
+ * registerFont through the npm package: the bundled font, by the URL the page already loaded it
+ * from, registered under another name and named by fontFamily; a URL that is not there rejects.
+ */
+async function fontCheck(page) {
+  setPhase('registerFont');
+  // A missing font's 404, if the server gives one, which the browser logs.
+  expectedConsole = [/Failed to load resource/];
+  const result = await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerFont } = window.__aardink;
+    const url = performance.getEntriesByType('resource').map((entry) => entry.name).find((name) => name.includes('jetbrains_mono_regular'));
+    if (!url) return { url: false };
+    await registerFont('Smoke Mono', url);
+    let rejected = false;
+    await registerFont('Missing Mono', '/no-such-font.ttf').catch(() => { rejected = true; });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'font', fontFamily: "'Smoke Mono', monospace" });
+    return { url: true, rejected };
+  }, MOUNT);
+  await sleep(800);
+  expectedConsole = [];
+  const value = await page.evaluate(() => window.__smokeEditor.getValue());
+  return {
+    'registerFont takes a font by URL, and fontFamily names it': result.url && value === 'font',
+    'registerFont rejects what is not a font (a page served for a missing file)': result.rejected === true,
+  };
+}
+
+/**
+ * 0.10's providers through the npm package: formatting and go to definition answer through the
+ * dispatcher, and a language without provideRenameEdits offers no rename.
+ */
+async function providersCheck(page) {
+  setPhase('0.10 providers');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerLanguage } = window.__aardink;
+    await registerLanguage(
+      { id: 'toy-providers', grammar: { tokenizer: { root: [[/\w+/, 'text']] } } },
+      {
+        provideDocumentFormattingEdits: (text, options) => [{
+          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+          text: options.insertSpaces ? '// formatted\n' : '// tabs\n',
+        }],
+        provideDefinition: () => ({ range: { startLineNumber: 2, startColumn: 5, endLineNumber: 2, endColumn: 8 } }),
+      },
+    );
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'use foo\nfun foo', language: 'toy-providers' });
+  }, MOUNT);
+  await sleep(800);
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 6 }));
+  const defined = await page.evaluate(() => window.__smokeEditor.trigger(null, 'editor.action.revealDefinition'));
+  await sleep(300);
+  const position = await page.evaluate(() => window.__smokeEditor.getPosition());
+  const formatted = await page.evaluate(() => window.__smokeEditor.format());
+  const value = await page.evaluate(() => window.__smokeEditor.getValue());
+  const rename = await page.evaluate(() => window.__smokeEditor.getAction('editor.action.rename').isSupported());
+  return {
+    'provideDefinition moves the caret to what it answers': defined === true && position.lineNumber === 2 && position.column >= 5,
+    'provideDocumentFormattingEdits formats through format()': formatted === true && value.startsWith('// formatted\nuse foo'),
+    'no provideRenameEdits, no rename': rename === false,
+  };
+}
+
+/**
+ * 0.10's keys on the web: Ctrl+Shift+F and trigger('workbench.action.findInFiles') hand the
+ * selection to onSearchWorkspace, and stop once its listener is gone; Shift+Alt+A, an Alt key
+ * Compose's web input would type, comments the selection.
+ */
+async function searchAndAltKeyCheck(page) {
+  setPhase('workspace search and Alt keys');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor } = window.__aardink;
+    window.__searches = [];
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'hello world', language: 'typescript' });
+    window.__stopSearch = window.__smokeEditor.onSearchWorkspace((search) => window.__searches.push(search));
+  }, MOUNT);
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  await sleep(800);
+  await page.mouse.click(300, 12);
+  await page.evaluate(() => window.__smokeEditor.setSelections([{
+    selectionStartLineNumber: 1, selectionStartColumn: 7, positionLineNumber: 1, positionColumn: 12,
+  }]));
+  await sleep(100);
+  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('KeyF');
+  await page.keyboard.up('Shift');
+  await page.keyboard.up('Control');
+  await sleep(300);
+  const byKey = await page.evaluate(() => window.__searches.slice());
+  const triggered = await page.evaluate(() => window.__smokeEditor.trigger(null, 'workbench.action.findInFiles'));
+  await page.evaluate(() => window.__stopSearch.dispose());
+  await sleep(300);
+  const afterDispose = await page.evaluate(() => window.__smokeEditor.trigger(null, 'workbench.action.findInFiles'));
+  const searches = await page.evaluate(() => window.__searches.length);
+
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyA');
+  await page.keyboard.up('Alt');
+  await page.keyboard.up('Shift');
+  await sleep(300);
+  const commented = await value();
+  return {
+    'Ctrl+Shift+F hands the selection to onSearchWorkspace':
+      byKey.length === 1 && byKey[0].query === 'world' && byKey[0].isRegex === false,
+    'trigger(workbench.action.findInFiles) runs it, and not once its listener is disposed':
+      triggered === true && afterDispose === false && searches === 2,
+    'Shift+Alt+A comments the selection': commented.includes('/*') && commented.includes('world') && !commented.includes('A'),
+  };
+}
+
 async function triggerCheck(page) {
   setPhase('trigger characters');
   await page.evaluate(async (mount) => {
@@ -1074,6 +1192,9 @@ try {
     ...(await languageServerCheck(desktop)),
     ...(await serverTypingCheck(desktop)),
     ...(await linkCheck(desktop)),
+    ...(await searchAndAltKeyCheck(desktop)),
+    ...(await providersCheck(desktop)),
+    ...(await fontCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);

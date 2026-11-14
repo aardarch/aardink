@@ -39,6 +39,25 @@ class FindReplaceState {
     var wholeWord by mutableStateOf(false)
     var useRegex by mutableStateOf(false)
 
+    /**
+     * Find in selection: matches only within the text selected when this was switched on (the
+     * caret's line when nothing was), which moves with the edits made since. Each time the panel
+     * opens with it on and text selected, that selection becomes the place searched.
+     */
+    var inSelection by mutableStateOf(false)
+
+    /**
+     * Preserve case: a replacement takes the case of the text it replaces, all capitals, all small
+     * letters or a capital first letter, as VS Code's does.
+     */
+    var preserveCase by mutableStateOf(false)
+
+    /** Where [inSelection] searches, moved along with each edit; the layout attaches it to the document. */
+    internal val scopeTracker = TrackedRanges<IntRange>({ it }, { _, range -> range }, keepsOneCharacter = false)
+
+    /** The place [inSelection] searches, or null for the whole document. */
+    internal val scope: IntRange? get() = if (inSelection) scopeTracker.items.firstOrNull() else null
+
     var matches by mutableStateOf<List<IntRange>>(emptyList())
         internal set
 
@@ -72,6 +91,7 @@ class FindReplaceState {
     }
 
     fun hide() {
+        remember()
         visible = false
         matches = emptyList()
         matchesCapped = false
@@ -96,5 +116,19 @@ class FindReplaceState {
 
     /** The edits that replace [targets] in [text] with [replacement], groups expanded in regex mode. */
     internal fun replaceEdits(text: CharSequence, targets: List<IntRange>): List<TextEdit> =
-        FindEngine.replaceEdits(text, targets, query, replacement, toOptions())
+        FindEngine.replaceEdits(text, targets, query, replacement, toOptions(), preserveCase)
+
+    // ── History ───────────────────────────────────────────────────────────────
+
+    /** What was searched for, newest first. */
+    internal val queryHistory = SearchHistory()
+
+    /** What was replaced with, newest first. */
+    internal val replaceHistory = SearchHistory()
+
+    /** Keeps the query and, when [replaced], the replacement in their histories. */
+    internal fun remember(replaced: Boolean = false) {
+        queryHistory.add(query)
+        if (replaced) replaceHistory.add(replacement)
+    }
 }

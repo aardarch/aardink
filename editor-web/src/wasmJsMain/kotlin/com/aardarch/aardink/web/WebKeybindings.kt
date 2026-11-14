@@ -130,6 +130,8 @@ internal object MonacoActions {
         put("editor.action.marker.prev", "Go to Previous Problem" to EditorCommand.PreviousProblem)
         put("actions.find", "Find" to EditorCommand.ShowFind)
         put("editor.action.startFindReplaceAction", "Replace" to EditorCommand.ShowReplace)
+        // VS Code's id: Monaco has no such action; the web editor runs it for onSearchWorkspace.
+        put("workbench.action.findInFiles", "Search: Find in Files" to EditorCommand.SearchWorkspace)
         put("editor.action.gotoLine", "Go to Line/Column..." to EditorCommand.GoToLine)
         put("editor.foldAll", "Fold All" to EditorCommand.FoldAll)
         put("editor.unfoldAll", "Unfold All" to EditorCommand.UnfoldAll)

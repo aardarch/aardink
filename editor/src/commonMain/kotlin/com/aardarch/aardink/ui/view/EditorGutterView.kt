@@ -47,10 +47,12 @@ import com.aardarch.aardink.ui.EditorDefaults
 import com.aardarch.aardink.ui.EditorTestTags
 import com.aardarch.aardink.ui.FOLD_LANE_WIDTH
 import com.aardarch.aardink.ui.GutterAnnotationKind
+import com.aardarch.aardink.ui.LineNumberStyle
 import com.aardarch.aardink.ui.LocalEditorTypography
 import com.aardarch.aardink.ui.drawAnnotationDot
 import com.aardarch.aardink.ui.drawFoldTriangle
 import com.aardarch.aardink.ui.rememberGutterWidth
+import kotlin.math.abs
 
 /** What the gutter shows per line, and what tapping it does. */
 internal class GutterContent(
@@ -71,6 +73,10 @@ internal class GutterContent(
     val reserveAnnotationLane: Boolean,
     val showLineNumbers: Boolean,
     val onToggleFold: (Int) -> Unit,
+    /** How lines are numbered; [caretLine] is read only for the styles that count from it. */
+    val lineNumbers: LineNumberStyle = LineNumberStyle.Absolute,
+    /** The primary caret's line, read while drawing. */
+    val caretLine: () -> Int = { 0 },
     val onAnnotationTap: (Int) -> Unit,
     /** The host's decorations with a gutter colour: a bar at the text edge on each line they mark. */
     val decorationMarks: List<LineMark> = emptyList(),
@@ -171,8 +177,8 @@ internal fun EditorGutterView(
                     marks.lastOrNull { line.line in it.firstLine..it.lastLine }?.let { mark ->
                         drawRect(mark.color, Offset(size.width - markWidth, top), Size(markWidth, rowsHeight))
                     }
-                    if (shown.showLineNumbers) {
-                        val label = (line.line + 1).toString()
+                    val label = if (shown.showLineNumbers) lineLabel(line.line, shown) else ""
+                    if (label.isNotEmpty()) {
                         if (numbers.size > MAX_CACHED_NUMBERS) numbers.clear()
                         val number = numbers.getOrPut(label) { measurer.measure(label, textStyle) }
                         drawText(
@@ -204,10 +210,9 @@ internal fun EditorGutterView(
                 // Sticky scroll's lines, with their numbers, over the rows at the top.
                 for (stuck in sticky().asReversed()) {
                     drawRect(background, Offset(0f, stuck.top), Size(size.width, lineHeight))
-                    if (shown.showLineNumbers) {
-                        val number = numbers.getOrPut((stuck.line + 1).toString()) {
-                            measurer.measure((stuck.line + 1).toString(), textStyle)
-                        }
+                    val stuckLabel = if (shown.showLineNumbers) lineLabel(stuck.line, shown) else ""
+                    if (stuckLabel.isNotEmpty()) {
+                        val number = numbers.getOrPut(stuckLabel) { measurer.measure(stuckLabel, textStyle) }
                         drawText(
                             number,
                             topLeft = Offset(
@@ -226,3 +231,19 @@ private val GUTTER_MARK_WIDTH = 3.dp
 
 /** Line-number layouts kept at once: a few screens of them. */
 private const val MAX_CACHED_NUMBERS = 512
+
+/** What [line] (0-based) is numbered in the gutter, as [content]'s style has it; empty for none. */
+internal fun lineLabel(line: Int, content: GutterContent): String = when (content.lineNumbers) {
+    LineNumberStyle.Absolute -> (line + 1).toString()
+
+    LineNumberStyle.Relative -> {
+        val caret = content.caretLine()
+        if (line == caret) (line + 1).toString() else abs(line - caret).toString()
+    }
+
+    LineNumberStyle.Interval ->
+        if (line == content.caretLine() || (line + 1) % LINE_NUMBER_INTERVAL == 0) (line + 1).toString() else ""
+}
+
+/** [LineNumberStyle.Interval]'s step, VS Code's. */
+private const val LINE_NUMBER_INTERVAL = 10

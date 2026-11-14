@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlin.random.Random
 import kotlin.test.Test
@@ -121,7 +122,51 @@ class IncrementalTokenizingTest {
         }
     }
 
-    private fun checkRandomEdits(id: String, tokenizer: IncrementalTokenizer, sample: String, random: Random, steps: Int = 60) {
+    // A style or script element's opening tag and body are one construct, so a rescan converges
+    // only past the body, and an edit to the tag recolours it.
+    @Test
+    fun `incremental passes agree with a full scan in HTML with style and script elements`() {
+        val sample = """
+            <html><head>
+            <style>
+              .a { color: #fff; } /* c */
+            </style>
+            <script type="module">
+              const s = "</p>"; if (a < b) { f(`t`); }
+            </script>
+            </head><body><p>x</p>
+            <script type="importmap">{ "a": 1 }</script>
+            </body></html>
+        """.trimIndent()
+        val markup = fragments + listOf("<style>", "</style>", "<script>", "</script>", "script", "style", " type=\"x\"", "/>")
+        repeat(4) { seed -> checkRandomEdits("html", HtmlTokenizer, sample, Random(seed * 17 + 3), fragments = markup) }
+        checkRandomEdits("html", HtmlTokenizer, (sample + "\n").repeat(8), Random(11), steps = 40, fragments = markup)
+    }
+
+    // Whether a `/` divides or starts a regular expression depends on the token before it, so an
+    // edit can change how a later line reads without changing that line.
+    @Test
+    fun `incremental passes agree with a full scan where a slash divides or starts a regular expression`() {
+        val sample = """
+            const r = /a"b/g; // c
+            let q = a / b / c;
+            if (/^\d+$/.test(s)) { x = f(y) / 2; }
+            s.replace(/[/]x/i, "/") /* d */ / k
+        """.trimIndent()
+        val slashes = fragments + listOf("/", " / ", "/x/g", "(", ")", "=", "return ", "]", "\n/")
+        val tokenizer = BuiltInLanguages.TypeScript.tokenizer
+        repeat(6) { seed -> checkRandomEdits("typescript", tokenizer, sample, Random(seed * 13 + 5), fragments = slashes) }
+        checkRandomEdits("typescript", tokenizer, (sample + "\n").repeat(10), Random(23), steps = 40, fragments = slashes)
+    }
+
+    private fun checkRandomEdits(
+        id: String,
+        tokenizer: IncrementalTokenizer,
+        sample: String,
+        random: Random,
+        steps: Int = 60,
+        fragments: List<String> = this.fragments,
+    ) {
         var text = sample
         var full = tokenizer.tokenizeFull(text)
         // What the editor passes back as previousTokens: the list the tokenizer returned last.

@@ -219,20 +219,31 @@ private class WatchedTransport(private val transport: LspTransport, private val 
 
 /**
  * What an editor of a language gets with [servers] following it, more than one taken in the order
- * they connected. A registered language's service stays first, so the host's providers keep their
- * word and the server fills in what they leave ([CompositeLanguageService]'s rules). A built-in
- * language's goes after the server, as a real server knows more than its service does. Either way
- * what happens as text is typed stays the language's ([TypedByLanguage]), and with no language there
- * it is as it would be without a server ([TypedAsWithNoService]).
+ * they connected. A registered language's host providers stay first, so they keep their word; the
+ * server comes next and the language it extends last ([WebLanguageService.withServer]), so the
+ * server fills in what the host leaves before the base does. A built-in language's service goes
+ * after the server, as a real server knows more than its service does. Either way what happens as
+ * text is typed stays the language's ([TypedByLanguage]), and with no language there it is as it
+ * would be without a server ([TypedAsWithNoService]).
  */
 internal fun servedLanguage(own: LanguageService?, servers: List<LanguageService>): LanguageService? {
     val server =
         servers.reduceOrNull<LanguageService, LanguageService> { first, next -> CompositeLanguageService(first, next) } ?: return own
     return when (own) {
         null -> TypedAsWithNoService(server)
-        is WebLanguageService -> TypedByLanguage(primary = own, fallback = server, language = own)
+        is WebLanguageService -> TypedAsLanguage(own.withServer(server), language = own)
         else -> TypedByLanguage(primary = server, fallback = own, language = own)
     }
+}
+
+/** [service] with what happens as text is typed answered by [language] alone, as [TypedByLanguage] has it. */
+private class TypedAsLanguage(service: LanguageService, private val language: LanguageService) : LanguageService by service {
+    override fun smartIndent(document: CodeDocument, lineIndex: Int, options: FormattingOptions): String =
+        language.smartIndent(document, lineIndex, options)
+
+    override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = language.autoClose(document, offset, charTyped)
+
+    override fun surroundingClose(typed: Char): String? = language.surroundingClose(typed)
 }
 
 /**

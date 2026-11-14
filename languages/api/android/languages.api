@@ -3,14 +3,26 @@ public final class com/aardarch/aardink/languages/BuiltInLanguages {
 	public static final field INSTANCE Lcom/aardarch/aardink/languages/BuiltInLanguages;
 	public final fun getAll ()Ljava/util/List;
 	public final fun getCss ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getDiff ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getDockerfile ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getGroovy ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getHtml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getIni ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getJava ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getJson ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getKotlin ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getLess ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getMarkdown ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getPlainText ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getProperties ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getPython ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getScss ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getShell ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getSql ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getToml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getTypeScript ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getXml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun getYaml ()Lcom/aardarch/aardink/languages/LanguageDefinition;
 }
 
 public final class com/aardarch/aardink/languages/DeclarativeGrammar {
@@ -204,8 +216,8 @@ public final class com/aardarch/aardink/languages/LanguageConfiguration$OnEnterR
 public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public static final field $stable I
 	public static final field Companion Lcom/aardarch/aardink/languages/LanguageDefinition$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/util/List;
@@ -213,11 +225,13 @@ public final class com/aardarch/aardink/languages/LanguageDefinition {
 	public final fun component5 ()Lcom/aardarch/aardink/core/FoldingProvider;
 	public final fun component6 ()Lcom/aardarch/aardink/core/LanguageService;
 	public final fun component7 ()Ljava/util/List;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;)Lcom/aardarch/aardink/languages/LanguageDefinition;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageDefinition;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun component8 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;Ljava/util/List;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/languages/LanguageDefinition;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/aardarch/aardink/core/IncrementalTokenizer;Lcom/aardarch/aardink/core/FoldingProvider;Lcom/aardarch/aardink/core/LanguageService;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDisplayName ()Ljava/lang/String;
 	public final fun getFileExtensions ()Ljava/util/List;
+	public final fun getFileNames ()Ljava/util/List;
 	public final fun getFoldingProvider ()Lcom/aardarch/aardink/core/FoldingProvider;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getKeyboardToolbarChars ()Ljava/util/List;
@@ -238,6 +252,7 @@ public final class com/aardarch/aardink/languages/LanguageRegistry {
 	public static final field Companion Lcom/aardarch/aardink/languages/LanguageRegistry$Companion;
 	public fun <init> ()V
 	public final fun byExtension (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageDefinition;
+	public final fun byFileName (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun byId (Ljava/lang/String;)Lcom/aardarch/aardink/languages/LanguageDefinition;
 	public final fun getAll ()Ljava/util/List;
 	public final fun override (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/aardarch/aardink/languages/LanguageRegistry;
@@ -354,8 +369,10 @@ public abstract class com/aardarch/aardink/languages/internal/BaseLanguageServic
 	public fun documentLinks (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun formatOnType (Lcom/aardarch/aardink/core/CodeDocument;ICLcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun formatRange (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/ranges/IntRange;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getCompletionsAreIncomplete ()Z
+	public fun getFormatOnTypeCharacters ()Ljava/util/Set;
 	public fun getSupportsRename ()Z
 	public fun getTriggerCharacters ()Ljava/util/Set;
 	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -467,6 +484,8 @@ public final class com/aardarch/aardink/languages/internal/kotlin/KotlinLanguage
 	public fun documentSymbols (Lcom/aardarch/aardink/core/CodeDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun format (Lcom/aardarch/aardink/core/CodeDocument;Lcom/aardarch/aardink/core/FormattingOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getTriggerCharacters ()Ljava/util/Set;
+	public fun hoverDoc (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signatureHelp (Lcom/aardarch/aardink/core/CodeDocument;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun smartIndent (Lcom/aardarch/aardink/core/CodeDocument;ILcom/aardarch/aardink/core/FormattingOptions;)Ljava/lang/String;
 }
 

@@ -366,7 +366,7 @@ What the server knows joins what the language has:
 
 | | Who answers |
 | --- | --- |
-| A language from `registerLanguage` | The host's providers and the language it extends first, then the server. |
+| A language from `registerLanguage` | The host's providers first, then the server, then the language it extends. `exclusive` and `inheritCompletions: false` leave out the extended language's completions, not the server's. |
 | A built-in language | The server first, then the language. |
 | Enter, closing pairs and surrounding a selection | The language alone, even where it does nothing. A server never changes what typing does, so an editor with no language service, such as plain text or a language this page does not know, types as it does without one. |
 | Completions, diagnostics, code actions, references, links, colours | Both, as above. |
@@ -399,11 +399,16 @@ files to apply them to.
 | --- | --- | --- |
 | `value` | `value` | `createEditor` only; afterwards `setValue`. |
 | `language` | `language` | `kotlin`, `typescript`, `json`, `toml`, `xml`, `html`, `css`, `markdown`, `plaintext`, plus any you register. |
-| `theme` | `theme` | Aardink's theme keys, or your own (see the template). |
+| `theme` | `theme` | Aardink's theme keys, or your own (see the template). Monaco's `vs`, `vs-dark`, `hc-black` and `hc-light` work too. |
 | `fontSize` | `fontSize` | CSS pixels; line height scales with it. |
-| `wordWrap` (`'on'` / `'off'`) | `wordWrap` | Same values. |
+| `wordWrap` (`'on'`, `'off'`, `'wordWrapColumn'`, `'bounded'`), `wordWrapColumn` | The same | Same values. `'off'` by default from 0.10, as Monaco's. Both `'wordWrapColumn'` and `'bounded'` wrap at the column or the edge, whichever comes first. |
+| `wrappingIndent` | The same | `'none'` by default, where Monaco's is `'same'`. |
 | `readOnly` | `readOnly` | |
-| `lineNumbers` (`'on'` / `'off'`) | `showLineNumbers` | Boolean. |
+| `lineNumbers` (`'on'`, `'off'`, `'relative'`, `'interval'`) | The same, or `showLineNumbers` | Monaco's function form is not taken. |
+| `rulers`, `guides: { indentation, bracketPairs }` | The same | Off by default, where Monaco's indentation guides are on. A ruler's colour is the theme's `editorRuler.foreground`; `bracketPairs: 'active'` shows them all. |
+| `cursorStyle`, `cursorBlinking`, `cursorSurroundingLines`, `smoothScrolling` | The same | `'phase'` and `'expand'` blink as `'smooth'`. `smoothScrolling` animates the editor's own scrolls, not the wheel. |
+| `scrollBeyondLastLine`, `dragAndDrop` | The same | Off by default, where Monaco's are on. |
+| `formatOnType` | The same | With `provideOnTypeFormattingEdits` or a language server. Off by default, as Monaco's. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
 | `minimap: { enabled }` | `minimap` | The same object, or a boolean. Blocks rather than characters, as with Monaco's `renderCharacters: false`. |
@@ -412,6 +417,8 @@ files to apply them to.
 | `renderLineHighlight` | `renderLineHighlight` / `highlightCurrentLine` | Anything but `'none'` highlights each caret's line. |
 | `tabSize`, `insertSpaces` | `tabSize`, `insertSpaces` | |
 | Multi-cursor and column selection | The same keys and mouse | Alt+click, Ctrl/Cmd+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down, Shift+Alt+drag, Ctrl+Shift+Alt+arrows. |
+| Keys with Alt and a character | The same | Read by the key's place on the keyboard, as Monaco reads them (Shift+Alt+A, Alt+]). Option on a Mac, and AltGr, still type their characters where no binding takes the key. |
+| VS Code's Find in Files (Ctrl/Cmd+Shift+F) | `onSearchWorkspace(listener)`, returning a disposable | Called with `{ query, isRegex, isCaseSensitive, matchWholeWord }`, the query being the selection on one line, else the find panel's. Also the find panel's "Search all files" button and `trigger(null, 'workbench.action.findInFiles')`. Without a listener the key is the page's. |
 | `model.onDidChangeContent` | `onDidChangeContent` | Receives the full text, at most once per frame, and `{ versionId, isUndoing, isRedoing, isFlush, changes }`. `changes` are Monaco's `IModelContentChange`s, each in the text the ones before it left, so applying them in order rebuilds the text. |
 | `onDidChangeCursorSelection` | The same | `{ selection, secondarySelections, reason, source }`; `reason` is a word (`'keyboard'`, `'pointer'`, `'edit'`, `'undo'`, `'redo'`, `'flush'`, `'api'`). |
 | `onDidFocusEditorText`, `onDidBlurEditorText` | The same | |
@@ -429,7 +436,7 @@ files to apply them to.
 | `monaco.editor.tokenize` | `tokenize` | Same arguments and shape: a grammar's own names, and Monaco's names for the built-in languages' tokens (`keyword.flow`, `comment.doc`, `string.escape`, ...). |
 | `monaco.editor.setModelMarkers` | `setDiagnostics` | Monaco's `IMarkerData` as it is: `startLineNumber` to `endLineNumber`, `MarkerSeverity` numbers, `code` (or `{ value, target }`), `tags`, `relatedInformation`. `null` shows the language's own again. One owner. |
 | `monaco.languages.register` + `setMonarchTokensProvider` | `registerLanguage` | One call: `{ id, grammar, extends?, comments? }`, plus providers. |
-| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground` and `fontStyle` apply; its `background` is ignored. |
+| `monaco.editor.defineTheme` | `defineTheme` / `registerTheme` | Monaco's `{ base, inherit, rules, colors }`, or VS Code theme JSON. A rule's `foreground`, `fontStyle` and `background` apply. `colors` takes the chrome's keys too: minimap, scrollbar slider, indent guides, ruler, widget background, foreground and border, inlay hints, code lenses, ghost text. |
 | `monaco.editor.onDidChangeMarkers` | `onDidChangeDiagnostics` | The language's own diagnostics, as marker objects. |
 | Re-running a model's validation | `revalidate()` | Monaco has no single call; this asks the language's diagnostics again without an edit. |
 | `revealPositionInCenterIfOutsideViewport` | `revealPosition` | Also places the caret there. A position already on screen does not scroll; one off screen comes to the middle of the view. |
@@ -443,15 +450,24 @@ files to apply them to.
 | `'semanticHighlighting.enabled'` | `semanticHighlighting` | A boolean under this plain key, off by default. Monaco's dotted `'semanticHighlighting.enabled'` key is not read, so rename it when moving options over. Colours from a language server over the syntax's; there is no JS provider for them. Token types come named as a theme colours them (`type.class`, `variable.parameter`, `function.method`), so a theme rule named `class` does not match. |
 | `inlayHints: { enabled }` | The same, or a boolean | Off by default, where Monaco's is on. `'on'` and `'off'` as Monaco's; no key is watched, so `'onUnlessPressed'` and `'offUnlessPressed'` mean those. |
 | `codeLens` | The same | Off by default, where Monaco's is on. |
-| `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them, and no `resolveCodeLens`, so each has its command. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
-| `languages.registerInlineCompletionsProvider` | `registerInlineCompletionsProvider(languageId, { provideInlineCompletions(text, line, column) })`, returning a Promise of a disposable | Answers Monaco's `{ items: [{ insertText, range? }] }`, or the array alone. See [Inline completions](#inline-completions). |
+| `languages.registerCodeLensProvider` | `registerLanguage`'s `provideCodeLenses(text)`, `resolveCodeLens(text, lens)` and `runCodeLensCommand(id, args)` | Answers `[{ range, command: { id, title, arguments? } }]`, with no `{ lenses }` around them. A lens without a `command` goes to `resolveCodeLens` as the answer comes, at most 100 of them, and is left out if it still has none. There is no command registry: a click or a tap calls `runCodeLensCommand` with the command's `id` and `arguments`, as JSON has them, and the caret stays. A lens sits in a row above the line its `range` starts on, starting where the line's text does; several on a line share the row, split by ` \| ` as Monaco's are. Asked after a pause in typing, about the whole text. With `extends` or a language server, every source's lenses are shown, less a later source's with the same position and title; a server that has not answered within a second does not hold yours back. A server's lens is resolved when it comes near the view, holding its row until then, and a resolve that is slow or never answered holds back neither the rows nor any other lens's title. Its click goes to the server as `workspace/executeCommand`, if it listed that command. |
+| `languages.registerInlineCompletionsProvider` | `registerInlineCompletionsProvider(languageId, { provideInlineCompletions(text, line, column) })`, returning a Promise of a disposable | Answers Monaco's `{ items: [{ insertText, range? }] }`, or the array alone. An `insertText` of `{ snippet }` shows and goes in as its text, with no tab stops. See [Inline completions](#inline-completions). |
 | `editor.action.inlineSuggest.commit`, `showNext`, `showPrevious`, `hide` | The same ids, in `trigger` and `getAction` | `isSupported()` on `commit` and `hide` says whether anything shows. `trigger` is not there: `showNext` with nothing showing asks. |
 | `languages.registerInlayHintsProvider` | `registerLanguage`'s `provideInlayHints(text, range)` | Answers `[{ position, label }]`, with no `{ hints }` around them; `label` is a string, on one row. `range` is whole lines around the view, asked after a pause in typing, in scrolling past what it last asked about, or after a fold opens or closes; a long closed fold on screen makes that a few calls at once, one for the lines on either side of it. With `extends` or a language server, every source's hints are shown, the first's where two are at one position; a server that has not answered within a second does not hold yours back. |
 | `getVisibleRanges`, `getScrollTop`, `setScrollTop`, `getScrollHeight`, `onDidScrollChange`, `layout` | The same | CSS pixels. `layout()` measures the container again; the editor follows its size anyway. |
 | `monaco.editor.setModelMarkers(model, owner, markers)` | `setModelMarkers(owner, markers)`, or `setDiagnostics(markers, owner)` | Each owner's markers are shown with every other owner's and the language's own. |
+| `registerDefinitionProvider`, `registerReferenceProvider` | `registerLanguage`'s `provideDefinition(text, line, column)`, `provideReferences(text, line, column)` | Monaco's `Location` (or `LocationLink`), one or an array. A location without `uri` is in this text; one with a `uri` is another file's, which the editor does not open yet. |
+| `registerDocumentFormattingEditProvider`, `registerDocumentRangeFormattingEditProvider` | `provideDocumentFormattingEdits(text, options)`, `provideDocumentRangeFormattingEdits(text, range, options)` | Monaco's `TextEdit`s; `options` is `{ tabSize, insertSpaces }`. With `extends`, the base language formats when yours changes nothing. |
+| `registerSignatureHelpProvider` | `provideSignatureHelp(text, line, column)` | Monaco's `SignatureHelpResult` or the `SignatureHelp` in it. Asked whenever the caret is in a call's arguments, so `signatureHelpTriggerCharacters` is accepted and not needed. |
+| `registerCodeActionProvider` | `provideCodeActions(text, range, { markers })` | `{ actions }` or the array; `markers` are those of your `provideDiagnostics`' last answer that touch the range. An action with an edit to another file (a `resource`) is left out. Its `command` goes to `runCodeLensCommand`, after its edits: there is one command runner for lenses and actions. |
+| `registerRenameProvider` | `provideRenameEdits(text, line, column, newName)`, `resolveRenameLocation(text, line, column)` | A `WorkspaceEdit` for this text; one reaching another file, or `{ rejectReason }`, renames nothing. F2 is offered only with `provideRenameEdits`. |
+| `registerFoldingRangeProvider` | `provideFoldingRanges(text)` | `[{ start, end, kind? }]`, 1-based lines. They replace the language's own folds. |
+| `registerDocumentSemanticTokensProvider` | `provideDocumentSemanticTokens(text)` with `getLegend()` (or `legend`) | `{ data }`, a `Uint32Array` or an array, coloured over the syntax with `semanticHighlighting`. Types are named as a theme colours a language server's: `class` as `type.class`, `parameter` as `variable.parameter`. |
+| `CompletionItemProvider.resolveCompletionItem` | `resolveCompletionItem(item)` | Called with the item as you gave it when it is selected in the list; its `documentation` and `detail` replace the item's. |
 | `languages.registerDocumentSymbolProvider`, `registerColorProvider` | `registerLanguage`'s `provideDocumentSymbols`, `provideDocumentColors` | Read the result with `getDocumentSymbols()` and `getSymbolPathAt(position)`, the caret-to-preview mapping. |
 | `KeyMod.chord(...)` | The same, or `'CtrlCmd+K CtrlCmd+S'` | In `addCommand` and `addAction`. |
-| `fontFamily`, `automaticLayout` | None | The font is the bundled JetBrains Mono; the editor always follows its container's size. |
+| `fontFamily` | The same | The first name in the list given to `registerFont`; see [Your own font](#your-own-font). |
+| `automaticLayout` | None | The editor always follows its container's size. |
 
 ## Fonts
 
@@ -471,6 +487,25 @@ A new editor waits up to half a second for the font before it shows, rather than
 fallback and then jumping to JetBrains Mono (W-9); `preloadAardink()` starts the fetch early, so
 usually it waits for nothing. If the font takes longer, the editor shows in the fallback and
 switches when the font arrives.
+
+### Your own font
+
+A font the page loads with CSS (`@font-face`) is not one the editor can draw with: it draws on a
+canvas, with the fonts it was given. Give it one with `registerFont(name, urlOrBytes)`, a TrueType
+or OpenType file by URL or as its bytes, and name it in the `fontFamily` option, Monaco's CSS font
+list:
+
+```js
+import { createEditor, registerFont } from '@aardarch/aardink-web';
+
+await registerFont('Fira Code', '/fonts/FiraCode-Regular.ttf');
+const editor = await createEditor(container, undefined, { fontFamily: "'Fira Code', monospace" });
+```
+
+The first name in the list that was registered is the font; with none, the bundled JetBrains Mono.
+Editors already naming a font change to it when it is registered. What is not a TrueType or
+OpenType file (a server's error page in place of a missing file, say) is refused. From Kotlin,
+`AardinkWeb.registerFont(name, bytes)`; the template's export is `aardinkRegisterFont`.
 
 ## Host page CSS
 
@@ -585,20 +620,8 @@ covers W-1, part of W-2, W-3, W-7, W-8 and W-10 (`node checklist.mjs W-2 W-10` r
   faces where it has them; otherwise the text renderer slants or thickens the regular face.
 - A language server connection does not reconnect, and the host hears of its end only on the
   console; `showMessage`, `logMessage` and `$/progress` from a server go nowhere.
-- A language from `registerLanguage` answers before a language server, and so does the built-in
-  language it extends. With `extends: 'json'` (or `xml`, `toml`, `kotlin`), that language's formatter
-  and outline come ahead of a connected server's, which fills in only what they leave empty. A
-  server's formatter and outline win only for a built-in language used as it is.
 - The page has no save, so a server is never sent `willSave` or `didSave`. A server that reports
   only when a file is saved shows nothing.
-- Of the keys that type a character with Alt held, only Alt+] and Alt+[ reach the editor's bindings:
-  the browser input Compose uses takes any other as typing. So `addCommand('Alt+K', ...)` never runs,
-  and neither do the default Shift+Alt+A (block comment) and Shift+Alt+I (carets at line ends). Bind
-  such commands to a key with Ctrl or Cmd, or run them with `trigger`
-  (`editor.action.blockComment`, `editor.action.insertCursorAtEndOfEachLineSelected`).
-- Inlay hints, code lenses and semantic tokens are not asked for again when a server says they are
-  out of date (`workspace/inlayHint/refresh` and the like). The editor asks again only for reasons of
-  its own: an edit; for hints, scrolling or a fold; for lenses, one without a title coming on screen.
 - Semantic highlighting from a language server asks for the whole document after each edit, and its
   answer is parsed in one piece: on a 5,000-line file each answer holds the page for about 70 ms as
   it lands, and a key pressed then waits for it. Code lenses are asked about the whole document too,

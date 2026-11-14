@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -23,8 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.takeOrElse
+import androidx.compose.ui.unit.dp
+import com.aardarch.aardink.core.ChromeColors
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.TokenType
@@ -42,6 +48,9 @@ import kotlin.math.min
  * shade off the editor; the accent is the theme's keyword colour. A colour drawn as text is moved
  * towards white or black where it must be, until it reaches [MIN_TEXT_CONTRAST] on every surface
  * and on the selection, so a theme with dim text (Solarized) still gets readable chrome.
+ *
+ * A theme's [ChromeColors.widgetBackground] and [ChromeColors.widgetForeground] take the place of
+ * the surfaces' shade and the text colour; the foreground is still moved where it would not read.
  */
 internal class EditorChromeColors(private val theme: EditorTheme) {
     /** The editor's background, opaque. */
@@ -52,10 +61,23 @@ internal class EditorChromeColors(private val theme: EditorTheme) {
 
     /** The theme's own text colour, which the surfaces step towards. */
     private val themeText: Color =
-        (theme.tokenColors[TokenType.Default] ?: if (isDark) Color(0xFFD4D4D4) else Color(0xFF1F1F1F)).compositeOver(background)
+        theme.chromeColors.widgetForeground.takeOrElse {
+            theme.tokenColors[TokenType.Default] ?: if (isDark) Color(0xFFD4D4D4) else Color(0xFF1F1F1F)
+        }.compositeOver(background)
 
-    /** A surface [level] steps (0 to 4) off the background, towards the text colour. */
-    fun surface(level: Int): Color = lerp(background, themeText, SURFACE_STEP * level)
+    /** The theme's own card background, if it has one. */
+    private val widget: Color = theme.chromeColors.widgetBackground.let { if (it.isSpecified) it.compositeOver(background) else it }
+
+    /**
+     * A surface [level] steps (0 to 4) off the background, towards the text colour. With the
+     * theme's [ChromeColors.widgetBackground], level 2 (the cards) is that colour, and the levels
+     * either side step from it.
+     */
+    fun surface(level: Int): Color = when {
+        widget.isUnspecified || level == 0 -> lerp(background, themeText, SURFACE_STEP * level)
+        level == 1 -> lerp(background, widget, 0.5f)
+        else -> lerp(widget, themeText, SURFACE_STEP * (level - 2))
+    }
 
     /** A selected row or chip: the theme's selection colour. */
     val selection: Color = theme.selectionColor.compositeOver(background)
@@ -160,6 +182,13 @@ internal class EditorChromeColors(private val theme: EditorTheme) {
         /** WCAG AA for a control's boundary. */
         const val MIN_UI_CONTRAST = 3f
     }
+}
+
+/** The border of the editor's cards: [ChromeColors.widgetBorder], 1 dp, or none when the theme has none. */
+@Composable
+internal fun editorWidgetBorder(): BorderStroke? {
+    val color = LocalEditorTheme.current.chromeColors.widgetBorder
+    return if (color.isSpecified) remember(color) { BorderStroke(1.dp, color) } else null
 }
 
 /** The WCAG contrast ratio between two opaque colours, from 1 to 21. */

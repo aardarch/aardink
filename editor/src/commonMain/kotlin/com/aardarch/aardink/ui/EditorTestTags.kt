@@ -29,6 +29,7 @@ internal object EditorTestTags {
     const val FIND_FIELD = "aardink.find.query"
 
     /** The find panel's replace field. */
+    const val REPLACE_PREVIEW = "aardink_replace_preview"
     const val REPLACE_FIELD = "aardink.find.replacement"
     const val GUTTER = "aardink.gutter"
 

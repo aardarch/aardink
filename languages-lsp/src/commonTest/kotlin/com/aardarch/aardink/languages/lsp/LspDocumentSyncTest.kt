@@ -720,6 +720,38 @@ class LspDocumentSyncTest {
     }
 
     @Test
+    fun `willSaveWaitUntil returns the server's edits in the text it was asked about`() =
+        withSync("""{"openClose":true,"change":2,"willSaveWaitUntil":true}""") {
+            val state = editorState("a  \nb")
+            service.attach(state)
+            nextSent()
+
+            val edits = async { service.willSaveWaitUntil(state.document, LspSaveReason.FocusOut) }
+            val sent = respond("textDocument/willSaveWaitUntil", """[{"range":${range(0, 1, 0, 3)},"newText":""}]""")
+
+            assertEquals(3, sent.params["reason"]!!.jsonPrimitive.int)
+            assertEquals(URI, sent.params["textDocument"]!!.jsonObject["uri"]!!.jsonPrimitive.content)
+            assertEquals(listOf(TextEdit(1 until 3, "")), edits.await())
+        }
+
+    @Test
+    fun `willSaveWaitUntil asks only a server that asked for it, and a registration counts`() {
+        fun check(sync: String) = withSync(sync) {
+            assertTrue(service.willSaveWaitUntil(CodeDocument("x"), LspSaveReason.Manual).isEmpty())
+            assertNothingSent("for $sync")
+        }
+        check("""{"openClose":true,"willSave":true}""")
+        check(INCREMENTAL_SYNC)
+
+        withSync(NO_SYNC) {
+            serverRegisters(registration("textDocument/willSaveWaitUntil"))
+            val edits = async { service.willSaveWaitUntil(CodeDocument("x"), LspSaveReason.Manual) }
+            respond("textDocument/willSaveWaitUntil", "null")
+            assertTrue(edits.await().isEmpty())
+        }
+    }
+
+    @Test
     fun `didSave carries the text only when the server's save options ask for it`() {
         fun check(sync: String, expected: String?) = withSync(sync) {
             service.didSave(CodeDocument("saved"))

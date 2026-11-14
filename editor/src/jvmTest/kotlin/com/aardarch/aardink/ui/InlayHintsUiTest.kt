@@ -28,6 +28,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
@@ -151,6 +152,25 @@ class InlayHintsUiTest {
     }
 
     private val manyLines = (0 until 2_000).joinToString("\n") { "line $it" }
+
+    // ── Tooltips ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a mouse resting on a hint with a tooltip shows it, titled with the label`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val service = HeldHints()
+        show(state, service)
+        answer(service, listOf(InlayHint(0, "a long hint label", tooltip = "**tip** text")))
+
+        mainClock.autoAdvance = false
+        onNodeWithTag(EditorTestTags.EDITOR).performMouseInput { moveTo(Offset(8.dp.toPx() + 10f, 8.dp.toPx() + 10.dp.toPx())) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+
+        onNodeWithText("tip text").assertExists()
+        onNodeWithText("a long hint label").assertExists()
+        mainClock.autoAdvance = true
+    }
 
     // ── When it asks ─────────────────────────────────────────────────────────
 

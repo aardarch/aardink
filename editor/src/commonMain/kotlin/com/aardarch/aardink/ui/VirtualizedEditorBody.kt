@@ -15,6 +15,8 @@
  */
 package com.aardarch.aardink.ui
 
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -35,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -52,6 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -81,6 +86,7 @@ import com.aardarch.aardink.ui.view.EditorMetrics
 import com.aardarch.aardink.ui.view.EditorSelectionHandles
 import com.aardarch.aardink.ui.view.EditorTouchMenu
 import com.aardarch.aardink.ui.view.EditorViewport
+import com.aardarch.aardink.ui.view.Guides
 import com.aardarch.aardink.ui.view.GutterContent
 import com.aardarch.aardink.ui.view.INDENT_GLYPH
 import com.aardarch.aardink.ui.view.MinimapView
@@ -177,13 +183,33 @@ internal fun VirtualizedEditorBody(
         tabSize = options.tabSize,
         columnWidthEm = columnWidthEm,
         joinIndentation = joinIndentation,
+        scrollBeyondLastLine = options.scrollBeyondLastLine,
+        cursorSurroundingLines = options.cursorSurroundingLines,
+        smoothScrolling = options.smoothScrolling,
+        wrappingIndent = options.wrappingIndent,
+        wordWrapColumn = options.wordWrapColumn,
     )
+    // A reveal with smooth scrolling on: animated here, and called off by the next.
+    LaunchedEffect(view) {
+        snapshotFlow { view.smoothScroll }.collectLatest { target ->
+            if (target != null) view.scroll.animateScrollToY(target.y)
+        }
+    }
     // Faint, so that it does not read as the document's text; a hint gets a ground as well, as VS
     // Code's, to tell it from what surrounds it.
+    // The theme's chromeColors take the place of each.
+    val chrome = theme.chromeColors
     val decorationTextStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f)) }
-    val hintStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.6f), background = textColor.copy(alpha = 0.08f)) }
+    val lensStyle = remember(textColor, chrome.codeLens) { SpanStyle(color = chrome.codeLens.takeOrElse { textColor.copy(alpha = 0.6f) }) }
+    val hintStyle = remember(textColor, chrome.inlayHint, chrome.inlayHintBackground) {
+        SpanStyle(
+            color = chrome.inlayHint.takeOrElse { textColor.copy(alpha = 0.6f) },
+            background = chrome.inlayHintBackground.takeOrElse { textColor.copy(alpha = 0.08f) },
+        )
+    }
     // Fainter than either, as Monaco's `editorGhostText.foreground`, and with no ground: it is about to be text.
-    val ghostStyle = remember(textColor) { SpanStyle(color = textColor.copy(alpha = 0.45f)) }
+    val ghostStyle =
+        remember(textColor, chrome.ghostText) { SpanStyle(color = chrome.ghostText.takeOrElse { textColor.copy(alpha = 0.45f) }) }
     // Whether the mouse is on text a click does something on: asked as it moves, changing rarely.
     val onClickable by remember(controller, view) {
         derivedStateOf { controller.hoverAt?.let { view.offsetAt(it).injection?.id != null } == true }
@@ -192,21 +218,32 @@ internal fun VirtualizedEditorBody(
     val clipboard = LocalClipboard.current
     SideEffect {
         view.style = style
-        view.inline.setStyles(hintStyle, decorationTextStyle, decorationTextStyle, ghostStyle)
+        view.inline.setStyles(hintStyle, decorationTextStyle, lensStyle, ghostStyle)
         view.foldState = foldState
         controller.pointer.foldState = foldState
+        controller.pointer.dragAndDrop = options.dragAndDrop && !options.readOnly
         controller.clipboard = clipboard
         controller.requestFocus = { runCatching { focusRequester.requestFocus() } }
     }
 
     // The carets blink while the editor has focus, and show solid again after every change.
-    var caretOn by remember { mutableStateOf(true) }
-    LaunchedEffect(controller) {
+    var caretAlpha by remember { mutableFloatStateOf(1f) }
+    val blinking = options.cursorBlinking
+    LaunchedEffect(controller, blinking) {
         snapshotFlow { Triple(controller.focused, state.selections, state.textVersion) }.collectLatest { (focused) ->
-            caretOn = true
+            caretAlpha = 1f
+            if (blinking == CursorBlinking.Solid) return@collectLatest
             while (focused) {
                 delay(CARET_BLINK_MS)
-                caretOn = !caretOn
+                if (blinking == CursorBlinking.Smooth) {
+                    animate(1f, 0f, animationSpec = tween(CARET_FADE_MS)) { value, _ -> caretAlpha = value }
+                    delay(CARET_BLINK_MS - CARET_FADE_MS)
+                    animate(0f, 1f, animationSpec = tween(CARET_FADE_MS)) { value, _ -> caretAlpha = value }
+                } else {
+                    caretAlpha = 0f
+                    delay(CARET_BLINK_MS)
+                    caretAlpha = 1f
+                }
             }
         }
     }
@@ -245,7 +282,49 @@ internal fun VirtualizedEditorBody(
         // Monaco's editor.snippetTabstopHighlightBackground.
         snippetTabStop = Color(0x4D7C7C7C),
         background = theme.background,
+        // VS Code's dark theme draws its indent guides at about 20 %, the active one at about 45 %.
+        indentGuide = chrome.indentGuide.takeOrElse { textColor.copy(alpha = 0.16f) },
+        activeIndentGuide = chrome.activeIndentGuide.takeOrElse { textColor.copy(alpha = 0.45f) },
+        ruler = chrome.ruler.takeOrElse { textColor.copy(alpha = 0.2f) },
+        findScope = textColor.copy(alpha = 0.1f),
+        bracketGuides = if (chrome.bracketPairGuide.isSpecified) {
+            listOf(chrome.bracketPairGuide)
+        } else {
+            theme.bracketPairColors.map { it.copy(alpha = it.alpha * 0.5f) }
+        },
     )
+    // The guides around the view: worked out again when the text, its tokens or the tab size
+    // change, or the view scrolls out of the lines last worked out, not on every frame.
+    val indentGuides = options.indentGuides
+    val bracketPairGuides = options.bracketPairGuides
+    val guideTabSize = options.tabSize
+    val guides by remember(state, view, indentGuides, bracketPairGuides, guideTabSize) {
+        var last: Guides? = null
+        var lastVersion = -1 to -1
+        derivedStateOf {
+            if (!indentGuides && !bracketPairGuides) return@derivedStateOf null
+            val shown = view.frame.lines
+            if (shown.isEmpty()) return@derivedStateOf last
+            val version = state.textVersion to state.tokenVersion
+            val from = shown.first().line
+            val to = shown.last().line
+            val document = state.document
+            last?.takeIf { lastVersion == version && it.covers(from, to, document.lineCount) }?.let { return@derivedStateOf it }
+            Guides.compute(document, from, to, guideTabSize, bracketPairGuides) { line, action ->
+                state.brackets.forEachBracket(line, action)
+            }.also {
+                last = it
+                lastVersion = version
+            }
+        }
+    }
+    val activeGuide by remember(state) {
+        derivedStateOf {
+            val shown = guides ?: return@derivedStateOf null
+            val document = state.document
+            shown.activeGuide(document.offsetToLineCol(state.selection.end.coerceIn(0, document.length)).first)
+        }
+    }
     // The pair the caret touches, worked out when the caret, the text or its tokens change, not
     // on every frame the content draws (scrolling redraws it every frame).
     val matchBrackets = rememberUpdatedState(options.matchBrackets)
@@ -357,10 +436,25 @@ internal fun VirtualizedEditorBody(
                         }.orEmpty(),
                         hostDecorations = state.shownDecorations,
                         colorSwatches = colorSwatches(),
+                        guides = guides,
+                        indentGuides = indentGuides,
+                        bracketPairGuides = bracketPairGuides,
+                        activeGuide = activeGuide,
+                        rulers = options.rulers,
+                        findScope = findReplaceState?.takeIf { it.visible }?.scope,
                     )
                 },
-                carets = { if (controller.focused && caretOn) state.selections else emptyList() },
+                carets = {
+                    if (controller.focused) {
+                        val drop = controller.pointer.dropCaret
+                        if (drop == null) state.selections else state.selections + TextRange(drop)
+                    } else {
+                        emptyList()
+                    }
+                },
                 colors = colors,
+                caretStyle = options.cursorStyle,
+                caretAlpha = { caretAlpha },
                 softWrap = softWrap,
                 modifier = Modifier
                     .fillMaxSize()
@@ -395,7 +489,15 @@ internal fun VirtualizedEditorBody(
                 },
             )
         },
-        scrollbars = { EditorScrollbars(view.scroll, horizontal = !softWrap, modifier = Modifier.fillMaxSize()) },
+        scrollbars = {
+            EditorScrollbars(
+                view.scroll,
+                horizontal = !softWrap,
+                slider = chrome.scrollbarSlider,
+                sliderHover = chrome.scrollbarSliderHover,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
         overviewRuler = {
             if (showRuler) {
                 OverviewRuler(
@@ -412,8 +514,8 @@ internal fun VirtualizedEditorBody(
                 MinimapView(
                     view = view,
                     tokenColor = { type -> (tokenStyles.color(type) ?: textColor).copy(alpha = 0.7f) },
-                    background = theme.background,
-                    slider = textColor.copy(alpha = 0.12f),
+                    background = chrome.minimapBackground.takeOrElse { theme.background },
+                    slider = chrome.minimapSlider.takeOrElse { textColor.copy(alpha = 0.12f) },
                     tabSize = options.tabSize,
                     marks = { minimapMarks },
                 )
@@ -449,6 +551,9 @@ private suspend fun PointerInputScope.trackHover(controller: EditorController) {
 
 /** Half a caret blink: VS Code's default, 1.06 s a cycle. */
 private const val CARET_BLINK_MS = 530L
+
+/** How long a smooth blink takes to fade out or in. */
+private const val CARET_FADE_MS = 200
 
 /** Measured to find the advance of one character of the (monospace) editor font. */
 private const val CHAR_WIDTH_SAMPLE = "0000000000000000000000000000000000000000000000000000000000000000"

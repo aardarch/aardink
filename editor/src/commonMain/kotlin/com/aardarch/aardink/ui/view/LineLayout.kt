@@ -104,6 +104,20 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
     /** The box of the character at [column]. Not `map(column + 1) - 1`: that can land in injected text. */
     fun charBox(column: Int): Rect = result.getBoundingBox(map.charIndex(column))
 
+    /**
+     * The box of the injected text right before the document's character at [column], when that
+     * text's id is [id], with the row it is on; null otherwise, as when it was cut from the line.
+     */
+    fun injectedBoxBefore(column: Int, id: Any): Pair<Rect, Int>? {
+        val end = map.charIndex(column)
+        val injection = map.injectionAt(end - 1)?.takeIf { it.id == id } ?: return null
+        val start = end - injection.text.length
+        if (start < 0) return null
+        val first = result.getBoundingBox(start)
+        val last = result.getBoundingBox(end - 1)
+        return Rect(first.left, first.top, last.right, first.bottom) to rowAt(start)
+    }
+
     /** The outline of columns [from, to), which leaves out rows of injected text between them. */
     fun rangePath(from: Int, to: Int): Path {
         if (injectedRows == null) return result.getPathForRange(map.charIndex(from), map.rangeEnd(to))

@@ -24,7 +24,7 @@ package com.aardarch.aardink.languages
  *     override("kotlin") { it.copy(tokenizer = MyKotlinTokenizer) }
  *     register(myCustomLanguageDefinition)
  * }
- * val def = registry.byExtension("kt")
+ * val def = registry.byFileName("src/Main.kt")
  * ```
  *
  * Iteration order is insertion order (built-ins first, then anything the consumer added).
@@ -70,10 +70,55 @@ class LanguageRegistry {
         }
     }
 
+    /**
+     * Looks up a language by a file's name or path: the first registered definition whose
+     * [LanguageDefinition.fileNames] match the name, else [byExtension] of what follows its last
+     * dot. `"Dockerfile"`, `"docker/Dockerfile.dev"`, `"~/.bashrc"` and `"src\\Main.kt"` each find
+     * theirs. Returns null if none matches.
+     */
+    fun byFileName(fileName: String): LanguageDefinition? {
+        val name = fileName.substringAfterLast('/').substringAfterLast('\\')
+        if (name.isEmpty()) return null
+        definitions.values.firstOrNull { def -> def.fileNames.any { fileNameMatches(it, name) } }?.let { return it }
+        val dot = name.lastIndexOf('.')
+        return if (dot < 0) null else byExtension(name.substring(dot + 1))
+    }
+
     companion object {
         /** Builds a registry pre-populated with every entry in [BuiltInLanguages.all]. */
         fun withBuiltIns(): LanguageRegistry = LanguageRegistry().apply {
             BuiltInLanguages.all.forEach(::register)
         }
     }
+}
+
+/** Whether [name] is [pattern], without regard to case, where a `*` in [pattern] stands for any run of characters. */
+internal fun fileNameMatches(pattern: String, name: String): Boolean {
+    var p = 0
+    var n = 0
+    // The last `*` seen, and where in [name] its run would end if it took one more character.
+    var star = -1
+    var resume = 0
+    while (n < name.length) {
+        when {
+            p < pattern.length && pattern[p] == '*' -> {
+                star = p++
+                resume = n
+            }
+
+            p < pattern.length && pattern[p].equals(name[n], ignoreCase = true) -> {
+                p++
+                n++
+            }
+
+            star >= 0 -> {
+                p = star + 1
+                n = ++resume
+            }
+
+            else -> return false
+        }
+    }
+    while (p < pattern.length && pattern[p] == '*') p++
+    return p == pattern.length
 }

@@ -20,11 +20,57 @@ export interface AardinkOptions {
   value?: string;
   /** A language id: kotlin, typescript, json, toml, xml, html, css, markdown, plaintext. */
   language?: string;
-  /** vscode-dark, vscode-light, material-dark, material-light, midnight-ocean, solarized-dark. */
+  /**
+   * vscode-dark (or Monaco's `vs-dark`), vscode-light (or `vs`), hc-black, hc-light, material-dark,
+   * material-light, midnight-ocean, solarized-dark, or a name given to `defineTheme`.
+   */
   theme?: string;
   /** In CSS pixels. */
   fontSize?: number;
-  wordWrap?: 'on' | 'off';
+  /**
+   * Monaco's `fontFamily`, a CSS font list: the first name in it given to `registerFont` is the
+   * editor's font, else the bundled JetBrains Mono. A font the page has only in CSS is not seen: the
+   * editor draws on a canvas, with the fonts it was given.
+   */
+  fontFamily?: string;
+  /**
+   * Monaco's `wordWrap`: `'on'` wraps at the edge of the view, `'wordWrapColumn'` and `'bounded'`
+   * at `wordWrapColumn` or the edge, whichever comes first. `'off'` by default, as Monaco's (on
+   * before 0.10).
+   */
+  wordWrap?: 'on' | 'off' | 'wordWrapColumn' | 'bounded';
+  /** Where `wordWrap: 'wordWrapColumn'` or `'bounded'` wraps. 80 by default. */
+  wordWrapColumn?: number;
+  /** How wrapped rows are indented, as Monaco's. `'none'` by default, where Monaco's is `'same'`. */
+  wrappingIndent?: 'none' | 'same' | 'indent' | 'deepIndent';
+  /**
+   * Monaco's `lineNumbers`: `'relative'` counts from the caret's line, `'interval'` shows every
+   * tenth and the caret's. Monaco's function form is not taken: it counts as `'on'`.
+   */
+  lineNumbers?: 'on' | 'off' | 'relative' | 'interval';
+  /** Columns with a vertical line. Monaco's `{ column, color }` takes its column; the colour is the theme's. */
+  rulers?: Array<number | { column: number; color?: string | null }>;
+  /**
+   * Monaco's `guides`: `indentation`, a faint line down each level of indentation (the caret's
+   * block's stronger), and `bracketPairs`, a line from each bracket to its partner (`'active'`
+   * shows them all). Both off by default, where Monaco's indentation guides are on.
+   */
+  guides?: { indentation?: boolean; bracketPairs?: boolean | 'active' };
+  /** The caret's shape. `'line'` by default. */
+  cursorStyle?: 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin';
+  /** How the caret blinks; `'phase'` and `'expand'` fade as `'smooth'` does. `'blink'` by default. */
+  cursorBlinking?: 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
+  /** The editor's own scrolls (to the caret, Page Up and Down) animate. Off by default. */
+  smoothScrolling?: boolean;
+  /** The last line can scroll up to the top of the view. Off by default, where Monaco's is on. */
+  scrollBeyondLastLine?: boolean;
+  /** Lines kept visible above and below the caret as it moves. 0 by default. */
+  cursorSurroundingLines?: number;
+  /**
+   * A selection dragged with the mouse moves; with Ctrl (Alt on macOS) held, copies. Off by
+   * default, where Monaco's is on.
+   */
+  dragAndDrop?: boolean;
   readOnly?: boolean;
   showGutter?: boolean;
   showLineNumbers?: boolean;
@@ -73,6 +119,20 @@ export interface AardinkOptions {
    * default, where Monaco's is on.
    */
   codeLens?: boolean;
+  /**
+   * Typing one of `autoFormatTriggerCharacters` asks `provideOnTypeFormattingEdits` (or a language
+   * server) to tidy the text around it, as Monaco's `formatOnType`. Undo takes the edits back and
+   * keeps what was typed. Off by default.
+   */
+  formatOnType?: boolean;
+}
+
+/** What `onSearchWorkspace` is called with: VS Code's Find in Files arguments. */
+export interface AardinkWorkspaceSearch {
+  query: string;
+  isRegex: boolean;
+  isCaseSensitive: boolean;
+  matchWholeWord: boolean;
 }
 
 /**
@@ -247,7 +307,8 @@ export interface AardinkEditor {
    * `editor.action.addCommentLine`, `editor.action.removeCommentLine`, `editor.action.blockComment`,
    * `editor.action.insertLineAfter` and `Before`, `expandLineSelection`,
    * `editor.action.showColorPicker`, `editor.action.inlineSuggest.commit`, `.showNext`,
-   * `.showPrevious` and `.hide`, and
+   * `.showPrevious` and `.hide`, VS Code's `workbench.action.findInFiles` (with an
+   * `onSearchWorkspace` listener), and
    * `editor.action.insertSnippet` with `{ snippet }`. `source` is accepted for Monaco's shape.
    * Returns whether it ran.
    */
@@ -300,6 +361,14 @@ export interface AardinkEditor {
    * nothing. Returns a disposable.
    */
   onOpenLink(listener: (target: string) => void): { dispose(): void };
+  /**
+   * Called when the editor hands a search to the page, by Ctrl/Cmd+Shift+F, the find panel's
+   * "Search all files" button or `trigger('workbench.action.findInFiles')`, with VS Code's Find in
+   * Files arguments: the selection on one line, else the find panel's query, and its options. While
+   * there is no listener, the button is not shown and the key is left to the page. Returns a
+   * disposable.
+   */
+  onSearchWorkspace(listener: (search: AardinkWorkspaceSearch) => void): { dispose(): void };
   /** Measures the container again now; the editor follows its container's size by itself. */
   layout(): void;
   /**
@@ -704,29 +773,170 @@ export interface AardinkLanguageProviders {
    * What is shown in a row above the line each `range` starts on, as Monaco's `provideCodeLenses`,
    * with the `codeLens` option on. It is about the whole text, and asked after a pause in typing;
    * between answers each lens moves with its text. Lenses on one line share a row. An array, with no
-   * `{ lenses }` around it, and each lens with its `command`: there is no `resolveCodeLens`. With
+   * `{ lenses }` around it. A lens without a `command` is given to `resolveCodeLens`, if there is
+   * one, as the answer comes (at most 100 of them), and left out if it still has none. With
    * `extends`, the base language's are added, less any with this one's position and title. With a
    * language server these are shown after a second if it has not answered by then.
    */
   provideCodeLenses?(text: string): AardinkCodeLens[] | null | Promise<AardinkCodeLens[] | null>;
   /**
-   * A lens from `provideCodeLenses` was clicked or tapped: its command's `id`, and its `arguments`,
-   * `[]` when it has none. As they passed through JSON, they hold only what JSON can. There is no
-   * command registry behind this: a lens does what this does with its `id`.
+   * A lens from `provideCodeLenses` was clicked or tapped, or a code action from `provideCodeActions`
+   * with a `command` chosen (after its edits): the command's `id`, and its `arguments`, `[]` when it
+   * has none. As they passed through JSON, they hold only what JSON can. There is no command
+   * registry behind this: a lens or an action does what this does with its `id`.
    */
   runCodeLensCommand?(id: string, args: unknown[]): void | Promise<void>;
+  /**
+   * The characters whose typing asks `provideOnTypeFormattingEdits`, as on Monaco's
+   * `OnTypeFormattingEditProvider`: `'}'`, `';'`, or `'\n'` for Enter.
+   */
+  autoFormatTriggerCharacters?: string[];
+  /**
+   * Edits that tidy the text around what was just typed, as Monaco's `provideOnTypeFormattingEdits`,
+   * with the `formatOnType` option on. `line` and `column` are the caret's, after the character `ch`;
+   * the edits are applied as an undo step of their own, and dropped if the text changed while they
+   * were worked out. With `extends`, the base language's apply when this answers none.
+   */
+  provideOnTypeFormattingEdits?(
+    text: string,
+    line: number,
+    column: number,
+    ch: string,
+    options: { tabSize: number; insertSpaces: boolean },
+  ): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /**
+   * Where the symbol at a 1-based `line` and `column` is defined, as Monaco's `provideDefinition`,
+   * for F12 and Ctrl/Cmd+click: a location, an array of them (the first is followed) or Monaco's
+   * `LocationLink`s. A location without `uri` is in this text; one with a `uri` is another file's,
+   * which the editor does not open.
+   */
+  provideDefinition?(text: string, line: number, column: number): AardinkLocation | AardinkLocation[] | null | Promise<AardinkLocation | AardinkLocation[] | null>;
+  /** The references to the symbol at a place, as Monaco's `provideReferences`, for Shift+F12's list. */
+  provideReferences?(text: string, line: number, column: number): AardinkLocation[] | null | Promise<AardinkLocation[] | null>;
+  /**
+   * Edits that format the whole text, as Monaco's `provideDocumentFormattingEdits`, for Format
+   * Document (Shift+Alt+F) and `format()`. With `extends`, the base language formats when this
+   * changes nothing.
+   */
+  provideDocumentFormattingEdits?(text: string, options: { tabSize: number; insertSpaces: boolean }): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /** Edits that format `range`, as Monaco's `provideDocumentRangeFormattingEdits`, for Format Selection. */
+  provideDocumentRangeFormattingEdits?(
+    text: string,
+    range: AardinkRange,
+    options: { tabSize: number; insertSpaces: boolean },
+  ): AardinkTextEdit[] | null | Promise<AardinkTextEdit[] | null>;
+  /**
+   * Accepted for Monaco's shape. The editor asks `provideSignatureHelp` whenever the caret is
+   * inside a call's arguments, so no character has to start it.
+   */
+  signatureHelpTriggerCharacters?: string[];
+  /**
+   * The signatures of the call at a place, as Monaco's `provideSignatureHelp`: its
+   * `SignatureHelpResult` (`{ value }`) or the `SignatureHelp` in it. A parameter's `label` is its
+   * text or `[start, end]` in the signature's label.
+   */
+  provideSignatureHelp?(text: string, line: number, column: number): AardinkSignatureHelp | { value: AardinkSignatureHelp } | null | Promise<AardinkSignatureHelp | { value: AardinkSignatureHelp } | null>;
+  /**
+   * Quick fixes and refactorings for `range`, as Monaco's `provideCodeActions`, with the markers of
+   * `provideDiagnostics`' last answer that touch it. An action with edits to another file (a
+   * `resource`) is left out; its `command` goes to `runCodeLensCommand` after its edits.
+   */
+  provideCodeActions?(
+    text: string,
+    range: AardinkRange,
+    context: { markers: AardinkDiagnostic[] },
+  ): AardinkCodeAction[] | { actions: AardinkCodeAction[] } | null | Promise<AardinkCodeAction[] | { actions: AardinkCodeAction[] } | null>;
+  /**
+   * The edits that rename the symbol at a place to `newName`, as Monaco's `provideRenameEdits`, for
+   * F2. Its presence offers rename. `{ rejectReason }`, or edits to another file, rename nothing.
+   */
+  provideRenameEdits?(text: string, line: number, column: number, newName: string): AardinkWorkspaceEdit | { rejectReason: string } | null | Promise<AardinkWorkspaceEdit | { rejectReason: string } | null>;
+  /**
+   * What F2 would rename at a place, as Monaco's `resolveRenameLocation`: `{ range, text }`, or
+   * `{ rejectReason }` where nothing can be. Without it, the word at the caret.
+   */
+  resolveRenameLocation?(text: string, line: number, column: number): { range: AardinkRange; text: string } | { rejectReason: string } | null | Promise<{ range: AardinkRange; text: string } | { rejectReason: string } | null>;
+  /**
+   * The text's folds, as Monaco's `provideFoldingRanges`: 1-based `start` and `end` lines. They
+   * replace the language's own (by indentation, or the base language's).
+   */
+  provideFoldingRanges?(text: string): { start: number; end: number; kind?: 'comment' | 'imports' | 'region' }[] | null | Promise<{ start: number; end: number; kind?: 'comment' | 'imports' | 'region' }[] | null>;
+  /**
+   * What `provideDocumentSemanticTokens` numbers stand for, as Monaco's `getLegend()`. The token
+   * types are named as a theme colours them, as a language server's are: `class` as `type.class`,
+   * `parameter` as `variable.parameter`, `method` as `function.method`.
+   */
+  getLegend?(): { tokenTypes: string[]; tokenModifiers: string[] };
+  /** The legend as data, in place of `getLegend`. */
+  legend?: { tokenTypes: string[]; tokenModifiers: string[] };
+  /**
+   * The text's semantic tokens, as Monaco's `provideDocumentSemanticTokens`: `{ data }`, five
+   * integers a token, coloured over the syntax's with the `semanticHighlighting` option on.
+   */
+  provideDocumentSemanticTokens?(text: string): { data: ArrayLike<number>; resultId?: string } | null | Promise<{ data: ArrayLike<number>; resultId?: string } | null>;
+  /**
+   * More of an item, as Monaco's `resolveCompletionItem`: called with the item as
+   * `provideCompletionItems` gave it when it is selected in the list; its `documentation` and
+   * `detail` replace what the item had.
+   */
+  resolveCompletionItem?(item: AardinkCompletionItem): AardinkCompletionItem | null | Promise<AardinkCompletionItem | null>;
+  /** A lens that came without a `command`, with one, as Monaco's `resolveCodeLens`. */
+  resolveCodeLens?(text: string, lens: AardinkCodeLens): AardinkCodeLens | null | Promise<AardinkCodeLens | null>;
 }
 
-/** Monaco's `CodeLens`, with the command it must have here: a title in a row above the line `range` starts on. */
+/** Monaco's `Location`: `uri` left out for a place in this text. */
+export interface AardinkLocation {
+  uri?: string;
+  range: AardinkRange;
+}
+
+/** Monaco's `SignatureHelp`. */
+export interface AardinkSignatureHelp {
+  signatures: {
+    label: string;
+    documentation?: string | { value: string };
+    parameters: { label: string | [number, number]; documentation?: string | { value: string } }[];
+  }[];
+  activeSignature: number;
+  activeParameter: number;
+}
+
+/** Monaco's `WorkspaceEdit`, for this text: an edit with a `resource` is another file's. */
+export interface AardinkWorkspaceEdit {
+  edits: { resource?: unknown; textEdit: AardinkTextEdit }[];
+}
+
+/** Monaco's `CodeAction`, as far as the editor reads one. */
+export interface AardinkCodeAction {
+  title: string;
+  /** `'quickfix'`, `'refactor...'` or `'source.organizeImports'`. */
+  kind?: string;
+  isPreferred?: boolean;
+  edit?: AardinkWorkspaceEdit;
+  command?: { id: string; title?: string; arguments?: unknown[] };
+}
+
+/** Monaco's `TextEdit`: `text` in place of `range`. */
+export interface AardinkTextEdit {
+  range: AardinkRange;
+  text: string | null;
+}
+
+/**
+ * Monaco's `CodeLens`: a title in a row above the line `range` starts on. One without a `command`
+ * is shown once `resolveCodeLens` gives it one.
+ */
 export interface AardinkCodeLens {
   range: AardinkRange;
-  command: { id: string; title: string; arguments?: unknown[] };
+  command?: { id: string; title: string; arguments?: unknown[] };
 }
 
 /** Monaco's `InlayHint`, as far as the editor draws it: a label at a position, in front of the character there. */
 export interface AardinkInlayHint {
   position: AardinkPosition;
   label: string;
+  /** Shown, as Markdown, in a card under a mouse resting on the label; Monaco's `{ value }` too. */
+  tooltip?: string | { value: string };
 }
 
 /** Monaco's `IColorInformation`: where a colour is written, and the colour, each channel from 0 to 1. */
@@ -742,7 +952,12 @@ export function registerLanguage(definition: AardinkLanguageDefinition, provider
  * Monaco's `defineTheme` data. Token rules name tokens as Monaco does, and the longest matching
  * prefix wins: `tag` also colours `tag.aardflex`, `comment.doc` only documentation comments. A
  * rule's `fontStyle` (`'bold'`, `'italic'`, `'underline'`, `'strikethrough'`, or `''` for none)
- * applies too; its `background` is accepted, so Monaco theme data passes as it is, and ignored.
+ * applies too, and its `background` is drawn behind the token's text; the empty token's sets the
+ * editor's. `colors` takes VS Code's keys, the editor's chrome too (`minimap.background`,
+ * `scrollbarSlider.background`, `editorIndentGuide.background1`, `editorRuler.foreground`,
+ * `editorWidget.background`, `.foreground` and `.border`, `editorInlayHint.foreground`,
+ * `editorCodeLens.foreground`, `editorGhostText.foreground`...). `hc-black` and `hc-light` fill in
+ * from the high-contrast themes.
  */
 export interface AardinkThemeData {
   base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
@@ -761,8 +976,8 @@ export function registerTheme(name: string, theme: AardinkThemeData | object): P
  * generated `file:///aardink/` URI.
  *
  * What the server knows joins what the language has. The providers of a language from
- * `registerLanguage` answer first and the server fills in; a built-in language's answers come after
- * the server's. Either way Enter, closing pairs and surrounding a selection stay the language's,
+ * `registerLanguage` answer first, the server fills in, and the language it extends comes last; a
+ * built-in language's answers come after the server's. Either way Enter, closing pairs and surrounding a selection stay the language's,
  * even where it does nothing, and an editor with no language service, such as plain text, types as
  * it does without a server. Completions, diagnostics, code actions, references, links and colours
  * come from both, and what a server pushes shows after a pause in typing.
@@ -781,8 +996,9 @@ export interface AardinkInlineCompletions {
 }
 
 /**
- * Monaco's `InlineCompletion`, as far as the editor shows it. `insertText` is a string: a
- * `{ snippet }` is left out, as ghost text cannot fill in its stops.
+ * Monaco's `InlineCompletion`, as far as the editor shows it. A `{ snippet }` shows and goes in as
+ * its text: a placeholder as its default text, a choice as its first, tab stops and variables as
+ * nothing.
  *
  * `range` is what it replaces, and must hold the caret. What `insertText` repeats of it is not shown
  * again: over `)`, the text `x) {` shows `x` before the bracket and ` {` after it, which is how ghost
@@ -796,7 +1012,7 @@ export interface AardinkInlineCompletions {
  * or past it, shows nothing.
  */
 export interface AardinkInlineCompletion {
-  insertText: string;
+  insertText: string | { snippet: string };
   range?: AardinkRange;
 }
 
@@ -833,6 +1049,12 @@ export function registerInlineCompletionsProvider(
 
 /** Monaco's name for `registerTheme`. */
 export const defineTheme: typeof registerTheme;
+
+/**
+ * Adds a font for the `fontFamily` option: a TrueType or OpenType file, by URL (fetched) or as its
+ * bytes. Editors naming it change to it at once. A monospaced font is meant.
+ */
+export function registerFont(name: string, urlOrBytes: string | URL | ArrayBuffer | ArrayBufferView): Promise<void>;
 
 /**
  * Mounts an editor that fills `container`. Loads the WebAssembly module on first use (see

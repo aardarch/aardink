@@ -55,7 +55,12 @@ import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -189,6 +194,7 @@ fun CodeEditorLayout(
     onOpenLink: (target: String) -> Unit = NoOpenLink,
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
     inlineCompletionProvider: InlineCompletionProvider? = null,
+    onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)? = null,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -241,6 +247,7 @@ fun CodeEditorLayout(
             contextMenuItems = contextMenuItems,
             onOpenLink = onOpenLink,
             inlineCompletionProvider = inlineCompletionProvider,
+            onSearchWorkspace = onSearchWorkspace,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -279,6 +286,7 @@ private fun CodeEditorLayoutContent(
     contextMenuItems: List<EditorMenuItem>,
     onOpenLink: (target: String) -> Unit,
     inlineCompletionProvider: InlineCompletionProvider?,
+    onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)?,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
@@ -357,7 +365,7 @@ private fun CodeEditorLayoutContent(
             state.publishSymbols(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(SYMBOLS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val list = if (state.exceedsAnalysisLimit) {
@@ -598,6 +606,33 @@ private fun CodeEditorLayoutContent(
 
     // ── Find/Replace: re-run search on query/option/text changes (debounced) ──
     if (findReplaceState != null) {
+        // Find in selection: the place searched follows the text, and is taken from the selection
+        // when the option goes on, and on each opening of the panel with text selected.
+        DisposableEffect(findReplaceState, state) {
+            val document = state.document
+            document.addChangeListener(findReplaceState.scopeTracker)
+            onDispose { document.removeChangeListener(findReplaceState.scopeTracker) }
+        }
+        LaunchedEffect(findReplaceState, state) {
+            snapshotFlow { findReplaceState.inSelection to findReplaceState.showRequests }.collect { (on, _) ->
+                if (!on) {
+                    findReplaceState.scopeTracker.replace(emptyList())
+                    return@collect
+                }
+                val selection = state.selection
+                val selected = selection.min until selection.max
+                val isAMatch = findReplaceState.matches.getOrNull(findReplaceState.currentMatchIndex) == selected
+                when {
+                    !selection.collapsed && !isAMatch -> findReplaceState.scopeTracker.replace(listOf(selected))
+
+                    findReplaceState.scopeTracker.items.isEmpty() -> {
+                        val document = state.document
+                        val line = document.offsetToLineCol(selection.end.coerceIn(0, document.length)).first
+                        findReplaceState.scopeTracker.replace(listOf(document.lineStart(line) until document.lineEnd(line)))
+                    }
+                }
+            }
+        }
         LaunchedEffect(findReplaceState, state) {
             snapshotFlow {
                 listOf(
@@ -606,6 +641,7 @@ private fun CodeEditorLayoutContent(
                     findReplaceState.caseSensitive,
                     findReplaceState.wholeWord,
                     findReplaceState.useRegex,
+                    findReplaceState.scope,
                     state.textVersion,
                 )
             }.collectLatest { _ ->
@@ -619,8 +655,9 @@ private fun CodeEditorLayoutContent(
                 delay(200)
                 val text = state.document.text
                 val opts = findReplaceState.toOptions()
+                val scope = findReplaceState.scope
                 val found = withContext(state.computeDispatcher) {
-                    FindEngine.findAllCooperatively(text, findReplaceState.query, opts, EditorLimits.maxFindMatches)
+                    FindEngine.findAllCooperatively(text, findReplaceState.query, opts, EditorLimits.maxFindMatches, scope)
                 }
                 findReplaceState.matches = found.matches
                 findReplaceState.matchesCapped = found.capped
@@ -632,7 +669,7 @@ private fun CodeEditorLayoutContent(
     // ── Folding: recompute foldable ranges when text changes ─────────────────
     if (foldState != null) {
         LaunchedEffect(foldState, state, foldingProvider) {
-            snapshotFlow { state.textVersion }.collectLatest {
+            snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
                 delay(200)
                 currentFoldableRanges(state, foldingProvider)?.let(foldState::updateFoldableRanges)
             }
@@ -645,7 +682,7 @@ private fun CodeEditorLayoutContent(
     var ownStickyRanges by remember { mutableStateOf<List<FoldRange>>(emptyList()) }
     if (options.stickyScroll && foldState == null) {
         LaunchedEffect(state, foldingProvider) {
-            snapshotFlow { state.textVersion }.collectLatest {
+            snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
                 delay(200)
                 currentFoldableRanges(state, foldingProvider)?.let { ownStickyRanges = it }
             }
@@ -745,7 +782,7 @@ private fun CodeEditorLayoutContent(
         if (service == null || service !== state.semanticSource) state.clearSemanticTokens()
         state.semanticSource = service
         if (service == null) return@LaunchedEffect
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(SEMANTIC_TOKENS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
                 state.clearSemanticTokens()
@@ -775,8 +812,8 @@ private fun CodeEditorLayoutContent(
                 frame.lineCount,
             )
             asked = window
-            state.textVersion to window
-        }.filterNotNull().collectLatest { (_, window) ->
+            Triple(state.textVersion, state.languageRefreshes, window)
+        }.filterNotNull().collectLatest { (_, _, window) ->
             delay(INLAY_HINTS_DEBOUNCE_MS)
             if (state.exceedsAnalysisLimit) {
                 state.publishInlayHints(emptyList())
@@ -795,13 +832,13 @@ private fun CodeEditorLayoutContent(
         // As with hints: what is here came from a service, and a change of either ends that.
         state.publishCodeLenses(emptyList())
         val service = languageService.takeIf { options.codeLens } ?: return@LaunchedEffect
-        var answered: Int? = null
+        var answered: Pair<Int, Int>? = null
         // A first answer may leave the same lines waiting as before it, which alone asks nothing.
         var firstAnswers by mutableIntStateOf(0)
         snapshotFlow {
             state.codeLenses
             val waiting = view.frame.lines.mapNotNull { shown -> shown.line.takeIf { view.inline.isWaiting(it) } }
-            Triple(state.textVersion, waiting, firstAnswers)
+            Triple(state.textVersion to state.languageRefreshes, waiting, firstAnswers)
         }.collectLatest { (version, waiting) ->
             if (version == answered && waiting.isEmpty()) return@collectLatest
             delay(CODE_LENSES_DEBOUNCE_MS)
@@ -852,21 +889,14 @@ private fun CodeEditorLayoutContent(
         }
     }
 
-    // ── Colours: swatches under the colours the language service finds, and their picker ─
-    val colorTracker = remember(state) {
-        TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
-    }
-    DisposableEffect(colorTracker) {
-        state.document.addChangeListener(colorTracker)
-        onDispose { state.document.removeChangeListener(colorTracker) }
-    }
-    LaunchedEffect(colorTracker, languageService, options.colorDecorators) {
+    // ── Colours: a swatch before each colour the language service finds, and their picker ─
+    LaunchedEffect(state, languageService, options.colorDecorators) {
         val service = languageService
         if (service == null || !options.colorDecorators) {
-            colorTracker.replace(emptyList())
+            state.publishDocumentColors(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(COLORS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val found = if (state.exceedsAnalysisLimit) {
@@ -876,14 +906,16 @@ private fun CodeEditorLayoutContent(
                     service.documentColors(document)
                 }
             }
-            if (state.document.version == document.version) colorTracker.replace(found)
+            if (state.document.version == document.version) state.publishDocumentColors(found)
         }
     }
     val colorAt: (Int) -> ColorInfo? = { offset ->
-        colorTracker.items.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
+        state.documentColors.firstOrNull { !it.range.isEmpty() && offset >= it.range.first && offset <= it.range.last + 1 }
     }
     // The colour the picker is open for, while it is.
     var pickingColor by remember { mutableStateOf<ColorInfo?>(null) }
+    // A click on a swatch opens the picker for its colour, as a hover on VS Code's does.
+    SideEffect { view.inline.onSwatchClick = { offset -> colorAt(offset)?.let { pickingColor = it } } }
     val applyColor: (ColorInfo, Color) -> Unit = { info, color ->
         pickingColor = null
         val service = languageService
@@ -943,8 +975,15 @@ private fun CodeEditorLayoutContent(
             if (at == null) return@collectLatest
             delay(HOVER_DELAY_MS)
             val hit = view.offsetAt(at)
+            if (hover?.holding == true) return@collectLatest
+            // An inlay hint with a tooltip is about itself, not the text it stands in front of.
+            val tooltip = hit.injection?.tooltip
+            if (tooltip != null) {
+                hover = HoverShown(HoverDoc(hit.injection.text.trim(), tooltip), hit.offset, hit.offset, restedAt = at)
+                return@collectLatest
+            }
             // What a click does something on says it itself, and is not the text of the line under it.
-            if (hover?.holding != true && hit.injection?.id == null) showHover(hit.offset, at)
+            if (hit.injection?.id == null) showHover(hit.offset, at)
         }
     }
     // A mouse that moves on takes the card down, but not at once: it has to be able to cross to
@@ -1079,7 +1118,7 @@ private fun CodeEditorLayoutContent(
             linkTracker.replace(emptyList())
             return@LaunchedEffect
         }
-        snapshotFlow { state.textVersion }.collectLatest {
+        snapshotFlow { state.textVersion to state.languageRefreshes }.collectLatest {
             delay(LINKS_DEBOUNCE_MS)
             val document = state.document.snapshot()
             val links = if (state.exceedsAnalysisLimit) {
@@ -1254,10 +1293,24 @@ private fun CodeEditorLayoutContent(
         }
     }
     val currentHandleSingleCharacterInsert = rememberUpdatedState(handleSingleCharacterInsert)
+    // Format on type: asked off the typing path with a single caret, and dropped by the next
+    // keystroke, which cancels it, or by any edit made while it was being worked out.
+    val currentFormatOnType = rememberUpdatedState(options.formatOnType)
+    var formatOnTypeJob by remember { mutableStateOf<Job?>(null) }
+    val askFormatOnType: (CodeEditorState.TypedInput) -> Unit = ask@{ typed ->
+        formatOnTypeJob?.cancel()
+        val service = currentLanguageService.value ?: return@ask
+        if (!currentFormatOnType.value || typed.composing || typed.char !in service.formatOnTypeCharacters) return@ask
+        val caret = state.selections.singleOrNull()?.takeIf { it.collapsed } ?: return@ask
+        val document = state.document.snapshot()
+        formatOnTypeJob = coroutineScope.launch { formatAfterTyping(state, service, document, caret.start, typed.char) }
+    }
     val onInput: (CodeEditorState.TypedInput?) -> Unit = { typed ->
         if (typed != null) {
             currentHandleSingleCharacterInsert.value(typed.offset, typed.char, typed.autoCloseLength)
+            askFormatOnType(typed)
         } else {
+            formatOnTypeJob?.cancel()
             showCompletion = false
         }
     }
@@ -1326,6 +1379,24 @@ private fun CodeEditorLayoutContent(
             if ('\n' !in selected) find.query = selected
         }
     }
+    // EditorCommand.SearchWorkspace (Ctrl+Shift+F), and the find panel's button: the host's search
+    // of its workspace, for the selection on one line, else what the find panel has.
+    val currentOnSearchWorkspace = rememberUpdatedState(onSearchWorkspace)
+    val searchWorkspace: (() -> Unit)? = if (onSearchWorkspace == null) {
+        null
+    } else {
+        {
+            val selection = state.selection
+            val selected = if (!selection.collapsed && selection.length <= FIND_SEED_LIMIT) {
+                state.document.subSequence(selection.min, selection.max).toString().takeIf { '\n' !in it }
+            } else {
+                null
+            }
+            val find = findReplaceState
+            find?.remember()
+            currentOnSearchWorkspace.value?.invoke(selected ?: find?.query.orEmpty(), find?.toOptions() ?: FindEngine.Options())
+        }
+    }
     // F3 / Shift+F3: the next or previous match; with none to go to, the find panel.
     val findNext: (Boolean) -> Boolean = next@{ forward ->
         val find = findReplaceState ?: return@next false
@@ -1388,6 +1459,8 @@ private fun CodeEditorLayoutContent(
                 it.show()
             } != null
 
+            EditorCommand.SearchWorkspace -> searchWorkspace?.invoke() != null
+
             EditorCommand.ShowReplace -> findReplaceState?.let {
                 seedFind(it)
                 it.show(replace = true)
@@ -1444,6 +1517,7 @@ private fun CodeEditorLayoutContent(
         }
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
+        if (onSearchWorkspace != null) add(EditorCommand.SearchWorkspace)
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
         if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))
@@ -1601,17 +1675,26 @@ private fun CodeEditorLayoutContent(
     ) {
         // ── Find/Replace panel (slides down from the top) ────────────────────
         if (findReplaceState != null) {
+            val previewColors = remember(theme) { EditorChromeColors(theme) }
+            val replacePreview by remember(findReplaceState, state, previewColors.error, previewColors.accent) {
+                derivedStateOf {
+                    replacePreviewOf(findReplaceState, state.document.also { state.textVersion }, previewColors.error, previewColors.accent)
+                }
+            }
             FindReplacePanel(
                 state = findReplaceState,
                 onNext = {
+                    findReplaceState.remember()
                     val match = findReplaceState.nextMatch() ?: return@FindReplacePanel
                     state.navigateTo(match.first, TextRange(match.first, match.last + 1))
                 },
                 onPrev = {
+                    findReplaceState.remember()
                     val match = findReplaceState.prevMatch() ?: return@FindReplacePanel
                     state.navigateTo(match.first, TextRange(match.first, match.last + 1))
                 },
                 onReplace = {
+                    findReplaceState.remember(replaced = true)
                     val idx = findReplaceState.currentMatchIndex
                     val match = findReplaceState.matches.getOrNull(idx) ?: return@FindReplacePanel
                     val edit = findReplaceState.replaceEdits(state.text, listOf(match)).firstOrNull()
@@ -1620,6 +1703,7 @@ private fun CodeEditorLayoutContent(
                     state.applyEdit(match.first, match.last - match.first + 1, edit.newText, newSel)
                 },
                 onReplaceAll = {
+                    findReplaceState.remember(replaced = true)
                     val all = findReplaceState.matches
                     if (all.isEmpty()) return@FindReplacePanel
                     // One batch: one undo step for the whole replacement.
@@ -1631,6 +1715,8 @@ private fun CodeEditorLayoutContent(
                     controller.requestFocus()
                 },
                 modifier = Modifier.fillMaxWidth(),
+                onSearchWorkspace = searchWorkspace,
+                replacePreview = replacePreview,
             )
         }
 
@@ -1712,6 +1798,8 @@ private fun CodeEditorLayoutContent(
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
+                    lineNumbers = options.lineNumbers,
+                    caretLine = { state.document.offsetToLineCol(state.selection.end.coerceIn(0, state.document.length)).first },
                     onLineNumberTap = { line ->
                         val document = state.document
                         val end = if (line + 1 < document.lineCount) document.lineStart(line + 1) else document.length
@@ -1735,7 +1823,7 @@ private fun CodeEditorLayoutContent(
             options = options,
             textColor = textColor,
             stickyRanges = stickyRanges,
-            colorSwatches = { colorTracker.items },
+            colorSwatches = { state.documentColors },
             onZoom = zoom?.zoomBy,
             modifier = Modifier
                 .weight(1f)
@@ -1870,6 +1958,7 @@ private fun CodeEditorLayoutContent(
                             onSelectAction = { action ->
                                 state.applyTextEdits(action.edits)
                                 showCodeActionsMenu = false
+                                action.onApply?.let { rest -> coroutineScope.launch { applyRestOf(rest) } }
                             },
                             onDismiss = { showCodeActionsMenu = false },
                         )
@@ -1984,6 +2073,33 @@ private suspend fun askForInlineCompletions(
     throw e
 } catch (_: Exception) {
     emptyList()
+}
+
+/** A chosen [CodeAction.onApply]; a failure costs the rest of the action, not the editor. */
+private suspend fun applyRestOf(onApply: suspend () -> Unit) {
+    try {
+        onApply()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+    }
+}
+
+/**
+ * Applies what [service] answers to [typed] at [offset] in [document], as an undo step of its own,
+ * if the text is still [document]: an answer about older text would land in the wrong place. A
+ * failure costs the formatting, not the editor.
+ */
+private suspend fun formatAfterTyping(state: CodeEditorState, service: LanguageService, document: CodeDocument, offset: Int, typed: Char) {
+    val edits = try {
+        withContext(state.computeDispatcher) { service.formatOnType(document, offset, typed, state.formattingOptions) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        return
+    }
+    if (edits.isEmpty() || state.document.version != document.version) return
+    state.applyTextEdits(edits)
 }
 
 // ── Completion acceptance ──────────────────────────────────────────────────────
@@ -2212,3 +2328,33 @@ internal fun symbolStickyRanges(symbols: List<DocumentSymbol>, document: CodeDoc
     }
     return out
 }
+
+/**
+ * The replace preview: the current match's line, the match struck through and the replacement
+ * after it, cut to [REPLACE_PREVIEW_CONTEXT] characters either side. Null with nothing to replace.
+ * Reads one line of [document], never the whole text.
+ */
+internal fun replacePreviewOf(find: FindReplaceState, document: CodeDocument, removed: Color, added: Color): AnnotatedString? {
+    if (!find.visible || !find.replaceMode) return null
+    val match = find.matches.getOrNull(find.currentMatchIndex) ?: return null
+    if (match.isEmpty() || match.last >= document.length) return null
+    val newText = find.replaceEdits(document, listOf(match)).firstOrNull()?.newText ?: return null
+    val line = document.offsetToLineCol(match.first).first
+    val lineStart = document.lineStart(line)
+    val lineEnd = document.lineEnd(line)
+    val from = maxOf(lineStart, match.first - REPLACE_PREVIEW_CONTEXT)
+    val to = minOf(lineEnd, match.last + 1 + REPLACE_PREVIEW_CONTEXT).coerceAtLeast(match.last + 1)
+    return buildAnnotatedString {
+        if (from > lineStart) append("…")
+        append(document.subSequence(from, match.first).toString().trimStart())
+        withStyle(SpanStyle(color = removed, textDecoration = TextDecoration.LineThrough)) {
+            append(document.subSequence(match.first, match.last + 1).toString())
+        }
+        withStyle(SpanStyle(color = added)) { append(newText.replace("\n", "⏎")) }
+        append(document.subSequence(match.last + 1, minOf(to, document.length)).toString())
+        if (to < lineEnd) append("…")
+    }
+}
+
+/** How much of the line the replace preview shows either side of the match. */
+private const val REPLACE_PREVIEW_CONTEXT = 30

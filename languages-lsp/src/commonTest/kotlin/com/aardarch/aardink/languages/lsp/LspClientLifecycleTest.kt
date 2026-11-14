@@ -40,6 +40,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -546,6 +547,15 @@ class LspClientLifecycleTest {
     }
 
     @Test
+    fun `a host's own initialize request sets serverCapabilities too`() = withServer("") {
+        val initializing = async { client.sendRequest("initialize", buildJsonObject { put("capabilities", buildJsonObject { }) }) }
+        respond("initialize", """{"capabilities":{"renameProvider":true}}""")
+
+        initializing.await()
+        assertTrue(client.serverCapabilities!!.jsonObject["renameProvider"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
     fun `serverCapabilities is set by the time initialized reaches the server`() = runTest {
         // Read from inside the write: a server may ask the client something the moment it sees
         // `initialized`, and nothing observed after initialize returns could tell the difference.
@@ -656,7 +666,7 @@ class LspClientLifecycleTest {
         val resolved = completionItem["resolveSupport"]!!.jsonObject["properties"]!!.jsonArray.map { it.jsonPrimitive.content }
 
         assertFalse("additionalTextEdits" in resolved, "accepting an item does not wait for resolve, so the import would be lost")
-        assertFalse("willSaveWaitUntil" in textDocument["synchronization"]!!.jsonObject, "not in 0.9")
+        assertTrue(textDocument["synchronization"]!!.jsonObject["willSaveWaitUntil"]!!.jsonPrimitive.boolean)
         assertFalse(
             "resourceOperations" in DefaultClientCapabilities["workspace"]!!.jsonObject["workspaceEdit"]!!.jsonObject,
             "the adapter refuses file operations",

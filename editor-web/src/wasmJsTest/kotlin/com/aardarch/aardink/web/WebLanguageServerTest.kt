@@ -348,6 +348,27 @@ class WebLanguageServerTest {
         awaitDiagnostics(handle, "host's", "server's")
     }
 
+    @Test
+    fun `a server answers after the host's providers and before the language they extend`() = runTest {
+        language("toy-order-base", WebLanguageProviders(hover = { _, _, _ -> """{ "contents": "from the base" }""" }))
+        language(
+            "toy-order",
+            WebLanguageProviders(hover = { _, _, column -> if (column == 1) """{ "contents": "from the host" }""" else null }),
+            extends = "toy-order-base",
+        )
+        val handle = mount("name", "toy-order")
+        val server = FakeServer { method -> if (method == "textDocument/hover") """{"contents":"from the server"}""" else null }
+        connect("toy-order", server)
+        served(handle)
+        val service = assertNotNull(handle.languageService)
+        val snapshot = handle.state.value.document.snapshot()
+
+        withContext(Dispatchers.Main) {
+            assertEquals("from the host", service.hoverDoc(snapshot, 0)?.content)
+            assertEquals("from the server", service.hoverDoc(snapshot, 2)?.content, "ahead of the base")
+        }
+    }
+
     /** Waits for the service to have exactly [messages]; pushed ones come in their own time. */
     private suspend fun awaitDiagnostics(handle: AardinkEditorHandle, vararg messages: String) {
         var last = emptyList<String>()
@@ -442,18 +463,19 @@ class WebLanguageServerTest {
     @Test
     fun `a language's empty indentation on Enter stands, with a real server behind it`() = runTest {
         val kotlin = mount("  foo\n}", "kotlin")
-        val markdown = mount("    code\n", "markdown")
+        // After `return`, Python's configuration outdents to nothing.
+        val python = mount("    return x\n", "python")
         connect("kotlin", FakeServer())
-        connect("markdown", FakeServer())
+        connect("python", FakeServer())
         val kotlinAdapter = served(kotlin)
-        val markdownAdapter = served(markdown)
+        val pythonAdapter = served(python)
         val closing = CodeDocument("  foo\n}")
-        val code = CodeDocument("    code\n")
+        val returned = CodeDocument("    return x\n")
 
         assertEquals("  ", kotlinAdapter.smartIndent(closing, 1, FormattingOptions()))
-        assertEquals("    ", markdownAdapter.smartIndent(code, 1, FormattingOptions()))
+        assertEquals("    ", pythonAdapter.smartIndent(returned, 1, FormattingOptions()))
         assertEquals("", kotlin.languageService!!.smartIndent(closing, 1, FormattingOptions()))
-        assertEquals("", markdown.languageService!!.smartIndent(code, 1, FormattingOptions()))
+        assertEquals("", python.languageService!!.smartIndent(returned, 1, FormattingOptions()))
     }
 
     @Test

@@ -158,9 +158,9 @@ class LspClient(
     private var shuttingDown = false
 
     /**
-     * The `ServerCapabilities` the server answered [initialize] with: null until that answer
-     * arrives, and when it carried none. Registrations made later through
-     * `client/registerCapability` are not reflected here.
+     * The `ServerCapabilities` the server answered [initialize] with, or a host's own
+     * `sendRequest("initialize")`: null until that answer arrives, and when it carried none.
+     * Registrations made later through `client/registerCapability` are not reflected here.
      */
     @Volatile
     var serverCapabilities: JsonElement? = null
@@ -196,6 +196,14 @@ class LspClient(
     fun removeDiagnosticsListener(listener: DiagnosticsListener) {
         diagnosticsListeners = diagnosticsListeners - listener
     }
+
+    /**
+     * What hears a server's `workspace/.../refresh` requests, given the method: each
+     * [LspLanguageService] of this client, so that one attached to an editor asks again. Copy-on-write,
+     * as [diagnosticsListeners] is; a listener must not block.
+     */
+    @Volatile
+    internal var refreshListeners: List<(method: String) -> Unit> = emptyList()
 
     /**
      * Runs [block] under [lock], taking it synchronously via [Mutex.tryLock] when uncontended (the
@@ -341,12 +349,19 @@ class LspClient(
         givenUp.value = false
         var answered = false
         val result = try {
-            sendRequest("initialize", params).also { answered = true }
+            sendRequest("initialize", params, onWritten = {}).also { answered = true }
         } finally {
             // A refusal, a lost connection or a host's own timeout: no document will follow this.
             if (!answered) givenUp.value = true
         }
         // Before `initialized`: the server may ask the client something as soon as it reads that.
+        val declared = takeCapabilities(result)
+        sendNotification("initialized", buildJsonObject { })
+        return declared
+    }
+
+    /** Keeps the capabilities in an `initialize` [result], and tells the host if their positions cannot be read. */
+    private suspend fun takeCapabilities(result: JsonElement?): JsonElement? {
         val declared = (result as? JsonObject)?.get("capabilities")
         serverCapabilities = declared
         if (!positionsAreUtf16(declared)) {
@@ -355,7 +370,6 @@ class LspClient(
                 host.logMessage(MESSAGE_ERROR, "Positions in $encoding cannot be read: only whole-text sync and pushed diagnostics stay on")
             }
         }
-        sendNotification("initialized", buildJsonObject { })
         return declared
     }
 
@@ -431,7 +445,10 @@ class LspClient(
      *   is already closed or shutting down, or closes before a response is received, or with the
      *   server's code when it answers with an `error`.
      */
-    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? = sendRequest(method, params, onWritten = {})
+    suspend fun sendRequest(method: String, params: JsonElement? = null): JsonElement? = sendRequest(method, params, onWritten = {}).also {
+        // A host doing its own handshake: what it learns, the client learns too.
+        if (method == "initialize") takeCapabilities(it)
+    }
 
     /**
      * [sendRequest], calling [onWritten] as soon as the request is on the wire rather than when it
@@ -737,6 +754,9 @@ class LspClient(
      *   positions cannot be read: see [applyEditResult].
      * - `workspace/configuration`: answered with one `null` per requested item, per spec, meaning
      *   "no configuration value for this scope".
+     * - `workspace/inlayHint/refresh`, `workspace/codeLens/refresh`, `workspace/semanticTokens/refresh`
+     *   and `workspace/diagnostic/refresh`: passed to each [LspLanguageService] that is attached to an
+     *   editor, which asks again, and acknowledged with a `null` result.
      */
     private suspend fun answerServerRequest(id: JsonElement, method: String, params: JsonElement?): LspMessage.Response {
         val result: JsonElement = when (method) {
@@ -757,6 +777,11 @@ class LspClient(
             "workspace/applyEdit" -> applyEditResult(params)
 
             "workspace/configuration" -> workspaceConfigurationResult(params)
+
+            in REFRESH_REQUESTS -> {
+                refreshListeners.forEach { it(method) }
+                JsonNull
+            }
 
             else -> return LspMessage.Response(
                 id = id,
@@ -851,6 +876,14 @@ class LspClient(
     private companion object {
         /** JSON-RPC: the receiver failed while handling the request. */
         const val INTERNAL_ERROR = -32603
+
+        /** The server's requests to ask again, answered with `null` once passed on. */
+        val REFRESH_REQUESTS = setOf(
+            "workspace/inlayHint/refresh",
+            "workspace/codeLens/refresh",
+            "workspace/semanticTokens/refresh",
+            "workspace/diagnostic/refresh",
+        )
 
         /** LSP's `MessageType.Error`. */
         const val MESSAGE_ERROR = 1

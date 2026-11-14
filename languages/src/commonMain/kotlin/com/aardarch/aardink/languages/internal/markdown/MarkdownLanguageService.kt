@@ -17,6 +17,7 @@ package com.aardarch.aardink.languages.internal.markdown
 
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.DocumentSymbol
+import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
@@ -24,7 +25,8 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
 /**
  * Markdown's service: its document symbols, the headings, nested by level as VS Code's outline
  * nests them. A heading's range runs to the line before the next heading of the same or a higher
- * level. Headings inside fenced code blocks are not headings.
+ * level. Headings inside fenced code blocks are not headings. Formatting lines up its tables'
+ * columns ([MarkdownTables]) and leaves the rest alone.
  */
 internal object MarkdownLanguageService : BaseLanguageService() {
 
@@ -39,6 +41,8 @@ internal object MarkdownLanguageService : BaseLanguageService() {
 
         fun build(last: Int) = DocumentSymbol(name, SymbolKind.String, start..maxOf(start, last), nameRange, children = children)
     }
+
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = MarkdownTables.format(document.text)
 
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> {
         val lineCount = document.lineCount

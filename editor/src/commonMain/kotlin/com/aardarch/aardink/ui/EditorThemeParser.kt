@@ -17,6 +17,7 @@ package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.aardarch.aardink.core.ChromeColors
 import com.aardarch.aardink.core.DefaultBracketPairColors
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.LightBracketPairColors
@@ -70,32 +71,39 @@ object EditorThemeParser {
     /**
      * Parses [json] as Monaco's `defineTheme` data, `{ base, inherit, rules, colors }`, so one theme
      * file serves a Monaco-shaped web editor and a Kotlin one alike. `base` picks what the theme
-     * leaves unset: [EditorThemes.VsCodeLight] for `vs` and `hc-light`, [EditorThemes.VsCodeDark]
-     * otherwise. Each rule's `token` names tokens as a grammar or the built-in languages do
+     * leaves unset: [EditorThemes.VsCodeLight] for `vs`, [EditorThemes.VsCodeDark] otherwise. Each rule's `token` names tokens as a grammar or the built-in languages do
      * (`keyword`, `tag.aardflex`; the longest matching prefix wins), with its `foreground` (with or
-     * without `#`) and `fontStyle`; a rule with the empty token sets the default text colour. A
-     * rule's `background` is not drawn. `colors` takes VS Code's color keys, as [fromJson] does.
+     * without `#`) and `fontStyle`; a rule with the empty token sets the default text colour (and
+     * with a `background`, the editor's). A rule's `background` goes to [EditorTheme.tokenBackgrounds].
+     * `base` `hc-black` and `hc-light` take [EditorThemes.HighContrastDark] and
+     * [EditorThemes.HighContrastLight]. `colors` takes VS Code's color keys, as [fromJson] does.
      * With `inherit: false` the base still supplies the UI colours and the default text colour, but
      * none of its token rules; a missing `inherit` inherits. Returns null if the JSON is malformed.
      */
     fun fromMonacoJson(json: String): EditorTheme? = try {
         val root = Json.parseToJsonElement(json).jsonObject
         val base = when ((root["base"] as? JsonPrimitive)?.contentOrNull) {
-            "vs", "hc-light" -> EditorThemes.VsCodeLight
+            "vs" -> EditorThemes.VsCodeLight
+            "hc-black" -> EditorThemes.HighContrastDark
+            "hc-light" -> EditorThemes.HighContrastLight
             else -> EditorThemes.VsCodeDark
         }
         val inherit = (root["inherit"] as? JsonPrimitive)?.booleanOrNull ?: true
         val colors = (root["colors"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
+        val tokenBackgrounds = if (inherit) base.tokenBackgrounds.toMutableMap() else mutableMapOf()
         val tokenColors = buildJsonArray {
             for (rule in (root["rules"] as? JsonArray).orEmpty()) {
                 val obj = rule as? JsonObject ?: continue
                 val token = (obj["token"] as? JsonPrimitive)?.contentOrNull ?: continue
                 val foreground = (obj["foreground"] as? JsonPrimitive)?.contentOrNull?.let { "#" + it.removePrefix("#") }
                 val fontStyle = (obj["fontStyle"] as? JsonPrimitive)?.contentOrNull
+                val background = (obj["background"] as? JsonPrimitive)?.contentOrNull?.let { "#" + it.removePrefix("#") }
                 if (token.isEmpty()) {
                     if (foreground != null && "editor.foreground" !in colors) colors["editor.foreground"] = JsonPrimitive(foreground)
+                    if (background != null && "editor.background" !in colors) colors["editor.background"] = JsonPrimitive(background)
                     continue
                 }
+                background?.let(::parseHex)?.let { tokenBackgrounds[NamedTokenType(token)] = it }
                 if (foreground == null && fontStyle == null) continue
                 add(
                     buildJsonObject {
@@ -118,7 +126,7 @@ object EditorThemeParser {
             },
             base,
             inheritTokenRules = inherit,
-        )
+        ).copy(tokenBackgrounds = tokenBackgrounds)
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
@@ -144,6 +152,7 @@ object EditorThemeParser {
 
         // ── Token colors ──────────────────────────────────────────────────────
         val tokenStyles = buildTokenStyles(root, foreground, fallback, inheritTokenRules)
+        val chrome = fallback.chromeColors
 
         return EditorTheme(
             background = background,
@@ -167,6 +176,27 @@ object EditorThemeParser {
                 selection = colors.hexColor("editorOverviewRuler.selectionHighlightForeground") ?: fallback.overviewRulerColors.selection,
                 added = colors.hexColor("editorOverviewRuler.addedForeground") ?: fallback.overviewRulerColors.added,
                 modified = colors.hexColor("editorOverviewRuler.modifiedForeground") ?: fallback.overviewRulerColors.modified,
+            ),
+            chromeColors = ChromeColors(
+                minimapBackground = colors.hexColor("minimap.background") ?: chrome.minimapBackground,
+                minimapSlider = colors.hexColor("minimapSlider.background") ?: chrome.minimapSlider,
+                scrollbarSlider = colors.hexColor("scrollbarSlider.background") ?: chrome.scrollbarSlider,
+                scrollbarSliderHover = colors.hexColor("scrollbarSlider.hoverBackground") ?: chrome.scrollbarSliderHover,
+                indentGuide = colors.hexColor("editorIndentGuide.background1")
+                    ?: colors.hexColor("editorIndentGuide.background")
+                    ?: chrome.indentGuide,
+                activeIndentGuide = colors.hexColor("editorIndentGuide.activeBackground1")
+                    ?: colors.hexColor("editorIndentGuide.activeBackground")
+                    ?: chrome.activeIndentGuide,
+                bracketPairGuide = colors.hexColor("editorBracketPairGuide.background1") ?: chrome.bracketPairGuide,
+                ruler = colors.hexColor("editorRuler.foreground") ?: chrome.ruler,
+                widgetBackground = colors.hexColor("editorWidget.background") ?: chrome.widgetBackground,
+                widgetForeground = colors.hexColor("editorWidget.foreground") ?: chrome.widgetForeground,
+                widgetBorder = colors.hexColor("editorWidget.border") ?: colors.hexColor("contrastBorder") ?: chrome.widgetBorder,
+                inlayHint = colors.hexColor("editorInlayHint.foreground") ?: chrome.inlayHint,
+                inlayHintBackground = colors.hexColor("editorInlayHint.background") ?: chrome.inlayHintBackground,
+                codeLens = colors.hexColor("editorCodeLens.foreground") ?: chrome.codeLens,
+                ghostText = colors.hexColor("editorGhostText.foreground") ?: chrome.ghostText,
             ),
         )
     }

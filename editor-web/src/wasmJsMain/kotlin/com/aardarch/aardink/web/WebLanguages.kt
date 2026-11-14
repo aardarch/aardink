@@ -16,7 +16,10 @@
 package com.aardarch.aardink.web
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
+import com.aardarch.aardink.core.ChromeColors
 import com.aardarch.aardink.core.CodeAction
+import com.aardarch.aardink.core.CodeActionKind
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeLens
 import com.aardarch.aardink.core.ColorInfo
@@ -26,6 +29,9 @@ import com.aardarch.aardink.core.CompositeLanguageService
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorTheme
+import com.aardarch.aardink.core.FoldKind
+import com.aardarch.aardink.core.FoldRange
+import com.aardarch.aardink.core.FoldingProvider
 import com.aardarch.aardink.core.FormattingOptions
 import com.aardarch.aardink.core.HoverDoc
 import com.aardarch.aardink.core.InlayHint
@@ -34,8 +40,11 @@ import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
 import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.ParameterInformation
 import com.aardarch.aardink.core.SignatureHelp
+import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.BuiltInLanguages
 import com.aardarch.aardink.languages.DeclarativeGrammar
@@ -103,6 +112,34 @@ import kotlinx.serialization.json.jsonObject
  * - [runCodeLensCommand]: a lens was clicked. It gets the command's `id` and its `arguments` as a
  *   JSON array, `[]` for none, and what it answers is not read. A click comes back here because an
  *   answer is JSON, and a language's service has no hold of any one editor.
+ * - [formatOnType]: one of the definition's `autoFormatTriggerCharacters` was typed, with the caret
+ *   after it at the position given and `options` as `{ tabSize, insertSpaces }`: an array of Monaco's
+ *   `TextEdit`, `{ range, text }`, for the editor to apply with the `formatOnType` option on. Enter
+ *   is `"\n"`.
+ * - [definition] and [references]: Monaco's `Location`, `{ uri?, range }`, one or an array (and
+ *   `LocationLink`'s `targetUri` and `targetRange`). A location without `uri` is in this document;
+ *   one with a `uri` is another file's, which the editor does not open.
+ * - [formatDocument] and [formatRange]: an array of Monaco's `TextEdit`. They get the options as
+ *   [formatOnType] does, and [formatRange] the range as a [WebRange] in JSON first.
+ * - [signatureHelp]: Monaco's `SignatureHelpResult`, `{ value: { signatures, activeSignature,
+ *   activeParameter } }`, or the `SignatureHelp` in it. A parameter's `label` is its text or Monaco's
+ *   `[start, end]` in the signature's label; `documentation` a string or `{ value }`.
+ * - [codeActions]: asked about a range (a [WebRange] in JSON) with the diagnostics there as an array
+ *   of [WebDiagnostic]: Monaco's `CodeActionList`, `{ actions }`, or the array. An action is `{ title,
+ *   kind?, isPreferred?, edit?: { edits: [{ textEdit: { range, text } }] }, command?: { id, arguments? } }`;
+ *   edits with a `resource` are another file's and leave the action out. Its command goes to
+ *   [runCodeLensCommand], as a lens's does, after its edits.
+ * - [rename]: the new name after the place: Monaco's `WorkspaceEdit`, `{ edits: [{ textEdit }] }`,
+ *   or `{ rejectReason }`, which renames nothing. Edits to other files leave it all undone.
+ * - [resolveRename]: Monaco's `RenameLocation`, `{ range, text }`, the name to rename; `{ rejectReason }`
+ *   or null where nothing can be renamed.
+ * - [foldingRanges]: an array of Monaco's `FoldingRange`, `{ start, end, kind? }`, 1-based lines,
+ *   `kind` `comment`, `imports` or `region`. These replace the language's own folds.
+ * - [semanticTokens]: Monaco's `SemanticTokens`, `{ data }`, read by the definition's
+ *   `semanticTokensLegend`, `{ tokenTypes, tokenModifiers }`.
+ * - [resolveCompletionItem]: asked with an item as the provider gave it, when it is selected in the
+ *   list: the item with more filled in (`documentation`, `detail`), or null to keep it.
+ * - [resolveCodeLens]: asked with a lens that came without a `command`: the lens with one.
  *
  * A language that `extends` a built-in one gets its answers as well: completions and diagnostics
  * from both, the host's first; hover from the host, or else from the built-in language. A built-in
@@ -119,6 +156,19 @@ class WebLanguageProviders(
     val inlayHints: (suspend (text: String, rangeJson: String) -> String?)? = null,
     val codeLenses: (suspend (text: String) -> String?)? = null,
     val runCodeLensCommand: (suspend (id: String, argsJson: String) -> Unit)? = null,
+    val formatOnType: (suspend (text: String, line: Int, column: Int, ch: String, optionsJson: String) -> String?)? = null,
+    val definition: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
+    val references: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
+    val formatDocument: (suspend (text: String, optionsJson: String) -> String?)? = null,
+    val formatRange: (suspend (text: String, rangeJson: String, optionsJson: String) -> String?)? = null,
+    val signatureHelp: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
+    val codeActions: (suspend (text: String, rangeJson: String, diagnosticsJson: String) -> String?)? = null,
+    val rename: (suspend (text: String, line: Int, column: Int, newName: String) -> String?)? = null,
+    val resolveRename: (suspend (text: String, line: Int, column: Int) -> String?)? = null,
+    val foldingRanges: (suspend (text: String) -> String?)? = null,
+    val semanticTokens: (suspend (text: String) -> String?)? = null,
+    val resolveCompletionItem: (suspend (itemJson: String) -> String?)? = null,
+    val resolveCodeLens: (suspend (text: String, lensJson: String) -> String?)? = null,
 )
 
 /**
@@ -127,7 +177,10 @@ class WebLanguageProviders(
  * one more line here, and one in the npm package's `PROVIDERS`. A template's copy changes in
  * nothing: a dispatcher answers null for a name it does not know, which is no provider.
  */
-internal fun dispatchedProviders(dispatcher: suspend (method: String, text: String, argsJson: String) -> String?) = WebLanguageProviders(
+internal fun dispatchedProviders(
+    dispatcher: suspend (method: String, text: String, argsJson: String) -> String?,
+    provided: Set<String>? = null,
+) = WebLanguageProviders(
     completions = { text, line, column -> dispatcher("completions", text, "[$line,$column]") },
     hover = { text, line, column -> dispatcher("hover", text, "[$line,$column]") },
     diagnostics = { text -> dispatcher("diagnostics", text, "[]") },
@@ -139,35 +192,92 @@ internal fun dispatchedProviders(dispatcher: suspend (method: String, text: Stri
     runCodeLensCommand = { id, argsJson ->
         dispatcher("runCodeLensCommand", "", "[${JsonPrimitive(id)},$argsJson]")
     },
+    formatOnType = { text, line, column, ch, optionsJson ->
+        dispatcher("formatOnType", text, "[$line,$column,${JsonPrimitive(ch)},$optionsJson]")
+    },
+    // Asked only where the page has the provider, when it says which it has: whether there is one
+    // decides whether a rename is offered and whose folds are shown.
+    definition = provided.ifHas("definition") { text, line, column -> dispatcher("definition", text, "[$line,$column]") },
+    references = provided.ifHas("references") { text, line, column -> dispatcher("references", text, "[$line,$column]") },
+    formatDocument = provided.ifHas("formatDocument") { text, optionsJson -> dispatcher("formatDocument", text, "[$optionsJson]") },
+    formatRange = provided.ifHas("formatRange") { text, rangeJson, optionsJson ->
+        dispatcher("formatRange", text, "[$rangeJson,$optionsJson]")
+    },
+    signatureHelp = provided.ifHas("signatureHelp") { text, line, column -> dispatcher("signatureHelp", text, "[$line,$column]") },
+    codeActions = provided.ifHas("codeActions") { text, rangeJson, diagnosticsJson ->
+        dispatcher("codeActions", text, "[$rangeJson,$diagnosticsJson]")
+    },
+    rename = provided.ifHas("rename") { text, line, column, newName ->
+        dispatcher("rename", text, "[$line,$column,${JsonPrimitive(newName)}]")
+    },
+    resolveRename = provided.ifHas("resolveRename") { text, line, column -> dispatcher("resolveRename", text, "[$line,$column]") },
+    foldingRanges = provided.ifHas("foldingRanges") { text -> dispatcher("foldingRanges", text, "[]") },
+    semanticTokens = provided.ifHas("semanticTokens") { text -> dispatcher("semanticTokens", text, "[]") },
+    resolveCompletionItem = provided.ifHas("resolveCompletionItem") { itemJson -> dispatcher("resolveCompletionItem", "", "[$itemJson]") },
+    resolveCodeLens = provided.ifHas("resolveCodeLens") { text, lensJson -> dispatcher("resolveCodeLens", text, "[$lensJson]") },
 )
 
+/** [provider] if the page has the provider [name] (see [has]), else null. */
+private fun <F> Set<String>?.ifHas(name: String, provider: F): F? = if (has(name)) provider else null
+
+/** Whether a page that says which providers it has ([provided]) has [name]; one that does not say has them all. */
+private fun Set<String>?.has(name: String): Boolean = this == null || name in this
+
+/** The names of the providers a definition says the page has (its `provided`), or null when it does not say. */
+internal fun providedIn(definitionJson: String): Set<String>? =
+    ((parsed(definitionJson) as? JsonObject)?.get("provided") as? JsonArray)?.mapNotNullTo(HashSet()) {
+        (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
+    }
+
 /**
- * A registered language's service: the host's providers ([JsProviderService]) first, then what
- * [base] (the language it extends) has, by [CompositeLanguageService]'s rules. With
- * [inheritCompletions] the base's completions follow the host's, and [ownTriggerCharacters] (those
- * the definition gave, if any) add to the base's; without it, they replace them. On top of the
- * composite's rules: an answer `{ suggestions, exclusive: true }` leaves out the base's
- * completions for that request, and whether the list is asked for again on each keystroke is the
- * host's answer's `incomplete` alone.
+ * A registered language's service: the host's providers ([JsProviderService]) first, then a
+ * language [server]'s if one follows the editor, then what [base] (the language it extends) has,
+ * each by [CompositeLanguageService]'s rules. With [inheritCompletions] the base's completions come
+ * last, and [ownTriggerCharacters] (those the definition gave, if any) add to the base's; without
+ * it, they replace them. On top of the composite's rules: an answer `{ suggestions, exclusive: true }`
+ * leaves out the base's completions for that request (a server's still come), and whether the list
+ * is asked for again on each keystroke is the host's answer's `incomplete` alone.
  */
-internal class WebLanguageService(
-    base: LanguageService?,
-    providers: WebLanguageProviders,
-    ownTriggerCharacters: Set<Char>? = null,
-    inheritCompletions: Boolean = true,
+internal class WebLanguageService private constructor(
+    private val js: JsProviderService,
+    private val base: LanguageService,
+    private val server: LanguageService?,
+    inheritCompletions: Boolean,
 ) : CompositeLanguageService(
-    primary = JsProviderService(providers, ownTriggerCharacters ?: base?.triggerCharacters.orEmpty()),
-    fallback = base ?: NoLanguageService,
+    primary = js,
+    fallback = server?.let { CompositeLanguageService(it, base) } ?: base,
     inheritCompletions = inheritCompletions,
 ) {
-    private val js: JsProviderService get() = primary as JsProviderService
+    constructor(
+        base: LanguageService?,
+        providers: WebLanguageProviders,
+        ownTriggerCharacters: Set<Char>? = null,
+        inheritCompletions: Boolean = true,
+        autoFormatTriggerCharacters: Set<Char> = emptySet(),
+        semanticLegend: WebSemanticLegend? = null,
+    ) : this(
+        js = JsProviderService(
+            providers,
+            ownTriggerCharacters ?: base?.triggerCharacters.orEmpty(),
+            autoFormatTriggerCharacters,
+            semanticLegend,
+        ),
+        base = base ?: NoLanguageService,
+        server = null,
+        inheritCompletions = inheritCompletions,
+    )
+
+    /** This language with [server] between the host's providers and the base: the host, then the server, then the base. */
+    fun withServer(server: LanguageService): WebLanguageService = WebLanguageService(js, base, server, inheritCompletions)
 
     override val completionsAreIncomplete: Boolean
         get() = js.lastIncomplete
 
     override suspend fun completions(document: CodeDocument, cursorOffset: Int): List<CompletionItem> {
         val own = js.completions(document, cursorOffset)
-        if (!inheritCompletions || js.lastExclusive) return own
+        if (!inheritCompletions || js.lastExclusive) {
+            return server?.let { merged(own, it.completions(document, cursorOffset)) } ?: own
+        }
         return merged(own, fallback.completions(document, cursorOffset))
     }
 }
@@ -192,8 +302,25 @@ private object NoLanguageService : LanguageService {
 /**
  * What a host's JavaScript providers answer, and nothing else: completions, hover and diagnostics.
  * [triggerCharacters] are the definition's own, or the extended language's when it gave none.
+ * [formatOnTypeCharacters] are the definition's `autoFormatTriggerCharacters`, and none without a
+ * provider to ask.
  */
-private class JsProviderService(private val providers: WebLanguageProviders, override val triggerCharacters: Set<Char>) : LanguageService {
+private class JsProviderService(
+    private val providers: WebLanguageProviders,
+    override val triggerCharacters: Set<Char>,
+    autoFormatTriggerCharacters: Set<Char>,
+    private val semanticLegend: WebSemanticLegend?,
+) : LanguageService {
+
+    override val supportsRename: Boolean get() = providers.rename != null
+
+    /** The provider's last diagnostics, for a code action provider's `markers`. */
+    private var lastDiagnostics: List<WebDiagnostic> = emptyList()
+
+    /** The items of the last completion answer, as the provider gave them, for [resolveCompletion]. */
+    private var given: Map<CompletionItem, JsonObject> = emptyMap()
+
+    override val formatOnTypeCharacters: Set<Char> = if (providers.formatOnType == null) emptySet() else autoFormatTriggerCharacters
 
     private val commands = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -216,7 +343,85 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
             providers.completions?.invoke(document.text, line + 1, column + 1)
         }?.let { parseCompletions(it, document, cursorOffset) }
         lastExclusive = answer?.exclusive == true
+        given = answer?.given.orEmpty()
         return answer?.items.orEmpty()
+    }
+
+    override suspend fun resolveCompletion(item: CompletionItem): CompletionItem {
+        val resolve = providers.resolveCompletionItem ?: return item
+        val original = given[item] ?: return item
+        val resolved = parsed(asked { resolve(original.toString()) } ?: return item) as? JsonObject ?: return item
+        return item.copy(
+            documentation = resolved.text("documentation") ?: item.documentation,
+            detail = resolved.string("detail") ?: item.detail,
+        )
+    }
+
+    override suspend fun definition(document: CodeDocument, offset: Int): Location? {
+        val (line, column) = document.offsetToLineCol(offset)
+        return asked { providers.definition?.invoke(document.text, line + 1, column + 1) }
+            ?.let { parseLocations(document, it) }?.firstOrNull()
+    }
+
+    override suspend fun references(document: CodeDocument, offset: Int): List<Location> {
+        val (line, column) = document.offsetToLineCol(offset)
+        return asked { providers.references?.invoke(document.text, line + 1, column + 1) }
+            ?.let { parseLocations(document, it) }.orEmpty()
+    }
+
+    override suspend fun format(document: CodeDocument, options: FormattingOptions): String {
+        val format = providers.formatDocument ?: return document.text
+        val edits = asked { format(document.text, optionsJson(options)) }?.let { AardinkWeb.parseTextEdits(document, it) }
+        return if (edits.isNullOrEmpty()) document.text else applied(document.text, edits)
+    }
+
+    override suspend fun formatRange(document: CodeDocument, range: IntRange, options: FormattingOptions): List<TextEdit> {
+        val format = providers.formatRange ?: return emptyList()
+        return asked { format(document.text, AardinkWeb.rangeJson(document, range), optionsJson(options)) }
+            ?.let { AardinkWeb.parseTextEdits(document, it) }.orEmpty()
+    }
+
+    override suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? {
+        val (line, column) = document.offsetToLineCol(offset)
+        return asked { providers.signatureHelp?.invoke(document.text, line + 1, column + 1) }?.let(::parseSignatureHelp)
+    }
+
+    override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> {
+        val ask = providers.codeActions ?: return emptyList()
+        // Monaco's `context.markers`: those of this provider's last diagnostics that touch the range.
+        val touching = lastDiagnostics.filter { web ->
+            val shown = AardinkWeb.toDiagnostics(document, listOf(web)).firstOrNull()?.range ?: return@filter false
+            shown.first <= range.last + 1 && range.first <= shown.last + 1
+        }
+        val diagnostics = AardinkWeb.diagnosticsJson(touching)
+        return asked { ask(document.text, AardinkWeb.rangeJson(document, range), diagnostics) }
+            ?.let { parseCodeActions(document, it) }.orEmpty()
+    }
+
+    override suspend fun prepareRename(document: CodeDocument, offset: Int): IntRange? {
+        if (providers.rename == null) return null
+        val (line, column) = document.offsetToLineCol(offset)
+        val resolve = providers.resolveRename ?: return wordAt(document, offset)
+        val answer = parsed(asked { resolve(document.text, line + 1, column + 1) } ?: return null) as? JsonObject ?: return null
+        if (answer.given("rejectReason") != null) return null
+        return rangeIn(document, answer["range"])?.takeIf { !it.isEmpty() }
+    }
+
+    override suspend fun rename(document: CodeDocument, offset: Int, newName: String): List<TextEdit> {
+        val (line, column) = document.offsetToLineCol(offset)
+        val answer = parsed(asked { providers.rename?.invoke(document.text, line + 1, column + 1, newName) } ?: return emptyList())
+            as? JsonObject ?: return emptyList()
+        if (answer.given("rejectReason") != null) return emptyList()
+        // Another file's edits leave the rename undone: half a rename is worse than none.
+        return workspaceEdits(document, answer) ?: emptyList()
+    }
+
+    override suspend fun semanticTokens(document: CodeDocument): List<Token> {
+        val legend = semanticLegend ?: return emptyList()
+        val answer = parsed(asked { providers.semanticTokens?.invoke(document.text) } ?: return emptyList()) as? JsonObject
+            ?: return emptyList()
+        val data = answer["data"] as? JsonArray ?: return emptyList()
+        return decodeSemanticTokens(data, legend, document)
     }
 
     override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? {
@@ -224,9 +429,11 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
         return asked { providers.hover?.invoke(document.text, line + 1, column + 1) }?.let(::parseHover)
     }
 
-    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> = asked {
-        providers.diagnostics?.invoke(document.text)
-    }?.let { AardinkWeb.toDiagnostics(document, AardinkWeb.parseDiagnostics(it)) }.orEmpty()
+    override suspend fun diagnostics(document: CodeDocument): List<Diagnostic> {
+        val web = asked { providers.diagnostics?.invoke(document.text) }?.let { AardinkWeb.parseDiagnostics(it) }.orEmpty()
+        lastDiagnostics = web
+        return AardinkWeb.toDiagnostics(document, web)
+    }
 
     override suspend fun documentSymbols(document: CodeDocument): List<DocumentSymbol> = asked {
         providers.documentSymbols?.invoke(document.text)
@@ -240,9 +447,26 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
         providers.inlayHints?.invoke(document.text, AardinkWeb.rangeJson(document, range))
     }?.let { AardinkWeb.parseInlayHints(document, it) }.orEmpty()
 
-    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> = asked {
-        providers.codeLenses?.invoke(document.text)
-    }?.let { json -> AardinkWeb.parseCodeLenses(document, json, ::runCommand) }.orEmpty()
+    override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
+        val answer = asked { providers.codeLenses?.invoke(document.text) } ?: return emptyList()
+        val resolve = providers.resolveCodeLens
+        // Those without a command, resolved now, a few at once, at most MAX_RESOLVED_LENSES of them.
+        val resolved = if (resolve == null) {
+            answer
+        } else {
+            val lenses = (parsed(answer) as? JsonArray).orEmpty()
+            val text = document.text
+            coroutineScope {
+                lenses.mapIndexed { index, lens ->
+                    async {
+                        val bare = lens is JsonObject && lens["command"] !is JsonObject && index < MAX_RESOLVED_LENSES
+                        if (bare) parsed(asked { resolve(text, lens.toString()) } ?: "null") as? JsonObject ?: lens else lens
+                    }
+                }.awaitAll()
+            }.let { JsonArray(it).toString() }
+        }
+        return AardinkWeb.parseCodeLenses(document, resolved, ::runCommand)
+    }
 
     /** A click on a lens, for the host. It has been asked for: nothing here calls it off. */
     private fun runCommand(id: String, argsJson: String) {
@@ -258,7 +482,40 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = null
 
-    override suspend fun format(document: CodeDocument, options: FormattingOptions): String = document.text
+    override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+        val (line, column) = document.offsetToLineCol(offset)
+        return asked {
+            providers.formatOnType?.invoke(document.text, line + 1, column + 1, typed.toString(), optionsJson(options))
+        }?.let { AardinkWeb.parseTextEdits(document, it) }.orEmpty()
+    }
+
+    /** Monaco's `FormattingOptions`. */
+    private fun optionsJson(options: FormattingOptions): String =
+        """{"tabSize":${options.tabSize},"insertSpaces":${options.insertSpaces}}"""
+
+    /** Monaco's `CodeActionList` or the array of actions, as actions in [document]. */
+    private fun parseCodeActions(document: CodeDocument, json: String): List<CodeAction> {
+        val root = parsed(json)
+        val actions = ((root as? JsonObject)?.get("actions") ?: root) as? JsonArray ?: return emptyList()
+        return actions.mapNotNull { element ->
+            val action = element as? JsonObject ?: return@mapNotNull null
+            val title = action.string("title") ?: return@mapNotNull null
+            val edits = (action["edit"] as? JsonObject)?.let { workspaceEdits(document, it) ?: return@mapNotNull null }.orEmpty()
+            val command = action["command"] as? JsonObject
+            val id = command?.string("id")
+            if (edits.isEmpty() && id == null) return@mapNotNull null
+            CodeAction(
+                title = title,
+                kind = codeActionKind(action.string("kind")),
+                edits = edits,
+                isPreferred = (action["isPreferred"] as? JsonPrimitive)?.booleanOrNull == true,
+                onApply = id?.let { commandId ->
+                    val argsJson = (command["arguments"] as? JsonArray)?.toString() ?: "[]"
+                    suspend { runCommand(commandId, argsJson) }
+                },
+            )
+        }
+    }
 
     /** What a host's provider answered; nothing when it failed (a rejected Promise), which costs its answer, not the editor. */
     private suspend fun asked(provider: suspend () -> String?): String? = try {
@@ -270,11 +527,11 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
         null
     }
 
-    /** The host's completions, filtered and ordered, and whether they leave out the base's. */
-    private class Answer(val items: List<CompletionItem>, val exclusive: Boolean)
+    /** The host's completions, filtered and ordered, whether they leave out the base's, and each as it was given. */
+    private class Answer(val items: List<CompletionItem>, val exclusive: Boolean, val given: Map<CompletionItem, JsonObject>)
 
-    /** A host's item with the `filterText` and `sortText` it gave, if any. */
-    private class Offered(val item: CompletionItem, val filterText: String?, val sortText: String?)
+    /** A host's item with the `filterText` and `sortText` it gave, if any, and the item as it was given. */
+    private class Offered(val item: CompletionItem, val filterText: String?, val sortText: String?, val json: JsonObject)
 
     private fun parseCompletions(json: String, document: CodeDocument, cursor: Int): Answer? {
         val root = parsed(json)
@@ -301,12 +558,17 @@ private class JsProviderService(private val providers: WebLanguageProviders, ove
                 ),
                 filterText = filterText,
                 sortText = item.string("sortText"),
+                json = item,
             )
         }
         if ((list?.get("incomplete") as? JsonPrimitive)?.booleanOrNull == false) lastIncomplete = false
         val kept = offered.filter { it.filterText == null || fuzzyMatches(typedFor(document, cursor, it.item), it.filterText) }
         val ordered = if (kept.any { it.sortText != null }) kept.sortedBy { it.sortText ?: it.item.label } else kept
-        return Answer(ordered.map { it.item }, exclusive = (list?.get("exclusive") as? JsonPrimitive)?.booleanOrNull == true)
+        return Answer(
+            ordered.map { it.item },
+            exclusive = (list?.get("exclusive") as? JsonPrimitive)?.booleanOrNull == true,
+            given = ordered.associate { it.item to it.json },
+        )
     }
 
     private fun parseHover(json: String): HoverDoc? {
@@ -351,15 +613,19 @@ internal class WebInlineCompletions(private val providers: List<suspend (text: S
 
 /**
  * Monaco's `InlineCompletions`, `{ items: [{ insertText, range? }] }`, or the bare array of items. An
- * `insertText` that is a snippet is left out: ghost text cannot fill in its stops. So is an item
- * whose `range` is not one in [document], which would otherwise read as no range given.
+ * `insertText` that is a snippet, `{ snippet }`, shows and goes in as its text: placeholders as their
+ * default text, a choice as its first, tab stops and variables as nothing; one that is then empty is
+ * left out. So is an item whose `range` is not one in [document], which would otherwise read as no
+ * range given.
  */
 internal fun parseInlineCompletions(document: CodeDocument, json: String): List<InlineCompletion> {
     val root = parsed(json)
     val items = ((root as? JsonObject)?.get("items") ?: root) as? JsonArray ?: return emptyList()
     return items.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
-        val text = item.string("insertText") ?: return@mapNotNull null
+        val text = item.string("insertText")
+            ?: (item["insertText"] as? JsonObject)?.string("snippet")?.let(::snippetText)?.takeIf { it.isNotEmpty() }
+            ?: return@mapNotNull null
         val range = item["range"].takeUnless { it is JsonNull } ?: return@mapNotNull InlineCompletion(text)
         rangeIn(document, range)?.let { InlineCompletion(text, it) }
     }
@@ -518,12 +784,19 @@ internal fun languageFrom(
         throw IllegalArgumentException("grammar.${e.message}", e)
     }
     val extensions = (root["extensions"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.removePrefix(".") }.orEmpty()
-    val triggerCharacters = root.given("triggerCharacters")?.let { value ->
+    fun characters(name: String): Set<Char>? = root.given(name)?.let { value ->
         val given = (value as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
         if (given == null || given.any { it == null || it.length != 1 }) {
-            throw IllegalArgumentException("triggerCharacters: an array of one-character strings")
+            throw IllegalArgumentException("$name: an array of one-character strings")
         }
         given.mapTo(LinkedHashSet()) { it!!.single() }
+    }
+    val triggerCharacters = characters("triggerCharacters")
+    val autoFormatTriggerCharacters = characters("autoFormatTriggerCharacters").orEmpty()
+    val semanticLegend = root.given("semanticTokensLegend")?.let { value ->
+        val legend = value as? JsonObject ?: throw IllegalArgumentException("semanticTokensLegend: { tokenTypes, tokenModifiers }")
+        fun names(key: String) = (legend[key] as? JsonArray).orEmpty().map { (it as? JsonPrimitive)?.contentOrNull.orEmpty() }
+        WebSemanticLegend(names("tokenTypes"), names("tokenModifiers"))
     }
     val inheritCompletions = root.given("inheritCompletions")?.let {
         (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull
@@ -557,7 +830,17 @@ internal fun languageFrom(
     val configured = root.given("configuration")?.let { definition.withConfiguration(configurationFrom(it)) } ?: definition
     grammars[id] = grammar
     return configured.copy(
-        languageService = WebLanguageService(configured.languageService, providers, triggerCharacters, inheritCompletions),
+        languageService =
+        WebLanguageService(
+            configured.languageService,
+            providers,
+            triggerCharacters,
+            inheritCompletions,
+            autoFormatTriggerCharacters,
+            semanticLegend,
+        ),
+        // The page's folds replace the language's own, as a Monaco folding provider's do.
+        foldingProvider = providers.foldingRanges?.let { WebFoldingProvider(it, configured.foldingProvider) } ?: configured.foldingProvider,
     )
 }
 
@@ -569,13 +852,18 @@ private fun configurationFrom(value: JsonElement): LanguageConfiguration = try {
 }
 
 /**
- * A theme from VS Code theme JSON. What it does not set comes from its base: `base` (a theme key)
- * if given, else by its `type`, `vscode-light` for light themes and `vscode-dark` otherwise. Its
- * rules' scopes stay in its token colours by name (`tag.aardflex`), which the editor resolves by
- * dotted prefix as Monaco does.
+ * A theme from VS Code theme JSON, or from Monaco's `defineTheme` data (`{ base, inherit, rules,
+ * colors }`, told apart by its `rules`), which [EditorThemeParser.fromMonacoJson] reads with its
+ * rules' backgrounds and its `hc-black` and `hc-light` bases. What VS Code JSON does not set comes
+ * from its base: `base` (a theme key) if given, else by its `type`, `vscode-light` for light themes
+ * and `vscode-dark` otherwise. Its rules' scopes stay in its token colours by name (`tag.aardflex`),
+ * which the editor resolves by dotted prefix as Monaco does.
  */
 internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): EditorTheme {
     val root = parsed(themeJson) as? JsonObject ?: throw IllegalArgumentException("a theme is a JSON object")
+    if (root["rules"] is JsonArray) {
+        return EditorThemeParser.fromMonacoJson(themeJson) ?: throw IllegalArgumentException("not Monaco theme data")
+    }
     val parsed = EditorThemeParser.fromJson(themeJson) ?: throw IllegalArgumentException("not a VS Code theme")
     val base = root.string("base")?.let { themes[it] ?: throw IllegalArgumentException("base: no theme named '$it'") }
         ?: if (root.string("type") == "light") EditorThemes.VsCodeLight else EditorThemes.VsCodeDark
@@ -611,6 +899,310 @@ internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): Edi
         errorColor = pick("editorError.foreground", parsed.errorColor, base.errorColor),
         warningColor = pick("editorWarning.foreground", parsed.warningColor, base.warningColor),
         infoColor = pick("editorInfo.foreground", parsed.infoColor, base.infoColor),
+        chromeColors = parsed.chromeColors.orElse(base.chromeColors),
+        tokenBackgrounds = base.tokenBackgrounds + parsed.tokenBackgrounds,
     )
     return theme
+}
+
+/** Each of these colours the theme set, else [base]'s. */
+private fun ChromeColors.orElse(base: ChromeColors): ChromeColors {
+    fun Color.or(other: Color) = takeOrElse { other }
+    return ChromeColors(
+        minimapBackground = minimapBackground.or(base.minimapBackground),
+        minimapSlider = minimapSlider.or(base.minimapSlider),
+        scrollbarSlider = scrollbarSlider.or(base.scrollbarSlider),
+        scrollbarSliderHover = scrollbarSliderHover.or(base.scrollbarSliderHover),
+        indentGuide = indentGuide.or(base.indentGuide),
+        activeIndentGuide = activeIndentGuide.or(base.activeIndentGuide),
+        bracketPairGuide = bracketPairGuide.or(base.bracketPairGuide),
+        ruler = ruler.or(base.ruler),
+        widgetBackground = widgetBackground.or(base.widgetBackground),
+        widgetForeground = widgetForeground.or(base.widgetForeground),
+        widgetBorder = widgetBorder.or(base.widgetBorder),
+        inlayHint = inlayHint.or(base.inlayHint),
+        inlayHintBackground = inlayHintBackground.or(base.inlayHintBackground),
+        codeLens = codeLens.or(base.codeLens),
+        ghostText = ghostText.or(base.ghostText),
+    )
+}
+
+/** How many lenses that came without a command [LanguageService.codeLenses] resolves at a time. */
+private const val MAX_RESOLVED_LENSES = 100
+
+/**
+ * The page's folds ([ask], Monaco's `FoldingRange`s), in place of [own]: the language's, used while
+ * there is no answer yet, and when the page's provider fails or answers nothing.
+ */
+private class WebFoldingProvider(private val ask: suspend (text: String) -> String?, private val own: FoldingProvider) : FoldingProvider {
+    override fun foldableRanges(document: CodeDocument): List<FoldRange> = own.foldableRanges(document)
+
+    override suspend fun requestFoldableRanges(document: CodeDocument): List<FoldRange> {
+        val answer = try {
+            ask(document.text)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            println("Aardink: a folding provider failed: ${e.message}")
+            null
+        } ?: return own.requestFoldableRanges(document)
+        val ranges = (parsed(answer) as? JsonArray ?: return own.requestFoldableRanges(document)).mapNotNull { element ->
+            val range = element as? JsonObject ?: return@mapNotNull null
+            val start = range.int("start") ?: return@mapNotNull null
+            val end = range.int("end") ?: return@mapNotNull null
+            if (start < 1 || end <= start || end > document.lineCount) return@mapNotNull null
+            FoldRange(
+                startLine = start - 1,
+                endLine = end - 1,
+                kind = when (range.string("kind")) {
+                    "comment" -> FoldKind.Comment
+                    "imports" -> FoldKind.Imports
+                    "region" -> FoldKind.Region
+                    else -> null
+                },
+            )
+        }
+        return ranges
+    }
+}
+
+/**
+ * Monaco's `Location` or `LocationLink`, one or an array, as locations: in [document] when it has
+ * no `uri` (`targetUri`), else another file's, with an empty range and the 1-based place given.
+ */
+private fun parseLocations(document: CodeDocument, json: String): List<Location> {
+    val root = parsed(json) ?: return emptyList()
+    val items = root as? JsonArray ?: JsonArray(listOf(root))
+    return items.mapNotNull { element ->
+        val location = element as? JsonObject ?: return@mapNotNull null
+        val uri = location.string("uri") ?: location.string("targetUri")
+        val range = (location.given("range") ?: location.given("targetSelectionRange") ?: location.given("targetRange")) as? JsonObject
+            ?: return@mapNotNull null
+        if (uri == null) {
+            rangeIn(document, range)?.let { Location("", it) }
+        } else {
+            val line = range.int("startLineNumber") ?: return@mapNotNull null
+            val column = range.int("startColumn") ?: 1
+            Location(uri, IntRange.EMPTY, line - 1, column - 1)
+        }
+    }
+}
+
+/**
+ * The edits of Monaco's `WorkspaceEdit`, `{ edits: [{ textEdit: { range, text } }] }`, in [document];
+ * null when one is another file's (it has a `resource`) or cannot be read, as nothing of it applies then.
+ */
+private fun workspaceEdits(document: CodeDocument, edit: JsonObject): List<TextEdit>? {
+    val edits = edit["edits"] as? JsonArray ?: return emptyList()
+    return edits.map { element ->
+        val item = element as? JsonObject ?: return null
+        if (item.given("resource") != null) return null
+        val textEdit = item["textEdit"] as? JsonObject ?: return null
+        val range = rangeIn(document, textEdit["range"]) ?: return null
+        TextEdit(range, textEdit.string("text").orEmpty())
+    }
+}
+
+/** [edits] (offsets in [text], not overlapping) made to [text]. */
+private fun applied(text: String, edits: List<TextEdit>): String {
+    val out = StringBuilder(text)
+    for (edit in edits.sortedByDescending { it.range.first }) {
+        val start = edit.range.first.coerceIn(0, out.length)
+        val end = (edit.range.last + 1).coerceIn(start, out.length)
+        out.setRange(start, end, edit.newText)
+    }
+    return out.toString()
+}
+
+/** The word at [offset] in [document], for a rename with no `resolveRenameLocation`; null where there is none. */
+private fun wordAt(document: CodeDocument, offset: Int): IntRange? {
+    fun isWord(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'
+    var start = offset.coerceIn(0, document.length)
+    var end = start
+    while (start > 0 && isWord(document[start - 1])) start--
+    while (end < document.length && isWord(document[end])) end++
+    return if (end > start) start until end else null
+}
+
+/** Monaco's `CodeActionKind` value. */
+private fun codeActionKind(kind: String?): CodeActionKind = when {
+    kind == null -> CodeActionKind.QuickFix
+    kind.startsWith("refactor") -> CodeActionKind.Refactor
+    kind.startsWith("source.organizeImports") -> CodeActionKind.SourceOrganizeImports
+    else -> CodeActionKind.QuickFix
+}
+
+/** Monaco's `SignatureHelpResult`, or the `SignatureHelp` in it. */
+private fun parseSignatureHelp(json: String): SignatureHelp? {
+    val root = parsed(json) as? JsonObject ?: return null
+    val help = root["value"] as? JsonObject ?: root
+    val signatures = (help["signatures"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val signature = element as? JsonObject ?: return@mapNotNull null
+        val label = signature.string("label") ?: return@mapNotNull null
+        SignatureInformation(
+            label = label,
+            documentation = signature.text("documentation"),
+            parameters = (signature["parameters"] as? JsonArray).orEmpty().mapNotNull { p ->
+                val parameter = p as? JsonObject ?: return@mapNotNull null
+                when (val given = parameter["label"]) {
+                    is JsonPrimitive -> given.contentOrNull?.let { ParameterInformation(it, parameter.text("documentation")) }
+
+                    is JsonArray -> {
+                        val start = (given.getOrNull(0) as? JsonPrimitive)?.doubleOrNull?.toInt()
+                        val end = (given.getOrNull(1) as? JsonPrimitive)?.doubleOrNull?.toInt()
+                        if (start == null || end == null || start < 0 || end > label.length || end < start) {
+                            null
+                        } else {
+                            ParameterInformation(label.substring(start, end), parameter.text("documentation"), start until end)
+                        }
+                    }
+
+                    else -> null
+                }
+            },
+        )
+    }
+    if (signatures.isEmpty()) return null
+    return SignatureHelp(
+        signatures = signatures,
+        activeSignature = help.int("activeSignature")?.coerceIn(0, signatures.lastIndex) ?: 0,
+        activeParameter = help.int("activeParameter") ?: 0,
+    )
+}
+
+/**
+ * What the numbers in Monaco's semantic tokens stand for: a language's `semanticTokensLegend`. A
+ * token's type is named as a language server's are (`type.class`, `variable.parameter`), with its
+ * modifiers after it, so a theme colours both alike.
+ */
+internal class WebSemanticLegend(private val tokenTypes: List<String>, private val tokenModifiers: List<String>) {
+    private val named = HashMap<Long, NamedTokenType>()
+
+    fun typeOf(type: Int, modifiers: Int): NamedTokenType? {
+        val name = tokenTypes.getOrNull(type)?.takeIf { it.isNotEmpty() } ?: return null
+        return named.getOrPut(type.toLong() shl Int.SIZE_BITS or modifiers.toUInt().toLong()) {
+            NamedTokenType(
+                buildString {
+                    append(THEME_NAMES[name] ?: name)
+                    for (bit in 0 until minOf(tokenModifiers.size, Int.SIZE_BITS)) {
+                        if (modifiers ushr bit and 1 == 1) append('.').append(tokenModifiers[bit])
+                    }
+                },
+            )
+        }
+    }
+
+    private companion object {
+        /** As `:languages-lsp`'s legend names them, which a theme colours by. */
+        val THEME_NAMES = mapOf(
+            "namespace" to "type.namespace",
+            "class" to "type.class",
+            "enum" to "type.enum",
+            "interface" to "type.interface",
+            "struct" to "type.struct",
+            "typeParameter" to "type.typeParameter",
+            "parameter" to "variable.parameter",
+            "property" to "variable.property",
+            "enumMember" to "variable.enumMember",
+            "event" to "variable.event",
+            "method" to "function.method",
+            "macro" to "function.macro",
+            "modifier" to "keyword.modifier",
+            "decorator" to "annotation.decorator",
+        )
+    }
+}
+
+/**
+ * Monaco's `SemanticTokens.data`, five integers a token (line and start relative to the token
+ * before, length, type, modifiers), as tokens in [document]; as `:languages-lsp` decodes a server's,
+ * leaving out what the document does not have. Integers that are not counts are no answer.
+ */
+internal fun decodeSemanticTokens(data: JsonArray, legend: WebSemanticLegend, document: CodeDocument): List<Token> {
+    val tokens = ArrayList<Token>(data.size / 5)
+    var line = 0
+    var column = 0
+    for (index in 0..data.size - 5 step 5) {
+        val numbers = IntArray(5) {
+            (data[index + it] as? JsonPrimitive)?.doubleOrNull?.toInt()?.takeIf { n -> n >= 0 }
+                ?: return emptyList()
+        }
+        line += numbers[0]
+        column = if (numbers[0] == 0) column + numbers[1] else numbers[1]
+        if (line >= document.lineCount) break
+        val start = document.lineStart(line) + column
+        if (start >= document.lineEnd(line)) continue
+        val end = minOf(start + numbers[2], document.length)
+        val type = legend.typeOf(numbers[3], numbers[4]) ?: continue
+        if (end > start) tokens += Token(start, end, type)
+    }
+    return tokens
+}
+
+/**
+ * A snippet's text as it reads with nothing filled in: `${1:name}` its default text, `${1|a,b|}` its
+ * first choice, `$1`, `$0` and variables (`$TM_FILENAME`, `${TM_SELECTED_TEXT:default}` its default)
+ * nothing, `\$`, `\}` and `\\` the character.
+ */
+internal fun snippetText(snippet: String): String {
+    val out = StringBuilder(snippet.length)
+    var i = 0
+    fun readTo(end: Int) {
+        while (i < end) {
+            val c = snippet[i]
+            when {
+                c == '\\' && i + 1 < snippet.length && snippet[i + 1] in "$}\\,|" -> {
+                    out.append(snippet[i + 1])
+                    i += 2
+                }
+
+                c == '$' && i + 1 < snippet.length && (snippet[i + 1].isLetterOrDigit() || snippet[i + 1] == '_') -> {
+                    i++
+                    while (i < snippet.length && (snippet[i].isLetterOrDigit() || snippet[i] == '_')) i++
+                }
+
+                c == '$' && i + 1 < snippet.length && snippet[i + 1] == '{' -> {
+                    i += 2
+                    while (i < snippet.length && (snippet[i].isLetterOrDigit() || snippet[i] == '_')) i++
+                    when (snippet.getOrNull(i)) {
+                        ':' -> {
+                            i++
+                            readTo(closingBrace(snippet, i))
+                            i++
+                        }
+
+                        '|' -> {
+                            val close = snippet.indexOf("|}", i + 1).takeIf { it >= 0 } ?: snippet.length
+                            out.append(snippet.substring(i + 1, close).split(',').first())
+                            i = close + 2
+                        }
+
+                        else -> i = closingBrace(snippet, i) + 1
+                    }
+                }
+
+                else -> {
+                    out.append(c)
+                    i++
+                }
+            }
+        }
+    }
+    readTo(snippet.length)
+    return out.toString()
+}
+
+/** The index of the `}` closing a placeholder whose text starts at [from], past nested ones and escapes. */
+private fun closingBrace(snippet: String, from: Int): Int {
+    var depth = 0
+    var i = from
+    while (i < snippet.length) {
+        when {
+            snippet[i] == '\\' -> i++
+            snippet[i] == '$' && snippet.getOrNull(i + 1) == '{' -> depth++
+            snippet[i] == '}' -> if (depth == 0) return i else depth--
+        }
+        i++
+    }
+    return snippet.length
 }
