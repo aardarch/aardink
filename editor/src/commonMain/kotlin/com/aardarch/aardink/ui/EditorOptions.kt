@@ -97,6 +97,46 @@ import com.aardarch.aardink.core.LineEnding
  *   a click or a tap away from what it does, and asked for after each pause in typing. The row is
  *   not part of the document: a caret passes over it. Off by default, and nothing is asked for
  *   while off.
+ * @property formatOnType Typing one of the language service's `formatOnTypeCharacters` (a `}`, a
+ *   `;`, Enter) with a single caret asks its `formatOnType` to tidy the text around it, as VS
+ *   Code's `editor.formatOnType`. The answer is applied as an undo step of its own, so undo takes
+ *   it back and keeps what was typed, and only if nothing was typed while it was being worked
+ *   out. Off by default, and nothing is asked for while off.
+ * @property lineNumbers How the gutter numbers lines, with [showLineNumbers] on, as VS Code's
+ *   `editor.lineNumbers`: [LineNumberStyle.Absolute], the default, or counted from the caret's line,
+ *   or every tenth line.
+ * @property cursorStyle The caret's shape, as VS Code's `editor.cursorStyle`; a line, the default.
+ * @property cursorBlinking How the caret blinks while the editor has focus, as VS Code's
+ *   `editor.cursorBlinking`; [CursorBlinking.Blink], the default, as it always has.
+ * @property indentGuides A faint line down each level of indentation, the one of the block holding
+ *   the caret stronger, as VS Code's `editor.guides.indentation` with `highlightActiveIndentation`.
+ *   A blank line takes its neighbours' levels. Off by default.
+ * @property bracketPairGuides A line down the lines between a bracket pair that opens and closes
+ *   on different lines, in the pair's colour from `EditorTheme.bracketPairColors`, as VS Code's
+ *   `editor.guides.bracketPairs`. Pairs are found within 500 lines of those on screen. Off by default.
+ * @property rulers Columns to draw a vertical line at, as VS Code's `editor.rulers`: `listOf(80, 120)`.
+ *   None by default.
+ * @property scrollBeyondLastLine The view scrolls on until the last line is at its top, as VS Code's
+ *   `editor.scrollBeyondLastLine`. Off by default, where VS Code's is on: the editor has always
+ *   stopped at the last line.
+ * @property cursorSurroundingLines How many lines the editor keeps between the caret and the top or
+ *   bottom of the view when it scrolls to the caret, as VS Code's `editor.cursorSurroundingLines`;
+ *   at most half the view. 0, the default, keeps one, as it always has.
+ * @property smoothScrolling The scrolls the editor makes itself, to keep the caret in view (arrow
+ *   keys, Page Up and Down, Go to Line), are animated, as VS Code's `editor.smoothScrolling`. A
+ *   wheel, a touch and a fling scroll as the platform does. Off by default.
+ * @property wrappingIndent Where a wrapped line's later rows start, with [softWrap] on, as VS Code's
+ *   `editor.wrappingIndent`: at the left edge ([WrappingIndent.None], the default, as the editor has
+ *   always wrapped), under the line's text, or one or two indents further in. An indent that would
+ *   leave less than half the width for text falls back to none.
+ * @property wordWrapColumn With [softWrap] on, lines wrap at this column, or at the edge of the view
+ *   if that comes first, as VS Code's `wordWrap: 'bounded'` with `editor.wordWrapColumn`. Null, the
+ *   default, wraps at the edge.
+ * @property dragAndDrop A selection pressed with the mouse and dragged moves its text to where it is
+ *   let go, and Ctrl (Alt on macOS) held at that moment copies it, as VS Code's
+ *   `editor.dragAndDrop`; one undo step, with the text selected where it went. A press in a selection
+ *   that does not move places the caret, as a click does. Not with touch, nor read-only. Off by
+ *   default, where VS Code's is on.
  */
 @Immutable
 data class EditorOptions(
@@ -130,10 +170,85 @@ data class EditorOptions(
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
     val codeLens: Boolean = false,
+    val formatOnType: Boolean = false,
+    val lineNumbers: LineNumberStyle = LineNumberStyle.Absolute,
+    val cursorStyle: CursorStyle = CursorStyle.Line,
+    val cursorBlinking: CursorBlinking = CursorBlinking.Blink,
+    val indentGuides: Boolean = false,
+    val bracketPairGuides: Boolean = false,
+    val rulers: List<Int> = emptyList(),
+    val scrollBeyondLastLine: Boolean = false,
+    val cursorSurroundingLines: Int = 0,
+    val smoothScrolling: Boolean = false,
+    val wrappingIndent: WrappingIndent = WrappingIndent.None,
+    val wordWrapColumn: Int? = null,
+    val dragAndDrop: Boolean = false,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
+        require(wordWrapColumn == null || wordWrapColumn > 0) { "wordWrapColumn must be positive, was $wordWrapColumn" }
+        require(cursorSurroundingLines >= 0) { "cursorSurroundingLines must not be negative, was $cursorSurroundingLines" }
     }
+}
+
+/** How [EditorOptions.lineNumbers] numbers the gutter's lines; VS Code's `editor.lineNumbers` values. */
+enum class LineNumberStyle {
+    /** Each line's own number. */
+    Absolute,
+
+    /** The caret's line its own number, every other line how far it is from it. */
+    Relative,
+
+    /** Every tenth line's number, and the caret's line's. */
+    Interval,
+}
+
+/** The caret's shape, [EditorOptions.cursorStyle]; VS Code's `editor.cursorStyle` values. */
+enum class CursorStyle {
+    /** A bar 2 dp wide in front of the character. */
+    Line,
+
+    /** The character's box, filled at half strength so the character shows through. */
+    Block,
+
+    /** A bar 2 dp high under the character. */
+    Underline,
+
+    /** A bar 1 dp wide in front of the character. */
+    LineThin,
+
+    /** The outline of the character's box. */
+    BlockOutline,
+
+    /** A bar 1 dp high under the character. */
+    UnderlineThin,
+}
+
+/** How the caret blinks, [EditorOptions.cursorBlinking]; a subset of VS Code's `editor.cursorBlinking`. */
+enum class CursorBlinking {
+    /** On and off, half a second each. */
+    Blink,
+
+    /** Fading out and in, on the same beat. */
+    Smooth,
+
+    /** Never: always shown while the editor has focus. */
+    Solid,
+}
+
+/** Where a wrapped line's later rows start, [EditorOptions.wrappingIndent]; VS Code's `editor.wrappingIndent` values. */
+enum class WrappingIndent {
+    /** At the left edge. */
+    None,
+
+    /** Under the line's first character. */
+    Same,
+
+    /** One indent further in than the line. */
+    Indent,
+
+    /** Two indents further in than the line. */
+    DeepIndent,
 }
 
 /** Which whitespace [EditorOptions.renderWhitespace] draws; the values of VS Code's setting. */

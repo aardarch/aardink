@@ -136,6 +136,7 @@ class LspFeaturesTest {
         assertNull(service.hoverDoc(doc, 1))
         assertEquals(doc.text, service.format(doc, FormattingOptions()))
         assertTrue(service.formatRange(doc, 0..1, FormattingOptions()).isEmpty())
+        assertTrue(service.formatOnType(doc, 1, '}', FormattingOptions()).isEmpty())
         assertTrue(service.codeActions(doc, 0..1).isEmpty())
         assertNull(service.definition(doc, 1))
         assertTrue(service.references(doc, 1).isEmpty())
@@ -1042,5 +1043,34 @@ class LspFeaturesTest {
 
         assertEquals("""a\_b""", signature.documentation)
         assertEquals("""c\_d""", signature.parameters.single().documentation)
+    }
+
+    // ── Formatting on type ───────────────────────────────────────────────────
+
+    @Test
+    fun `format on type characters come from what the server declared and registered`() = withServer("x") {
+        assertTrue(service.formatOnTypeCharacters.isEmpty(), "nothing is known before the handshake")
+        serverDeclares("""{"documentOnTypeFormattingProvider":{"firstTriggerCharacter":"}","moreTriggerCharacter":[";","\n","::"]}}""")
+        assertEquals(setOf('}', ';', '\n'), service.formatOnTypeCharacters, "a longer string is no character typed")
+
+        serverRegisters(registration("textDocument/onTypeFormatting", """{"firstTriggerCharacter":")"}"""))
+        assertEquals(setOf('}', ';', '\n', ')'), service.formatOnTypeCharacters)
+
+        serverDeclares("{}")
+        assertEquals(setOf(')'), service.formatOnTypeCharacters)
+    }
+
+    @Test
+    fun `format on type sends the position after the character, the character and the options`() = withServer("if (a) {\n    }") {
+        serverDeclares("""{"documentOnTypeFormattingProvider":{"firstTriggerCharacter":"}"}}""")
+        val server = async { respond("textDocument/onTypeFormatting", """[{"range":${range(1, 0, 1, 4)},"newText":""}]""") }
+
+        val edits = service.formatOnType(doc, 14, '}', FormattingOptions(tabSize = 2, insertSpaces = false))
+        val params = server.await().params
+
+        assertEquals("""{"line":1,"character":5}""", params["position"].toString())
+        assertEquals("}", params["ch"]!!.jsonPrimitive.content)
+        assertEquals(2, params["options"]!!.jsonObject["tabSize"]!!.jsonPrimitive.int)
+        assertEquals(listOf(TextEdit(9 until 13, "")), edits)
     }
 }

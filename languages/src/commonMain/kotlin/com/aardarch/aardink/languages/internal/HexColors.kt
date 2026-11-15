@@ -151,8 +151,9 @@ internal object HexColors {
      * The hex colour tokens in [text] (CSS) in declaration values: after a declaration's `:`, inside
      * a `{ }` block. A statement that ends in `{` is a selector (a nested rule's, or an at-rule's
      * prelude), so its tokens (`#id`) are not colours; nor are those in comments, strings or `url()`.
+     * With [lineComments] (SCSS, LESS), `//` starts a comment to the line's end too; CSS has none.
      */
-    fun cssTokens(text: CharSequence): List<ColorInfo> {
+    fun cssTokens(text: CharSequence, lineComments: Boolean = false): List<ColorInfo> {
         val colors = ArrayList<ColorInfo>()
         // The colours of the statement being read, kept once it ends as a declaration.
         val pending = ArrayList<ColorInfo>()
@@ -173,6 +174,12 @@ internal object HexColors {
                 c == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     val end = indexOf(text, "*/", i + 2)
                     i = if (end < 0) n else end + 2
+                    continue
+                }
+
+                lineComments && c == '/' && i + 1 < n && text[i + 1] == '/' -> {
+                    val end = indexOf(text, "\n", i + 2)
+                    i = if (end < 0) n else end
                     continue
                 }
 

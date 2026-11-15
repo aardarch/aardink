@@ -56,6 +56,7 @@ import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.EditorAnchoredPopup
 import com.aardarch.aardink.ui.EditorChromeTheme
 import com.aardarch.aardink.ui.EditorTestTags
+import com.aardarch.aardink.ui.editorWidgetBorder
 import kotlin.math.roundToInt
 
 /** Which selection handle is being dragged. */
@@ -196,6 +197,7 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
         tonalElevation = 6.dp,
         shadowElevation = 4.dp,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = editorWidgetBorder(),
         modifier = Modifier.testTag(EditorTestTags.TOUCH_MENU),
     ) {
         Row(Modifier.horizontalScroll(rememberScrollState())) {

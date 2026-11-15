@@ -153,6 +153,32 @@ interface LanguageService {
         emptyList()
 
     /**
+     * Edits that tidy the text around [offset] now that [typed], one of [formatOnTypeCharacters],
+     * was typed just before it: re-indenting the line a `}` closes, say. [offset] is the caret
+     * after the character, and after anything the editor added at once (an auto-closed bracket is
+     * after the caret, Enter's indentation before it); for Enter, [typed] is `'\n'`. Ranges are
+     * offsets in [document], indented as [options] says.
+     *
+     * Asked only with [EditorOptions.formatOnType][com.aardarch.aardink.ui.EditorOptions] on, and
+     * off the typing path: the editor applies the answer as an undo step of its own, and drops it
+     * if anything was typed while it was being worked out. The default is none.
+     */
+    suspend fun formatOnType(
+        document: CodeDocument,
+        offset: Int,
+        typed: Char,
+        options: FormattingOptions = FormattingOptions(),
+    ): List<TextEdit> = emptyList()
+
+    /**
+     * The characters whose typing asks [formatOnType], as LSP's `firstTriggerCharacter` and
+     * `moreTriggerCharacter` together; `'\n'` for Enter. Read at each keystroke, so it must be
+     * cheap. The default is none.
+     */
+    val formatOnTypeCharacters: Set<Char>
+        get() = emptySet()
+
+    /**
      * Whether [completions] must be asked again on every letter typed while the list is open, as
      * LSP's and Monaco's `isIncomplete`. True, the default and 0.6's behaviour: the service is asked
      * on each keystroke and filters for what was typed itself; the editor only orders the items by

@@ -17,10 +17,17 @@ package com.aardarch.aardink.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.ui.view.EditorScrollController
 
 /** No scrollbars on Android — touch scrolling never had them, and adding them would regress. */
 @Composable
-internal actual fun EditorScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier) {
+internal actual fun EditorScrollbars(
+    scroll: EditorScrollController,
+    horizontal: Boolean,
+    slider: Color,
+    sliderHover: Color,
+    modifier: Modifier,
+) {
     // Intentionally empty.
 }

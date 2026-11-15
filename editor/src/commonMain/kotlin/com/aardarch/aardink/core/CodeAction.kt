@@ -22,12 +22,18 @@ package com.aardarch.aardink.core
  * @param kind Category of action (quick fix, refactoring, organise imports).
  * @param edits List of text edits to apply atomically to the document.
  * @param isPreferred True if this action is the primary/default fix.
+ * @param onApply What else choosing the action does, after [edits] are applied: a command a
+ *   language server runs, or edits to other files that a host makes. Run in the layout's
+ *   coroutine scope, on the UI thread, once the action is chosen; a failure costs the rest of the
+ *   action, not the editor. An action with no [edits] and no [onApply] does nothing. Null by
+ *   default.
  */
 data class CodeAction(
     val title: String,
     val kind: CodeActionKind = CodeActionKind.QuickFix,
     val edits: List<TextEdit> = emptyList(),
     val isPreferred: Boolean = false,
+    val onApply: (suspend () -> Unit)? = null,
 )
 
 enum class CodeActionKind {

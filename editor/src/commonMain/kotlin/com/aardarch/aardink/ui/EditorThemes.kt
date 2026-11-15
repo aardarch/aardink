@@ -16,13 +16,14 @@
 package com.aardarch.aardink.ui
 
 import androidx.compose.ui.graphics.Color
+import com.aardarch.aardink.core.ChromeColors
 import com.aardarch.aardink.core.EditorTheme
 import com.aardarch.aardink.core.LightBracketPairColors
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.TokenType
 
 /**
- * Six built-in [EditorTheme] instances.
+ * Eight built-in [EditorTheme] instances.
  *
  * - [VsCodeDark] — VS Code Dark+ (reference theme, formalises legacy hardcoded colors)
  * - [VsCodeLight] — VS Code Light+
@@ -30,6 +31,11 @@ import com.aardarch.aardink.core.TokenType
  * - [MaterialLight] — Material 3 light surface
  * - [MidnightOcean] — Deep navy + teal/cyan (marketing screenshot theme)
  * - [SolarizedDark] — Ethan Schoonover's Solarized Dark
+ * - [HighContrastDark] — white on black, after VS Code's High Contrast (Monaco's `hc-black`)
+ * - [HighContrastLight] — near-black on white, after VS Code's High Contrast Light (`hc-light`)
+ *
+ * Every token colour of the two high-contrast themes reaches 7:1 against their background
+ * (WCAG AAA), and their cards have a border.
  */
 object EditorThemes {
 
@@ -205,5 +211,92 @@ object EditorThemes {
         errorColor = Color(0xFFDC322F),
         warningColor = Color(0xFFCB4B16),
         infoColor = Color(0xFF268BD2),
+    )
+
+    val HighContrastDark: EditorTheme = EditorTheme(
+        background = Color(0xFF000000),
+        gutterBackground = Color(0xFF000000),
+        gutterForeground = Color(0xFFFFFFFF),
+        lineHighlight = Color(0xFF1C1C1C),
+        selectionColor = Color(0xFF1A5B9E),
+        findMatchColor = Color(0x99A0510B),
+        cursorColor = Color(0xFFFFFFFF),
+        tokenColors = mapOf(
+            TokenType.Default to Color(0xFFFFFFFF),
+            TokenType.Keyword to Color(0xFF569CD6),
+            TokenType.Operator to Color(0xFFFFFFFF),
+            TokenType.Punctuation to Color(0xFFFFFFFF),
+            TokenType.StringLiteral to Color(0xFFCE9178),
+            TokenType.Comment to Color(0xFF7CA668),
+            TokenType.Number to Color(0xFFB5CEA8),
+            TokenType.Identifier to Color(0xFF9CDCFE),
+            TokenType.TypeName to Color(0xFF4EC9B0),
+            TokenType.FunctionCall to Color(0xFFDCDCAA),
+            TokenType.Annotation to Color(0xFFD7BA7D),
+            TokenType.Invalid to Color(0xFFF48771),
+            NamedTokenType("keyword.flow") to Color(0xFFC586C0),
+        ),
+        errorColor = Color(0xFFF48771),
+        warningColor = Color(0xFFCCA700),
+        infoColor = Color(0xFF3794FF),
+        bracketPairColors = listOf(Color(0xFFFFD700), Color(0xFFDA70D6), Color(0xFF87CEFA)),
+        chromeColors = ChromeColors(
+            minimapSlider = Color(0x99FFFFFF),
+            scrollbarSlider = Color(0x99FFFFFF),
+            scrollbarSliderHover = Color(0xFFFFFFFF),
+            indentGuide = Color(0xFF8A8A8A),
+            activeIndentGuide = Color(0xFFFFFFFF),
+            ruler = Color(0xFF8A8A8A),
+            widgetBackground = Color(0xFF0C141F),
+            widgetForeground = Color(0xFFFFFFFF),
+            widgetBorder = Color(0xFF6FC3DF),
+            inlayHint = Color(0xFFFFFFFF),
+            inlayHintBackground = Color(0xFF333333),
+            codeLens = Color(0xFFD0D0D0),
+            ghostText = Color(0xFFB0B0B0),
+        ),
+    )
+
+    val HighContrastLight: EditorTheme = EditorTheme(
+        background = Color(0xFFFFFFFF),
+        gutterBackground = Color(0xFFFFFFFF),
+        gutterForeground = Color(0xFF292929),
+        lineHighlight = Color(0xFFEDEDED),
+        selectionColor = Color(0xFFB5D5FF),
+        findMatchColor = Color(0xFFFFD27F),
+        cursorColor = Color(0xFF0F4A85),
+        tokenColors = mapOf(
+            TokenType.Default to Color(0xFF292929),
+            TokenType.Keyword to Color(0xFF0F4A85),
+            TokenType.Operator to Color(0xFF292929),
+            TokenType.Punctuation to Color(0xFF292929),
+            TokenType.StringLiteral to Color(0xFFA31515),
+            TokenType.Comment to Color(0xFF515151),
+            TokenType.Number to Color(0xFF00613A),
+            TokenType.Identifier to Color(0xFF001080),
+            TokenType.TypeName to Color(0xFF185E73),
+            TokenType.FunctionCall to Color(0xFF5E2CBC),
+            TokenType.Annotation to Color(0xFF6F4400),
+            TokenType.Invalid to Color(0xFFA01B0B),
+        ),
+        errorColor = Color(0xFFA01B0B),
+        warningColor = Color(0xFF7A4A00),
+        infoColor = Color(0xFF0F4A85),
+        bracketPairColors = LightBracketPairColors,
+        chromeColors = ChromeColors(
+            minimapSlider = Color(0x660F4A85),
+            scrollbarSlider = Color(0x990F4A85),
+            scrollbarSliderHover = Color(0xFF0F4A85),
+            indentGuide = Color(0xFF8A8A8A),
+            activeIndentGuide = Color(0xFF292929),
+            ruler = Color(0xFF8A8A8A),
+            widgetBackground = Color(0xFFFFFFFF),
+            widgetForeground = Color(0xFF292929),
+            widgetBorder = Color(0xFF0F4A85),
+            inlayHint = Color(0xFF292929),
+            inlayHintBackground = Color(0xFFE6E6E6),
+            codeLens = Color(0xFF3A3A3A),
+            ghostText = Color(0xFF5A5A5A),
+        ),
     )
 }

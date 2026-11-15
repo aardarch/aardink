@@ -38,6 +38,7 @@ import com.aardarch.aardink.ui.view.InlineFixture.viewOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -237,9 +238,32 @@ class InlineGeometryTest {
     }
 
     @Test
-    fun `a colour swatch stays on its characters`() = forEachRange { scene, from, to, context ->
-        val box = scene.draw(decorations(colorSwatches = listOf(ColorInfo(from until to, swatchColor)))).boxOf(swatchColor, context)
-        assertOn(scene, from, box, scene.span(from, to), context)
+    fun `a colour swatch is drawn in the room injected before its colour`() {
+        for (base in scenes()) {
+            val columns = listOf(0, base.injectedAt(), base.text.length - 2).filter { it in 0..base.text.length - 2 }.distinct()
+            for (column in columns) {
+                val room = Injection(column, SWATCH_ROOM, id = InlineContent.SwatchSlot)
+                val scene = Scene("${base.name} and a swatch at $column", base.text, base.items + room, base.softWrap, base.viewWidth)
+                // Inside hidden indentation the room moves to its end; a colour never starts in whitespace.
+                if (scene.layout.injectedBoxBefore(column, InlineContent.SwatchSlot) == null) continue
+                val swatch = ColorInfo(column until column + 2, swatchColor)
+                val box = scene.draw(decorations(colorSwatches = listOf(swatch))).boxOf(swatchColor, scene.name)
+                val start = scene.charAt(column) - SWATCH_ROOM.length
+                val first = scene.raw.getBoundingBox(start)
+                val last = scene.raw.getBoundingBox(start + SWATCH_ROOM.length - 1)
+                assertTrue(box.left > PADDING + first.left && box.right < PADDING + last.right, "$box in the room: ${scene.name}")
+                val top = PADDING + scene.raw.getLineForOffset(start) * LINE_HEIGHT
+                assertTrue(box.top >= top && box.bottom <= top + LINE_HEIGHT, "$box on the room's row: ${scene.name}")
+            }
+        }
+    }
+
+    @Test
+    fun `a colour with no room before it gets no swatch`() {
+        for (scene in scenes()) {
+            val drawn = scene.draw(decorations(colorSwatches = listOf(ColorInfo(0 until 2, swatchColor))))
+            assertNull(drawn.bounds(swatchColor), scene.name)
+        }
     }
 
     @Test

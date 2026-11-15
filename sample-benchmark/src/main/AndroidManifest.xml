@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Macrobenchmark finds the app under test by package name. -->
+    <queries>
+        <package android:name="com.aardarch.aardink.sample" />
+    </queries>
+</manifest>

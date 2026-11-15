@@ -22,6 +22,8 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.FormattingOptions
+import com.aardarch.aardink.core.HoverDoc
+import com.aardarch.aardink.core.SignatureHelp
 import com.aardarch.aardink.core.SymbolKind
 import com.aardarch.aardink.languages.internal.BaseLanguageService
 import com.aardarch.aardink.languages.internal.diagnosticsPacer
@@ -29,7 +31,8 @@ import com.aardarch.aardink.languages.internal.diagnosticsPacer
 /**
  * In-process language service for Kotlin.
  * Provides lexical completions (keywords, stdlib types/methods, Compose annotations, snippets),
- * syntax error diagnostics, auto-closing, smart indentation, and formatting.
+ * syntax error diagnostics, auto-closing, smart indentation, and formatting, and hover and
+ * signature help for what [KotlinCatalogue] knows of the standard library.
  */
 object KotlinLanguageService : BaseLanguageService() {
 
@@ -49,25 +52,14 @@ object KotlinLanguageService : BaseLanguageService() {
         "isNotEmpty()" to "Returns true if not empty",
     )
 
-    private val commonAnnotations = listOf(
-        "Composable",
-        "OptIn",
-        "Stable",
-        "Immutable",
-        "Test",
-        "Preview",
-        "Keep",
-        "Deprecated",
-    )
+    private val commonAnnotations = KotlinCatalogue.annotations.keys
 
     private val keywords = listOf(
         "fun", "val", "var", "class", "sealed interface", "data class", "when", "if", "else",
         "try", "catch", "return", "suspend", "override", "companion object", "private", "public",
     )
 
-    private val types = listOf(
-        "String", "Int", "Boolean", "Long", "Float", "Double", "List", "Map", "Set", "Unit", "Any",
-    )
+    private val types = KotlinCatalogue.types.keys
 
     private val snippets = listOf(
         CompletionItem(
@@ -432,6 +424,11 @@ object KotlinLanguageService : BaseLanguageService() {
 
         return items
     }
+
+    override suspend fun hoverDoc(document: CodeDocument, offset: Int): HoverDoc? = KotlinCatalogue.hover(document, offset)
+
+    override suspend fun signatureHelp(document: CodeDocument, offset: Int): SignatureHelp? =
+        KotlinCatalogue.signatureHelp(document, offset)
 
     override fun autoClose(document: CodeDocument, offset: Int, charTyped: Char): String? = when (charTyped) {
         '{' -> "}"

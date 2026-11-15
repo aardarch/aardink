@@ -17,6 +17,7 @@ package com.aardarch.aardink.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.aardarch.aardink.ui.view.EditorScrollController
 
 /**
@@ -24,10 +25,17 @@ import com.aardarch.aardink.ui.view.EditorScrollController
  *
  * Android shows none: it never had them, and adding them would be a visible regression for
  * existing consumers. Desktop and web draw a vertical one, plus a horizontal one when
- * [horizontal] is true (soft wrap off).
+ * [horizontal] is true (soft wrap off), their slider in [slider] and, under the mouse,
+ * [sliderHover]; [Color.Unspecified] keeps the platform's.
  *
  * Lives under `platform/` because that is the only package `expect`/`actual` may live in,
  * even for a composable.
  */
 @Composable
-internal expect fun EditorScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier)
+internal expect fun EditorScrollbars(
+    scroll: EditorScrollController,
+    horizontal: Boolean,
+    slider: Color,
+    sliderHover: Color,
+    modifier: Modifier,
+)

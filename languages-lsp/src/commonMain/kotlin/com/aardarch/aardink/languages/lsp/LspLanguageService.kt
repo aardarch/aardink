@@ -72,6 +72,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlin.concurrent.Volatile
 
 /**
@@ -333,6 +334,8 @@ class LspLanguageService(
     fun attach(state: CodeEditorState) {
         client.addDiagnosticsListener(diagnosticsListener)
         sync.attach(state)
+        val listeners = client.refreshListeners
+        if (refreshListener !in listeners) client.refreshListeners = listeners + refreshListener
     }
 
     /**
@@ -340,7 +343,31 @@ class LspLanguageService(
      * none. The document stays open on the server, and edits already made still reach it; [didClose]
      * closes it, and [attach] catches up on anything missed meanwhile.
      */
-    fun detach() = sync.detach()
+    fun detach() {
+        client.refreshListeners = client.refreshListeners - refreshListener
+        sync.detach()
+    }
+
+    /**
+     * A server's `workspace/.../refresh`, for the state [attach] was given. Diagnostics it pulls are
+     * pulled again at once and then read by the editor; everything else the editor asks again for.
+     */
+    private val refreshListener: (String) -> Unit = { method ->
+        // The server's tokens may have changed for reasons of its own: start again from a whole answer.
+        if (method == "workspace/semanticTokens/refresh") lastSemantic = null
+        val state = sync.state
+        if (state != null) {
+            if (method == "workspace/diagnostic/refresh" && !pullRefused && supports("diagnosticProvider")) {
+                diagnosticsPull?.cancel()
+                diagnosticsPull = client.launchUntilClosed {
+                    pullDiagnostics()
+                    state.revalidate()
+                }
+            } else {
+                state.refreshLanguageFeatures()
+            }
+        }
+    }
 
     /**
      * Sends `textDocument/didOpen` notification to the server and (re-)registers this service's
@@ -353,6 +380,7 @@ class LspLanguageService(
         check(!sync.isAttached) { "$documentUri is attached to an editor state, which opened it" }
         client.addDiagnosticsListener(diagnosticsListener)
         diagnosticsVersion = null
+        lastSemantic = null
         sync.open(document.text)
     }
 
@@ -381,14 +409,38 @@ class LspLanguageService(
         diagnosticsVersion = null
         offeredCompletions = emptyList()
         servedLenses = null
+        lastSemantic = null
         sync.close()
     }
 
     /**
      * Sends `textDocument/willSave`, if the server asked for it with `textDocumentSync.willSave`.
-     * It does not wait for the server: `willSaveWaitUntil` is not supported.
+     * It does not wait for the server; [willSaveWaitUntil] does.
      */
     suspend fun willSave(reason: LspSaveReason) = sync.willSave(reason)
+
+    /**
+     * Sends `textDocument/willSaveWaitUntil`, if the server asked for it with
+     * `textDocumentSync.willSaveWaitUntil` or registered it, and returns the edits it wants made
+     * before the save: trimming whitespace, organising imports. They are offsets in [document], which
+     * is read on the caller's thread before anything is sent. Apply them with
+     * [CodeEditorState.applyTextEdits] only while the text is still [document], then save.
+     *
+     * Empty when the server did not ask for it, failed, or took longer than
+     * 1.5 s, as VS Code gives up on a slow save participant: a save never waits for
+     * long. Sent in the document's order, after every edit made before it.
+     */
+    suspend fun willSaveWaitUntil(document: CodeDocument, reason: LspSaveReason): List<TextEdit> {
+        if (!sync.willSaveWaitUntil) return emptyList()
+        val snapshot = document.snapshot()
+        val params = buildJsonObject {
+            putJsonObject("textDocument") { put("uri", documentUri) }
+            put("reason", reason.code)
+        }
+        val result = withTimeoutOrNull(WILL_SAVE_WAIT_MILLIS) { request("textDocument/willSaveWaitUntil", params) } ?: return emptyList()
+        val edits = decodeOrNull(ListSerializer(LspTextEdit.serializer()), result) ?: return emptyList()
+        return toTextEdits(snapshot, edits)
+    }
 
     /**
      * Sends `textDocument/didSave`, if the server's `textDocumentSync.save` asked for it, with the
@@ -543,36 +595,119 @@ class LspLanguageService(
     }
 
     /**
-     * Code actions whose workspace edit touches this document, and whose whole effect is that edit.
+     * The server's `firstTriggerCharacter` and `moreTriggerCharacter`, declared or registered; none
+     * while its capabilities are unknown, so nothing is asked before the handshake. Read at each
+     * keystroke, so worked out once per change of capabilities or registrations.
+     */
+    override val formatOnTypeCharacters: Set<Char>
+        get() {
+            val capabilities = client.serverCapabilities
+            val registrations = client.registrations
+            onTypeCharacters?.let { (forCapabilities, forRegistrations, characters) ->
+                if (forCapabilities === capabilities && forRegistrations === registrations) return characters
+            }
+            val characters = if (!supports("documentOnTypeFormattingProvider")) {
+                emptySet()
+            } else {
+                val declared = (capabilities as? JsonObject)?.get("documentOnTypeFormattingProvider") as? JsonObject
+                val method = methodOf("documentOnTypeFormattingProvider")
+                val offers = listOfNotNull(declared) + registrations.filter { it.method == method }.mapNotNull { it.options }
+                offers.flatMapTo(HashSet()) { offer ->
+                    val first = (offer["firstTriggerCharacter"] as? JsonPrimitive)?.contentOrNull
+                    val more = (offer["moreTriggerCharacter"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                    (listOfNotNull(first) + more).mapNotNull { it.singleOrNull() }
+                }
+            }
+            onTypeCharacters = Triple(capabilities, registrations, characters)
+            return characters
+        }
+
+    /** [formatOnTypeCharacters] with what it was worked out from. */
+    private var onTypeCharacters: Triple<Any?, Any?, Set<Char>>? = null
+
+    /** `textDocument/onTypeFormatting`, with the position after the typed character as LSP has it. */
+    override suspend fun formatOnType(document: CodeDocument, offset: Int, typed: Char, options: FormattingOptions): List<TextEdit> {
+        val params = LspDocumentOnTypeFormattingParams(textDocument, positionOf(document, offset), typed.toString(), options.toLsp())
+        val result = request(
+            "documentOnTypeFormattingProvider",
+            "textDocument/onTypeFormatting",
+            encode(LspDocumentOnTypeFormattingParams.serializer(), params),
+        ) ?: return emptyList()
+        val edits = decodeOrNull(ListSerializer(LspTextEdit.serializer()), result) ?: return emptyList()
+        return toTextEdits(document, edits)
+    }
+
+    /**
+     * The server's code actions, each as much as the editor can carry out whole.
      *
-     * Four shapes are omitted, all for the same reason — the editor would perform only part of what
-     * the action promises. Bare `Command`s have nothing this adapter can apply. An action carrying
-     * *both* an edit and a `command` has the command run after the edit, and `core` has no way to
-     * represent that half. An action whose edit reaches another file, or creates, renames or
-     * deletes one, cannot be applied whole through a single-document API: unlike a rename, nothing
-     * here hears when one is chosen, so its other files cannot go to [LspClientHost] at that moment.
-     * And an action the server marked `disabled` is one it has told us not to run at all.
+     * An action's edit to this document is its [CodeAction.edits]. A `command`, of an action or a
+     * bare `Command`, runs on the server through `workspace/executeCommand` after the edit, as VS Code
+     * runs it, from [CodeAction.onApply]: only one the server lists in `executeCommandProvider` (or
+     * any, with its capabilities unknown), as a code lens's. An edit that reaches other files goes to
+     * [LspClientHost.applyWorkspaceEdit] when the action is chosen, and this document's part follows
+     * only if the host made the rest and the text has not moved since the answer: such an action has
+     * no [CodeAction.edits] of its own, and is offered only while a state is [attach]ed, through which
+     * its part is applied.
+     *
+     * Left out: an action the server marked `disabled`, one with a command the server does not run (a
+     * command of its client, which there is no one here to run), an edit that creates, renames or
+     * deletes this document, and an edit to other files with no state attached.
      */
     override suspend fun codeActions(document: CodeDocument, range: IntRange): List<CodeAction> {
+        if (!supports("codeActionProvider")) return emptyList()
         val context = LspCodeActionContext(
             diagnostics = lspDiagnostics.filter { overlaps(offsetRangeOf(document, it.range), range) },
         )
         val params = LspCodeActionParams(textDocument, lspRangeOf(document, range), context)
-        val result = request("codeActionProvider", "textDocument/codeAction", encode(LspCodeActionParams.serializer(), params))
-            ?: return emptyList()
-        val actions = decodeOrNull(ListSerializer(LspCodeAction.serializer()), result) ?: return emptyList()
-        return actions.mapNotNull { action ->
-            if (action.command != null) return@mapNotNull null
+        var revision = 0L
+        val answer = requestOrFailure("textDocument/codeAction", encode(LspCodeActionParams.serializer(), params)) {
+            revision = sync.textRevision
+        }
+        val result = (answer as? LspResult.Value)?.element as? JsonArray ?: return emptyList()
+        return result.mapNotNull { element ->
+            val raw = element as? JsonObject ?: return@mapNotNull null
+            val action = decodeOrNull(LspCodeAction.serializer(), raw) ?: return@mapNotNull null
             if (action.disabled != null) return@mapNotNull null
-            val parts = action.edit?.let(::partsOf) ?: return@mapNotNull null
-            if (parts.elsewhere != null || parts.here.isEmpty()) return@mapNotNull null
+            // A bare Command is its own command: { title, command: "name", arguments }.
+            val command = when (val given = raw["command"]) {
+                is JsonObject -> given
+                is JsonPrimitive -> raw
+                else -> null
+            }
+            if (command != null && command.string("command")?.let(::runsCommand) != true) return@mapNotNull null
+            val parts = action.edit?.let { partsOf(it) ?: return@mapNotNull null }
+            val here = parts?.here.orEmpty()
+            val elsewhere = parts?.elsewhere
+            if (elsewhere != null && !sync.isAttached) return@mapNotNull null
+            if (here.isEmpty() && elsewhere == null && command == null) return@mapNotNull null
+            val edits = toTextEdits(document, here)
             CodeAction(
                 title = action.title,
                 kind = mapCodeActionKind(action.kind),
-                edits = toTextEdits(document, parts.here),
+                edits = if (elsewhere == null) edits else emptyList(),
                 isPreferred = action.isPreferred ?: false,
+                onApply = if (elsewhere == null && command == null) {
+                    null
+                } else {
+                    {
+                        val done = elsewhere == null || applyAcrossFiles(elsewhere, edits, revision)
+                        if (done && command != null) runCommand(command)
+                    }
+                },
             )
         }
+    }
+
+    /**
+     * [elsewhere] through the host, then [here] in the attached state, if the text is still what the
+     * server answered about: true when both are done. Called on the thread that edits the state.
+     */
+    private suspend fun applyAcrossFiles(elsewhere: LspWorkspaceEdit, here: List<TextEdit>, revision: Long): Boolean {
+        if (sync.textRevision != revision || !client.applyThroughHost(elsewhere)) return false
+        val state = sync.state ?: return false
+        if (sync.textRevision != revision) return false
+        state.applyTextEdits(here)
+        return true
     }
 
     /**
@@ -819,22 +954,66 @@ class LspLanguageService(
     override suspend fun semanticTokens(document: CodeDocument): List<Token> {
         if (supports("semanticTokensProvider") && !sync.awaitOpen()) return emptyList()
         val legend = semanticLegend ?: return emptyList()
-        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
-        val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
+        val previous = lastSemantic?.takeIf { semanticDeltas }
+        val data = previous?.let { semanticTokensSince(it) } ?: wholeSemanticTokens() ?: return emptyList()
         return decodeSemanticTokens(data, legend, document)
     }
 
     /**
+     * The server's last whole answer, as its `resultId` and numbers, for a `full/delta` request to
+     * start from. A server that sends no `resultId` gets whole requests only.
+     */
+    private class SemanticResult(val resultId: String, val data: IntArray)
+
+    @Volatile
+    private var lastSemantic: SemanticResult? = null
+
+    /** `textDocument/semanticTokens/full`: every token, and the start of the next delta. */
+    private suspend fun wholeSemanticTokens(): IntArray? {
+        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
+        val result = (answer as? LspResult.Value)?.element as? JsonObject
+        val data = (result?.get("data") as? JsonArray)?.let { semanticTokenNumbers(it) }
+        lastSemantic = if (result != null && data != null) semanticResultOf(result, data) else null
+        return data
+    }
+
+    /**
+     * `textDocument/semanticTokens/full/delta` since [previous]: the server's edits to its numbers, or
+     * all of them again, which a server may send instead. Null for anything else (an error, edits that
+     * do not fit), and the whole answer is asked for.
+     */
+    private suspend fun semanticTokensSince(previous: SemanticResult): IntArray? {
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            put("previousResultId", previous.resultId)
+        }
+        val answer = requestPatiently("textDocument/semanticTokens/full/delta", params)
+        val result = (answer as? LspResult.Value)?.element as? JsonObject
+        val edits = result?.get("edits") as? JsonArray
+        val whole = result?.get("data") as? JsonArray
+        val data = when {
+            edits != null -> applySemanticTokenEdits(previous.data, edits)
+            whole != null -> semanticTokenNumbers(whole)
+            else -> null
+        }
+        lastSemantic = if (result != null && data != null) semanticResultOf(result, data) else null
+        return data
+    }
+
+    private fun semanticResultOf(result: JsonObject, data: IntArray): SemanticResult? =
+        (result["resultId"] as? JsonPrimitive)?.contentOrNull?.let { SemanticResult(it, data) }
+
+    /**
      * The server's `textDocument/inlayHint` answer for [range] of [document], which should be what it
      * was last sent. A label is a string, or parts whose values are joined: their commands, locations
-     * and tooltips are not read. `paddingLeft` and `paddingRight` become a space on that side of it.
+     * and tooltips are not read. The hint's own `tooltip` is its [InlayHint.tooltip], a plain string
+     * escaped as Markdown. `paddingLeft` and `paddingRight` become a space on that side of it.
      *
      * The editor may ask once and then not again until an edit or a scroll, so a request that comes
      * too soon waits and asks again as [semanticTokens] does, and is over as that one is.
      *
-     * A `workspace/inlayHint/refresh` from the server is not honoured, and `refreshSupport` is not
-     * declared: nothing in a language service can tell the editor to ask again. Hints come back with
-     * the next edit or scroll.
+     * A `workspace/inlayHint/refresh` from the server has the editor [attach] was given ask again;
+     * without one, hints come back with the next edit or scroll.
      */
     override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
         if (supports("inlayHintProvider") && !sync.awaitOpen()) return emptyList()
@@ -875,8 +1054,8 @@ class LspLanguageService(
      * The editor may ask once and then not again until an edit, so a request that comes too soon
      * waits and asks again as [semanticTokens] does.
      *
-     * A `workspace/codeLens/refresh` from the server is not honoured, and `refreshSupport` is not
-     * declared, for the reason [inlayHints] gives. Lenses come back with the next edit.
+     * A `workspace/codeLens/refresh` from the server has the editor [attach] was given ask again;
+     * without one, lenses come back with the next edit.
      */
     override suspend fun codeLenses(document: CodeDocument): List<CodeLens> {
         if (supports("codeLensProvider") && !sync.awaitOpen()) return emptyList()
@@ -972,6 +1151,18 @@ class LspLanguageService(
             val method = methodOf("semanticTokensProvider")
             val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
             return (listOfNotNull(declared) + registered).firstNotNullOfOrNull(LspSemanticLegend::from)
+        }
+
+    /** Whether the server answers `semanticTokens/full/delta`, as it declared or registered `full: { delta: true }`. */
+    private val semanticDeltas: Boolean
+        get() {
+            if (!supports("semanticTokensProvider")) return false
+            val declared = (client.serverCapabilities as? JsonObject)?.get("semanticTokensProvider") as? JsonObject
+            val method = methodOf("semanticTokensProvider")
+            val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
+            return (listOfNotNull(declared) + registered).any { provider ->
+                ((provider["full"] as? JsonObject)?.get("delta") as? JsonPrimitive)?.booleanOrNull == true
+            }
         }
 
     /**
@@ -1220,7 +1411,7 @@ class LspLanguageService(
         if (label.isNullOrEmpty()) return null
         val left = if (boolean("paddingLeft") == true) " " else ""
         val right = if (boolean("paddingRight") == true) " " else ""
-        return InlayHint(offsetOf(document, position), left + label + right)
+        return InlayHint(offsetOf(document, position), left + label + right, documentationMarkdown(this["tooltip"]))
     }
 
     private fun JsonObject.toServedLens(document: CodeDocument): ServedLens? {
@@ -1341,6 +1532,9 @@ class LspLanguageService(
 
         /** How long the text has to stand still for its diagnostics to be pulled. */
         private const val DIAGNOSTICS_PULL_DEBOUNCE_MILLIS = 400L
+
+        /** How long a save waits for `willSaveWaitUntil`, as VS Code waits for a save participant. */
+        private const val WILL_SAVE_WAIT_MILLIS = 1_500L
 
         /**
          * The `completionProvider.triggerCharacters` a server declared, for

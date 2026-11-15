@@ -749,6 +749,75 @@ class InlineCompletionTest {
         assertEquals("a", state.document.text)
     }
 
+    // ── Snippets ─────────────────────────────────────────────────────────────
+
+    private fun snippet(text: String, range: IntRange? = null) = InlineCompletion(text, range, isSnippet = true)
+
+    @Test
+    fun `a snippet shows what it expands to`() {
+        val state = stateAt("val x = |")
+        state.offer(snippet("compute(\${1:a}, \${2|b,c|})\$0"))
+        assertEquals("val x = [compute(a, b)]", state.drawn)
+    }
+
+    @Test
+    fun `accepting a snippet selects its first stop, and Tab goes through the rest`() {
+        val state = stateAt("val x = |")
+        state.offer(snippet("compute(\${1:a}, \$2)\$0"))
+        state.accept()
+        assertEquals("val x = compute(a, )", state.document.text)
+        assertNotNull(state.snippet)
+        assertEquals(TextRange(16, 17), state.selection, "the placeholder is selected")
+        assertNull(state.inlineCompletions.ask, "nothing is asked for while the snippet is filled in")
+        assertTrue(state.moveInSnippet(forward = true))
+        assertEquals(TextRange(19), state.selection)
+        assertTrue(state.moveInSnippet(forward = true))
+        assertEquals(TextRange(20), state.selection)
+        assertNull(state.snippet, "the final stop ends it")
+    }
+
+    @Test
+    fun `a snippet replaces its whole range, typed part and all, in one undo step`() {
+        val state = stateAt("val x = |")
+        state.offer(snippet("compute(\${1:a})"))
+        state.typeAtCaret("com")
+        assertEquals("val x = com[pute(a)]", state.drawn)
+        state.accept()
+        assertEquals("val x = compute(a)", state.document.text)
+        assertEquals(TextRange(16, 17), state.selection)
+        state.undo()
+        assertEquals("val x = com", state.document.text)
+    }
+
+    @Test
+    fun `a snippet with only a final stop leaves the caret there and asks again`() {
+        val state = stateAt("a|")
+        state.offer(snippet("(\$0)"))
+        state.accept()
+        assertEquals("a()", state.document.text)
+        assertEquals(TextRange(2), state.selection)
+        assertNull(state.snippet)
+        assertEquals(true, state.inlineCompletions.ask?.now)
+    }
+
+    @Test
+    fun `a snippet over a range keeps what follows the range`() {
+        val state = stateAt("foo(|)")
+        val caret = state.selection.end
+        state.offer(snippet("\${1:bar})", caret until caret + 1))
+        assertEquals("foo([bar])", state.drawn)
+        state.accept()
+        assertEquals("foo(bar)", state.document.text)
+        assertEquals(TextRange(4, 7), state.selection)
+    }
+
+    @Test
+    fun `text that is not a snippet keeps its dollar signs`() {
+        val state = stateAt("val x = |")
+        state.offer("\"\$1\"")
+        assertEquals("val x = [\"\$1\"]", state.drawn)
+    }
+
     @Test
     fun `a layout told lines goes by where the ghost is now`() {
         val state = stateAt("one\ntwo|")

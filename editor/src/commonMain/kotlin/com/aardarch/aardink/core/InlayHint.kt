@@ -28,9 +28,12 @@ import kotlin.coroutines.CoroutineContext
  * @property offset The document offset it stands at, in front of the character there. A caret at
  *   this offset is in front of the label.
  * @property label What it shows, on one row: a line break in it shows as a space.
+ * @property tooltip More about it, as Markdown, in a card under a mouse that rests on the label,
+ *   with the label as its title. Null, the default, for none: the mouse then gets the hover of the
+ *   text under it.
  */
 @Immutable
-data class InlayHint(val offset: Int, val label: String)
+data class InlayHint(val offset: Int, val label: String, val tooltip: String? = null)
 
 /**
  * In the context of a call to [LanguageService.inlayHints], told what the answer holds so far when

@@ -31,6 +31,7 @@ import com.aardarch.aardink.core.edit.AppliedChange
 import com.aardarch.aardink.core.edit.CommandEdit
 import com.aardarch.aardink.core.edit.EditKind
 import com.aardarch.aardink.core.edit.EditingCommands
+import com.aardarch.aardink.core.edit.ExpandedSnippet
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.OccurrenceFinder
@@ -103,6 +104,7 @@ class CodeEditorState(
             field = value
             lastTokenizerResult = null
             tokenizerIsIncremental = null
+            slowPartialPasses = 0
             scheduleTokenization(debounce = false)
         }
 
@@ -333,6 +335,23 @@ class CodeEditorState(
         revalidations++
     }
 
+    /** Bumped by [refreshLanguageFeatures]; the layout asks again for everything it shows from the service. */
+    internal var languageRefreshes by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Asks the language service again, without waiting for an edit, for everything the editor
+     * shows from it: diagnostics, document symbols, folds, colours, links, semantic tokens, inlay
+     * hints and code lenses, each as the options have it on. For when what they depend on outside
+     * the text has changed: a language server sends `workspace/inlayHint/refresh` and the like for
+     * this, and `:languages-lsp`'s `LspLanguageService` calls this on the state it is attached to. Each is asked on its usual schedule, after its pause; what shows stays until the
+     * answer. Safe from any thread.
+     */
+    fun refreshLanguageFeatures() {
+        languageRefreshes++
+        revalidations++
+    }
+
     // ── Change events ─────────────────────────────────────────────────────────
 
     /**
@@ -546,7 +565,8 @@ class CodeEditorState(
 
     /** Whether anything from the decorations, the hints or the lenses is part of a line's layout. */
     internal val hasInlineContent: Boolean
-        get() = hintTracker.items.isNotEmpty() || lensTracker.items.isNotEmpty() || decorationOwners.values.any { it.hasInline }
+        get() = hintTracker.items.isNotEmpty() || lensTracker.items.isNotEmpty() || colorTracker.items.isNotEmpty() ||
+            decorationOwners.values.any { it.hasInline }
 
     /** Calls [action] with every decoration that is part of a line's layout, as they are now. */
     internal fun forEachInlineDecoration(action: (Decoration) -> Unit) {
@@ -570,6 +590,19 @@ class CodeEditorState(
 
     private val lensTracker = OffsetTracker<CodeLens>({ it.offset }, { lens, offset -> lens.copy(offset = offset) })
 
+    private val colorTracker =
+        TrackedRanges<ColorInfo>({ it.range }, { info, range -> info.copy(range = range) }, keepsOneCharacter = false)
+
+    /** The colours in the text the language service found, each shown with a swatch, moved along with the edits since. */
+    internal val documentColors: List<ColorInfo> get() = colorTracker.items
+
+    /** Shows [colors] in place of those before, at offsets of the document as it is now. */
+    internal fun publishDocumentColors(colors: List<ColorInfo>) {
+        if (colors == colorTracker.items) return
+        colorTracker.replace(colors)
+        inlineChanged()
+    }
+
     /** The language service's newest code lenses, moved along with the edits since. */
     internal val codeLenses: List<CodeLens> get() = lensTracker.items
 
@@ -584,7 +617,11 @@ class CodeEditorState(
     internal var ghostListeners: List<(lines: List<Int>) -> Unit> = emptyList()
 
     /** The inline completions on offer at the caret, and the ghost text of the one showing. */
-    internal val inlineCompletions = GhostTextTracker(document, ::singleCaret) { lines -> ghostListeners.forEach { it(lines) } }
+    internal val inlineCompletions = GhostTextTracker(
+        document,
+        ::singleCaret,
+        expandSnippet = { template, at -> expandSnippet(template, at, adjustWhitespace = true).text },
+    ) { lines -> ghostListeners.forEach { it(lines) } }
 
     /** The caret, if it is one that ghost text can show at. */
     private fun singleCaret(): Int? {
@@ -726,9 +763,20 @@ class CodeEditorState(
      * repeats stays as it is, along with what is anchored to it. Then asks for what might come next
      * without waiting, as Monaco does. The caret can end up lines below where the view stops, and a
      * host's button has no key to show it, so this does.
+     *
+     * A snippet replaces its whole range instead, as Monaco does, and selects its first tab stop.
+     * While that is being filled in nothing is asked for: ghost text does not show in a snippet.
      */
     private fun acceptInlineCompletion(): Boolean {
         val pieces = inlineCompletions.settled?.pieces ?: return false
+        inlineCompletions.settledSnippet?.let { ghost ->
+            val version = document.version
+            insertSnippet(ghost.start until ghost.end, ghost.template)
+            if (document.version == version) return false
+            uiCommandHandler?.invoke(EditorCommand.Reveal(selectionSet.primary.end))
+            if (snippet == null) inlineCompletions.askAgain(now = true)
+            return true
+        }
         val changes = pieces.map { TextChange(it.offset, it.offset, TypingRules.withLineEnding(it.text, lineEnding)) }
         val caret = changes.last().start + changes.sumOf { it.text.length }
         return applyChanges(changes, EditKind.Other) { SelectionSet.caret(caret) }.also {
@@ -1222,16 +1270,7 @@ class CodeEditorState(
         endSnippet()
         val start = target.first.coerceIn(0, document.length)
         val end = (target.last + 1).coerceIn(start, document.length)
-        val line = document.offsetToLineCol(start).first
-        val lineStart = document.lineStart(line)
-        val lineText = document.subSequence(lineStart, document.lineEnd(line)).toString()
-        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
-        val expanded = SnippetParser.expand(
-            template,
-            variable = { name -> snippetVariable(name, line, lineText, start - lineStart) },
-            indent = if (adjustWhitespace) indent else null,
-            indentUnit = if (adjustWhitespace) indentUnit else null,
-        )
+        val expanded = expandSnippet(template, start, adjustWhitespace)
         val additional = additionalEdits.map { edit ->
             val from = edit.range.first.coerceIn(0, document.length)
             TextChange(from, (edit.range.last + 1).coerceIn(from, document.length), edit.newText)
@@ -1247,6 +1286,21 @@ class CodeEditorState(
         document.addChangeListener(session)
         snippet = session
         history.pushStop()
+    }
+
+    /** What [template] becomes inserted at [at]: its variables for that place and, with [adjustWhitespace], that line's indentation. */
+    private fun expandSnippet(template: String, at: Int, adjustWhitespace: Boolean): ExpandedSnippet {
+        val start = at.coerceIn(0, document.length)
+        val line = document.offsetToLineCol(start).first
+        val lineStart = document.lineStart(line)
+        val lineText = document.subSequence(lineStart, document.lineEnd(line)).toString()
+        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
+        return SnippetParser.expand(
+            template,
+            variable = { name -> snippetVariable(name, line, lineText, start - lineStart) },
+            indent = if (adjustWhitespace) indent else null,
+            indentUnit = if (adjustWhitespace) indentUnit else null,
+        )
     }
 
     /**
@@ -1307,7 +1361,7 @@ class CodeEditorState(
     // ── Input (the editor's own renderer) ────────────────────────────────────
 
     /** A character [applyInput] typed at [offset], and how many characters were auto-closed after it. */
-    internal class TypedInput(val offset: Int, val char: Char, val autoCloseLength: Int)
+    internal class TypedInput(val offset: Int, val char: Char, val autoCloseLength: Int, val composing: Boolean = false)
 
     /**
      * Text from the keyboard or an input method: replaces [start, end) with [text] and places the
@@ -1406,7 +1460,7 @@ class CodeEditorState(
             it.version = textVersion
         }
         if (!composing) inlineCompletions.askAgain()
-        return typed?.let { TypedInput(from, it, autoCloseLength) }
+        return typed?.let { TypedInput(from, it, autoCloseLength, composing) }
     }
 
     /**
@@ -1597,10 +1651,15 @@ class CodeEditorState(
     /**
      * On a single-threaded host, whether [IncrementalTokenizer.tokenizeLines] is cheap for this
      * tokenizer (null until a call shows it). A tokenizer whose partial pass is really a full scan
-     * blocks the UI for as long as that scan takes, so once one call takes longer than
-     * [SLOW_PARTIAL_PASS_MS] the editor goes back to chunked full passes for it.
+     * blocks the UI for as long as that scan takes, so once [SLOW_PARTIAL_PASSES] calls in a row
+     * take longer than [SLOW_PARTIAL_PASS_MS] the editor goes back to chunked full passes for it.
+     * One slow call is not enough: the first ones after a mount run while the browser is still
+     * compiling the code, and a collection can land in any, and giving up is for the document's life.
      */
     private var tokenizerIsIncremental: Boolean? = null
+
+    /** Partial passes in a row that took longer than [SLOW_PARTIAL_PASS_MS]. */
+    private var slowPartialPasses = 0
 
     /**
      * The document lines on screen, reported by the layout. Highlighted first when a large
@@ -1614,6 +1673,7 @@ class CodeEditorState(
         document.addChangeListener(decorationMover)
         document.addChangeListener(hintTracker)
         document.addChangeListener(lensTracker)
+        document.addChangeListener(colorTracker)
         document.addChangeListener(inlineCompletions)
         // Tokenize the initial document so consumers see syntax highlighting on first frame
         // without having to type a character first.
@@ -1665,7 +1725,7 @@ class CodeEditorState(
                 val started = TimeSource.Monotonic.markNow()
                 tokenizer.tokenizeLines(snapshot, lines, previous) to started.elapsedNow()
             }
-            if (large) tokenizerIsIncremental = took.inWholeMilliseconds < SLOW_PARTIAL_PASS_MS
+            if (large) countPartialPass(took.inWholeMilliseconds)
             // Every edit schedules a new pass and cancels this one; the version check covers an
             // edit made straight through the public CodeDocument, which schedules nothing.
             if (document.version != version) return
@@ -1689,6 +1749,16 @@ class CodeEditorState(
         tokenVersion++
     }
 
+    /** Counts a partial pass that took [millis]; [SLOW_PARTIAL_PASSES] slow ones in a row give up on them. */
+    private fun countPartialPass(millis: Long) {
+        if (millis < SLOW_PARTIAL_PASS_MS) {
+            slowPartialPasses = 0
+            tokenizerIsIncremental = true
+        } else if (++slowPartialPasses >= SLOW_PARTIAL_PASSES) {
+            tokenizerIsIncremental = false
+        }
+    }
+
     /**
      * Tokenizes just the visible lines, with no previous tokens (a provisional pass the built-in
      * tokenizers answer by scanning only those lines), so they are coloured before the full pass
@@ -1700,7 +1770,7 @@ class CodeEditorState(
         val lines = visible.first.coerceIn(0, last)..visible.last.coerceIn(0, last)
         val started = TimeSource.Monotonic.markNow()
         val provisional = tokenizer.tokenizeLines(snapshot, lines, emptyList())
-        if (started.elapsedNow().inWholeMilliseconds >= SLOW_PARTIAL_PASS_MS) tokenizerIsIncremental = false
+        countPartialPass(started.elapsedNow().inWholeMilliseconds)
         if (document.version != version) return
         tokenStore.merge(lines, provisional)
         tokenVersion++
@@ -1742,6 +1812,9 @@ private const val INITIAL_VISIBLE_LINES = 100
 
 /** A partial tokenization pass slower than this is treated as a full scan on single-threaded hosts. */
 private const val SLOW_PARTIAL_PASS_MS = 50L
+
+/** Slow partial passes in a row after which a tokenizer's partial passes are taken for full scans. */
+private const val SLOW_PARTIAL_PASSES = 3
 
 /** How many earlier selections cursor undo (Ctrl+U) can go back through. */
 private const val CURSOR_HISTORY = 64

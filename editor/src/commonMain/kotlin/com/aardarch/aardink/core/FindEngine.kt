@@ -49,15 +49,19 @@ object FindEngine {
      * [YIELD_EVERY_CHARS] characters of progress, which on the single-threaded web host keeps the
      * page responsive through a large document and lets a newer query cancel this one.
      */
-    internal suspend fun findAllCooperatively(text: String, query: String, options: Options, limit: Int): Result {
+    internal suspend fun findAllCooperatively(text: String, query: String, options: Options, limit: Int, scope: IntRange? = null): Result {
         if (query.isEmpty() || text.isEmpty()) return Result(emptyList(), capped = false)
         val pattern = buildPattern(query, options) ?: return Result(emptyList(), capped = false)
         val matches = ArrayList<IntRange>()
         var nextYield = YIELD_EVERY_CHARS
-        var match = pattern.find(text)
+        // Within a scope: from its start, a match only if it ends inside it, and no further than its end.
+        val from = scope?.first?.coerceIn(0, text.length) ?: 0
+        val end = scope?.let { it.last + 1 } ?: text.length
+        var match = pattern.find(text, from)
         while (match != null) {
+            if (match.range.first >= end && !(match.range.isEmpty() && match.range.first == end)) break
             if (matches.size >= limit) return Result(matches, capped = true)
-            matches.add(match.range)
+            if (match.range.last < end) matches.add(match.range)
             if (match.range.last >= nextYield) {
                 yield()
                 nextYield = match.range.last + YIELD_EVERY_CHARS
@@ -86,15 +90,52 @@ object FindEngine {
         query: String,
         replacement: String,
         options: Options,
+        preserveCase: Boolean = false,
     ): List<TextEdit> {
-        if (!options.useRegex) return matches.map { TextEdit(it, replacement) }
+        if (!options.useRegex) {
+            return matches.map { range ->
+                val newText = if (preserveCase && range.last < text.length) {
+                    withCaseOf(text.substring(range.first, range.last + 1), replacement)
+                } else {
+                    replacement
+                }
+                TextEdit(range, newText)
+            }
+        }
         val pattern = buildPattern(query, options) ?: return emptyList()
         return matches.mapNotNull { range ->
             if (range.first !in 0..text.length) return@mapNotNull null
             val match = pattern.matchAt(text, range.first) ?: return@mapNotNull null
             if (match.range != range) return@mapNotNull null
-            TextEdit(range, expandReplacement(replacement, match))
+            val expanded = expandReplacement(replacement, match)
+            TextEdit(range, if (preserveCase) withCaseOf(match.value, expanded) else expanded)
         }
+    }
+
+    /**
+     * [replacement] in the case of [matched], as VS Code's preserve case has it: all capitals, all
+     * small letters, or the first letter's case; where both have the same number of `-` or `_`
+     * separated parts, part by part.
+     */
+    internal fun withCaseOf(matched: String, replacement: String): String {
+        if (matched.isEmpty() || replacement.isEmpty()) return replacement
+        for (separator in charArrayOf('-', '_')) {
+            if (separator in matched && separator in replacement) {
+                val from = matched.split(separator)
+                val to = replacement.split(separator)
+                if (from.size == to.size) return from.indices.joinToString(separator.toString()) { caseOne(from[it], to[it]) }
+            }
+        }
+        return caseOne(matched, replacement)
+    }
+
+    private fun caseOne(matched: String, replacement: String): String = when {
+        matched.isEmpty() || replacement.isEmpty() -> replacement
+        matched.uppercase() == matched && matched.lowercase() != matched -> replacement.uppercase()
+        matched.lowercase() == matched && matched.uppercase() != matched -> replacement.lowercase()
+        matched[0].isUpperCase() -> replacement[0].uppercase() + replacement.substring(1)
+        matched[0].isLowerCase() -> replacement[0].lowercase() + replacement.substring(1)
+        else -> replacement
     }
 
     private fun expandReplacement(replacement: String, match: MatchResult): String {

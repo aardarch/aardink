@@ -31,6 +31,7 @@ import com.aardarch.aardink.core.Decoration
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.ui.CursorStyle
 import com.aardarch.aardink.ui.RenderWhitespace
 import com.aardarch.aardink.ui.drawSquiggleLine
 import kotlin.math.max
@@ -56,6 +57,15 @@ internal data class EditorColors(
     val snippetTabStop: Color = Color.Transparent,
     /** The editor's background, laid over unnecessary code to fade it. */
     val background: Color = Color.Transparent,
+    /** Indent guides, and the one of the block holding the caret. */
+    val indentGuide: Color = Color.Transparent,
+    val activeIndentGuide: Color = Color.Transparent,
+    /** The vertical lines at [EditorDecorations.rulers]. */
+    val ruler: Color = Color.Transparent,
+    /** Bracket-pair guides by depth; none drawn without them. */
+    val bracketGuides: List<Color> = emptyList(),
+    /** Behind the text find in selection searches, as Monaco's `editor.findRangeHighlightBackground`. */
+    val findScope: Color = Color.Transparent,
 )
 
 /** What is drawn under and over the text, in document offsets. */
@@ -77,8 +87,18 @@ internal class EditorDecorations(
     val snippetTabStops: List<TextRange> = emptyList(),
     /** The host's decorations, in order of where they start. */
     val hostDecorations: List<Decoration> = emptyList(),
-    /** The colours in the text, each drawn as a swatch bar under it. */
+    /** The colours in the text, each drawn as a swatch in the room inline content leaves before it. */
     val colorSwatches: List<ColorInfo> = emptyList(),
+    /** Indentation and bracket pairs around the view; null draws no guides. */
+    val guides: Guides? = null,
+    val indentGuides: Boolean = false,
+    val bracketPairGuides: Boolean = false,
+    /** The indent guide to highlight. */
+    val activeGuide: ActiveGuide? = null,
+    /** Columns with a vertical line. */
+    val rulers: List<Int> = emptyList(),
+    /** Where find in selection searches, shaded; null for none. */
+    val findScope: IntRange? = null,
 )
 
 /**
@@ -113,6 +133,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         drawBracketBox(frame, open, colors, left)
         drawBracketBox(frame, close, colors, left)
     }
+    drawGuides(frame, decorations, colors)
     for (line in frame.lines) {
         val top = line.top - frame.scrollY
         for (decoration in shownDecorations) {
@@ -131,6 +152,10 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
                 top,
                 lineHeight,
             )
+        }
+        decorations.findScope?.let { scope ->
+            if (scope.isEmpty() || scope.last < line.start || scope.first > line.end) return@let
+            drawRange(line, scope.first - line.start, scope.last + 1 - line.start, colors.findScope, left, top, lineHeight)
         }
         for (stop in decorations.snippetTabStops) {
             if (stop.collapsed || stop.max <= line.start || stop.min > line.end) continue
@@ -334,27 +359,23 @@ private fun DrawScope.drawUnderline(line: VisibleLine, range: TextRange, color: 
 }
 
 /**
- * A colour's swatch: a bar in the colour under its text, over a contrasting edge so a colour
- * close to the background still shows. Drawn below the text, so nothing is laid out again.
+ * A colour's swatch, as VS Code's: a square in the colour in the room inline content leaves before
+ * it ([SWATCH_ROOM]), over a contrasting edge so a colour close to the background still shows.
  */
 private fun DrawScope.drawSwatch(line: VisibleLine, swatch: ColorInfo, left: Float, top: Float, lineHeight: Float) {
-    val layout = line.layout
-    val a = (swatch.range.first - line.start).coerceIn(0, line.shownLength)
-    val b = (swatch.range.last + 1 - line.start).coerceIn(a, line.shownLength)
-    if (b <= a) return
-    val height = 3.dp.toPx()
+    val column = swatch.range.first - line.start
+    if (column !in 0..line.shownLength) return
+    val (room, row) = line.layout.injectedBoxBefore(column, InlineContent.SwatchSlot) ?: return
     val edge = 1.dp.toPx()
-    val firstRow = layout.charRow(a)
-    val lastRow = layout.charRow(b - 1)
-    for (row in firstRow..lastRow) {
-        if (layout.isInjectedRow(row)) continue
-        val x0 = if (row == firstRow) layout.charLeft(a) else layout.getLineLeft(row)
-        val x1 = if (row == lastRow) layout.charBox(b - 1).right else layout.getLineRight(row)
-        val y = top + layout.rowShift(row, lineHeight) + layout.getLineBottom(row) - height
-        drawRect(Color.Gray, Offset(left + x0 - edge, y - edge), Size(x1 - x0 + 2 * edge, height + 2 * edge))
-        drawRect(swatch.color, Offset(left + x0, y), Size(x1 - x0, height))
-    }
+    val side = minOf(room.width * SWATCH_FILL, room.height * SWATCH_FILL)
+    val x = left + room.left + (room.width - side) / 2f
+    val y = top + line.layout.rowShift(row, lineHeight) + room.top + (room.height - side) / 2f
+    drawRect(Color.Gray, Offset(x - edge, y - edge), Size(side + 2 * edge, side + 2 * edge))
+    drawRect(swatch.color, Offset(x, y), Size(side, side))
 }
+
+/** How much of its room a swatch fills: about VS Code's 0.8 em square in two columns. */
+private const val SWATCH_FILL = 0.6f
 
 /** The decorations in [all] (in order of where they start) that reach a line of [frame]. */
 internal fun visibleDecorations(frame: ViewFrame, all: List<Decoration>): List<Decoration> {
@@ -425,6 +446,41 @@ private fun DrawScope.drawBracketBox(frame: ViewFrame, offset: Int, colors: Edit
     )
 }
 
+/**
+ * The rulers, then the indent guides and bracket-pair guides down the lines on screen, each over all
+ * of a line's text rows. A guide's x is its column times a character's width: indentation is
+ * spaces and tabs, which a monospaced font lays out on that grid.
+ */
+private fun DrawScope.drawGuides(frame: ViewFrame, decorations: EditorDecorations, colors: EditorColors) {
+    val left = frame.textLeft
+    val charWidth = frame.metrics.charWidth
+    val width = 1.dp.toPx().coerceAtLeast(1f)
+    for (column in decorations.rulers) {
+        drawRect(colors.ruler, Offset(left + column * charWidth, 0f), Size(width, size.height))
+    }
+    val guides = decorations.guides ?: return
+    val lineHeight = frame.metrics.lineHeight
+    val active = decorations.activeGuide
+    for (line in frame.lines) {
+        val top = line.textBandTop(frame)
+        val height = line.layout.textRows * lineHeight
+        if (decorations.indentGuides) {
+            for (level in 0 until guides.level(line.line)) {
+                val strong = active != null && active.level == level && line.line in active.fromLine..active.toLine
+                val x = left + level * guides.tabSize * charWidth
+                drawRect(if (strong) colors.activeIndentGuide else colors.indentGuide, Offset(x, top), Size(width, height))
+            }
+        }
+        if (decorations.bracketPairGuides && colors.bracketGuides.isNotEmpty()) {
+            for (pair in guides.pairs) {
+                if (line.line !in pair.fromLine..pair.toLine) continue
+                val color = colors.bracketGuides[pair.depth % colors.bracketGuides.size]
+                drawRect(color, Offset(left + pair.column * charWidth, top), Size(width, height))
+            }
+        }
+    }
+}
+
 /** Viewport y of the first row of this line's text: below any rows injected above it. */
 private fun VisibleLine.textBandTop(frame: ViewFrame): Float = top - frame.scrollY + layout.textRow * frame.metrics.lineHeight
 
@@ -445,9 +501,8 @@ internal fun ViewFrame.lineContaining(offset: Int): VisibleLine? {
     return found?.takeIf { offset <= it.end }
 }
 
-/** A caret at the active end of every selection that is on screen. */
-internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>, color: Color) {
-    val width = 2.dp.toPx()
+/** A caret at the active end of every selection that is on screen, in [style]. */
+internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>, color: Color, style: CursorStyle = CursorStyle.Line) {
     val left = frame.textLeft
     for (selection in selections) {
         val line = frame.lineContaining(selection.end) ?: continue
@@ -455,7 +510,44 @@ internal fun DrawScope.drawCarets(frame: ViewFrame, selections: List<TextRange>,
         val layout = line.layout
         val rect = layout.cursorRect(column)
         val top = line.top - frame.scrollY + layout.rowShift(layout.rowFor(column), frame.metrics.lineHeight)
-        // Like the text field: the caret starts at its x and is drawn rightwards.
-        drawRect(color, Offset(left + rect.left, top + rect.top), Size(width, rect.height))
+        val x = left + rect.left
+        val y = top + rect.top
+        // The character's width, or a space's at the end of the line, where there is none.
+        val charWidth = if (column < line.shownLength) {
+            layout.charBox(column).width.takeIf { it > 0f } ?: frame.metrics.charWidth
+        } else {
+            frame.metrics.charWidth
+        }
+        when (style) {
+            // Like the text field: the caret starts at its x and is drawn rightwards.
+            CursorStyle.Line -> drawRect(color, Offset(x, y), Size(2.dp.toPx(), rect.height))
+
+            CursorStyle.LineThin -> drawRect(color, Offset(x, y), Size(1.dp.toPx(), rect.height))
+
+            CursorStyle.Block -> drawRect(color.copy(alpha = color.alpha * BLOCK_CARET_ALPHA), Offset(x, y), Size(charWidth, rect.height))
+
+            CursorStyle.BlockOutline -> {
+                val stroke = 1.dp.toPx()
+                drawRect(
+                    color,
+                    Offset(x + stroke / 2f, y + stroke / 2f),
+                    Size(charWidth - stroke, rect.height - stroke),
+                    style = Stroke(stroke),
+                )
+            }
+
+            CursorStyle.Underline -> {
+                val height = 2.dp.toPx()
+                drawRect(color, Offset(x, y + rect.height - height), Size(charWidth, height))
+            }
+
+            CursorStyle.UnderlineThin -> {
+                val height = 1.dp.toPx()
+                drawRect(color, Offset(x, y + rect.height - height), Size(charWidth, height))
+            }
+        }
     }
 }
+
+/** How strongly a [CursorStyle.Block] caret fills the character's box: enough to see, not to hide it. */
+private const val BLOCK_CARET_ALPHA = 0.5f

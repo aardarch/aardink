@@ -16,6 +16,8 @@
 package com.aardarch.aardink.languages.internal.typescript
 
 import com.aardarch.aardink.core.CommentSyntax
+import com.aardarch.aardink.core.NamedTokenType
+import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.internal.BACKSLASH_ESCAPE
 import com.aardarch.aardink.languages.internal.COMMENT_DOC
@@ -25,7 +27,14 @@ import com.aardarch.aardink.languages.internal.NUMBER_FLOAT
 import com.aardarch.aardink.languages.internal.NUMBER_HEX
 import com.aardarch.aardink.languages.internal.RegexTokenizer
 
-/** Regex-driven TypeScript / JavaScript tokenizer. */
+/**
+ * Regex-driven TypeScript / JavaScript tokenizer. A `/` starts a regular expression literal (Monaco's
+ * `regexp`) where the token before it, comments aside, leaves a value to come: an operator, an
+ * opening bracket, `,`, `;`, `:`, a keyword such as `return` or `typeof`, or nothing; after a name, a
+ * number, a string, `)` or `]` it is division. After `}`, which may end a block or a value, it is a
+ * literal only when `.`, `;`, `,`, a closing bracket or the line's end follows it, as in Monaco. The
+ * literal ends at its first `/` outside a class, on its own line.
+ */
 object TypeScriptTokenizer : RegexTokenizer() {
 
     private val keywords = setOf(
@@ -45,6 +54,76 @@ object TypeScriptTokenizer : RegexTokenizer() {
     )
 
     override val multiLineConstructs: Boolean = true
+
+    override val contextualTokens: Boolean = true
+
+    private val REGEXP: TokenType = NamedTokenType("regexp")
+
+    /** A regular expression literal: escapes, classes (in which `/` does not end it), then its flags. */
+    private val REGEXP_LITERAL = Regex("""/(?![*/])(?:\\.|\[(?:\\.|[^\]\\\n])*]|[^/\\\n\[])+/[dgimsuvy]*""")
+
+    /** Keywords that are values themselves, after which a `/` divides. */
+    private val valueKeywords = setOf("this", "super", "true", "false", "null", "undefined")
+
+    override fun contextual(
+        text: String,
+        start: Int,
+        end: Int,
+        type: TokenType,
+        previousType: TokenType?,
+        previousStart: Int,
+        previousEnd: Int,
+    ): Token? {
+        if (type != TokenType.Operator) return null
+        // Only this operator's own characters: searching on would walk the rest of the text.
+        var slash = start
+        while (slash < end && text[slash] != '/') slash++
+        if (slash == end) return null
+        if (slash > start) {
+            // `x =/re/`: the operators before the slash first, then the slash is asked about on its
+            // own. Not `</`, which closes a JSX element, and not after `++` or `--`, which end a value.
+            val before = text.substring(start, slash)
+            if (before.endsWith('<') || before.endsWith("++") || before.endsWith("--")) return null
+            return if (REGEXP_LITERAL.matchAt(text, slash) != null) Token(start, slash, TokenType.Operator) else null
+        }
+        if (!regexpMayFollow(text, previousType, previousStart, previousEnd)) return null
+        val literal = REGEXP_LITERAL.matchAt(text, start) ?: return null
+        val literalEnd = literal.range.last + 1
+        // A `}` ends a block or a value (`{valueOf: f} / 2 / 3`), which the token alone does not
+        // tell. As Monaco does, a literal there must then be followed by what can follow one.
+        if (previousType == TokenType.Punctuation && text[previousEnd - 1] == '}' && !endsLiteral(text, literalEnd)) return null
+        return Token(start, literalEnd, REGEXP)
+    }
+
+    /**
+     * Whether what follows [from], spaces and tabs aside, can follow a regexp literal: `.;,)]}` or
+     * the line's end. It looks no further than a rescan starts before an edit (`RESCAN_LOOKBACK`),
+     * so an incremental pass decides as a full one does.
+     */
+    private fun endsLiteral(text: String, from: Int): Boolean {
+        val limit = minOf(text.length, from + MAX_SPACE_AFTER_LITERAL)
+        var i = from
+        while (i < limit && (text[i] == ' ' || text[i] == '\t')) i++
+        return i == text.length || (i < limit && text[i] in ".;,)]}\r\n")
+    }
+
+    private const val MAX_SPACE_AFTER_LITERAL = 64
+
+    private fun regexpMayFollow(text: String, type: TokenType?, start: Int, end: Int): Boolean = when (type) {
+        null, KEYWORD_FLOW -> true
+
+        TokenType.Keyword -> text.substring(start, end) !in valueKeywords
+
+        // Not after `++` or `--`, which end a value, nor after a lone `>`, which ends a JSX tag.
+        TokenType.Operator -> {
+            val operator = text.substring(start, end)
+            !operator.endsWith("++") && !operator.endsWith("--") && !(operator.endsWith('>') && operator != "=>")
+        }
+
+        TokenType.Punctuation -> text[end - 1] != ')' && text[end - 1] != ']' && text[end - 1] != '.'
+
+        else -> false
+    }
 
     override val rules: List<Pair<Regex, TokenType>> = listOf(
         // JSDoc before other block comments (`/**/` is an empty comment, not JSDoc).

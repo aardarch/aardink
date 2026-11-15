@@ -50,15 +50,21 @@ import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.InlineCompletion
 import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.ParameterInformation
+import com.aardarch.aardink.core.SignatureHelp
+import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeBlock
 import com.aardarch.aardink.ui.CodeEditorLayout
+import com.aardarch.aardink.ui.CursorStyle
 import com.aardarch.aardink.ui.EditorOptions
 import com.aardarch.aardink.ui.EditorThemes
 import com.aardarch.aardink.ui.KeyboardToolbarPlacement
+import com.aardarch.aardink.ui.LineNumberStyle
 import com.aardarch.aardink.ui.LocalCodeFenceTokenizers
 import com.aardarch.aardink.ui.LocalEditorTheme
 import com.aardarch.aardink.ui.RenderWhitespace
+import com.aardarch.aardink.ui.WrappingIndent
 import com.aardarch.aardink.ui.fromColorScheme
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -278,6 +284,23 @@ class EditorSceneScreenshotTest {
     }
 
     @Test
+    fun findReplace() {
+        // The panel replacing within a selection: the place searched shaded, preserve case on, and
+        // under the replace row the current match's line with the replacement made.
+        val state = stateOf(code)
+        val document = state.document
+        state.selection = TextRange(document.lineStart(4), document.lineEnd(9))
+        val find = FindReplaceState().apply {
+            show(replace = true)
+            inSelection = true
+            preserveCase = true
+            query = "name"
+            replacement = "person"
+        }
+        capture("find-replace", state, findReplaceState = find)
+    }
+
+    @Test
     fun multicursor() {
         val state = stateOf(code)
         val document = state.document
@@ -399,7 +422,7 @@ class EditorSceneScreenshotTest {
 
     @Test
     fun colors() {
-        // Colour resources: each hex value gets a swatch under it, alpha first as Android writes them.
+        // Colour resources: each hex value gets a swatch before it, alpha first as Android writes them.
         val xml = LanguageRegistry.withBuiltIns().all.first { it.id == "xml" }
         val text = """
             |<resources>
@@ -424,6 +447,65 @@ class EditorSceneScreenshotTest {
     fun zoom() {
         // A larger font, set through the options, with ligatures off.
         capture("zoom", stateOf(code), editorOptions = EditorOptions(fontSize = 20.sp, fontLigatures = false))
+    }
+
+    @Test
+    fun caretAndLineNumbers() {
+        // Line numbers counted from the caret's line, and block carets, one at the end of a line.
+        val state = stateOf(code)
+        val document = state.document
+        val options = EditorOptions(lineNumbers = LineNumberStyle.Relative, cursorStyle = CursorStyle.Block)
+        capture("caret-line-numbers", state, editorOptions = options) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(5, 8)), TextRange(document.lineEnd(9))))
+        }
+    }
+
+    @Test
+    fun wrappingIndent() {
+        // Wrapped rows one indent in from their line, with whitespace drawn.
+        val text = """
+            |<effect
+            |      palette="#3A1C71,#D76D77,#FFAF7B,#FF6E40,#3A1C71,#D76D77"
+            |	url="https://example.invalid/a/very/long/path/that/wraps/around"
+            |
+        """.trimMargin()
+        val options = EditorOptions(softWrap = true, wrappingIndent = WrappingIndent.Indent, renderWhitespace = RenderWhitespace.All)
+        capture("wrapping-indent", stateOf(text), editorOptions = options)
+    }
+
+    @Test
+    fun guides() {
+        // Indent guides with the block holding the caret highlighted, and a ruler at 30. Bracket-pair
+        // guides, drawn at the same columns in properly indented code, are left to the unit tests.
+        val state = stateOf(code)
+        val document = state.document
+        val options = EditorOptions(indentGuides = true, rulers = listOf(30))
+        capture("guides", state, editorOptions = options) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(6, 12))))
+        }
+    }
+
+    @Test
+    fun highContrast() {
+        // The high-contrast dark theme with what its chrome colours reach: indent guides with the
+        // caret's block highlighted, a ruler, a lens and an inlay hint.
+        val hinted = object : LanguageService by kotlin.languageService!! {
+            override suspend fun codeLenses(document: CodeDocument) = listOf(CodeLens(code.indexOf("class Greeter"), "2 references"))
+
+            override suspend fun inlayHints(document: CodeDocument, range: IntRange) =
+                listOf(InlayHint(code.indexOf("names)") + 5, ": List<String>"))
+        }
+        val state = stateOf(code)
+        val document = state.document
+        capture(
+            "high-contrast",
+            state,
+            editorOptions = EditorOptions(indentGuides = true, rulers = listOf(30), codeLens = true, inlayHints = true),
+            languageService = hinted,
+            theme = EditorThemes.HighContrastDark,
+        ) {
+            state.setSelections(listOf(TextRange(document.lineColToOffset(6, 12))))
+        }
     }
 
     @Test
@@ -502,6 +584,71 @@ class EditorSceneScreenshotTest {
                 composeTestRule.mainClock.advanceTimeBy(100)
             },
         )
+    }
+
+    // ── 0.10's chrome ────────────────────────────────────────────────────────
+
+    /** The editor with [service], [options] and the keyboard toolbar at [placement], for a scene whose picture includes a popup. */
+    private fun showForScreen(
+        state: CodeEditorState,
+        service: LanguageService? = null,
+        placement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
+        options: EditorOptions = EditorOptions(),
+    ) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                    CodeEditorLayout(
+                        state = state,
+                        languageService = service,
+                        options = options,
+                        keyboardToolbarPlacement = placement,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test
+    fun signatureHelp() {
+        // Signature help with the caret in the second argument of a call: two overloads, the first
+        // active, its second parameter highlighted, and its documentation.
+        val call = "greet(name, count)"
+        val text = "fun demo(name: String, count: Int) {\n    $call\n}\n"
+        val helping = object : LanguageService by kotlin.languageService!! {
+            override suspend fun signatureHelp(document: CodeDocument, offset: Int) = SignatureHelp(
+                signatures = listOf(
+                    SignatureInformation(
+                        label = "fun greet(name: String, times: Int): Unit",
+                        documentation = "Greets *name*, `times` times over.",
+                        parameters = listOf(ParameterInformation("name: String"), ParameterInformation("times: Int", "How often")),
+                    ),
+                    SignatureInformation(label = "fun greet(name: String): Unit"),
+                ),
+                activeSignature = 0,
+                activeParameter = 1,
+            )
+        }
+        val state = stateOf(text)
+        showForScreen(state, helping)
+        composeTestRule.onNode(hasSetTextAction()).performSemanticsAction(SemanticsActions.RequestFocus)
+        composeTestRule.runOnUiThread { state.selection = TextRange(text.indexOf("count)")) }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        captureScreenRoboImage("../screenshots/scene-signature-help.png", roborazziOptions = options)
+    }
+
+    @Test
+    fun keyboardToolbar() {
+        // The keyboard toolbar fixed at the bottom, as a host without a soft keyboard shows it:
+        // undo and redo, the cursor nudges and the language's quick characters.
+        val state = stateOf(code)
+        showForScreen(state, placement = KeyboardToolbarPlacement.BottomFixed)
+        composeTestRule.onRoot().captureRoboImage("../screenshots/scene-keyboard-toolbar.png", roborazziOptions = options)
     }
 
     @OptIn(ExperimentalRoborazziApi::class)

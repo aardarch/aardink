@@ -115,6 +115,17 @@ class AardinkWebTest {
     }
 
     @Test
+    fun `an editor in a registered font does not ask for the bundled one`() = runTest {
+        AardinkWeb.registerFont("Own Mono", byteArrayOf(0, 1, 0, 0) + ByteArray(12))
+        forgetBundledFont()
+        mount("own", WebEditorOptions(fontFamily = "'Own Mono', monospace"))
+        letFramesRun()
+        assertFalse(bundledFontAsked, "a page that brings its own font does not fetch the bundled one")
+        mount("bundled")
+        awaitUntil { bundledFontAsked }
+    }
+
+    @Test
     fun `getValue returns what setValue stored`() {
         val handle = mount("first")
         assertEquals("first", AardinkWeb.getValue(handle))

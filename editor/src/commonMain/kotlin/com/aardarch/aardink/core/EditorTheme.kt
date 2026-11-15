@@ -76,6 +76,21 @@ data class EditorTheme(
      * [Color.Unspecified], the default, follows from the theme's other colours.
      */
     val overviewRulerColors: OverviewRulerColors = OverviewRulerColors(),
+
+    // ── Chrome colours ────────────────────────────────────────────────────────
+    /**
+     * The colours of the minimap, the scrollbars, the guides and rulers, the editor's cards and
+     * the text it adds (inlay hints, lenses, ghost text). Each one left [Color.Unspecified], the
+     * default, follows from the theme's other colours, as it always has.
+     */
+    val chromeColors: ChromeColors = ChromeColors(),
+
+    // ── Token backgrounds ─────────────────────────────────────────────────────
+    /**
+     * Backgrounds by token type, found as [tokenColors] are, drawn behind the token's text, as a
+     * Monaco rule's `background`. Empty by default: no token has a background of its own.
+     */
+    val tokenBackgrounds: Map<TokenType, Color> = emptyMap(),
 ) {
     /** For themes built from elsewhere: `EditorTheme.fromColorScheme(...)` in `com.aardarch.aardink.ui`. */
     companion object
@@ -95,6 +110,46 @@ data class OverviewRulerColors(
     val selection: Color = Color.Unspecified,
     val added: Color = Color.Unspecified,
     val modified: Color = Color.Unspecified,
+)
+
+/**
+ * The colours of the editor's chrome, by VS Code's color keys. Each one [Color.Unspecified], the
+ * default, follows from the theme as it did before these existed:
+ *
+ * - [minimapBackground] (`minimap.background`): the editor's background; [minimapSlider]
+ *   (`minimapSlider.background`): the text colour, faint.
+ * - [scrollbarSlider] and [scrollbarSliderHover] (`scrollbarSlider.background` and
+ *   `.hoverBackground`): the platform's scrollbar colours. Android draws no scrollbar.
+ * - [indentGuide] and [activeIndentGuide] (`editorIndentGuide.background1` and
+ *   `.activeBackground1`): the text colour at 16 % and 45 %.
+ * - [bracketPairGuide] (`editorBracketPairGuide.background1`): one colour for every depth, in
+ *   place of the theme's bracket-pair colours at half strength.
+ * - [ruler] (`editorRuler.foreground`): the text colour at 20 %.
+ * - [widgetBackground], [widgetForeground] and [widgetBorder] (`editorWidget.*`): the cards,
+ *   menus and find panel. Their background is otherwise a shade off the editor's, their text the
+ *   theme's text colour; they have a border only with [widgetBorder]. Text is moved towards white
+ *   or black where it would not read.
+ * - [inlayHint] and [inlayHintBackground] (`editorInlayHint.foreground` and `.background`), and
+ *   [codeLens] (`editorCodeLens.foreground`): the text colour at 60 %, a hint on a ground of 8 %.
+ * - [ghostText] (`editorGhostText.foreground`): the text colour at 45 %.
+ */
+@Immutable
+data class ChromeColors(
+    val minimapBackground: Color = Color.Unspecified,
+    val minimapSlider: Color = Color.Unspecified,
+    val scrollbarSlider: Color = Color.Unspecified,
+    val scrollbarSliderHover: Color = Color.Unspecified,
+    val indentGuide: Color = Color.Unspecified,
+    val activeIndentGuide: Color = Color.Unspecified,
+    val bracketPairGuide: Color = Color.Unspecified,
+    val ruler: Color = Color.Unspecified,
+    val widgetBackground: Color = Color.Unspecified,
+    val widgetForeground: Color = Color.Unspecified,
+    val widgetBorder: Color = Color.Unspecified,
+    val inlayHint: Color = Color.Unspecified,
+    val inlayHintBackground: Color = Color.Unspecified,
+    val codeLens: Color = Color.Unspecified,
+    val ghostText: Color = Color.Unspecified,
 )
 
 /** VS Code's bracket-pair colours for dark themes: gold, orchid, blue. */

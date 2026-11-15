@@ -56,10 +56,15 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         put("configuration", true)
         putJsonObject("workspaceEdit") { put("documentChanges", true) }
         feature("executeCommand")
+        // Passed to the editor an LspLanguageService is attached to, which asks again.
+        for (refreshed in listOf("inlayHint", "codeLens", "semanticTokens", "diagnostics")) {
+            putJsonObject(refreshed) { put("refreshSupport", true) }
+        }
     }
     putJsonObject("textDocument") {
         feature("synchronization") {
             put("willSave", true)
+            put("willSaveWaitUntil", true)
             put("didSave", true)
         }
         feature("publishDiagnostics", dynamic = false) {
@@ -120,6 +125,7 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         }
         feature("formatting")
         feature("rangeFormatting")
+        feature("onTypeFormatting")
         feature("rename") {
             put("prepareSupport", true)
             put("prepareSupportDefaultBehavior", 1)
@@ -136,7 +142,9 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         feature("codeLens")
         feature("inlayHint")
         feature("semanticTokens") {
-            putJsonObject("requests") { put("full", true) }
+            // Delta, not range: a range needs the lines on screen, which the editor does not hand a
+            // language service (docs/AARDINK_ROADMAP.md §16.1).
+            putJsonObject("requests") { putJsonObject("full") { put("delta", true) } }
             put("formats", strings("relative"))
             put("tokenTypes", SemanticTokenTypes)
             put("tokenModifiers", SemanticTokenModifiers)

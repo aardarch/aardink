@@ -54,6 +54,7 @@ internal data class LspTextDocumentSync(
     val openClose: Boolean = false,
     val change: LspChangeSync = LspChangeSync.None,
     val willSave: Boolean = false,
+    val willSaveWaitUntil: Boolean = false,
     val didSave: Boolean = false,
     val saveIncludesText: Boolean = false,
 ) {
@@ -72,6 +73,8 @@ internal data class LspTextDocumentSync(
 
         "textDocument/willSave" -> copy(willSave = true)
 
+        "textDocument/willSaveWaitUntil" -> copy(willSaveWaitUntil = true)
+
         "textDocument/didSave" -> copy(
             didSave = true,
             saveIncludesText =
@@ -85,7 +88,8 @@ internal data class LspTextDocumentSync(
         /**
          * Capabilities not known count as supported, as everywhere in this module. Full is the one
          * form every server that syncs at all can read, where a range would corrupt the text of a
-         * server that only takes whole documents.
+         * server that only takes whole documents. A save does not wait on a server that may not
+         * answer, so `willSaveWaitUntil` is the exception.
          */
         private val Unknown = LspTextDocumentSync(openClose = true, change = LspChangeSync.Full, willSave = true, didSave = true)
 
@@ -111,6 +115,7 @@ internal data class LspTextDocumentSync(
                 openClose = options.flag("openClose"),
                 change = changeSyncOf(options["change"]),
                 willSave = options.flag("willSave"),
+                willSaveWaitUntil = options.flag("willSaveWaitUntil"),
                 didSave = save is JsonObject || (save as? JsonPrimitive)?.booleanOrNull == true,
                 saveIncludesText = (save as? JsonObject)?.flag("includeText") == true,
             )
@@ -251,6 +256,10 @@ internal class LspDocumentSync(
     /** Where the view of the attached state is, read from any thread; null when no state is attached. */
     val viewport: ViewportInfo?
         get() = attached?.viewport
+
+    /** The attached state, for what may be done from any thread: asking it to refresh. */
+    val state: CodeEditorState?
+        get() = attached
 
     /** Open as far as the host is concerned, whether or not the server was told. */
     private val opened = MutableStateFlow(false)
@@ -426,6 +435,10 @@ internal class LspDocumentSync(
             }
         },
     )
+
+    /** Whether the server asked for `textDocument/willSaveWaitUntil`, declared or registered. */
+    val willSaveWaitUntil: Boolean
+        get() = syncOptions().willSaveWaitUntil
 
     /** [document] is only read when the server asked for the text, and on the caller's thread. */
     suspend fun didSave(document: CodeDocument) {

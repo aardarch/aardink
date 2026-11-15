@@ -35,8 +35,320 @@ object SampleAssets {
         "css" -> CSS
         "markdown" -> MARKDOWN
         "plaintext" -> PLAIN_TEXT
+        "yaml" -> YAML
+        "properties" -> PROPERTIES
+        "ini" -> INI
+        "shell" -> SHELL
+        "python" -> PYTHON
+        "sql" -> SQL
+        "java" -> JAVA
+        "groovy" -> GROOVY
+        "dockerfile" -> DOCKERFILE
+        "diff" -> DIFF
+        "scss" -> SCSS
+        "less" -> LESS
         else -> ""
     }
+
+    private val YAML: String = """
+        # A CI workflow, the kind of YAML an editor opens most.
+        name: build
+        on:
+          push:
+            branches: [main, "release/*"]
+          pull_request: {}
+
+        env:
+          JAVA_VERSION: 17
+          CACHE: true
+
+        jobs:
+          test: &defaults
+            runs-on: ubuntu-latest
+            timeout-minutes: 30
+            steps:
+              - uses: actions/checkout@v4
+              - name: Run the checks
+                run: ./gradlew check --no-daemon
+              - name: 'Upload reports'
+                if: failure()
+          lint:
+            <<: *defaults
+            steps:
+              - run: ./gradlew spotlessCheck
+    """.trimIndent()
+
+    private val PROPERTIES: String = """
+        # Application settings
+        ! Lines starting with ! are comments too.
+        app.name = Aardink Sample
+        app.version=0.10.0
+        app.description = A long value that goes on \
+            over a second line, \
+            and a third.
+
+        server.port: 8080
+        server.address = 127.0.0.1
+        greeting.unicode = caf\u00e9
+        path.windows = C:\\Users\\demo
+    """.trimIndent()
+
+    private val INI: String = """
+        ; Editor settings, as an .editorconfig or a classic INI file has them.
+        root = true
+
+        [*]
+        indent_style = space
+        indent_size = 4
+        charset = "utf-8"
+        trim_trailing_whitespace = true
+
+        [*.{yml,yaml}]
+        indent_size = 2
+
+        # Make files want tabs
+        [Makefile]
+        indent_style = tab
+    """.trimIndent()
+
+    private val SHELL: String = """
+        #!/usr/bin/env bash
+        # Builds the project and copies the artifacts.
+        set -euo pipefail
+
+        readonly OUT="${'$'}{1:-build/dist}"
+        VERSION=${'$'}(git describe --tags)
+
+        build() {
+          local target="${'$'}1"
+          echo "Building ${'$'}target (${'$'}VERSION)"
+          ./gradlew "${'$'}target" --quiet
+        }
+
+        if [ ! -d "${'$'}OUT" ]; then
+          mkdir -p "${'$'}OUT"
+        fi
+
+        for module in editor languages; do
+          build ":${'$'}module:assemble" || exit 1
+        done
+        cp -r */build/outputs/* "${'$'}OUT" && echo 'done'
+    """.trimIndent()
+
+    private val PYTHON: String = """
+        # A tiny inventory, to show classes, decorators and strings.
+        from dataclasses import dataclass, field
+
+
+        @dataclass
+        class Item:
+            name: str
+            price: float = 0.0
+            tags: list[str] = field(default_factory=list)
+
+            def label(self) -> str:
+                # f-strings and escapes
+                return f"{self.name}: {self.price:.2f}\n"
+
+
+        def total(items: list[Item], tax=0.25) -> float:
+            if not items:
+                return 0
+            return sum(item.price for item in items) * (1 + tax)
+
+
+        if __name__ == "__main__":
+            stock = [Item("pen", 1.5), Item('ink', 0x10)]
+            print(total(stock), len(stock))
+    """.trimIndent()
+
+    private val SQL: String = """
+        -- Monthly revenue per customer, the largest first.
+        WITH monthly AS (
+            SELECT
+                customer_id,
+                date_trunc('month', ordered_at) AS month,
+                SUM(amount) AS revenue
+            FROM orders
+            WHERE status <> 'cancelled'
+              AND ordered_at >= '2026-01-01'
+            GROUP BY customer_id, month
+        )
+        SELECT c.name, m.month, m.revenue
+        FROM monthly m
+        INNER JOIN customers c ON c.id = m.customer_id
+        WHERE m.revenue > 1000 /* only the large ones */
+        ORDER BY m.revenue DESC
+        LIMIT 20;
+
+        CREATE TABLE notes (
+            id SERIAL PRIMARY KEY,
+            body TEXT NOT NULL DEFAULT 'it''s empty'
+        );
+    """.trimIndent()
+
+    private val JAVA: String = """
+        package com.example.inventory;
+
+        import java.util.List;
+        import java.util.Optional;
+
+        /**
+         * A shelf of items, with a total.
+         *
+         * @param <T> what the shelf holds
+         */
+        public final class Shelf<T extends Item> {
+            private final List<T> items;
+
+            public Shelf(List<T> items) {
+                this.items = List.copyOf(items);
+            }
+
+            @Override
+            public String toString() {
+                return "Shelf of " + items.size() + " items\n";
+            }
+
+            public Optional<T> cheapest() {
+                // The first with the lowest price.
+                return items.stream().min((a, b) -> Double.compare(a.price(), b.price()));
+            }
+
+            public double total() {
+                double sum = 0.0d;
+                for (T item : items) sum += item.price();
+                return sum * 1.25;
+            }
+        }
+    """.trimIndent()
+
+    private val GROOVY: String = """
+        // A Gradle build script, the Groovy most people open.
+        plugins {
+            id 'java-library'
+            id 'maven-publish'
+        }
+
+        group = 'com.example'
+        version = '1.2.0'
+
+        def libs = [junit: '5.11.0', kotest: "5.9.1"]
+
+        dependencies {
+            testImplementation "org.junit.jupiter:junit-jupiter:${'$'}{libs.junit}"
+        }
+
+        tasks.register('greet') {
+            doLast {
+                def name = project.findProperty('who') ?: 'world'
+                println "Hello, ${'$'}name, from ${'$'}{project.name}!"
+                assert name ==~ /\w+/
+                (1..3).each { n -> println n * 2 }
+            }
+        }
+    """.trimIndent()
+
+    private val DOCKERFILE: String = """
+        # syntax=docker/dockerfile:1
+        FROM node:20-alpine AS build
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci --no-audit && \
+            npm cache clean --force
+        COPY . .
+        RUN npm run build
+
+        FROM nginx:1.27-alpine
+        ARG PORT=8080
+        ENV NGINX_PORT=${'$'}{PORT} TZ="Europe/Stockholm"
+        COPY --from=build /app/dist /usr/share/nginx/html
+        EXPOSE 8080/tcp
+        HEALTHCHECK --interval=30s CMD wget -q -O - "http://localhost:${'$'}PORT/" || exit 1
+        CMD ["nginx", "-g", "daemon off;"]
+    """.trimIndent()
+
+    private val DIFF: String = """
+        diff --git a/src/Greeter.kt b/src/Greeter.kt
+        index 3b18e51..a9c4d2f 100644
+        --- a/src/Greeter.kt
+        +++ b/src/Greeter.kt
+        @@ -1,7 +1,8 @@ package demo
+         class Greeter(private val name: String) {
+        -    fun greet() = "Hello, " + name
+        +    fun greet(loud: Boolean = false): String =
+        +        if (loud) "HELLO, ${'$'}{name.uppercase()}!" else "Hello, ${'$'}name"
+
+             companion object {
+        -        const val DEFAULT = "world"
+        +        const val DEFAULT = "World"
+             }
+         }
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -3 +3 @@
+        -Run `./gradlew run`.
+        +Run `./gradlew run --args=--loud`.
+        \ No newline at end of file
+    """.trimIndent()
+
+    private val SCSS: String = """
+        @use 'sass:math';
+
+        // Design tokens
+        ${'$'}gap: 8px !default;
+        ${'$'}brand: #3b82f6;
+        ${'$'}breakpoints: (small: 576px, large: 992px);
+
+        @mixin respond(${'$'}size) {
+          @media (min-width: map-get(${'$'}breakpoints, ${'$'}size)) { @content; }
+        }
+
+        %card-base {
+          border-radius: math.div(${'$'}gap, 2);
+          background: url("/img/paper.png") repeat;
+        }
+
+        .card {
+          @extend %card-base;
+          color: darken(${'$'}brand, 10%);
+          padding: ${'$'}gap * 2;
+
+          &:hover { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+          &__title { font-weight: 600; }
+
+          @include respond(large) {
+            #{${'$'}prop}-left: ${'$'}gap;
+          }
+        }
+    """.trimIndent()
+
+    private val LESS: String = """
+        @import (reference) "base.less";
+
+        // Variables and a guarded mixin
+        @brand: #22c55e;
+        @radius: 4px;
+        @selector: ~".panel";
+
+        .rounded(@r: @radius) when (@r > 0) {
+          border-radius: @r;
+        }
+
+        @{selector} {
+          .rounded(6px);
+          color: darken(@brand, 15%);
+          background: fade(@brand, 10%);
+
+          &:hover { color: @brand; }
+          .title { font-size: 1.25em; content: "@{selector} title"; }
+
+          @media (max-width: 600px) {
+            padding: (@radius * 2);
+          }
+        }
+    """.trimIndent()
 
     private val KOTLIN: String = """
         /*

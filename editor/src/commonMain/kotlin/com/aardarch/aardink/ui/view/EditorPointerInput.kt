@@ -17,6 +17,9 @@ package com.aardarch.aardink.ui.view
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
@@ -35,6 +38,7 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.text.TextRange
 import com.aardarch.aardink.core.FoldState
 import com.aardarch.aardink.core.SelectionChangeReason
+import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.edit.SelectionSet
 import com.aardarch.aardink.core.edit.TextNavigator
 import com.aardarch.aardink.platform.PlatformInfo
@@ -91,6 +95,30 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     private var box: ColumnBox? = null
 
     private val state get() = view.state
+
+    /** Whether a press in a selection may drag its text ([com.aardarch.aardink.ui.EditorOptions.dragAndDrop]). */
+    var dragAndDrop = false
+
+    /** The selection being dragged, and where it was pressed. */
+    private var moving: Pair<TextRange, Int>? = null
+
+    /**
+     * The text's version when [moving] was pressed. An edit before the release (the host's, or a
+     * formatter's answer) leaves its offsets pointing at other text, so the move is called off.
+     */
+    private var movingVersion = 0
+
+    /** Calls off the move under way when the text changed since it was pressed; true when it did. */
+    private fun movingTextChanged(): Boolean {
+        if (moving == null || state.textVersion == movingVersion) return false
+        moving = null
+        dropCaret = null
+        return true
+    }
+
+    /** Where a dragged selection would land, shown as a caret; null when nothing is being dragged. */
+    var dropCaret by mutableStateOf<Int?>(null)
+        private set
 
     fun press(position: Offset, clicks: Int, shift: Boolean, alt: Boolean, touch: Boolean = false, link: Boolean = false) {
         val sticky = if (clicks == 1 && !shift && !alt) stickyLineAt(position) else null
@@ -152,6 +180,15 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
                 }
             }
 
+            clicks == 1 && dragAndDrop && !touch && !link && current.ranges.any {
+                !it.collapsed && hit.offset in it.min until it.max
+            } -> {
+                // In a selection: dragging moves its text, and a release where it was pressed places the caret.
+                origin = null
+                moving = current.ranges.first { hit.offset in it.min until it.max } to hit.offset
+                movingVersion = state.textVersion
+            }
+
             clicks == 1 -> {
                 unit = SelectionUnit.Character
                 origin = TextRange(hit.offset)
@@ -193,6 +230,13 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** The pointer moved to [position] with the button held (or the finger down after a long press). */
     fun drag(position: Offset) {
+        if (movingTextChanged()) return
+        if (moving != null) {
+            val at = view.offsetAt(position).offset
+            dropCaret = at
+            if (position.y < 0f || position.y > view.scroll.viewportHeight) view.requestReveal(at)
+            return
+        }
         box?.let { current ->
             val next = current.copy(activeRow = columns.activeRow(current.anchorRow, position.y), activeX = columns.columnX(position.x))
             if (next != current) {
@@ -219,10 +263,30 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
         }
     }
 
-    fun release() {
+    /** The press ended; [copy] is whether the copy modifier was held as it did. */
+    fun release(copy: Boolean = false) {
+        movingTextChanged()
+        moving?.let { (selection, pressedAt) ->
+            val drop = dropCaret
+            moving = null
+            dropCaret = null
+            when {
+                drop == null || drop in selection.min..selection.max -> state.replaceSelections(SelectionSet.caret(drop ?: pressedAt))
+                else -> moveText(selection, drop, copy)
+            }
+        }
         origin = null
         kept = null
         box = null
+    }
+
+    /** [selection]'s text at [drop], and gone from where it was unless [copy]: one undo step, the text selected. */
+    private fun moveText(selection: TextRange, drop: Int, copy: Boolean) {
+        val text = state.document.subSequence(selection.min, selection.max).toString()
+        val insert = TextEdit(drop until drop, text)
+        val edits = if (copy) listOf(insert) else listOf(insert, TextEdit(selection.min until selection.max, ""))
+        val start = if (!copy && drop > selection.max) drop - text.length else drop
+        state.executeEdits(edits, listOf(TextRange(start, start + text.length)))
     }
 
     /** A right click: the caret moves there unless it is inside a selection, then the menu opens. */
@@ -318,7 +382,9 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
                 handler.pointer { drag(change.position) }
                 change.consume()
             }
-            handler.pointer { release() }
+            // Copying a dragged selection: Ctrl, or Alt on macOS, as VS Code has it, held as it is let go.
+            val held = currentEvent.keyboardModifiers
+            handler.pointer { release(copy = if (PlatformInfo.isMacOs) held.isAltPressed else held.isCtrlPressed) }
             return@awaitEachGesture
         }
         val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUp(down.id) }

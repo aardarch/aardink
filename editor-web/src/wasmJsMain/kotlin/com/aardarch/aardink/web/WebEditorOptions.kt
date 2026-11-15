@@ -26,6 +26,8 @@ import kotlinx.serialization.Serializable
  * @property theme A key in the theme map passed to [AardinkWeb.mount] (by default
  *   [AardinkWeb.builtInThemes]); an unknown key falls back to `vscode-dark`.
  * @property fontSize In CSS pixels. Line height scales with it at the editor's default 20:14 ratio.
+ * @property wordWrap Long lines wrap at the edge of the view, or at [wordWrapColumn] if that comes
+ *   first. Off by default, as Monaco's (on before 0.10).
  * @property minimap A picture of the whole text at the side, with a slider over what is shown.
  * @property stickyScroll Keeps the first lines of the blocks the top of the view is inside pinned
  *   at the top.
@@ -51,13 +53,42 @@ import kotlinx.serialization.Serializable
  * @property codeLens What `provideCodeLenses` or a language server says, in a row above its lines,
  *   each a click or a tap away from what it does. Off by default, where Monaco's is on, and nothing
  *   is asked for while off.
+ * @property formatOnType Typing one of a provider's `autoFormatTriggerCharacters`, or a language
+ *   server's, asks for edits that tidy the text around it, as Monaco's `formatOnType`. Off by
+ *   default, as Monaco's.
+ * @property lineNumbers Monaco's `lineNumbers`: `on`, `off`, `relative` (distance from the caret's
+ *   line) or `interval` (every tenth, and the caret's). Anything else is `on`. `off` hides them as
+ *   [showLineNumbers] `false` does.
+ * @property rulers Columns with a vertical line, as Monaco's `rulers`.
+ * @property indentGuides A faint line down each level of indentation, the caret's block's
+ *   stronger; Monaco's `guides.indentation`. Off by default, where Monaco's is on.
+ * @property bracketPairGuides A line from each bracket to its partner, coloured by depth; Monaco's
+ *   `guides.bracketPairs`. Off by default.
+ * @property cursorStyle Monaco's `cursorStyle`: `line`, `block`, `underline`, `line-thin`,
+ *   `block-outline` or `underline-thin`. Anything else is `line`.
+ * @property cursorBlinking Monaco's `cursorBlinking`: `blink`, `smooth` (`phase` and `expand` are
+ *   `smooth` too) or `solid`. Anything else is `blink`.
+ * @property smoothScrolling The editor's own scrolls (to the caret, Page Up and Down) animate.
+ * @property scrollBeyondLastLine The last line can scroll up to the top of the view. Off by default,
+ *   where Monaco's is on.
+ * @property wrappingIndent How wrapped rows are indented: `none`, `same`, `indent` or `deepIndent`,
+ *   as Monaco's. Anything else is `none`, the default (Monaco's is `same`).
+ * @property wordWrapColumn With [wordWrap], lines wrap at this column or the edge, whichever comes
+ *   first: Monaco's `bounded`. Null wraps at the edge.
+ * @property cursorSurroundingLines Lines kept visible above and below the caret as it moves.
+ * @property dragAndDrop A selection dragged with the mouse moves (Ctrl, or Alt on macOS, copies).
+ *   Off by default, where Monaco's is on.
+ * @property fontFamily Monaco's `fontFamily`, a CSS font list: the first name in it that
+ *   [AardinkWeb.registerFont] registered is the editor's font. Null, or no registered name in it,
+ *   is the bundled JetBrains Mono. A font the page has only in CSS is not seen: the editor draws on
+ *   a canvas, with the fonts it was given.
  */
 @Serializable
 data class WebEditorOptions(
     val language: String = "plaintext",
     val theme: String = "vscode-dark",
     val fontSize: Float = 14f,
-    val wordWrap: Boolean = true,
+    val wordWrap: Boolean = false,
     val readOnly: Boolean = false,
     val showGutter: Boolean = true,
     val showLineNumbers: Boolean = true,
@@ -79,6 +110,20 @@ data class WebEditorOptions(
     val semanticHighlighting: Boolean = false,
     val inlayHints: Boolean = false,
     val codeLens: Boolean = false,
+    val formatOnType: Boolean = false,
+    val lineNumbers: String = "on",
+    val rulers: List<Int> = emptyList(),
+    val indentGuides: Boolean = false,
+    val bracketPairGuides: Boolean = false,
+    val cursorStyle: String = "line",
+    val cursorBlinking: String = "blink",
+    val smoothScrolling: Boolean = false,
+    val scrollBeyondLastLine: Boolean = false,
+    val wrappingIndent: String = "none",
+    val wordWrapColumn: Int? = null,
+    val cursorSurroundingLines: Int = 0,
+    val dragAndDrop: Boolean = false,
+    val fontFamily: String? = null,
 )
 
 /**

@@ -152,6 +152,27 @@ class MarkdownDocUiTest {
     }
 
     @Test
+    fun `the public hover popup hands its links to the host's handler`() = runComposeUiTest {
+        val opened = ArrayList<String>()
+        val uris = RecordingUriHandler()
+        show(uris) { HoverDocPopup(HoverDoc("title", "[hover docs](h)"), onDismiss = {}, onOpenLink = { opened += it }) }
+        onNodeWithText("hover docs").performClick()
+        waitForIdle()
+        assertEquals(listOf("h"), opened)
+        assertTrue(uris.opened.isEmpty())
+    }
+
+    @Test
+    fun `the public signature help popup hands its links to the host's handler`() = runComposeUiTest {
+        val opened = ArrayList<String>()
+        val help = SignatureHelp(listOf(SignatureInformation("foo()", documentation = "[signature docs](s)")))
+        show { SignatureHelpPopup(help, onDismiss = {}, onOpenLink = { opened += it }) }
+        onNodeWithText("signature docs").performClick()
+        waitForIdle()
+        assertEquals(listOf("s"), opened)
+    }
+
+    @Test
     fun `signature help shows the signature's documentation as Markdown`() = runComposeUiTest {
         val help = SignatureHelp(listOf(SignatureInformation("foo()", documentation = "**Bold** words")))
         show { SignatureHelpCard(help) }

@@ -73,6 +73,7 @@ internal fun CompletionList(
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             LazyColumn(state = listState) {
                 itemsIndexed(items) { index, item ->

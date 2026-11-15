@@ -139,22 +139,44 @@ class CodeEditorStateLimitsTest {
         }
 
     @Test
-    fun `a slow partial pass sends a large document back to chunked full passes`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
-        // What a tokenizer whose tokenizeLines rescans everything looks like on the web.
+    fun `slow partial passes in a row send a large document back to chunked full passes`() =
+        withLimits(cooperativeAt = 10, fallbackAt = 100) {
+            // What a tokenizer whose tokenizeLines rescans everything looks like on the web.
+            val tokenizer = object : RecordingTokenizer() {
+                override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
+                    val started = kotlin.time.TimeSource.Monotonic.markNow()
+                    while (started.elapsedNow().inWholeMilliseconds < 80) { /* a slow scan */ }
+                    return super.tokenizeLines(text, dirtyRange, previousTokens)
+                }
+            }
+            val state = testState(mediumText, tokenizer, mainThread = true)
+            tokenizer.calls.clear()
+
+            state.applyEdit(0, 0, "x", TextRange(1))
+            state.applyEdit(0, 0, "y", TextRange(1))
+            state.applyEdit(0, 0, "z", TextRange(1))
+
+            // The lines on screen at the mount were the first slow pass; two more, and that is three.
+            assertEquals(listOf("lines", "lines", "cooperative"), tokenizer.calls)
+        }
+
+    @Test
+    fun `one slow partial pass, as while the browser compiles, keeps partial passes`() = withLimits(cooperativeAt = 10, fallbackAt = 100) {
+        var slow = true
         val tokenizer = object : RecordingTokenizer() {
             override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
                 val started = kotlin.time.TimeSource.Monotonic.markNow()
-                while (started.elapsedNow().inWholeMilliseconds < 80) { /* a slow scan */ }
+                while (slow && started.elapsedNow().inWholeMilliseconds < 80) { /* a slow first pass */ }
                 return super.tokenizeLines(text, dirtyRange, previousTokens)
             }
         }
         val state = testState(mediumText, tokenizer, mainThread = true)
+        slow = false
         tokenizer.calls.clear()
 
-        state.applyEdit(0, 0, "x", TextRange(1))
-        state.applyEdit(0, 0, "y", TextRange(1))
+        repeat(4) { state.applyEdit(0, 0, "x", TextRange(1)) }
 
-        assertEquals(listOf("cooperative", "cooperative"), tokenizer.calls)
+        assertEquals(List(4) { "lines" }, tokenizer.calls)
     }
 
     @Test

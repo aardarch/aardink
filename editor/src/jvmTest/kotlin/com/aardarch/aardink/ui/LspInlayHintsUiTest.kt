@@ -154,6 +154,29 @@ class LspInlayHintsUiTest {
     }
 
     @Test
+    fun `a server's refresh has the editor ask again without an edit`() = runComposeUiTest {
+        val connection = Connection { asked, _, _ -> if (asked == 1) "[${hint(0, 1, "first")}]" else "[${hint(0, 2, "again")}]" }
+        try {
+            connection.client.initialize(rootUri = null)
+            val state = CodeEditorState("ab")
+            connection.service.attach(state)
+            show(state, connection.service)
+            pause()
+            waitUntil { state.inlayHints == listOf(InlayHint(1, "first")) }
+
+            connection.scope.launch {
+                connection.transport.receiveChannel.send("""{"jsonrpc":"2.0","id":"r1","method":"workspace/inlayHint/refresh"}""")
+            }
+            waitForIdle()
+            pause()
+
+            waitUntil { state.inlayHints == listOf(InlayHint(2, "again")) }
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
     fun `typing is sent before the next request, and the answer replaces the last`() = runComposeUiTest {
         val connection = Connection { asked, _, _ -> if (asked == 1) "[${hint(0, 1, "first")}]" else "[${hint(0, 2, "second")}]" }
         try {

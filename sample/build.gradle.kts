@@ -17,6 +17,7 @@ plugins {
     alias(libs.plugins.plugin.kotlin.compose)
     alias(libs.plugins.plugin.spotless)
     alias(libs.plugins.plugin.roborazzi)
+    alias(libs.plugins.plugin.baselineprofile)
 }
 
 android {
@@ -109,6 +110,11 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.google.android.material)
+
+    // The baseline profile :sample-benchmark generates (docs/AARDINK_ROADMAP.md §8.4), installed
+    // by profileinstaller. The sample only: :editor never depends on profileinstaller.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":sample-benchmark"))
 
     // Screenshot capture (scripts/capture-screenshots.ps1). Roborazzi/Robolectric run on the
     // JUnit 4 runner, so unlike the library modules the sample's tests are not JUnit 5.

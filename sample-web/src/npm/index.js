@@ -162,7 +162,31 @@ const PROVIDERS = new Map([
   ['codeLenses', (providers) => providers.provideCodeLenses],
   // A click is about a command, so no text comes with it.
   ['runCodeLensCommand', (providers) => providers.runCodeLensCommand && ((_text, id, args) => providers.runCodeLensCommand(id, args))],
+  ['formatOnType', (providers) => providers.provideOnTypeFormattingEdits],
+  ['definition', (providers) => providers.provideDefinition],
+  ['references', (providers) => providers.provideReferences],
+  ['formatDocument', (providers) => providers.provideDocumentFormattingEdits],
+  ['formatRange', (providers) => providers.provideDocumentRangeFormattingEdits],
+  ['signatureHelp', (providers) => providers.provideSignatureHelp],
+  // Monaco's context: the markers as Monaco has them.
+  ['codeActions', (providers) => providers.provideCodeActions &&
+    ((text, range, markers) => providers.provideCodeActions(text, range, { markers: markers.map(fromKotlinDiagnostic) }))],
+  ['rename', (providers) => providers.provideRenameEdits],
+  ['resolveRename', (providers) => providers.resolveRenameLocation],
+  ['foldingRanges', (providers) => providers.provideFoldingRanges],
+  // A Uint32Array's JSON is an object, so the numbers go as an array.
+  ['semanticTokens', (providers) => providers.provideDocumentSemanticTokens &&
+    ((text) => Promise.resolve(providers.provideDocumentSemanticTokens(text))
+      .then((tokens) => (tokens == null ? null : { ...tokens, data: Array.from(tokens.data ?? []) })))],
+  ['resolveCompletionItem', (providers) => providers.resolveCompletionItem && ((_text, item) => providers.resolveCompletionItem(item))],
+  ['resolveCodeLens', (providers) => providers.resolveCodeLens],
 ]);
+
+/** Monaco's legend of a semantic tokens provider: `getLegend()`, or a `legend` given as data. */
+function semanticLegend(providers) {
+  if (!providers.provideDocumentSemanticTokens) return undefined;
+  return typeof providers.getLegend === 'function' ? providers.getLegend() : providers.legend;
+}
 
 /** A provider's answer (a value or a Promise of one) as the Promise of JSON the Kotlin side awaits. */
 function answer(provider, ...args) {
@@ -191,6 +215,10 @@ export async function registerLanguage(definition, providers = {}) {
       configuration: JSON.parse(JSON.stringify(definition.configuration ?? null, regexAsPattern)),
       // On the providers, as on Monaco's completion provider; the Kotlin side reads it with the definition.
       triggerCharacters: providers.triggerCharacters,
+      autoFormatTriggerCharacters: providers.provideOnTypeFormattingEdits ? providers.autoFormatTriggerCharacters : undefined,
+      semanticTokensLegend: semanticLegend(providers),
+      // Which providers there are: whether there is one decides whether a rename is offered and whose folds show.
+      provided: [...PROVIDERS.keys()].filter((name) => PROVIDERS.get(name)(providers)),
       grammar,
     }),
     (method, text, argsJson) => answer(PROVIDERS.get(method)?.(providers), text, ...JSON.parse(argsJson)),
@@ -221,31 +249,13 @@ export async function registerInlineCompletionsProvider(languageId, provider) {
   return { dispose: () => k.aardinkDisposeInlineCompletionsProvider(id) };
 }
 
-/** Monaco's defineTheme data ({ base, inherit, rules, colors }) as VS Code theme JSON; VS Code JSON as it is. */
-function toVsCodeTheme(theme) {
-  if (!theme.rules) return theme;
-  const base = { vs: 'vscode-light', 'hc-light': 'vscode-light' }[theme.base] ?? 'vscode-dark';
-  return {
-    type: base === 'vscode-light' ? 'light' : 'dark',
-    base: theme.inherit === false ? undefined : base,
-    colors: theme.colors ?? {},
-    // A rule's colour and font style; its background is not drawn.
-    tokenColors: theme.rules
-      .filter((rule) => rule.foreground || rule.fontStyle !== undefined)
-      .map((rule) => ({
-        scope: rule.token,
-        settings: {
-          ...(rule.foreground ? { foreground: `#${rule.foreground.replace(/^#/, '')}` } : {}),
-          ...(rule.fontStyle !== undefined ? { fontStyle: rule.fontStyle } : {}),
-        },
-      })),
-  };
-}
-
-/** Adds a theme for createEditor's `theme` option, from Monaco's defineTheme data or VS Code theme JSON. */
+/**
+ * Adds a theme for createEditor's `theme` option, from Monaco's defineTheme data or VS Code theme
+ * JSON, each as it is: the Kotlin side tells them apart by Monaco's `rules`.
+ */
 export async function registerTheme(name, theme) {
   const k = await load();
-  const error = k.aardinkRegisterTheme(name, JSON.stringify(toVsCodeTheme(theme)));
+  const error = k.aardinkRegisterTheme(name, JSON.stringify(theme));
   if (error) throw new Error(`Aardink: ${error}`);
 }
 
@@ -253,15 +263,63 @@ export async function registerTheme(name, theme) {
 export const defineTheme = registerTheme;
 
 /**
- * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap 'on'/'off' and its
- * { enabled } objects for minimap and stickyScroll (a plain boolean works too).
+ * Adds a font for the `fontFamily` option, from a URL (fetched) or a font file's bytes (an
+ * ArrayBuffer or a typed array). Resolves once the editors can use it; rejects for what is not a
+ * TrueType or OpenType font.
+ */
+export async function registerFont(name, urlOrBytes) {
+  const k = await load();
+  let bytes = urlOrBytes;
+  if (typeof urlOrBytes === 'string' || urlOrBytes instanceof URL) {
+    const response = await fetch(urlOrBytes);
+    if (!response.ok) throw new Error(`Aardink: could not fetch the font ${name}: ${response.status}`);
+    bytes = await response.arrayBuffer();
+  }
+  const view = ArrayBuffer.isView(bytes) ? new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new Int8Array(bytes);
+  const error = k.aardinkRegisterFont(name, view);
+  if (error) throw new Error(`Aardink: ${error}`);
+}
+
+/** Monaco's names for the built-in themes, as Aardink's. */
+const MONACO_THEMES = { vs: 'vscode-light', 'vs-dark': 'vscode-dark' };
+
+/**
+ * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap ('on', 'off',
+ * 'wordWrapColumn', 'bounded'), its { enabled } objects for minimap and stickyScroll (a plain
+ * boolean works too), its guides and its lineNumbers.
  */
 function toKotlinOptions(options) {
   const out = {};
-  for (const key of ['language', 'theme', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers', 'tabSize', 'insertSpaces', 'highlightCurrentLine', 'renderWhitespace']) {
+  for (const key of ['language', 'fontSize', 'readOnly', 'showGutter', 'showLineNumbers', 'showFoldMarkers', 'tabSize', 'insertSpaces', 'highlightCurrentLine', 'renderWhitespace']) {
     if (options[key] !== undefined) out[key] = options[key];
   }
-  if (options.wordWrap !== undefined) out.wordWrap = options.wordWrap === 'on';
+  if (options.theme !== undefined) out.theme = MONACO_THEMES[options.theme] ?? options.theme;
+  if (options.wordWrap !== undefined) {
+    const bounded = options.wordWrap === 'wordWrapColumn' || options.wordWrap === 'bounded';
+    out.wordWrap = options.wordWrap === 'on' || options.wordWrap === true || bounded;
+    out.wordWrapColumn = bounded ? options.wordWrapColumn ?? 80 : null;
+  } else if (options.wordWrapColumn !== undefined) {
+    out.wordWrapColumn = options.wordWrapColumn;
+  }
+  if (options.lineNumbers !== undefined) {
+    // A function, Monaco's other form, cannot cross to the Kotlin side: it counts as 'on'.
+    out.lineNumbers = typeof options.lineNumbers === 'string' ? options.lineNumbers : 'on';
+  }
+  if (options.guides !== undefined && options.guides !== null) {
+    if (options.guides.indentation !== undefined) out.indentGuides = !!options.guides.indentation;
+    // Monaco's 'active' shows only the caret's pair; here it shows them all.
+    if (options.guides.bracketPairs !== undefined) out.bracketPairGuides = !!options.guides.bracketPairs;
+  }
+  if (options.rulers !== undefined) {
+    // Monaco's { column, color } rulers keep their column; one colour comes from the theme.
+    out.rulers = (options.rulers ?? []).map((r) => (typeof r === 'number' ? r : r?.column)).filter((c) => Number.isInteger(c));
+  }
+  for (const key of ['cursorStyle', 'cursorBlinking', 'wrappingIndent', 'cursorSurroundingLines', 'fontFamily']) {
+    if (options[key] !== undefined) out[key] = options[key];
+  }
+  for (const key of ['smoothScrolling', 'scrollBeyondLastLine', 'dragAndDrop']) {
+    if (options[key] !== undefined) out[key] = !!options[key];
+  }
   if (options.renderLineHighlight !== undefined) out.highlightCurrentLine = options.renderLineHighlight !== 'none';
   if (options.quickSuggestions !== undefined) {
     // Monaco's { other, comments, strings }: the editor opens the list in code, so `other` decides.
@@ -273,7 +331,7 @@ function toKotlinOptions(options) {
   if (options.overviewRuler !== undefined) out.overviewRuler = !!options.overviewRuler;
   if (options.occurrencesHighlight !== undefined) out.occurrencesHighlight = options.occurrencesHighlight !== false && options.occurrencesHighlight !== 'off';
   if (options.fontLigatures !== undefined) out.fontLigatures = options.fontLigatures !== false && options.fontLigatures !== 'off';
-  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens']) {
+  for (const key of ['linkedEditing', 'colorDecorators', 'breadcrumbs', 'semanticHighlighting', 'codeLens', 'formatOnType']) {
     if (options[key] !== undefined) out[key] = !!options[key];
   }
   if (options.inlayHints !== undefined) {
@@ -345,6 +403,11 @@ export async function createEditor(container, onChange, options = {}) {
   // opens http and https links itself. It does that in the click, which a popup blocker wants.
   const linkListeners = new Set();
   const openLink = (target) => linkListeners.forEach((listener) => listener(target));
+  const searchListeners = new Set();
+  const searchWorkspace = (json) => {
+    const args = JSON.parse(json);
+    searchListeners.forEach((listener) => listener(args));
+  };
 
   // Decorations: those set through deltaDecorations, with their ids, and each collection's own.
   let deltaDecorations = [];
@@ -439,6 +502,16 @@ export async function createEditor(container, onChange, options = {}) {
       scrollListeners.add(listener);
       return () => scrollListeners.delete(listener);
     },
+    onSearchWorkspace(listener) {
+      if (searchListeners.size === 0) k.aardinkOnSearchWorkspace(id, searchWorkspace);
+      searchListeners.add(listener);
+      return {
+        dispose() {
+          searchListeners.delete(listener);
+          if (searchListeners.size === 0 && !disposed) k.aardinkOnSearchWorkspace(id, null);
+        },
+      };
+    },
     onOpenLink(listener) {
       if (linkListeners.size === 0) k.aardinkOnOpenLink(id, openLink);
       linkListeners.add(listener);
@@ -531,6 +604,7 @@ export async function createEditor(container, onChange, options = {}) {
       blurListeners.clear();
       scrollListeners.clear();
       linkListeners.clear();
+      searchListeners.clear();
       k.aardinkDispose(id);
     },
   };

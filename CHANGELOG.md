@@ -36,6 +36,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.10 widens what the editor reads and shows: twelve more built-in languages and configured services
+for TypeScript, CSS and Markdown; the view options VS Code users reach for (line number styles, caret
+styles, guides, rulers, smooth scrolling, wrapping indent, drag and drop); find in selection and
+preserve case; format on type; and the web's providers in Monaco's shapes. It also puts the editor's
+speed under gates on the JVM, on Android and for the web's hints, lenses and semantic tokens. Every new
+option is off, or does what the editor did before, except `wordWrap` on the web, which is now off as
+in Monaco. It breaks source in one place: `EditorCommand` has a new member, so an exhaustive `when`
+over it needs a branch. `EditorOptions`, `EditorTheme`, `InlayHint`, `CodeAction`, `InlineCompletion`,
+`FindReplaceState`, `LanguageDefinition`, `WebEditorOptions`, `WebLanguageProviders`,
+`CodeEditorLayout`, `HoverDocPopup` and `SignatureHelpPopup` gain defaulted parameters, so code
+compiled against 0.9 that calls them needs a recompile. A module built from the web export template
+needs two new exports. [`docs/MIGRATION_0.10.md`](docs/MIGRATION_0.10.md) has the details.
+
+### Added
+
+- **Languages.** YAML, Properties, INI, Shell, Python, SQL, Java, Groovy (also `.gradle`),
+  Dockerfile, Diff, SCSS and LESS, each a grammar and a VS Code language configuration read on first
+  use. `LanguageDefinition.fileNames` and `LanguageRegistry.byFileName` find a language by a whole
+  name, such as `Dockerfile` or `.bashrc`. TypeScript, CSS and Markdown get services from their
+  configurations: Markdown's Enter carries lists and quotes on, CSS formats, and Markdown lines up its
+  tables. Kotlin gets hover and signature help for its standard-library catalogue. HTML colours CSS
+  in `<style>` and JavaScript (or JSON) in `<script>`, and TypeScript colours regular expression
+  literals.
+- **View options.** `EditorOptions.lineNumbers` (absolute, relative, interval), `cursorStyle` and
+  `cursorBlinking`, `indentGuides`, `bracketPairGuides` and `rulers`, `smoothScrolling`,
+  `scrollBeyondLastLine`, `cursorSurroundingLines`, `wrappingIndent` and `wordWrapColumn`, and
+  `dragAndDrop`.
+- **Themes.** `EditorTheme.chromeColors` for the minimap, scrollbars, guides, rulers, cards, hints,
+  lenses and ghost text, and `tokenBackgrounds`; `EditorThemes.HighContrastDark` and
+  `HighContrastLight`, every token colour at 7:1 or more.
+- **Find.** `FindReplaceState.inSelection` and `preserveCase`, search history in the fields, a
+  preview of the replacement, and `EditorCommand.SearchWorkspace` (Ctrl/Cmd+Shift+F) handing the
+  search to `CodeEditorLayout`'s `onSearchWorkspace`.
+- **Language features.** Format on type (`LanguageService.formatOnType`, from a service, a language
+  server or the web); `CodeEditorState.refreshLanguageFeatures()` and a server's `*/refresh`
+  requests; `LspLanguageService.willSaveWaitUntil`; `CodeAction.onApply` for actions that run a
+  command or reach other files; `InlayHint.tooltip`; `onOpenLink` on `HoverDocPopup` and
+  `SignatureHelpPopup`; `InlineCompletion.isSnippet`, so ghost text can be a snippet with tab stops.
+  A colour swatch is now drawn before the colour, as inline content.
+- **The web.** Providers in Monaco's shapes for definition, references, formatting, signature help,
+  code actions, rename, folding, on-type formatting, semantic tokens, completion resolve and code
+  lens resolve; Monaco's names for the view options; `registerFont` and `fontFamily`; the `hc-black`
+  and `hc-light` themes, with `defineTheme` reading the chrome keys and a rule's `background`;
+  `editor.onSearchWorkspace`; every Alt+character key for the host's actions and the editor's
+  bindings; and a host's providers, then a server's, then the base language's, in that order.
+- **Performance gates.** A wasm bundle ceiling (`tools/vite-smoke/bundle-size.mjs`, the recorded
+  gzipped size plus 2%); a JVM gate (`./gradlew :editor:jvmPerfTest`); `:sample`'s baseline profile
+  with `profileinstaller`, and an Android gate in CI comparing a change with `main` on one
+  emulator; and `perf.mjs --hints` and `--semantic` under `--gate`. `perf.mjs --profile` records a
+  CPU profile of the keys.
+
+### Changed
+
+- `wordWrap` on the web is off by default, as in Monaco.
+- Monaco's `base: 'hc-black'` and `'hc-light'` fill in from the new high-contrast themes, where
+  they took Dark+ and Light+.
+- `LspClient` parses each message once, where it parsed every response twice, and on the web parses
+  a large one in slices that let the page paint. It asks a server that has them for
+  `semanticTokens/full/delta`. On the web, the first answer of 272 KB of semantic tokens now lands
+  with no long task and a longest frame of 18.5 ms, where it held the page for about 110 ms.
+- The npm package no longer ships `skikod8.mjs` or `js-reexport-symbols.mjs`, which nothing in it
+  imported, and an editor in a registered font no longer fetches the bundled one.
+- The editor gives up partial highlighting passes for a document only after three slow ones in a
+  row, not one.
+
+### Fixed
+
+- A registered or grammar-as-data language's partial highlighting pass read the whole document again
+  for its line starts, which, with the single slow pass that used to be enough, made every key
+  highlight a large document from the top: about 400 ms a key at 60,000 lines on the web. The same
+  file now spends a quarter of the time busy, and hints on the 5,000-line reference document settle in
+  30 ms at p95, where they took 84 ms.
+- `serverCapabilities` is set after a host's own `initialize` request.
+
+### Known issues
+
+- On the web, a document of 60,000 lines with code lenses still takes about 400 ms to settle after
+  a key: its 3,000 lenses are read in one frame once typing pauses. Typing itself is not held up.
+- `semanticTokens/range` is not asked for: it needs the lines on screen, which a language service is
+  not given. A 0.10 patch adds it.
+- TypeScript colours a template literal as one string, `${}` and all, and CSS reads the `.png` in
+  `url(x.png)` as a class.
+
 ## [0.9.0] - 2026-11-08
 
 0.9 is about everything a language, a language server or an assistant can tell the editor:

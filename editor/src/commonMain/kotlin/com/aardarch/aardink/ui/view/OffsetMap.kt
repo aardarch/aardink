@@ -37,6 +37,8 @@ internal data class Injection(
     val id: Any? = null,
     /** Whether this is a piece of a row above the line, one that the piece with the row's line break ends. */
     val leadsRowAbove: Boolean = false,
+    /** Markdown a mouse resting on this text is shown, in place of the hover of the text under it. */
+    val tooltip: String? = null,
 ) {
     /** Whether this is whole rows above the line's text, as a code lens is, or a piece of such a row. */
     val isRowAbove: Boolean get() = leadsRowAbove || (column == 0 && caretAfter && text.endsWith('\n'))

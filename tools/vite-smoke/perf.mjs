@@ -22,17 +22,19 @@
 //   pnpm build && node perf.mjs [--gate] [--keys 30] [--lines 5000]
 //
 // Two more runs measure the same things with what the 0.9 inline layout and a language server add,
-// each to a file of its own, and neither is part of --gate yet:
+// each to a file of its own and each with --gate in CI since 0.10 (MODE_LIMITS, below):
 //
-//   node perf.mjs --hints [--lines 5000]      dist/perf-hints.json
-//   node perf.mjs --semantic [--lines 5000]   dist/perf-semantic.json
+//   node perf.mjs --hints [--gate] [--lines 5000]      dist/perf-hints.json
+//   node perf.mjs --semantic [--gate] [--lines 5000]   dist/perf-semantic.json
+//   node perf.mjs ... --profile                        also dist/perf*.cpuprofile, of the keys
 //
 // --hints types in a registered language whose provideInlayHints answers 3 hints for each line it
 // is asked about and whose provideCodeLenses puts a lens above every 20th line, with inlayHints and
 // codeLens on, through the npm package's dispatcher. Its grammar is a small Kotlin one of its own
 // (a registered language needs one), so compare it with a run of itself, not with dist/perf.json.
 // --semantic connects the built-in Kotlin language to a WebSocket language server in this process
-// that answers textDocument/semanticTokens/full with a token for every word of the document, with
+// that answers textDocument/semanticTokens/full (and full/delta, with one edit between the common
+// start and end) with a token for every word of the document, with
 // semanticHighlighting on. Its first answer is held until the editor is idle, and the frames and
 // long tasks while it lands are measured on their own. A run with --lines other than 5,000 adds
 // the size to the file name.
@@ -47,12 +49,14 @@ const keyCount = Number(args[args.indexOf('--keys') + 1]) || 30;
 // The gates are defined on the 5,000-line reference document; other sizes are for comparison.
 const lineCount = Number(args[args.indexOf('--lines') + 1]) || 5000;
 const mode = args.includes('--hints') ? 'hints' : args.includes('--semantic') ? 'semantic' : null;
+// --profile records a CPU profile of the sequential keys, writes it to dist/perf-<mode>.cpuprofile
+// (DevTools opens it) and prints the functions with the most time of their own.
+const profile = args.includes('--profile');
 if (args.includes('--hints') && args.includes('--semantic')) throw new Error('--hints and --semantic are separate runs');
-if (mode && gate) throw new Error(`--${mode} is not part of --gate yet`);
 
 // Target: what 0.6.0 aims for, recorded in WEB_INTEGRATION.md. Gate: what CI enforces with
 // --gate, looser to absorb shared-runner noise. null = informational only.
-const LIMITS = {
+const BASE_LIMITS = {
   mountToIdleMs: { target: 200, gate: 400 },
   keyToIdleP50Ms: { target: 16, gate: null },
   keyToIdleP95Ms: { target: 33, gate: 50 },
@@ -65,6 +69,20 @@ const LIMITS = {
   droppedKeysSequential: { target: 0, gate: 0, unit: 'keys' },
   droppedKeysAtBurst: { target: 0, gate: 0, unit: 'keys' },
 };
+
+// The two modes are gated too (since 0.10), on what they add: --hints by the same limits, typing
+// with hints and lenses on; --semantic by the frames while the server's first answer lands, the
+// work that once took a frame of over 100 ms. Its mount includes connecting to the server, which
+// is the network's, and its set-value includes the server asking again.
+const MODE_LIMITS = {
+  hints: {},
+  semantic: {
+    mountToIdleMs: { target: 200, gate: null },
+    semanticLandLongestTaskMs: { target: 0, gate: 50 },
+    semanticLandLongestFrameMs: { target: 33, gate: 50 },
+  },
+};
+const LIMITS = { ...BASE_LIMITS, ...(mode ? MODE_LIMITS[mode] : {}) };
 
 // ── --semantic: the language server, and the tokens it answers with ─────────────
 const SEMANTIC_TYPES = ['function', 'type', 'parameter', 'property', 'variable'];
@@ -96,6 +114,26 @@ function mirrorOf(server) {
   };
 }
 
+/** The functions in a CPU [profile] with the most self time, idle and the profiler's own left out. */
+function printHotFunctions(profile, file) {
+  const self = new Map();
+  const interval = (profile.endTime - profile.startTime) / Math.max(1, profile.samples.length) / 1000;
+  const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+  for (const id of profile.samples) {
+    const frame = byId.get(id).callFrame;
+    const name = `${frame.functionName || '(anonymous)'} ${frame.url.split('/').pop()}`;
+    self.set(name, (self.get(name) ?? 0) + interval);
+  }
+  const busy = [...self].filter(([name]) => !/^\((idle|program|garbage collector)\)/.test(name));
+  const total = busy.reduce((sum, [, ms]) => sum + ms, 0);
+  console.log(`CPU profile of the keys in ${file}: ${total.toFixed(0)} ms busy; most time of their own:`);
+  for (const [name, ms] of busy.sort((a, b) => b[1] - a[1]).slice(0, 25)) {
+    console.log(`  ${ms.toFixed(1).padStart(8)} ms  ${(100 * ms / total).toFixed(1).padStart(5)}%  ${name.slice(0, 110)}`);
+  }
+  const gc = self.get('(garbage collector) ') ?? 0;
+  console.log(`  ${gc.toFixed(1).padStart(8)} ms  in the garbage collector`);
+}
+
 /** A semantic token for every word of `text`, encoded as LSP's relative integers. */
 function semanticTokensOf(text) {
   const data = [];
@@ -113,7 +151,20 @@ function semanticTokensOf(text) {
   return data;
 }
 
-const semantic = { server: null, release: () => {}, answers: [] };
+const semantic = {
+  server: null,
+  release: () => {},
+  answers: [],
+  deltas: [],
+  results: new Map(),
+  /** Keeps [data] under a new result id, and only the last few, as a server would. */
+  keep(data) {
+    const id = String(this.results.size + this.deltas.length + this.answers.length);
+    this.results.set(id, data);
+    if (this.results.size > 4) this.results.delete(this.results.keys().next().value);
+    return id;
+  },
+};
 if (mode === 'semantic') {
   let releaseFirst;
   const firstHeld = new Promise((resolve) => { releaseFirst = resolve; });
@@ -125,14 +176,27 @@ if (mode === 'semantic') {
       completionProvider: undefined,
       hoverProvider: undefined,
       definitionProvider: undefined,
-      semanticTokensProvider: { legend: { tokenTypes: SEMANTIC_TYPES, tokenModifiers: [] }, full: true },
+      semanticTokensProvider: { legend: { tokenTypes: SEMANTIC_TYPES, tokenModifiers: [] }, full: { delta: true } },
     },
     answers: {
       'textDocument/semanticTokens/full': async (params) => {
         if (semantic.answers.length === 0) await firstHeld;
         const data = semanticTokensOf(semantic.mirror(params.textDocument.uri));
         semantic.answers.push({ tokens: data.length / 5, kb: Math.round(JSON.stringify(data).length / 1024) });
-        return { data };
+        return { resultId: semantic.keep(data), data };
+      },
+      // As a real server answers: the one edit between the common start and end of the numbers.
+      'textDocument/semanticTokens/full/delta': async (params) => {
+        const data = semanticTokensOf(semantic.mirror(params.textDocument.uri));
+        const previous = semantic.results.get(params.previousResultId);
+        if (!previous) return { resultId: semantic.keep(data), data };
+        let start = 0;
+        while (start < previous.length && start < data.length && previous[start] === data[start]) start++;
+        let end = 0;
+        while (end < previous.length - start && end < data.length - start && previous[previous.length - 1 - end] === data[data.length - 1 - end]) end++;
+        const edit = { start, deleteCount: previous.length - start - end, data: data.slice(start, data.length - end) };
+        semantic.deltas.push(edit.data.length);
+        return { resultId: semantic.keep(data), edits: [edit] };
       },
     },
   });
@@ -331,6 +395,12 @@ try {
   }
   const lengthBefore = await documentLength();
   const letters = 'abcdefghijklmnopqrstuvwxyz ';
+  const profiler = profile ? await page.createCDPSession() : null;
+  if (profiler) {
+    await profiler.send('Profiler.enable');
+    await profiler.send('Profiler.setSamplingInterval', { interval: 100 });
+    await profiler.send('Profiler.start');
+  }
   for (let i = 0; i < keyCount; i++) {
     await page.keyboard.type(letters[i % letters.length]);
     // Every key gets a frame; a key the editor lost never gets a change callback, so give up
@@ -343,6 +413,13 @@ try {
     // Isolate the keys: none should start inside the previous key's work. The burst below is
     // what measures typing faster than the editor keeps up.
     await new Promise((r) => setTimeout(r, 400));
+  }
+  if (profiler) {
+    const { profile: recorded } = await profiler.send('Profiler.stop');
+    const name = `dist/perf${mode ? `-${mode}` : ''}${lineCount === 5000 ? '' : `-${lineCount}`}.cpuprofile`;
+    writeFileSync(name, JSON.stringify(recorded));
+    printHotFunctions(recorded, name);
+    await profiler.detach();
   }
   if (mode) {
     const typed = Array.from({ length: keyCount }, (_, i) => letters[i % letters.length]).join('');
@@ -429,7 +506,10 @@ try {
     Object.assign(results, await page.evaluate(() => window.__perfHints));
     if (results.hintCalls === 0 || results.lensCalls === 0) throw new Error('The editor never asked for hints or lenses');
   }
-  if (mode === 'semantic') results.semanticRequests = semantic.server.count('textDocument/semanticTokens/full');
+  if (mode === 'semantic') {
+    results.semanticRequests = semantic.server.count('textDocument/semanticTokens/full');
+    results.semanticDeltaRequests = semantic.server.count('textDocument/semanticTokens/full/delta');
+  }
   await page.close();
 } finally {
   await harness.close();
@@ -449,14 +529,14 @@ console.log(`  ${'longestTaskMs'.padEnd(22)} ${results.longestTaskMs.toFixed(1).
 if (mode) {
   const extra = mode === 'hints'
     ? ['hintCalls', 'hints', 'lensCalls', 'lenses']
-    : ['semanticLandToIdleMs', 'semanticLandLongestTaskMs', 'semanticLandLongestFrameMs', 'semanticAnswerTokens', 'semanticAnswerKb', 'semanticRequests'];
+    : ['semanticLandToIdleMs', 'semanticLandLongestTaskMs', 'semanticLandLongestFrameMs', 'semanticAnswerTokens', 'semanticAnswerKb', 'semanticRequests', 'semanticDeltaRequests'];
   for (const name of extra) {
     if (results[name] !== undefined) console.log(`  ${name.padEnd(26)} ${Number(results[name]).toFixed(name.endsWith('Ms') ? 1 : 0).padStart(8)}`);
   }
   if (mode === 'semantic' && !results.semanticAskedOnMount) console.log('  the document is over the 2 MiB analysis limit, so nothing was asked for and nothing landed');
   const output = `dist/perf-${mode}${lineCount === 5000 ? '' : `-${lineCount}`}.json`;
   writeFileSync(output, `${JSON.stringify({ ...results, limits: LIMITS, date: new Date().toISOString() }, null, 2)}\n`);
-  console.log(`Wrote ${output} (not gated)`);
+  console.log(`Wrote ${output}`);
 } else {
   writeFileSync('dist/perf.json', `${JSON.stringify({ ...results, limits: LIMITS, date: new Date().toISOString() }, null, 2)}\n`);
   console.log('Wrote dist/perf.json');

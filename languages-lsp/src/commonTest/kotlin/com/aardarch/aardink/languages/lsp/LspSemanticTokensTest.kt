@@ -38,6 +38,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 
 private const val FULL = "textDocument/semanticTokens/full"
+private const val FULL_DELTA = "textDocument/semanticTokens/full/delta"
 private const val CONTENT_MODIFIED = -32801
 
 private const val LEGEND =
@@ -252,7 +253,7 @@ class LspSemanticTokensTest {
         val tokens = decodeSemanticTokens(data, legend, document, LspDecodePacer(Duration.ZERO))
 
         assertEquals(lines, tokens.size)
-        assertEquals(40L, testScheduler.currentTime, "a millisecond's pause every 256 tokens")
+        assertEquals(80L, testScheduler.currentTime, "a millisecond's pause every 256 tokens, reading the numbers and again placing them")
     }
 
     // ── What the server declared ─────────────────────────────────────────────
@@ -323,13 +324,101 @@ class LspSemanticTokensTest {
     fun `the default capabilities say what the decoder can take`() {
         val semanticTokens = DefaultClientCapabilities["textDocument"]!!.jsonObject["semanticTokens"]!!.jsonObject
 
-        assertEquals(setOf("full"), semanticTokens["requests"]!!.jsonObject.keys, "delta and range are not in 0.9")
-        assertTrue(semanticTokens["requests"]!!.jsonObject["full"]!!.jsonPrimitive.boolean)
+        assertEquals(setOf("full"), semanticTokens["requests"]!!.jsonObject.keys, "no range: the editor does not say what is on screen")
+        assertTrue(semanticTokens["requests"]!!.jsonObject["full"]!!.jsonObject["delta"]!!.jsonPrimitive.boolean)
         assertEquals(listOf("relative"), semanticTokens["formats"]!!.jsonArray.map { it.jsonPrimitive.content })
         assertTrue(semanticTokens["multilineTokenSupport"]!!.jsonPrimitive.boolean, "the store splits a token per line")
         assertFalse(semanticTokens["overlappingTokenSupport"]!!.jsonPrimitive.boolean)
         assertTrue(semanticTokens["augmentsSyntaxTokens"]!!.jsonPrimitive.boolean)
         assertFalse(semanticTokens["dynamicRegistration"]!!.jsonPrimitive.boolean)
+    }
+
+    // ── Deltas ───────────────────────────────────────────────────────────────
+
+    private val deltaServer = """{"semanticTokensProvider":{"legend":$LEGEND,"full":{"delta":true}}}"""
+
+    @Test
+    fun `after a whole answer with an id, a server that has deltas is asked for the edits since`() = withServer("ab cd") {
+        open(deltaServer)
+        val first = async { respond(FULL, """{"resultId":"1","data":[0,0,2,0,0]}""") }
+        assertEquals(listOf(0..1 to "type.class"), service.semanticTokens(doc).spans)
+        first.await()
+
+        val second = async { respond(FULL_DELTA, """{"resultId":"2","edits":[{"start":5,"deleteCount":0,"data":[0,3,2,1,0]}]}""") }
+        assertEquals(listOf(0..1 to "type.class", 3..4 to "function"), service.semanticTokens(doc).spans)
+        val sent = second.await()
+        assertEquals("1", sent["params"]!!.jsonObject["previousResultId"]!!.jsonPrimitive.content)
+
+        val third = async { respond(FULL_DELTA, """{"resultId":"3","edits":[{"start":0,"deleteCount":5}]}""") }
+        assertEquals(listOf(3..4 to "function"), service.semanticTokens(doc).spans, "edits apply to what the last delta left")
+        assertEquals("2", third.await()["params"]!!.jsonObject["previousResultId"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a delta request may be answered with every token`() = withServer("ab cd") {
+        open(deltaServer)
+        val first = async { respond(FULL, """{"resultId":"1","data":[0,0,2,0,0]}""") }
+        service.semanticTokens(doc)
+        first.await()
+
+        val second = async { respond(FULL_DELTA, """{"resultId":"2","data":[0,3,2,1,0]}""") }
+        assertEquals(listOf(3..4 to "function"), service.semanticTokens(doc).spans)
+        second.await()
+    }
+
+    @Test
+    fun `edits that do not fit, or a failed delta, ask for the whole answer again`() = withServer("ab cd") {
+        open(deltaServer)
+        val first = async { respond(FULL, """{"resultId":"1","data":[0,0,2,0,0]}""") }
+        service.semanticTokens(doc)
+        first.await()
+
+        val misfit = async {
+            respond(FULL_DELTA, """{"resultId":"2","edits":[{"start":9,"deleteCount":3,"data":[]}]}""")
+            respond(FULL, """{"resultId":"3","data":[0,3,2,1,0]}""")
+        }
+        assertEquals(listOf(3..4 to "function"), service.semanticTokens(doc).spans)
+        misfit.await()
+
+        val failed = async {
+            respondWithError(FULL_DELTA)
+            respond(FULL, """{"data":[0,0,2,0,0]}""")
+        }
+        assertEquals(listOf(0..1 to "type.class"), service.semanticTokens(doc).spans)
+        failed.await()
+
+        val noId = async { respond(FULL, """{"data":[0,0,2,0,0]}""") }
+        service.semanticTokens(doc)
+        noId.await()
+        assertNothingSent("an answer with no id leaves nothing to ask a delta of")
+    }
+
+    @Test
+    fun `a server without deltas is asked for the whole answer each time`() = withServer("ab") {
+        open()
+        repeat(2) {
+            val server = async { respond(FULL, """{"resultId":"$it","data":[0,0,2,0,0]}""") }
+            service.semanticTokens(doc)
+            server.await()
+        }
+    }
+
+    @Test
+    fun `edits are made in order of where they start, and out of range ones are refused`() {
+        val previous = intArrayOf(1, 2, 3, 4, 5, 6)
+        fun edits(json: String) = applySemanticTokenEdits(previous, LspJson.parseToJsonElement(json) as JsonArray)?.toList()
+        assertEquals(
+            listOf(1, 9, 3, 4, 7, 7),
+            edits("""[{"start":4,"deleteCount":2,"data":[7,7]},{"start":1,"deleteCount":1,"data":[9]}]"""),
+        )
+        assertEquals(
+            listOf(0, 1, 2, 3, 4, 5, 6, 8),
+            edits("""[{"start":0,"deleteCount":0,"data":[0]},{"start":6,"deleteCount":0,"data":[8]}]"""),
+        )
+        assertEquals(previous.toList(), edits("[]"))
+        assertEquals(null, edits("""[{"start":5,"deleteCount":2}]"""), "past the end")
+        assertEquals(null, edits("""[{"start":0,"deleteCount":3},{"start":2,"deleteCount":1}]"""), "overlapping")
+        assertEquals(null, edits("""[{"start":0,"deleteCount":0,"data":[-1]}]"""), "not an unsigned integer")
     }
 
     // ── The order on the wire ────────────────────────────────────────────────

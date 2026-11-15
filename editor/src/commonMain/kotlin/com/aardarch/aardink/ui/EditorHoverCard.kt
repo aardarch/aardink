@@ -71,6 +71,7 @@ internal fun EditorHoverCard(
             shape = RoundedCornerShape(10.dp),
             tonalElevation = 4.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = editorWidgetBorder(),
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // The host's decorations first, as Monaco shows decoration hovers above markers.

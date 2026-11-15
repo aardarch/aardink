@@ -66,6 +66,7 @@ internal fun CodeActionCard(
             shape = RoundedCornerShape(10.dp),
             tonalElevation = 8.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = editorWidgetBorder(),
         ) {
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
                 Text(

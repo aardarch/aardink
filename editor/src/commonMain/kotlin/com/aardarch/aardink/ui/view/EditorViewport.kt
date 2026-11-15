@@ -30,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Constraints
+import com.aardarch.aardink.ui.CursorStyle
 
 /**
  * The text area of the editor's own renderer: scrolls with wheel, touch and fling, selects with
@@ -46,6 +47,9 @@ internal fun EditorViewport(
     decorations: () -> EditorDecorations,
     carets: () -> List<TextRange>,
     colors: EditorColors,
+    caretStyle: CursorStyle = CursorStyle.Line,
+    /** How strongly the carets show, read while drawing them: the blink's place. */
+    caretAlpha: () -> Float = { 1f },
     softWrap: Boolean,
     modifier: Modifier = Modifier,
     inputModifier: Modifier = Modifier,
@@ -66,7 +70,10 @@ internal fun EditorViewport(
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer()
-                .drawBehind { drawCarets(view.frame, carets(), colors.caret) },
+                .drawBehind {
+                    val alpha = caretAlpha()
+                    if (alpha > 0f) drawCarets(view.frame, carets(), colors.caret.copy(alpha = colors.caret.alpha * alpha), caretStyle)
+                },
         )
         overlay()
     }

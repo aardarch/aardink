@@ -29,6 +29,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 private const val METHOD = "textDocument/inlayHint"
 private const val CONTENT_MODIFIED = -32801
@@ -114,6 +115,18 @@ class LspInlayHintsTest {
     }
 
     @Test
+    fun `a hint's tooltip is Markdown, a plain string escaped`() = withServer("abc") {
+        open()
+
+        val plain = hint(0, 1, "\"x\"", ""","tooltip":"a *b*"""")
+        val markdown = hint(0, 2, "\"y\"", ""","tooltip":{"kind":"markdown","value":"**c**"}""")
+
+        val hints = answered("[$plain,$markdown]")
+
+        assertEquals(listOf("""a \*b\*""", "**c**"), hints.map { it.tooltip })
+    }
+
+    @Test
     fun `padding becomes a space on its side`() = withServer("abc") {
         open()
 
@@ -180,21 +193,26 @@ class LspInlayHintsTest {
     }
 
     @Test
-    fun `the default capabilities ask for hints, and make no promise of refreshing them`() {
+    fun `the default capabilities ask for hints, and say a server may have them refreshed`() {
         val inlayHint = DefaultClientCapabilities["textDocument"]!!.jsonObject["inlayHint"]!!.jsonObject
 
         assertFalse(inlayHint["dynamicRegistration"]!!.jsonPrimitive.boolean)
         assertFalse("resolveSupport" in inlayHint, "a hint comes whole: nothing resolves one")
-        assertFalse("inlayHint" in DefaultClientCapabilities["workspace"]!!.jsonObject, "no refreshSupport: nothing could act on a refresh")
+        val workspace = DefaultClientCapabilities["workspace"]!!.jsonObject
+        for (refreshed in listOf("inlayHint", "codeLens", "semanticTokens", "diagnostics")) {
+            assertTrue(workspace[refreshed]!!.jsonObject["refreshSupport"]!!.jsonPrimitive.boolean, refreshed)
+        }
     }
 
     @Test
-    fun `a refresh the client never offered is refused, as any unknown request`() = withServer("ab") {
+    fun `a refresh is acknowledged, with or without an editor attached`() = withServer("ab") {
         open()
-
-        serverAsks("9", "workspace/inlayHint/refresh", "null")
-
-        assertEquals(LspRequestException.METHOD_NOT_FOUND, nextSent()["error"]!!.jsonObject["code"]!!.jsonPrimitive.int)
+        for ((id, refreshed) in listOf("inlayHint", "codeLens", "semanticTokens", "diagnostic").withIndex()) {
+            serverAsks("$id", "workspace/$refreshed/refresh", "null")
+            val reply = nextSent()
+            assertFalse("error" in reply, refreshed)
+            assertEquals("null", reply["result"].toString(), refreshed)
+        }
     }
 
     // ── The order on the wire ────────────────────────────────────────────────

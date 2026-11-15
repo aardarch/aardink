@@ -395,6 +395,20 @@ class InlineCompletionUiTest {
     }
 
     @Test
+    fun `Tab accepts a snippet, and Tab again goes to its next stop`() = runComposeUiTest {
+        val state = stateAtEnd("")
+        show(state, InlineCompletionProvider { _, _ -> listOf(InlineCompletion("(\${1:x}, \$2)\$0", isSnippet = true)) })
+        typeAndPause("f")
+        assertEquals("(x, )", state.ghost)
+        keys { pressKey(Key.Tab) }
+        assertEquals("f(x, )", state.document.text)
+        assertEquals(TextRange(2, 3), state.selection)
+        keys { pressKey(Key.Tab) }
+        assertEquals("f(x, )", state.document.text, "Tab is the snippet's, not an indent")
+        assertEquals(TextRange(5), state.selection)
+    }
+
+    @Test
     fun `Tab indents when nothing shows`() = runComposeUiTest {
         val state = stateAtEnd("")
         show(state, InlineCompletionProvider { _, _ -> emptyList() })

@@ -38,17 +38,22 @@ import com.aardarch.aardink.core.SignatureHelp
  * Parameter hint popover shown while the cursor sits inside a call's argument list.
  *
  * Placed by the default [Popup] rules, at the top-start of the composable that hosts it. The editor
- * itself shows the same card above the caret. Links in the documentation show as their text here:
- * only that card, through [CodeEditorLayout]'s `onOpenLink`, opens them.
+ * itself shows the same card above the caret. A link in the documentation, clicked or tapped, goes
+ * to [onOpenLink] with its target; without one, the default, links show as their text.
  */
 @Composable
-fun SignatureHelpPopup(help: SignatureHelp, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun SignatureHelpPopup(
+    help: SignatureHelp,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenLink: ((target: String) -> Unit)? = null,
+) {
     if (help.signatures.isEmpty()) return
     Popup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = false),
     ) {
-        SignatureHelpCard(help, modifier)
+        SignatureHelpCard(help, modifier, onOpenLink)
     }
 }
 
@@ -67,6 +72,7 @@ internal fun SignatureHelpCard(help: SignatureHelp, modifier: Modifier = Modifie
             shape = RoundedCornerShape(8.dp),
             tonalElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = editorWidgetBorder(),
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Annotated signature label highlighting the active parameter

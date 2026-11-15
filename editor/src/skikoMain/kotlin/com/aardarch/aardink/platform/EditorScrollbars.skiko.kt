@@ -16,6 +16,7 @@
 package com.aardarch.aardink.platform
 
 import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.LocalScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,20 +25,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import com.aardarch.aardink.ui.view.EditorScrollController
 import kotlin.math.max
 
 @Composable
-internal actual fun EditorScrollbars(scroll: EditorScrollController, horizontal: Boolean, modifier: Modifier) {
+internal actual fun EditorScrollbars(
+    scroll: EditorScrollController,
+    horizontal: Boolean,
+    slider: Color,
+    sliderHover: Color,
+    modifier: Modifier,
+) {
+    val platform = LocalScrollbarStyle.current
+    val style = remember(platform, slider, sliderHover) {
+        platform.copy(
+            unhoverColor = slider.takeOrElse {
+                platform.unhoverColor
+            },
+            hoverColor = sliderHover.takeOrElse { platform.hoverColor },
+        )
+    }
     Box(modifier = modifier.fillMaxSize()) {
         VerticalScrollbar(
             adapter = remember(scroll) { VerticalAdapter(scroll) },
             modifier = Modifier.align(Alignment.CenterEnd),
+            style = style,
         )
         if (horizontal) {
             HorizontalScrollbar(
                 adapter = remember(scroll) { HorizontalAdapter(scroll) },
                 modifier = Modifier.align(Alignment.BottomCenter),
+                style = style,
             )
         }
     }

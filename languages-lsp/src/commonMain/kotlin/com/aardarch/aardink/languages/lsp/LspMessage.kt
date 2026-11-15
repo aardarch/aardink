@@ -99,6 +99,14 @@ data class LspDocumentRangeFormattingParams(
 )
 
 @Serializable
+internal data class LspDocumentOnTypeFormattingParams(
+    val textDocument: LspTextDocumentIdentifier,
+    val position: LspPosition,
+    val ch: String,
+    val options: LspFormattingOptions,
+)
+
+@Serializable
 data class LspCodeActionContext(val diagnostics: List<LspDiagnostic>)
 
 @Serializable

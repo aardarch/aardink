@@ -27,9 +27,9 @@ import kotlin.test.assertTrue
 class LanguageRegistryTest {
 
     @Test
-    fun `withBuiltIns includes all 9 built-in languages`() {
+    fun `withBuiltIns includes every built-in language`() {
         val registry = LanguageRegistry.withBuiltIns()
-        assertEquals(9, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size, registry.all.size)
         assertNotNull(registry.byId("kotlin"))
         assertNotNull(registry.byId("typescript"))
         assertNotNull(registry.byId("json"))
@@ -64,7 +64,7 @@ class LanguageRegistryTest {
             tokenizer = PlainTextTokenizer,
         )
         registry.register(custom)
-        assertEquals(10, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size + 1, registry.all.size)
         assertSame(custom, registry.byId("log"))
         assertSame(custom, registry.byExtension("log"))
     }
@@ -74,7 +74,7 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         registry.override("kotlin") { it.copy(displayName = "Kotlin (custom)") }
         assertEquals("Kotlin (custom)", registry.byId("kotlin")?.displayName)
-        assertEquals(9, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size, registry.all.size)
     }
 
     @Test
@@ -90,6 +90,56 @@ class LanguageRegistryTest {
         val registry = LanguageRegistry.withBuiltIns()
         assertTrue(registry.unregister("plaintext"))
         assertNull(registry.byId("plaintext"))
-        assertEquals(8, registry.all.size)
+        assertEquals(BuiltInLanguages.all.size - 1, registry.all.size)
+    }
+
+    @Test
+    fun `byFileName reads a file's name before its extension`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        for ((path, id) in listOf(
+            "Dockerfile" to "dockerfile",
+            "docker/Dockerfile.dev" to "dockerfile",
+            "containerfile" to "dockerfile",
+            "web.dockerfile" to "dockerfile",
+            "Jenkinsfile" to "groovy",
+            "build.gradle" to "groovy",
+            "~/.bashrc" to "shell",
+            "C:\\Users\\me\\.gitconfig" to "ini",
+            ".editorconfig" to "ini",
+            "src\\Main.kt" to "kotlin",
+            "README.md" to "markdown",
+        )) {
+            assertEquals(id, registry.byFileName(path)?.id, path)
+        }
+        assertNull(registry.byFileName("Makefile"))
+        assertNull(registry.byFileName("notes."))
+        assertNull(registry.byFileName("dir/"))
+    }
+
+    @Test
+    fun `a registered language's file names come before a built-in's extension`() {
+        val registry = LanguageRegistry.withBuiltIns()
+        val log = LanguageDefinition(
+            id = "buildlog",
+            displayName = "Build log",
+            fileExtensions = listOf("log"),
+            tokenizer = PlainTextTokenizer,
+            fileNames = listOf("build*.txt"),
+        )
+        registry.register(log)
+        assertSame(log, registry.byFileName("build-2026.txt"))
+        assertEquals("plaintext", registry.byFileName("notes.txt")?.id)
+    }
+
+    @Test
+    fun `file name patterns match whole names, without regard to case`() {
+        assertTrue(fileNameMatches("Dockerfile", "dockerfile"))
+        assertTrue(fileNameMatches("Dockerfile.*", "Dockerfile.prod"))
+        assertTrue(fileNameMatches("*.Dockerfile", "web.dockerfile"))
+        assertTrue(fileNameMatches("a*b*c", "aXbYbZc"))
+        assertTrue(fileNameMatches("*", ""))
+        assertTrue(!fileNameMatches("Dockerfile", "Dockerfile.dev"))
+        assertTrue(!fileNameMatches("Dockerfile.*", "MyDockerfile.dev"))
+        assertTrue(!fileNameMatches("a*b", "aXbY"))
     }
 }

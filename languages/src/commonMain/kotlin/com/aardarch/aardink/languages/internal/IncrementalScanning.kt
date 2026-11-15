@@ -78,6 +78,12 @@ internal class PackedTokenBuilder(capacity: Int = 16) {
 
     val lastEnd: Int get() = if (types.isEmpty()) 0 else ends[types.size - 1]
 
+    fun start(index: Int): Int = starts[index]
+
+    fun end(index: Int): Int = ends[index]
+
+    fun type(index: Int): TokenType = types[index]
+
     fun add(start: Int, end: Int, type: TokenType) {
         val index = types.size
         if (index == starts.size) {

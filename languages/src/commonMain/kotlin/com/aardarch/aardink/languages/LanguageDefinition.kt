@@ -39,6 +39,10 @@ import com.aardarch.aardink.languages.internal.configuredService
  * @param languageService Optional completions / diagnostics / hover provider.
  * @param keyboardToolbarChars Characters surfaced in the editor's quick-input toolbar. Defaults
  *   to whatever the [tokenizer] reports.
+ * @param fileNames Whole file names that are this language whatever their extension, as VS Code's
+ *   `filenames` and `filenamePatterns` (e.g. `["Dockerfile", "Dockerfile.*"]`): matched without
+ *   regard to case, with `*` standing for any run of characters. [LanguageRegistry.byFileName]
+ *   reads them before the extension.
  */
 data class LanguageDefinition(
     val id: String,
@@ -48,6 +52,7 @@ data class LanguageDefinition(
     val foldingProvider: FoldingProvider = NoOpFoldingProvider,
     val languageService: LanguageService? = null,
     val keyboardToolbarChars: List<Char> = tokenizer.keyboardToolbarChars(),
+    val fileNames: List<String> = emptyList(),
 ) {
     /**
      * This language with [configuration] over it: what it says about closing pairs, surrounding a

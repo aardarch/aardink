@@ -123,6 +123,19 @@ class DocumentColorsTest {
     }
 
     @Test
+    fun `scss and less line comments are not colours, as css has none`() = runTest {
+        val text = "a { // color: #ff0000;\n color: #00ff00; background: url(//x/#f00) }"
+        for (language in listOf(BuiltInLanguages.Scss, BuiltInLanguages.Less)) {
+            assertEquals(listOf("#00ff00" to Color(0xFF00FF00)), colorsIn(language.languageService, text), language.id)
+        }
+        assertEquals(
+            listOf("#ff0000" to Color(0xFFFF0000), "#00ff00" to Color(0xFF00FF00)),
+            colorsIn(BuiltInLanguages.Css.languageService, text),
+            "in CSS, // is not a comment",
+        )
+    }
+
+    @Test
     fun `a picked colour becomes an edit of the colour's text`() = runTest {
         val document = CodeDocument("<c value=\"#ff0000\"/>")
         val service = BuiltInLanguages.Xml.languageService!!
