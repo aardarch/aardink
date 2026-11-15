@@ -1246,8 +1246,10 @@ final class com.aardarch.aardink.core/InlayHint { // com.aardarch.aardink.core/I
 }
 
 final class com.aardarch.aardink.core/InlineCompletion { // com.aardarch.aardink.core/InlineCompletion|null[0]
-    constructor <init>(kotlin/String, kotlin.ranges/IntRange? = ...) // com.aardarch.aardink.core/InlineCompletion.<init>|<init>(kotlin.String;kotlin.ranges.IntRange?){}[0]
+    constructor <init>(kotlin/String, kotlin.ranges/IntRange? = ..., kotlin/Boolean = ...) // com.aardarch.aardink.core/InlineCompletion.<init>|<init>(kotlin.String;kotlin.ranges.IntRange?;kotlin.Boolean){}[0]
 
+    final val isSnippet // com.aardarch.aardink.core/InlineCompletion.isSnippet|{}isSnippet[0]
+        final fun <get-isSnippet>(): kotlin/Boolean // com.aardarch.aardink.core/InlineCompletion.isSnippet.<get-isSnippet>|<get-isSnippet>(){}[0]
     final val range // com.aardarch.aardink.core/InlineCompletion.range|{}range[0]
         final fun <get-range>(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/InlineCompletion.range.<get-range>|<get-range>(){}[0]
     final val text // com.aardarch.aardink.core/InlineCompletion.text|{}text[0]
@@ -1255,7 +1257,8 @@ final class com.aardarch.aardink.core/InlineCompletion { // com.aardarch.aardink
 
     final fun component1(): kotlin/String // com.aardarch.aardink.core/InlineCompletion.component1|component1(){}[0]
     final fun component2(): kotlin.ranges/IntRange? // com.aardarch.aardink.core/InlineCompletion.component2|component2(){}[0]
-    final fun copy(kotlin/String = ..., kotlin.ranges/IntRange? = ...): com.aardarch.aardink.core/InlineCompletion // com.aardarch.aardink.core/InlineCompletion.copy|copy(kotlin.String;kotlin.ranges.IntRange?){}[0]
+    final fun component3(): kotlin/Boolean // com.aardarch.aardink.core/InlineCompletion.component3|component3(){}[0]
+    final fun copy(kotlin/String = ..., kotlin.ranges/IntRange? = ..., kotlin/Boolean = ...): com.aardarch.aardink.core/InlineCompletion // com.aardarch.aardink.core/InlineCompletion.copy|copy(kotlin.String;kotlin.ranges.IntRange?;kotlin.Boolean){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/InlineCompletion.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/InlineCompletion.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/InlineCompletion.toString|toString(){}[0]

@@ -388,7 +388,8 @@ object AardinkWeb {
      *
      * Without `range`, the word at the caret and the rest of the line are what the item replaces,
      * as in Monaco, or the rest of the line, or nothing, whichever its text can hold: see
-     * [com.aardarch.aardink.core.InlineCompletion]. A snippet in `insertText` is left out.
+     * [com.aardarch.aardink.core.InlineCompletion]. An `insertText` of `{ "snippet" }` is a snippet:
+     * the ghost text shows what it expands to, and accepting it goes in with its tab stops.
      *
      * Returns the handle to end it with.
      */

@@ -31,6 +31,7 @@ import com.aardarch.aardink.core.edit.AppliedChange
 import com.aardarch.aardink.core.edit.CommandEdit
 import com.aardarch.aardink.core.edit.EditKind
 import com.aardarch.aardink.core.edit.EditingCommands
+import com.aardarch.aardink.core.edit.ExpandedSnippet
 import com.aardarch.aardink.core.edit.LineCommands
 import com.aardarch.aardink.core.edit.MinimalEdits
 import com.aardarch.aardink.core.edit.OccurrenceFinder
@@ -615,7 +616,11 @@ class CodeEditorState(
     internal var ghostListeners: List<(lines: List<Int>) -> Unit> = emptyList()
 
     /** The inline completions on offer at the caret, and the ghost text of the one showing. */
-    internal val inlineCompletions = GhostTextTracker(document, ::singleCaret) { lines -> ghostListeners.forEach { it(lines) } }
+    internal val inlineCompletions = GhostTextTracker(
+        document,
+        ::singleCaret,
+        expandSnippet = { template, at -> expandSnippet(template, at, adjustWhitespace = true).text },
+    ) { lines -> ghostListeners.forEach { it(lines) } }
 
     /** The caret, if it is one that ghost text can show at. */
     private fun singleCaret(): Int? {
@@ -757,9 +762,20 @@ class CodeEditorState(
      * repeats stays as it is, along with what is anchored to it. Then asks for what might come next
      * without waiting, as Monaco does. The caret can end up lines below where the view stops, and a
      * host's button has no key to show it, so this does.
+     *
+     * A snippet replaces its whole range instead, as Monaco does, and selects its first tab stop.
+     * While that is being filled in nothing is asked for: ghost text does not show in a snippet.
      */
     private fun acceptInlineCompletion(): Boolean {
         val pieces = inlineCompletions.settled?.pieces ?: return false
+        inlineCompletions.settledSnippet?.let { ghost ->
+            val version = document.version
+            insertSnippet(ghost.start until ghost.end, ghost.template)
+            if (document.version == version) return false
+            uiCommandHandler?.invoke(EditorCommand.Reveal(selectionSet.primary.end))
+            if (snippet == null) inlineCompletions.askAgain(now = true)
+            return true
+        }
         val changes = pieces.map { TextChange(it.offset, it.offset, TypingRules.withLineEnding(it.text, lineEnding)) }
         val caret = changes.last().start + changes.sumOf { it.text.length }
         return applyChanges(changes, EditKind.Other) { SelectionSet.caret(caret) }.also {
@@ -1253,16 +1269,7 @@ class CodeEditorState(
         endSnippet()
         val start = target.first.coerceIn(0, document.length)
         val end = (target.last + 1).coerceIn(start, document.length)
-        val line = document.offsetToLineCol(start).first
-        val lineStart = document.lineStart(line)
-        val lineText = document.subSequence(lineStart, document.lineEnd(line)).toString()
-        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
-        val expanded = SnippetParser.expand(
-            template,
-            variable = { name -> snippetVariable(name, line, lineText, start - lineStart) },
-            indent = if (adjustWhitespace) indent else null,
-            indentUnit = if (adjustWhitespace) indentUnit else null,
-        )
+        val expanded = expandSnippet(template, start, adjustWhitespace)
         val additional = additionalEdits.map { edit ->
             val from = edit.range.first.coerceIn(0, document.length)
             TextChange(from, (edit.range.last + 1).coerceIn(from, document.length), edit.newText)
@@ -1278,6 +1285,21 @@ class CodeEditorState(
         document.addChangeListener(session)
         snippet = session
         history.pushStop()
+    }
+
+    /** What [template] becomes inserted at [at]: its variables for that place and, with [adjustWhitespace], that line's indentation. */
+    private fun expandSnippet(template: String, at: Int, adjustWhitespace: Boolean): ExpandedSnippet {
+        val start = at.coerceIn(0, document.length)
+        val line = document.offsetToLineCol(start).first
+        val lineStart = document.lineStart(line)
+        val lineText = document.subSequence(lineStart, document.lineEnd(line)).toString()
+        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
+        return SnippetParser.expand(
+            template,
+            variable = { name -> snippetVariable(name, line, lineText, start - lineStart) },
+            indent = if (adjustWhitespace) indent else null,
+            indentUnit = if (adjustWhitespace) indentUnit else null,
+        )
     }
 
     /**

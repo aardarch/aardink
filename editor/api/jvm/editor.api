@@ -1310,16 +1310,18 @@ public final class com/aardarch/aardink/core/InlayHint {
 
 public final class com/aardarch/aardink/core/InlineCompletion {
 	public static final field $stable I
-	public fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;)V
-	public synthetic fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Lkotlin/ranges/IntRange;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Lkotlin/ranges/IntRange;
-	public final fun copy (Ljava/lang/String;Lkotlin/ranges/IntRange;)Lcom/aardarch/aardink/core/InlineCompletion;
-	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/InlineCompletion;Ljava/lang/String;Lkotlin/ranges/IntRange;ILjava/lang/Object;)Lcom/aardarch/aardink/core/InlineCompletion;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;Lkotlin/ranges/IntRange;Z)Lcom/aardarch/aardink/core/InlineCompletion;
+	public static synthetic fun copy$default (Lcom/aardarch/aardink/core/InlineCompletion;Ljava/lang/String;Lkotlin/ranges/IntRange;ZILjava/lang/Object;)Lcom/aardarch/aardink/core/InlineCompletion;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getRange ()Lkotlin/ranges/IntRange;
 	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
+	public final fun isSnippet ()Z
 	public fun toString ()Ljava/lang/String;
 }
 

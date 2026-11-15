@@ -613,21 +613,22 @@ internal class WebInlineCompletions(private val providers: List<suspend (text: S
 
 /**
  * Monaco's `InlineCompletions`, `{ items: [{ insertText, range? }] }`, or the bare array of items. An
- * `insertText` that is a snippet, `{ snippet }`, shows and goes in as its text: placeholders as their
- * default text, a choice as its first, tab stops and variables as nothing; one that is then empty is
- * left out. So is an item whose `range` is not one in [document], which would otherwise read as no
- * range given.
+ * `insertText` that is a snippet, `{ snippet }`, is one: the ghost text shows what it expands to, and
+ * accepting it goes in as a snippet, so Tab steps through its stops. An empty one is left out. So is
+ * an item whose `range` is not one in [document], which would otherwise read as no range given.
  */
 internal fun parseInlineCompletions(document: CodeDocument, json: String): List<InlineCompletion> {
     val root = parsed(json)
     val items = ((root as? JsonObject)?.get("items") ?: root) as? JsonArray ?: return emptyList()
     return items.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
-        val text = item.string("insertText")
-            ?: (item["insertText"] as? JsonObject)?.string("snippet")?.let(::snippetText)?.takeIf { it.isNotEmpty() }
+        val plain = item.string("insertText")
+        val text = plain
+            ?: (item["insertText"] as? JsonObject)?.string("snippet")?.takeIf { it.isNotEmpty() }
             ?: return@mapNotNull null
-        val range = item["range"].takeUnless { it is JsonNull } ?: return@mapNotNull InlineCompletion(text)
-        rangeIn(document, range)?.let { InlineCompletion(text, it) }
+        val isSnippet = plain == null
+        val range = item["range"].takeUnless { it is JsonNull } ?: return@mapNotNull InlineCompletion(text, isSnippet = isSnippet)
+        rangeIn(document, range)?.let { InlineCompletion(text, it, isSnippet) }
     }
 }
 
@@ -1137,72 +1138,4 @@ internal fun decodeSemanticTokens(data: JsonArray, legend: WebSemanticLegend, do
         if (end > start) tokens += Token(start, end, type)
     }
     return tokens
-}
-
-/**
- * A snippet's text as it reads with nothing filled in: `${1:name}` its default text, `${1|a,b|}` its
- * first choice, `$1`, `$0` and variables (`$TM_FILENAME`, `${TM_SELECTED_TEXT:default}` its default)
- * nothing, `\$`, `\}` and `\\` the character.
- */
-internal fun snippetText(snippet: String): String {
-    val out = StringBuilder(snippet.length)
-    var i = 0
-    fun readTo(end: Int) {
-        while (i < end) {
-            val c = snippet[i]
-            when {
-                c == '\\' && i + 1 < snippet.length && snippet[i + 1] in "$}\\,|" -> {
-                    out.append(snippet[i + 1])
-                    i += 2
-                }
-
-                c == '$' && i + 1 < snippet.length && (snippet[i + 1].isLetterOrDigit() || snippet[i + 1] == '_') -> {
-                    i++
-                    while (i < snippet.length && (snippet[i].isLetterOrDigit() || snippet[i] == '_')) i++
-                }
-
-                c == '$' && i + 1 < snippet.length && snippet[i + 1] == '{' -> {
-                    i += 2
-                    while (i < snippet.length && (snippet[i].isLetterOrDigit() || snippet[i] == '_')) i++
-                    when (snippet.getOrNull(i)) {
-                        ':' -> {
-                            i++
-                            readTo(closingBrace(snippet, i))
-                            i++
-                        }
-
-                        '|' -> {
-                            val close = snippet.indexOf("|}", i + 1).takeIf { it >= 0 } ?: snippet.length
-                            out.append(snippet.substring(i + 1, close).split(',').first())
-                            i = close + 2
-                        }
-
-                        else -> i = closingBrace(snippet, i) + 1
-                    }
-                }
-
-                else -> {
-                    out.append(c)
-                    i++
-                }
-            }
-        }
-    }
-    readTo(snippet.length)
-    return out.toString()
-}
-
-/** The index of the `}` closing a placeholder whose text starts at [from], past nested ones and escapes. */
-private fun closingBrace(snippet: String, from: Int): Int {
-    var depth = 0
-    var i = from
-    while (i < snippet.length) {
-        when {
-            snippet[i] == '\\' -> i++
-            snippet[i] == '$' && snippet.getOrNull(i + 1) == '{' -> depth++
-            snippet[i] == '}' -> if (depth == 0) return i else depth--
-        }
-        i++
-    }
-    return snippet.length
 }

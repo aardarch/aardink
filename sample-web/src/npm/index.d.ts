@@ -996,9 +996,9 @@ export interface AardinkInlineCompletions {
 }
 
 /**
- * Monaco's `InlineCompletion`, as far as the editor shows it. A `{ snippet }` shows and goes in as
- * its text: a placeholder as its default text, a choice as its first, tab stops and variables as
- * nothing.
+ * Monaco's `InlineCompletion`, as far as the editor shows it. A `{ snippet }` shows what it expands
+ * to (a placeholder as its default text, a choice as its first), and accepting it replaces the whole
+ * `range` with the snippet, as in Monaco, so Tab then steps through its tab stops.
  *
  * `range` is what it replaces, and must hold the caret. What `insertText` repeats of it is not shown
  * again: over `)`, the text `x) {` shows `x` before the bracket and ` {` after it, which is how ghost

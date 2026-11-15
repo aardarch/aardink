@@ -279,14 +279,15 @@ class WebProvidersTest {
     }
 
     @Test
-    fun `a snippet inline completion shows as its text`() {
-        assertEquals("for (i of items) {\n\t\n}", snippetText("for (\${1:i} of \${2:items}) {\n\t$0\n}"))
-        assertEquals("let x = a;", snippetText("let \${1:x} = \${2|a,b|};"))
-        assertEquals("f() \$ {}", snippetText("f(\$TM_SELECTED_TEXT) \\$ {\${3:\${4}}}"))
-        assertEquals("nested default", snippetText("\${1:nested \${2:default}}"))
+    fun `a snippet inline completion is kept as a snippet`() {
         assertEquals(
-            listOf(InlineCompletion("a b")),
+            listOf(InlineCompletion("a \${1:b}", isSnippet = true)),
             parseInlineCompletions(CodeDocument(""), """{ "items": [{ "insertText": { "snippet": "a ${'$'}{1:b}" } }] }"""),
+        )
+        val range = """{ "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 2 }"""
+        assertEquals(
+            listOf(InlineCompletion("f(\$1)", 0 until 1, isSnippet = true)),
+            parseInlineCompletions(CodeDocument("f"), """[{ "insertText": { "snippet": "f(${'$'}1)" }, "range": $range }]"""),
         )
     }
 }

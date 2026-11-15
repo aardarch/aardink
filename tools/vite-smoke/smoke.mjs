@@ -394,6 +394,57 @@ async function inlineCompletionCheck(page) {
 }
 
 /**
+ * A `{ snippet }` inline completion: the ghost shows what it expands to, Tab puts it in with its
+ * first placeholder selected, and Tab again goes to the next stop rather than indenting.
+ */
+async function inlineSnippetCheck(page) {
+  setPhase('inline snippet completions');
+  await page.evaluate(async (mount) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createEditor, registerInlineCompletionsProvider, registerLanguage } = window.__aardink;
+    window.__snippetAsked = 0;
+    await registerLanguage({ id: 'toy-ghost-snippet', grammar: { tokenizer: { root: [] } } }, {});
+    window.__inlineProvider = await registerInlineCompletionsProvider('toy-ghost-snippet', {
+      provideInlineCompletions: async () => {
+        window.__snippetAsked++;
+        return { items: [{ insertText: { snippet: '(${1:x}, $2)$0' } }] };
+      },
+    });
+    window.__smokeEditor = await createEditor(eval(mount), undefined, { value: 'f', language: 'toy-ghost-snippet' });
+  }, MOUNT);
+  const value = () => page.evaluate(() => window.__smokeEditor.getValue());
+  const selection = () => page.evaluate(() => {
+    const s = window.__smokeEditor.getSelections()[0];
+    return { line: s.positionLineNumber, from: Math.min(s.selectionStartColumn, s.positionColumn), to: Math.max(s.selectionStartColumn, s.positionColumn) };
+  });
+  await sleep(800);
+  await page.mouse.click(300, 12);
+  await page.evaluate(() => window.__smokeEditor.setPosition({ lineNumber: 1, column: 2 }));
+  await sleep(100);
+  await page.keyboard.type('g');
+  await page.waitForFunction(() => window.__snippetAsked > 0, { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const shownValue = await value();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const accepted = await value();
+  const first = await selection();
+  await page.keyboard.press('Tab');
+  await sleep(200);
+  const afterTab = await value();
+  const second = await selection();
+  await page.evaluate(() => window.__inlineProvider.dispose());
+
+  return {
+    'a snippet inline completion shows without going in': shownValue === 'fg',
+    'Tab puts a snippet in with its first placeholder selected':
+      accepted === 'fg(x, )' && first?.line === 1 && first?.from === 4 && first?.to === 5,
+    'Tab again goes to the snippet\'s next stop': afterTab === 'fg(x, )' && second?.from === 7 && second?.to === 7,
+  };
+}
+
+/**
  * provideCodeLenses through the dispatcher, a row on screen and not in the document, and a real
  * click on each lens of the row coming back through runCodeLensCommand with the caret left alone.
  */
@@ -1189,6 +1240,7 @@ try {
     ...(await serverCodeLensCheck(desktop)),
     ...(await stuckServerLensCheck(desktop)),
     ...(await inlineCompletionCheck(desktop)),
+    ...(await inlineSnippetCheck(desktop)),
     ...(await languageServerCheck(desktop)),
     ...(await serverTypingCheck(desktop)),
     ...(await linkCheck(desktop)),

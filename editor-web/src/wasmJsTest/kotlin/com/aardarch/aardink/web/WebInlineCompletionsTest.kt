@@ -293,7 +293,7 @@ class WebInlineCompletionsTest {
         val document = CodeDocument("a")
         assertEquals(
             emptyList(),
-            parseInlineCompletions(document, """[{ "insertText": { "snippet": "${'$'}1" } }, { "range": null }, 7]"""),
+            parseInlineCompletions(document, """[{ "insertText": { "snippet": "" } }, { "range": null }, 7]"""),
         )
         assertEquals(emptyList(), parseInlineCompletions(document, "not json"))
         assertEquals(emptyList(), parseInlineCompletions(document, "{}"))

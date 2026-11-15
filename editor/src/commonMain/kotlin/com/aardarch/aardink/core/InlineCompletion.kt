@@ -42,9 +42,14 @@ import kotlin.math.min
  *   comes next leaves this null, and a closing bracket it repeats is still not doubled. Text the
  *   document has already, from the caret on or from the word's start to the caret or past it, shows
  *   nothing. An empty range is a plain insertion: a bracket [text] repeats there is meant, and doubled.
+ * @property isSnippet Whether [text] is in VS Code's snippet syntax, as [CompletionItem.isSnippet].
+ *   The ghost text shows what it expands to (a placeholder as its default, a choice as its first,
+ *   tab stops and variables as what they stand for, its lines indented as the caret's line), and
+ *   accepting it replaces the whole range with the snippet, as Monaco does, so Tab then steps
+ *   through its tab stops.
  */
 @Immutable
-data class InlineCompletion(val text: String, val range: IntRange? = null)
+data class InlineCompletion(val text: String, val range: IntRange? = null, val isSnippet: Boolean = false)
 
 /**
  * Offers what might come next at the caret, as Monaco's `provideInlineCompletions`. Where the
@@ -74,6 +79,9 @@ internal data class GhostText(val line: Int, val pieces: List<GhostPiece>)
 /** Providers are wanted at [caret]: at once with [now], and otherwise once typing pauses. */
 internal class InlineCompletionAsk(val caret: Int, val now: Boolean)
 
+/** A snippet on offer, to go in for [start, end) as it stands now. */
+internal class GhostSnippet(val start: Int, val end: Int, val template: String)
+
 /**
  * The completions on offer at the caret, moved with the text, and which of them shows.
  *
@@ -91,16 +99,22 @@ internal class InlineCompletionAsk(val caret: Int, val now: Boolean)
  *
  * @param caret The one caret, or null if ghost text cannot show now: a selection, several carets, a
  *   snippet being filled in, a read-only editor.
+ * @param expandSnippet What a snippet template inserted at an offset becomes, as the state's snippet
+ *   insertion would put it in.
  * @param onChanged Told which lines' ghost text changed, sorted.
  */
 internal class GhostTextTracker(
     private val document: CodeDocument,
     private val caret: () -> Int?,
+    private val expandSnippet: (template: String, at: Int) -> String = { template, _ -> template },
     private val onChanged: (lines: List<Int>) -> Unit,
 ) : DocumentChangeListener {
 
-    /** A completion as it stands: [text] with LF line breaks, for [start, end). */
-    private class Offer(val text: String, val start: Int, var end: Int) {
+    /**
+     * A completion as it stands: [text] with LF line breaks, for [start, end). For a snippet, [text]
+     * is what it expands to and [template] the snippet itself.
+     */
+    private class Offer(val text: String, val start: Int, var end: Int, val template: String? = null) {
         /** Follows [change]; false if that ends it. Only what is typed inside the range goes on. */
         fun follow(change: DocumentChange): Boolean {
             if (change.deletedLength > 0 || change.offset !in start..end) return false
@@ -143,6 +157,14 @@ internal class GhostTextTracker(
 
     /** [shown] if it is about the text as it is: an edit made straight through the document settles nothing. */
     val settled: GhostText? get() = shown?.takeIf { document.version == settledVersion }
+
+    /** The snippet behind [settled], if what shows is one. */
+    val settledSnippet: GhostSnippet?
+        get() {
+            if (settled == null) return null
+            val offer = current ?: return null
+            return offer.template?.let { GhostSnippet(offer.start, offer.end, it) }
+        }
 
     private val isIdle: Boolean get() = offers.isEmpty() && shown == null && ask == null && toldAt < 0
 
@@ -269,11 +291,13 @@ internal class GhostTextTracker(
 
     /** [completion] for the caret [at], if its range can be one and it has something to add. Not yet whether it shows anything. */
     private fun offerOf(completion: InlineCompletion, at: Int): Offer? {
-        val text = TypingRules.normalizeLineEndings(completion.text)
         val range = completion.range
+        val template = completion.text.takeIf { completion.isSnippet }
+        val shows = if (template != null) expandSnippet(template, range?.first?.coerceIn(0, at) ?: at) else completion.text
+        val text = TypingRules.normalizeLineEndings(shows)
         if (range != null) {
             val end = if (range.isEmpty()) range.first else range.last + 1
-            return if (range.first in 0..at && end in at..document.length) Offer(text, range.first, end) else null
+            return if (range.first in 0..at && end in at..document.length) Offer(text, range.first, end, template) else null
         }
         val lineEnd = document.lineEnd(lineOf(at))
         val end = if (lineEnd > at && document[lineEnd - 1] == '\r') lineEnd - 1 else lineEnd
@@ -282,7 +306,8 @@ internal class GhostTextTracker(
         // the caret to be that: short of it, it says what comes next, and only happens to match.
         if (repeats(text, at) || (wordStart + text.length >= at && repeats(text, wordStart))) return null
         // Most text does not start with the word, as a provider asked what comes next says only that.
-        return listOf(Offer(text, wordStart, end), Offer(text, at, end)).firstOrNull { ghostOf(it, at) != null } ?: Offer(text, at, at)
+        return listOf(Offer(text, wordStart, end, template), Offer(text, at, end, template)).firstOrNull { ghostOf(it, at) != null }
+            ?: Offer(text, at, at, template)
     }
 
     /** Whether the document has [text] at [offset], where each of its line breaks may be CR LF. */
