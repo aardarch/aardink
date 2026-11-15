@@ -129,6 +129,20 @@ jobs:
         working-directory: tools/vite-smoke
         run: node perf.mjs --gate --keys 20
 
+      # The same document with inlay hints and code lenses from a registered language's providers,
+      # and with a language server's semantic tokens (docs/AARDINK_ROADMAP.md section 8.4).
+      - name: Web performance with hints and lenses
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: node perf.mjs --hints --gate --keys 20
+
+      - name: Web performance with a language server's semantic tokens
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: node perf.mjs --semantic --gate --keys 20
+
       - name: Upload web sample
         uses: actions/upload-artifact@v7
         with:
@@ -137,6 +151,8 @@ jobs:
             sample-web/build/dist/wasmJs/productionExecutable
             tools/vite-smoke/dist/smoke.png
             tools/vite-smoke/dist/perf.json
+            tools/vite-smoke/dist/perf-hints.json
+            tools/vite-smoke/dist/perf-semantic.json
             tools/vite-smoke/dist/bundle-size.json
             editor/build/perf-jvm.json
           retention-days: 14

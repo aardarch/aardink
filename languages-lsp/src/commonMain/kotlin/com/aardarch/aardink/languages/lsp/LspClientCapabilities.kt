@@ -142,7 +142,9 @@ val DefaultClientCapabilities: JsonObject = buildJsonObject {
         feature("codeLens")
         feature("inlayHint")
         feature("semanticTokens") {
-            putJsonObject("requests") { put("full", true) }
+            // Delta, not range: a range needs the lines on screen, which the editor does not hand a
+            // language service (docs/AARDINK_ROADMAP.md §16.1).
+            putJsonObject("requests") { putJsonObject("full") { put("delta", true) } }
             put("formats", strings("relative"))
             put("tokenTypes", SemanticTokenTypes)
             put("tokenModifiers", SemanticTokenModifiers)

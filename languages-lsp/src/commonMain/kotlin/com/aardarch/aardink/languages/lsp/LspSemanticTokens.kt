@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.platform.EditorDispatchers
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -101,10 +102,10 @@ internal class LspSemanticLegend(private val tokenTypes: List<String>, private v
  * paints, and an answer can be as long as the document. With `delay`, as a coroutine that only
  * yields there resumes before any frame is drawn.
  */
-internal class LspDecodePacer(private val slice: Duration = 8.milliseconds) {
+internal open class LspDecodePacer(private val slice: Duration = 8.milliseconds) {
     private var sliceStart = TimeSource.Monotonic.markNow()
 
-    suspend fun check() {
+    open suspend fun check() {
         if (sliceStart.elapsedNow() < slice) return
         delay(1)
         sliceStart = TimeSource.Monotonic.markNow()
@@ -128,16 +129,41 @@ internal suspend fun decodeSemanticTokens(
     document: CodeDocument,
     pacer: LspDecodePacer? = if (EditorDispatchers.computeIsMainThread) LspDecodePacer() else null,
 ): List<Token> {
+    val numbers = semanticTokenNumbers(data, pacer) ?: return emptyList()
+    return decodeSemanticTokens(numbers, legend, document, pacer)
+}
+
+/** [data]'s numbers, or null if one is not an unsigned integer: nothing after a bad number can be placed. */
+internal suspend fun semanticTokenNumbers(
+    data: JsonArray,
+    pacer: LspDecodePacer? = if (EditorDispatchers.computeIsMainThread) LspDecodePacer() else null,
+): IntArray? {
+    val numbers = IntArray(data.size)
+    for (index in numbers.indices) {
+        if (index % INTEGERS_PER_CHECK == 0) pacer?.check()
+        numbers[index] = data.unsignedAt(index) ?: return null
+    }
+    return numbers
+}
+
+/** [decodeSemanticTokens] for numbers already read, as a delta's edits leave them. */
+internal suspend fun decodeSemanticTokens(
+    data: IntArray,
+    legend: LspSemanticLegend,
+    document: CodeDocument,
+    pacer: LspDecodePacer? = if (EditorDispatchers.computeIsMainThread) LspDecodePacer() else null,
+): List<Token> {
     val tokens = ArrayList<Token>(data.size / TOKEN_INTEGERS)
     var line = 0L
     var column = 0L
     for (index in 0..data.size - TOKEN_INTEGERS step TOKEN_INTEGERS) {
         if (index % INTEGERS_PER_CHECK == 0) pacer?.check()
-        val deltaLine = data.unsignedAt(index) ?: return emptyList()
-        val deltaStart = data.unsignedAt(index + 1) ?: return emptyList()
-        val length = data.unsignedAt(index + 2) ?: return emptyList()
-        val type = data.unsignedAt(index + 3) ?: return emptyList()
-        val modifiers = data.unsignedAt(index + 4) ?: return emptyList()
+        val deltaLine = data[index]
+        val deltaStart = data[index + 1]
+        val length = data[index + 2]
+        val type = data[index + 3]
+        val modifiers = data[index + 4]
+        if (deltaLine < 0 || deltaStart < 0 || length < 0 || type < 0 || modifiers < 0) return emptyList()
         line += deltaLine
         column = if (deltaLine == 0) column + deltaStart else deltaStart.toLong()
         // Lines only go forward, so nothing after this can be in the document either.
@@ -149,6 +175,45 @@ internal suspend fun decodeSemanticTokens(
         if (end > start) tokens += Token(start.toInt(), end.toInt(), tokenType)
     }
     return tokens
+}
+
+/**
+ * [previous] with a `SemanticTokensDelta`'s [edits] made, each `{ start, deleteCount, data? }` in
+ * the numbers of [previous]; null when they do not fit it (out of range, overlapping or not numbers),
+ * and the whole answer has to be asked for again. Applied in order of their starts, as VS Code does.
+ */
+internal fun applySemanticTokenEdits(previous: IntArray, edits: JsonArray): IntArray? {
+    class Edit(val start: Int, val deleteCount: Int, val data: IntArray)
+    val parsed = edits.map { element ->
+        val edit = element as? JsonObject ?: return null
+        val start = (edit["start"] as? JsonPrimitive)?.intOrNull?.takeIf { it >= 0 } ?: return null
+        val deleteCount = (edit["deleteCount"] as? JsonPrimitive)?.intOrNull?.takeIf { it >= 0 } ?: return null
+        val data = when (val numbers = edit["data"]) {
+            null, JsonNull -> IntArray(0)
+            is JsonArray -> IntArray(numbers.size) { numbers.unsignedAt(it) ?: return null }
+            else -> return null
+        }
+        Edit(start, deleteCount, data)
+    }.sortedBy { it.start }
+    var size = previous.size
+    var from = 0
+    for (edit in parsed) {
+        if (edit.start < from || edit.start.toLong() + edit.deleteCount > previous.size) return null
+        size += edit.data.size - edit.deleteCount
+        from = edit.start + edit.deleteCount
+    }
+    val result = IntArray(size)
+    var at = 0
+    from = 0
+    for (edit in parsed) {
+        previous.copyInto(result, at, from, edit.start)
+        at += edit.start - from
+        edit.data.copyInto(result, at)
+        at += edit.data.size
+        from = edit.start + edit.deleteCount
+    }
+    previous.copyInto(result, at, from, previous.size)
+    return result
 }
 
 private fun JsonArray.unsignedAt(index: Int): Int? = (this[index] as? JsonPrimitive)?.intOrNull?.takeIf { it >= 0 }

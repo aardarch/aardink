@@ -353,6 +353,8 @@ class LspLanguageService(
      * pulled again at once and then read by the editor; everything else the editor asks again for.
      */
     private val refreshListener: (String) -> Unit = { method ->
+        // The server's tokens may have changed for reasons of its own: start again from a whole answer.
+        if (method == "workspace/semanticTokens/refresh") lastSemantic = null
         val state = sync.state
         if (state != null) {
             if (method == "workspace/diagnostic/refresh" && !pullRefused && supports("diagnosticProvider")) {
@@ -378,6 +380,7 @@ class LspLanguageService(
         check(!sync.isAttached) { "$documentUri is attached to an editor state, which opened it" }
         client.addDiagnosticsListener(diagnosticsListener)
         diagnosticsVersion = null
+        lastSemantic = null
         sync.open(document.text)
     }
 
@@ -406,6 +409,7 @@ class LspLanguageService(
         diagnosticsVersion = null
         offeredCompletions = emptyList()
         servedLenses = null
+        lastSemantic = null
         sync.close()
     }
 
@@ -950,10 +954,54 @@ class LspLanguageService(
     override suspend fun semanticTokens(document: CodeDocument): List<Token> {
         if (supports("semanticTokensProvider") && !sync.awaitOpen()) return emptyList()
         val legend = semanticLegend ?: return emptyList()
-        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
-        val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
+        val previous = lastSemantic?.takeIf { semanticDeltas }
+        val data = previous?.let { semanticTokensSince(it) } ?: wholeSemanticTokens() ?: return emptyList()
         return decodeSemanticTokens(data, legend, document)
     }
+
+    /**
+     * The server's last whole answer, as its `resultId` and numbers, for a `full/delta` request to
+     * start from. A server that sends no `resultId` gets whole requests only.
+     */
+    private class SemanticResult(val resultId: String, val data: IntArray)
+
+    @Volatile
+    private var lastSemantic: SemanticResult? = null
+
+    /** `textDocument/semanticTokens/full`: every token, and the start of the next delta. */
+    private suspend fun wholeSemanticTokens(): IntArray? {
+        val answer = requestPatiently("textDocument/semanticTokens/full", documentParams())
+        val result = (answer as? LspResult.Value)?.element as? JsonObject
+        val data = (result?.get("data") as? JsonArray)?.let { semanticTokenNumbers(it) }
+        lastSemantic = if (result != null && data != null) semanticResultOf(result, data) else null
+        return data
+    }
+
+    /**
+     * `textDocument/semanticTokens/full/delta` since [previous]: the server's edits to its numbers, or
+     * all of them again, which a server may send instead. Null for anything else (an error, edits that
+     * do not fit), and the whole answer is asked for.
+     */
+    private suspend fun semanticTokensSince(previous: SemanticResult): IntArray? {
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            put("previousResultId", previous.resultId)
+        }
+        val answer = requestPatiently("textDocument/semanticTokens/full/delta", params)
+        val result = (answer as? LspResult.Value)?.element as? JsonObject
+        val edits = result?.get("edits") as? JsonArray
+        val whole = result?.get("data") as? JsonArray
+        val data = when {
+            edits != null -> applySemanticTokenEdits(previous.data, edits)
+            whole != null -> semanticTokenNumbers(whole)
+            else -> null
+        }
+        lastSemantic = if (result != null && data != null) semanticResultOf(result, data) else null
+        return data
+    }
+
+    private fun semanticResultOf(result: JsonObject, data: IntArray): SemanticResult? =
+        (result["resultId"] as? JsonPrimitive)?.contentOrNull?.let { SemanticResult(it, data) }
 
     /**
      * The server's `textDocument/inlayHint` answer for [range] of [document], which should be what it
@@ -1103,6 +1151,18 @@ class LspLanguageService(
             val method = methodOf("semanticTokensProvider")
             val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
             return (listOfNotNull(declared) + registered).firstNotNullOfOrNull(LspSemanticLegend::from)
+        }
+
+    /** Whether the server answers `semanticTokens/full/delta`, as it declared or registered `full: { delta: true }`. */
+    private val semanticDeltas: Boolean
+        get() {
+            if (!supports("semanticTokensProvider")) return false
+            val declared = (client.serverCapabilities as? JsonObject)?.get("semanticTokensProvider") as? JsonObject
+            val method = methodOf("semanticTokensProvider")
+            val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
+            return (listOfNotNull(declared) + registered).any { provider ->
+                ((provider["full"] as? JsonObject)?.get("delta") as? JsonPrimitive)?.booleanOrNull == true
+            }
         }
 
     /**

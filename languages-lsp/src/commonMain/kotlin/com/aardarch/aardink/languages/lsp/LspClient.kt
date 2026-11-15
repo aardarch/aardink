@@ -643,13 +643,14 @@ class LspClient(
         when {
             method != null && id != null -> launchServerRequest(id, method, message["params"])
             method != null -> handleNotification(method, message["params"])
-            id != null -> handleResponse(payload)
+            id != null -> handleResponse(message)
         }
     }
 
-    private suspend fun handleResponse(payload: String) {
+    /** The response in [message], read from the tree already parsed rather than from the text again. */
+    private suspend fun handleResponse(message: JsonObject) {
         val response = try {
-            LspJson.decodeFromString(LspMessage.Response.serializer(), payload)
+            LspJson.decodeFromJsonElement(LspMessage.Response.serializer(), message)
         } catch (_: SerializationException) {
             return
         } catch (_: IllegalArgumentException) {
@@ -857,8 +858,19 @@ class LspClient(
         return JsonArray(List(itemCount) { JsonNull })
     }
 
-    private fun parseObjectOrNull(payload: String): JsonObject? = try {
-        LspJson.parseToJsonElement(payload) as? JsonObject
+    /**
+     * [payload] as one JSON object, or null for anything else. Parsed once, here, for every message.
+     * Where the compute dispatcher is the page's event loop (wasm), a long one is parsed in slices
+     * that let the page paint between them: a whole document's semantic tokens can run to hundreds
+     * of kilobytes.
+     */
+    private suspend fun parseObjectOrNull(payload: String): JsonObject? = try {
+        val element = if (payload.length >= SLICED_PARSE_MIN_CHARS && EditorDispatchers.computeIsMainThread) {
+            parseJsonInSlices(payload)
+        } else {
+            LspJson.parseToJsonElement(payload)
+        }
+        element as? JsonObject
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
