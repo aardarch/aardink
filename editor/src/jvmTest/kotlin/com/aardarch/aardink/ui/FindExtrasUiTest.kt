@@ -85,6 +85,25 @@ class FindExtrasUiTest {
     }
 
     @Test
+    fun `find in selection whose place is gone finds nothing, not the whole document`() = runComposeUiTest {
+        val state = CodeEditorState("ab\nab ab\nab")
+        val find = FindReplaceState().apply { replacement = "zz" }
+        show(state, find)
+        state.selection = TextRange(3, 8)
+        find.show(replace = true)
+        find.inSelection = true
+        find.query = "ab"
+        waitUntil { find.matches.size == 2 }
+
+        runOnIdle { state.loadText("ab ab\nab") }
+        waitUntil { find.matches.isEmpty() }
+        assertTrue(find.inSelection)
+        onNodeWithText("All").performClick()
+        waitForIdle()
+        assertEquals("ab ab\nab", state.document.text, "Replace All must not reach outside the place searched")
+    }
+
+    @Test
     fun `find in selection with nothing selected searches the caret's line`() = runComposeUiTest {
         val state = CodeEditorState("ab\nab ab\nab")
         val find = FindReplaceState()

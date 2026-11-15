@@ -642,11 +642,12 @@ private fun CodeEditorLayoutContent(
                     findReplaceState.wholeWord,
                     findReplaceState.useRegex,
                     findReplaceState.scope,
+                    findReplaceState.scopeLost,
                     state.textVersion,
                 )
             }.collectLatest { _ ->
                 // collectLatest: a newer query or edit cancels a search still running.
-                if (!findReplaceState.visible || findReplaceState.query.isEmpty()) {
+                if (!findReplaceState.visible || findReplaceState.query.isEmpty() || findReplaceState.scopeLost) {
                     findReplaceState.matches = emptyList()
                     findReplaceState.matchesCapped = false
                     findReplaceState.currentMatchIndex = -1

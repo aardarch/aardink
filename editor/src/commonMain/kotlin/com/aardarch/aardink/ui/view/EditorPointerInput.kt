@@ -102,6 +102,20 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** The selection being dragged, and where it was pressed. */
     private var moving: Pair<TextRange, Int>? = null
 
+    /**
+     * The text's version when [moving] was pressed. An edit before the release (the host's, or a
+     * formatter's answer) leaves its offsets pointing at other text, so the move is called off.
+     */
+    private var movingVersion = 0
+
+    /** Calls off the move under way when the text changed since it was pressed; true when it did. */
+    private fun movingTextChanged(): Boolean {
+        if (moving == null || state.textVersion == movingVersion) return false
+        moving = null
+        dropCaret = null
+        return true
+    }
+
     /** Where a dragged selection would land, shown as a caret; null when nothing is being dragged. */
     var dropCaret by mutableStateOf<Int?>(null)
         private set
@@ -167,11 +181,12 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
             }
 
             clicks == 1 && dragAndDrop && !touch && !link && current.ranges.any {
-                !it.collapsed && hit.offset in it.min + 1 until it.max
+                !it.collapsed && hit.offset in it.min until it.max
             } -> {
                 // In a selection: dragging moves its text, and a release where it was pressed places the caret.
                 origin = null
-                moving = current.ranges.first { hit.offset in it.min + 1 until it.max } to hit.offset
+                moving = current.ranges.first { hit.offset in it.min until it.max } to hit.offset
+                movingVersion = state.textVersion
             }
 
             clicks == 1 -> {
@@ -215,6 +230,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** The pointer moved to [position] with the button held (or the finger down after a long press). */
     fun drag(position: Offset) {
+        if (movingTextChanged()) return
         if (moving != null) {
             val at = view.offsetAt(position).offset
             dropCaret = at
@@ -249,6 +265,7 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
 
     /** The press ended; [copy] is whether the copy modifier was held as it did. */
     fun release(copy: Boolean = false) {
+        movingTextChanged()
         moving?.let { (selection, pressedAt) ->
             val drop = dropCaret
             moving = null

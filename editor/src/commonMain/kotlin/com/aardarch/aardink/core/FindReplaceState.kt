@@ -55,8 +55,14 @@ class FindReplaceState {
     /** Where [inSelection] searches, moved along with each edit; the layout attaches it to the document. */
     internal val scopeTracker = TrackedRanges<IntRange>({ it }, { _, range -> range }, keepsOneCharacter = false)
 
-    /** The place [inSelection] searches, or null for the whole document. */
+    /** The place [inSelection] searches, or null for the whole document (or when [scopeLost]). */
     internal val scope: IntRange? get() = if (inSelection) scopeTracker.items.firstOrNull() else null
+
+    /**
+     * Whether [inSelection] is on but its place is gone: its text was deleted, or the document
+     * loaded anew. Nothing matches then, rather than the whole document, until a new place is taken.
+     */
+    internal val scopeLost: Boolean get() = inSelection && scopeTracker.items.isEmpty()
 
     var matches by mutableStateOf<List<IntRange>>(emptyList())
         internal set

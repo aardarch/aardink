@@ -82,6 +82,43 @@ class DragAndDropUiTest {
     }
 
     @Test
+    fun `a one-character selection can be dragged`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        show(state, EditorOptions(dragAndDrop = true))
+        state.selection = TextRange(0, 1)
+
+        drag(from = onFirstLine(2f), to = onFirstLine(500f))
+
+        assertEquals("ello worldh", state.document.text)
+        assertEquals(TextRange(10, 11), state.selection)
+    }
+
+    @Test
+    fun `an edit while a selection is dragged calls the move off`() = runComposeUiTest {
+        val state = CodeEditorState("hello world")
+        show(state, EditorOptions(dragAndDrop = true))
+        state.selection = TextRange(0, 5)
+        val from = onFirstLine(20f)
+        val to = onFirstLine(500f)
+        val editor = onNodeWithTag(EditorTestTags.EDITOR)
+        editor.performMouseInput {
+            moveTo(from)
+            press()
+        }
+        waitForIdle()
+        // The host edits before the release, as a formatter's late answer would.
+        runOnIdle { state.applyEdit(0, 0, ">> ", TextRange(0)) }
+        editor.performMouseInput {
+            moveTo(Offset((from.x + to.x) / 2f, from.y))
+            moveTo(to)
+            release()
+        }
+        waitForIdle()
+
+        assertEquals(">> hello world", state.document.text)
+    }
+
+    @Test
     fun `without the option a drag in a selection selects, as before`() = runComposeUiTest {
         val state = CodeEditorState("hello world")
         show(state, EditorOptions())
