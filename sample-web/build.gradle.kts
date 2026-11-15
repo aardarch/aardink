@@ -121,13 +121,19 @@ val npmPackage by tasks.registering(Sync::class) {
     from(rootProject.file("LICENSE"))
     into("kotlin") {
         // Already holds skiko.mjs/skiko.wasm next to the module, which is where it imports them.
+        // Not what nothing in the package imports: skikod8.mjs is Skiko for the d8 shell, and
+        // js-reexport-symbols.mjs the webpack bundle's way of reaching it.
         from(kotlinOutput) {
             include("*.mjs", "*.wasm")
+            exclude("skikod8.mjs", "js-reexport-symbols.mjs")
         }
         from(processedResources) {
             include("composeResources/**")
         }
     }
+    // Every module and library has a composeResources folder; only editor-web's has a file (the
+    // font). The empty ones would ship as empty folders.
+    includeEmptyDirs = false
 }
 
 // ── Keep Exports.kt in step with the compiled template ──────────────────────────

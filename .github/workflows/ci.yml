@@ -100,6 +100,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm smoke
 
+      # aardink-web.wasm and skiko.wasm against the gzipped sizes recorded in bundle-size.json,
+      # plus 2% (docs/AARDINK_ROADMAP.md section 16). Also reports the Brotli sizes.
+      - name: Bundle size ceiling
+        working-directory: tools/vite-smoke
+        run: node bundle-size.mjs
+
       # What npm and bundlers will see: the file list, package.json correctness (publint) and
       # that the types resolve for ESM consumers (arethetypeswrong). The release job runs the same.
       - name: Check the npm package
@@ -125,6 +131,7 @@ jobs:
             sample-web/build/dist/wasmJs/productionExecutable
             tools/vite-smoke/dist/smoke.png
             tools/vite-smoke/dist/perf.json
+            tools/vite-smoke/dist/bundle-size.json
           retention-days: 14
 
       - name: Upload sample APKs

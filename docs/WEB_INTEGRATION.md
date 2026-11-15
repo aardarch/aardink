@@ -160,11 +160,28 @@ const off = editor.onDidChangeDiagnostics((markers) => showProblems(markers));
 editor.dispose();
 ```
 
-`createEditor` is async: the first call loads the WebAssembly module (~14 MB of `.wasm`, ~5 MB
-gzipped: `aardink-web.wasm` 5.5 MB, 1.7 MB gzipped, and `skiko.wasm` 8.6 MB, 3.3 MB gzipped, as
-built for 0.9), and `preloadAardink()` starts that early. `aardink-web.wasm` is 486 KB larger than
-in 0.8.0 (9.6%), 145 KB gzipped, for every page whether or not it uses what 0.9 adds; 222 KB of
-that, 63 KB gzipped, is `connectLanguageServer` and the language server bridge behind it. The package
+`createEditor` is async: the first call loads the WebAssembly module, and `preloadAardink()` starts
+that early. As built for 0.10:
+
+| File | Raw | gzip | Brotli |
+| --- | --- | --- | --- |
+| `aardink-web.wasm` | 5.8 MB | 1.8 MB | 1.3 MB |
+| `skiko.wasm` | 8.6 MB | 3.4 MB | 2.6 MB |
+| Everything the package loads | 15.0 MB | 5.2 MB | 4.0 MB |
+
+**Serve `.wasm` with Brotli** where the server or CDN can: it is 24% smaller than gzip for the
+whole bundle (1.2 MB less), and browsers take it as they take gzip. Skiko is a prebuilt binary
+with no size options in this Compose release; `wasm-opt -Oz` over it saves 1% gzipped, which
+is not worth a build step of its own, and it carries no debug sections to strip.
+`aardink-web.wasm` has been through binaryen already, in Kotlin's production build. CI fails when
+either file grows more than 2% past the gzipped size recorded in
+`tools/vite-smoke/bundle-size.json` (`node bundle-size.mjs`, and `--record` for a change meant to
+grow it).
+
+The bundled font is fetched only by an editor that shows in it (or by `preloadAardink()`), so a
+page whose `fontFamily` names a registered font never downloads it. In 0.9 `aardink-web.wasm` grew
+486 KB (9.6%) over 0.8.0, 145 KB gzipped, for every page whether or not it uses what 0.9 added; 222
+KB of that, 63 KB gzipped, is `connectLanguageServer` and the language server bridge behind it. The package
 depends on `@js-joda/core`, which Compose's date/time support imports. Its dependency list is copied
 from the one Kotlin generates for the module, so it stays accurate.
 
@@ -503,7 +520,9 @@ const editor = await createEditor(container, undefined, { fontFamily: "'Fira Cod
 ```
 
 The first name in the list that was registered is the font; with none, the bundled JetBrains Mono.
-Editors already naming a font change to it when it is registered. What is not a TrueType or
+An editor in a registered font does not fetch the bundled one, so register the font before the
+first `createEditor` and skip `preloadAardink()` to keep it off the page. Editors already naming a
+font change to it when it is registered. What is not a TrueType or
 OpenType file (a server's error page in place of a missing file, say) is refused. From Kotlin,
 `AardinkWeb.registerFont(name, bytes)`; the template's export is `aardinkRegisterFont`.
 

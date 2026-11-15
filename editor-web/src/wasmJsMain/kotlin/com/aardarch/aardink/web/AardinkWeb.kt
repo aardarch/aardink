@@ -1529,10 +1529,10 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     // Registering a theme, language or font again changes what this editor shows.
     val registrations = AardinkWeb.registrations.intValue
     // A registered font named by the options, at once; else the bundled one. Nothing until that is
-    // there (or has had its time): no flash of another font.
+    // there (or has had its time): no flash of another font. An editor in a registered font never
+    // asks for the bundled one, so a page that brings its own font does not fetch it.
     val registeredFont = remember(options.fontFamily, registrations) { registeredFontIn(options.fontFamily) }
-    val bundledFont = rememberBundledMonoFont()
-    val fontFamily = registeredFont ?: bundledFont
+    val fontFamily = registeredFont ?: rememberBundledMonoFont()
     val typography = EditorTypography(
         fontFamily = fontFamily ?: FontFamily.Monospace,
         fontSize = options.fontSize.sp,
@@ -1743,6 +1743,14 @@ private fun releaseWebGlContexts(element: Element): Unit = js(
 
 /** JetBrains Mono's loading, started once and shared by every editor on the page. */
 private var bundledFont: Deferred<FontFamily?>? = null
+
+/** Whether anything has asked for the bundled font yet. */
+internal val bundledFontAsked: Boolean get() = bundledFont != null
+
+/** Forgets the bundled font's loading, for a test that starts from a page that has not asked for it. */
+internal fun forgetBundledFont() {
+    bundledFont = null
+}
 
 /**
  * The bundled JetBrains Mono, loading; null when it cannot be had.

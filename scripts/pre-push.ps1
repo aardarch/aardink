@@ -214,6 +214,10 @@ try {
                     Write-Sub 'Loader test, vite build and the headless Chrome run'
                     pnpm smoke 2>&1 | Out-Host
                     if ($LASTEXITCODE -ne 0) { throw 'Vite smoke test failed - see tools/vite-smoke/dist/smoke.png' }
+                    # The two .wasm files against their recorded gzipped sizes plus 2%.
+                    Write-Sub 'Bundle size ceiling'
+                    node bundle-size.mjs 2>&1 | Out-Host
+                    if ($LASTEXITCODE -ne 0) { throw 'The wasm bundle grew past its ceiling - see tools/vite-smoke/bundle-size.mjs' }
                     # The file list npm would publish; CI and the release job also run publint and
                     # arethetypeswrong, which need a network fetch this script avoids.
                     Write-Sub 'npm pack --dry-run'
