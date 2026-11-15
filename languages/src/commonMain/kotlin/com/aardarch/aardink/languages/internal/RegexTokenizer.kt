@@ -79,6 +79,21 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         return refined(text, raw, 0, raw.size)
     }
 
+    /**
+     * [tokenizeEmbedded], letting the page draw as it goes: the scan of a large `<script>` in a
+     * cooperative pass of the page around it. [pacer] is that pass's, which has [tokenBase] tokens
+     * so far.
+     */
+    internal suspend fun tokenizeEmbeddedCooperative(text: String, pacer: CooperativePacer, tokenBase: Int): List<Token> {
+        val builder = PackedTokenBuilder(text.length / 8)
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { tokenCount ->
+            pacer.onProgress(tokenBase + tokenCount)
+        }, converged = { false })
+        val raw = builder.build()
+        return refined(text, raw, 0, raw.size)
+    }
+
     private fun remembered(text: String, raw: PackedTokens, result: List<Token>, noMatchFrom: IntArray): List<Token> {
         scans.remember(result, ScanSnapshot(text, raw, noMatchFrom))
         return result

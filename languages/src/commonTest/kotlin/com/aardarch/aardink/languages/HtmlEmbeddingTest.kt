@@ -22,6 +22,7 @@ import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.typescript.TypeScriptTokenizer
 import com.aardarch.aardink.languages.internal.xml.XmlTokenizer
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -63,6 +64,26 @@ class HtmlEmbeddingTest {
         assertEmbedded("<script type='application/ld+json'>$json</script>", json, JsonTokenizer.tokenizeFull(json))
         val template = "<p>{{ name }}</p>"
         assertEmbedded("<script type=text/x-template>$template</script>", template, emptyList())
+    }
+
+    @Test
+    fun `a type inside another attribute's value is not the script's`() {
+        val body = "let x = 1 < 2;"
+        val js = TypeScriptTokenizer.tokenizeFull(body)
+        assertEmbedded("<script data-note=\"example type=importmap\" type=\"module\">$body</script>", body, js)
+        assertEmbedded("<script data-note='a type=\"x\"'>$body</script>", body, js)
+        assertEmbedded("<script data-type=\"importmap\">$body</script>", body, js)
+        val json = """{ "a": 1 }"""
+        assertEmbedded("<script title=\"t\" TYPE = importmap>$json</script>", json, JsonTokenizer.tokenizeFull(json))
+    }
+
+    @Test
+    fun `a cooperative pass gives what a full one does, bodies and all`() = runTest {
+        val text = (
+            "<p>x</p>\n<style>a { color: #fff; }</style>\n<script>\n" + "if (a < b) { f(/re/g, 1 / 2); }\n".repeat(4000) +
+                "</script>\n"
+            ).repeat(3)
+        assertEquals(HtmlTokenizer.tokenizeFull(text), HtmlTokenizer.tokenizeFullCooperative(text))
     }
 
     @Test

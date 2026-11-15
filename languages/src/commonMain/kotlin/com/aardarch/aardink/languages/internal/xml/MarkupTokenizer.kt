@@ -60,7 +60,16 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
          * What tokenizes the body of the element whose opening tag in [text] runs from its `<` at
          * [tagStart] to its `>` at [tagEnd], or null when its body is markup.
          */
-        fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): ((String) -> List<Token>)?
+        fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): EmbeddedLanguage?
+    }
+
+    /** The language of a raw-text element's body. Its scans are not kept: the markup's are. */
+    interface EmbeddedLanguage {
+        /** [body]'s tokens, from 0. */
+        fun tokenize(body: String): List<Token>
+
+        /** [body]'s tokens, letting the page draw as [pacer] has it; the markup's scan has [tokenBase] tokens so far. */
+        suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token>
     }
 
     /**
@@ -97,7 +106,16 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         val pacer = CooperativePacer()
         val tokens = PackedTokenBuilder(text.length / 8)
         val constructs = PackedTokenBuilder(text.length / 16)
-        val stoppedAt = scan(text, 0, tokens, constructs, onStep = { tokenCount -> pacer.onProgress(tokenCount) }, converged = { false })
+        val stoppedAt = scan(
+            text,
+            0,
+            tokens,
+            constructs,
+            onStep = { tokenCount -> pacer.onProgress(tokenCount) },
+            converged = { false },
+            // A large `<script>` body yields too, not only the markup around it.
+            embed = { language, body, tokenCount -> language.tokenizeCooperatively(body, pacer, tokenCount) },
+        )
         val raw = tokens.build()
         return remembered(MarkupScan(text, raw, constructs.build(), stoppedAt), raw.toTokens())
     }
@@ -127,13 +145,13 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         constructs.addAll(previous.constructs, 0, keptConstructs)
 
         var resumeAt = -1
-        val stopped = scan(text, restart, tokens, constructs, onStep = { }) { position ->
+        val stopped = scan(text, restart, tokens, constructs, onStep = { }, converged = { position ->
             // In step again once past the change, at a place the old scan also stood between
             // constructs: the text from here on is the same, so the scan would be too.
             val inStep = position - 1 >= diff.newEnd && previous.isBetweenConstructs(position - diff.delta)
             if (inStep) resumeAt = position
             inStep
-        }
+        })
         val rescannedUntil = tokens.size
         val stoppedAt = if (resumeAt >= 0) {
             val oldPosition = resumeAt - diff.delta
@@ -172,8 +190,9 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
      * The scanner behind every entry point: appends the tokens of [text] from [from] to [tokens]
      * and the span of each construct to [constructs]. [onStep] runs before each character is
      * examined; [converged] is asked at each position between constructs past [from] and may end
-     * the scan there. Returns where the scan ended: the text's length, the position of an unclosed
-     * tag, or where it converged.
+     * the scan there; [embed] tokenizes a raw-text element's body, given the tokens so far.
+     * Returns where the scan ended: the text's length, the position of an unclosed tag, or where
+     * it converged.
      */
     private inline fun scan(
         text: String,
@@ -182,6 +201,11 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         constructs: PackedTokenBuilder,
         onStep: (tokenCount: Int) -> Unit,
         converged: (position: Int) -> Boolean,
+        embed: (
+            language: EmbeddedLanguage,
+            body: String,
+            tokenCount: Int,
+        ) -> List<Token> = { language, body, _ -> language.tokenize(body) },
     ): Int {
         var i = from
         val n = text.length
@@ -238,7 +262,7 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
                 val bodyStart = tagEnd + 1
                 val bodyEnd = closingTagAt(text, bodyStart, nameAt(text, i + 1))
                 if (bodyEnd > bodyStart) {
-                    for (token in language(text.substring(bodyStart, bodyEnd))) {
+                    for (token in embed(language, text.substring(bodyStart, bodyEnd), tokens.size)) {
                         if (token.end > token.start) tokens.add(token.start + bodyStart, token.end + bodyStart, token.type)
                     }
                 }

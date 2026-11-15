@@ -18,6 +18,8 @@ package com.aardarch.aardink.languages.internal.html
 import com.aardarch.aardink.core.CommentSyntax
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
+import com.aardarch.aardink.languages.internal.CooperativePacer
+import com.aardarch.aardink.languages.internal.RegexTokenizer
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.typescript.TypeScriptTokenizer
@@ -46,20 +48,81 @@ object HtmlTokenizer : IncrementalTokenizer {
 
     override fun keyboardToolbarChars(): List<Char> = listOf('<', '>', '/', '=', '"', '&', ';', '#', '.')
 
-    /** A script's `type`, in any case, quoted or not. */
-    private val TYPE = Regex("""\stype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", RegexOption.IGNORE_CASE)
+    /** A body in [tokenizer]'s language: scans that it does not remember for an incremental pass of its own. */
+    private class Embedded(private val tokenizer: RegexTokenizer) : MarkupTokenizer.EmbeddedLanguage {
+        override fun tokenize(body: String): List<Token> = tokenizer.tokenizeEmbedded(body)
 
-    // Scans that the tokenizers do not remember for an incremental pass of their own.
-    private val css: (String) -> List<Token> = CssTokenizer::tokenizeEmbedded
-    private val javaScript: (String) -> List<Token> = TypeScriptTokenizer::tokenizeEmbedded
-    private val json: (String) -> List<Token> = JsonTokenizer::tokenizeEmbedded
-    private val plainText: (String) -> List<Token> = { emptyList() }
+        override suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token> =
+            tokenizer.tokenizeEmbeddedCooperative(body, pacer, tokenBase)
+    }
 
-    private fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): ((String) -> List<Token>)? = when {
+    private val css = Embedded(CssTokenizer)
+    private val javaScript = Embedded(TypeScriptTokenizer)
+    private val json = Embedded(JsonTokenizer)
+
+    private val plainText = object : MarkupTokenizer.EmbeddedLanguage {
+        override fun tokenize(body: String): List<Token> = emptyList()
+
+        override suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token> = emptyList()
+    }
+
+    private fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): MarkupTokenizer.EmbeddedLanguage? = when {
         isElement(text, tagStart, "style") -> css
-        isElement(text, tagStart, "script") -> scriptTokenizer(text.substring(tagStart, tagEnd))
+        isElement(text, tagStart, "script") -> scriptTokenizer(typeOf(text, tagStart, tagEnd))
         else -> null
     }
+
+    /**
+     * The `type` attribute's value in the opening tag from its `<` at [tagStart] to its `>` at
+     * [tagEnd], quoted or not and the name in any case; null without one. Attributes are read one
+     * by one, as the tag is tokenized, so `type=` inside another attribute's value is that value's.
+     */
+    private fun typeOf(text: String, tagStart: Int, tagEnd: Int): String? {
+        var i = tagStart + 1
+        while (i < tagEnd && text[i].isNameCharacter()) i++
+        while (i < tagEnd) {
+            val c = text[i]
+            if (c == '"' || c == '\'') {
+                // A value with no name before it: skipped whole.
+                val close = text.indexOf(c, i + 1)
+                i = if (close < 0 || close >= tagEnd) tagEnd else close + 1
+                continue
+            }
+            if (!(c.isLetter() || c == '_' || c == ':')) {
+                i++
+                continue
+            }
+            val nameStart = i
+            while (i < tagEnd && text[i].isNameCharacter()) i++
+            val isType = i - nameStart == 4 && text.regionMatches(nameStart, "type", 0, 4, ignoreCase = true)
+            var j = i
+            while (j < tagEnd && text[j].isWhitespace()) j++
+            if (j >= tagEnd || text[j] != '=') {
+                if (isType) return ""
+                continue
+            }
+            j++
+            while (j < tagEnd && text[j].isWhitespace()) j++
+            val valueStart: Int
+            val valueEnd: Int
+            if (j < tagEnd && (text[j] == '"' || text[j] == '\'')) {
+                val close = text.indexOf(text[j], j + 1)
+                valueStart = j + 1
+                valueEnd = if (close < 0 || close >= tagEnd) tagEnd else close
+                i = minOf(valueEnd + 1, tagEnd)
+            } else {
+                valueStart = j
+                var k = j
+                while (k < tagEnd && !text[k].isWhitespace()) k++
+                valueEnd = k
+                i = k
+            }
+            if (isType) return text.substring(valueStart, valueEnd)
+        }
+        return null
+    }
+
+    private fun Char.isNameCharacter() = isLetterOrDigit() || this == ':' || this == '-' || this == '_'
 
     /** Whether the opening tag at [tagStart] is [name]'s, in any case. */
     private fun isElement(text: String, tagStart: Int, name: String): Boolean {
@@ -68,9 +131,8 @@ object HtmlTokenizer : IncrementalTokenizer {
             after < text.length && (text[after].isWhitespace() || text[after] == '>' || text[after] == '/')
     }
 
-    private fun scriptTokenizer(tag: String): (String) -> List<Token> {
-        val match = TYPE.find(tag) ?: return javaScript
-        val type = (match.groups[1] ?: match.groups[2] ?: match.groups[3])?.value.orEmpty().trim().lowercase()
+    private fun scriptTokenizer(typeAttribute: String?): MarkupTokenizer.EmbeddedLanguage {
+        val type = typeAttribute?.trim()?.lowercase() ?: return javaScript
         return when {
             type.isEmpty() || type == "module" || type in SCRIPT_TYPES -> javaScript
             type == "importmap" || type == "speculationrules" || type.endsWith("json") -> json
