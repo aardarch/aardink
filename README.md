@@ -13,7 +13,8 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 [![minSdk](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](#requirements)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20JVM%20%7C%20Wasm-blue.svg)](#requirements)
 
-> **Upgrading?** From 0.8, [`docs/MIGRATION_0.9.md`](docs/MIGRATION_0.9.md); from 0.7,
+> **Upgrading?** From 0.9, [`docs/MIGRATION_0.10.md`](docs/MIGRATION_0.10.md); from 0.8,
+> [`docs/MIGRATION_0.9.md`](docs/MIGRATION_0.9.md); from 0.7,
 > [`docs/MIGRATION_0.8.md`](docs/MIGRATION_0.8.md); from 0.6,
 > [`docs/MIGRATION_0.7.md`](docs/MIGRATION_0.7.md); from 0.5, which had a different text field
 > underneath the editor, [`docs/MIGRATION_0.6.md`](docs/MIGRATION_0.6.md) first. Each has every
@@ -24,13 +25,15 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 
 | | Android | Desktop | Web |
 | --- | :---: | :---: | :---: |
-| Syntax highlighting, incremental, for Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown | ✓ | ✓ | ✓ |
+| Syntax highlighting, incremental, for Kotlin, TypeScript, JSON, TOML, XML, HTML (with CSS and JavaScript inside), CSS, SCSS, LESS, Markdown, YAML, Properties, INI, Shell, Python, SQL, Java, Groovy, Dockerfile and Diff | ✓ | ✓ | ✓ |
 | Your own language: a tokenizer in Kotlin, or a Monarch grammar as data (`DeclarativeGrammar`), one grammar embedding another | ✓ | ✓ | ✓ |
-| … or registered from JavaScript, with completions, hover, diagnostics, inlay hints and code lenses in JavaScript | | | ✓ |
+| … or registered from JavaScript, with Monaco's providers in JavaScript: completions, hover, diagnostics, inlay hints, code lenses, definition, references, formatting, signature help, code actions, rename, folding and semantic tokens | | | ✓ |
 | VS Code's `language-configuration.json`: closing pairs, surrounding a selection, Enter indentation | ✓ | ✓ | ✓ |
 | An XML dialect from a schema: completions by nesting, hover, checks (`XmlSchemaLanguageService`) | ✓ | ✓ | ✓ |
 | A dialect over a built-in language, keeping its checks and formatting (`CompositeLanguageService`) | ✓ | ✓ | ✓ |
-| Folding, find and replace, go to line | ✓ | ✓ | ✓ |
+| Folding, find and replace (in a selection, preserving case, with history and a preview), go to line, a workspace search handed to the host | ✓ | ✓ | ✓ |
+| VS Code's view options: relative line numbers, caret styles, indent and bracket-pair guides, rulers, smooth scrolling, wrapping indent, drag and drop | ✓ | ✓ | ✓ |
+| Format on type; high-contrast themes; your own font on the web | ✓ | ✓ | ✓ |
 | Multiple cursors and column selection | ✓ | ✓ | ✓ |
 | Undo grouped as Monaco does, `alternativeVersionId` for dirty tracking | ✓ | ✓ | ✓ |
 | Content and selection events with ranges; commands for a host's buttons (`EditorCommand`) | ✓ | ✓ | ✓ |
@@ -72,7 +75,8 @@ Aardink publishes four artifacts on Maven Central:
 - **`com.aardarch:aardink`** — the editor library: composables, state,
   theming, and the language-service interfaces.
 - **`com.aardarch:aardink-languages`** — built-in language definitions
-  (Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, Markdown, plain text).
+  (Kotlin, TypeScript, JSON, TOML, XML, HTML, CSS, SCSS, LESS, Markdown, YAML, Properties, INI,
+  Shell, Python, SQL, Java, Groovy, Dockerfile, Diff, plain text).
 - **`com.aardarch:aardink-languages-lsp`** — a bridge to an external
   Language Server over JSON-RPC (stream transport on JVM/Android, WebSocket in the browser).
 - **`com.aardarch:aardink-editor-web`** — browser only: mounts the editor into a DOM element

@@ -54,6 +54,9 @@ editor-web/      # Browser bridge -- published as com.aardarch:aardink-editor-we
 sample/          # Minimal Android app for local development and manual testing (not KMP)
   src/main/java/com/aardarch/aardink/sample/
   src/test/      # Roborazzi screenshot tests -- the Android zero-regression gate
+  src/release/generated/baselineProfiles/   # Baseline profile from :sample-benchmark (profileinstaller: the sample only, never :editor)
+
+sample-benchmark/   # com.android.test: :sample's baseline profile generator and macrobenchmarks (device or emulator only)
 
 sample-desktop/  # JVM desktop harness (not published)
 sample-web/      # wasmJs executable: browser harness + builds the @aardarch/aardink-web npm package
@@ -61,7 +64,8 @@ sample-web/      # wasmJs executable: browser harness + builds the @aardarch/aar
   src/npm/       # index.js / index.d.ts / package.json template for the npm package
 
 tools/consumer-smoke/   # Android app depending on the PUBLISHED coordinates, not project(...)
-tools/vite-smoke/       # Vite app consuming the built npm package; `pnpm smoke` tests its loader in Node, then drives it in headless Chrome
+tools/vite-smoke/       # Vite app consuming the built npm package; `pnpm smoke` tests its loader in Node, then drives it in headless Chrome; perf.mjs and bundle-size.mjs are the web gates
+tools/android-perf/     # run.sh and compare.mjs for CI's android-perf job (main against the change on one emulator)
 screenshots/     # Committed Roborazzi baselines -- verifyRoborazziDebug compares against these
 ```
 
@@ -90,8 +94,8 @@ All commands run from the repo root.
 ./gradlew checkAbiAll                           # Public ABI vs the committed dumps
 ./gradlew updateAbiAll                          # Rewrite the dumps after an intentional API change
 ./gradlew :sample:lintDebug                     # Lint (see the note below)
-./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck   # Formatting check
-./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply :sample-web:spotlessApply   # Auto-format
+./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck :sample-benchmark:spotlessCheck   # Formatting check
+./gradlew :editor:spotlessApply :languages:spotlessApply :languages-lsp:spotlessApply :editor-web:spotlessApply :sample:spotlessApply :sample-web:spotlessApply :sample-benchmark:spotlessApply   # Auto-format
 ./gradlew :sample:installDebug                  # Install sample app
 ./gradlew :sample:verifyRoborazziDebug          # Screenshot regression check
 ./scripts/capture-screenshots.ps1               # Re-record screenshots/ after an intended visual change (SampleScreenshotTest only)
@@ -103,8 +107,21 @@ All commands run from the repo root.
 ./gradlew :sample-web:npmPackage                # Build the npm package into sample-web/build/npm
 cd tools/vite-smoke; pnpm install --force; pnpm smoke   # npm package in a real Vite app (after npmPackage)
 cd tools/vite-smoke; pnpm build; node checklist.mjs     # Measure web checklist items W-1/3/7/8/10
-cd tools/vite-smoke; pnpm build; node perf.mjs --hints  # Latency with inlay hints and code lenses (--semantic: a server's semantic tokens)
+cd tools/vite-smoke; pnpm build; node perf.mjs --gate --keys 20   # The web performance gate (CI runs it)
+cd tools/vite-smoke; pnpm build; node perf.mjs --hints --gate     # ... with inlay hints and code lenses; --semantic: a server's semantic tokens
+cd tools/vite-smoke; node perf.mjs --hints --lines 60000 --profile   # A CPU profile of the keys (names need a development build)
+cd tools/vite-smoke; node bundle-size.mjs [--record]   # The wasm size ceiling: recorded gzipped size + 2% (after npmPackage)
+./gradlew :editor:jvmPerfTest                   # The JVM performance gate; writes editor/build/perf-jvm.json
+./gradlew :sample:generateBaselineProfile       # :sample's baseline profile, on a device or emulator
+./gradlew :sample-benchmark:connectedBenchmarkReleaseAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark   # Startup and frame benchmarks, on a device or emulator
 ```
+
+The performance gates: CI runs `perf.mjs --gate` three times (plain, `--hints`, `--semantic`),
+`bundle-size.mjs`, `:editor:jvmPerfTest`, and, on pull requests, the `android-perf` job, which
+benchmarks `main` and the change on one emulator and fails the change if `tools/android-perf/compare.mjs`
+finds it slower than its tolerance. Timings on a developer machine are informational; CI is the
+authority. Pre-push runs only the bundle ceiling of these: the timings need a quiet machine and
+the Android job an emulator.
 
 The wasmJs tests run in headless Chrome via Karma. Install Chrome locally and, if it is not
 on `PATH`, point `CHROME_BIN` at it. `scripts/pre-push.ps1 -SkipWasm` skips them.
@@ -125,8 +142,8 @@ Before pushing, run the full local equivalent of CI:
 ```
 
 The script runs: secret scan, Apache 2.0 header check, Spotless, lint, the ABI check,
-JVM tests, wasmJs browser tests, the npm package + Vite smoke test (needs pnpm; skipped with
-`-SkipWasm`), the sample build, the Roborazzi screenshot check, and the consumer smoke test.
+JVM tests, wasmJs browser tests, the npm package + Vite smoke test and the bundle ceiling (needs
+pnpm; skipped with `-SkipWasm`), the sample build, the Roborazzi screenshot check, and the consumer smoke test.
 
 > **Expected noise:** on a configuration-cache miss the npm package step prints
 > `Configuration 'wasmJsNpmAggregated' was resolved during configuration time` twice. That is

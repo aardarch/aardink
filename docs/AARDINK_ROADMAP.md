@@ -29,7 +29,7 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
 | 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Still open after release: the Android device check (§15.1) and the aardflex apps' builds against 0.9 (§13); the two opt-in performance costs are in §8.4. |
-| 0.10 | In progress on branch `feat/0.10`. Ledger approved as a whole 2026-11-14 (§16) | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
+| 0.10 | Built on branch `feat/0.10`, all 11 units of the ledger approved 2026-11-14 (§16; as built in §16.1); not yet released. `semanticTokens/range` goes to a 0.10 patch | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
 | 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
 
 ## 1. Where 0.6.2 stands
@@ -538,8 +538,10 @@ About fifteen PRs.
 
 ## 10. Threads through every version
 
-- The web gates stay; JVM and Android gates arrive in 0.10; the bundle size is recorded per
-  release.
+- The web gates stay, now with `--hints` and `--semantic` too; the JVM gate (`:editor:jvmPerfTest`)
+  and the Android gate (CI's `android-perf`, a change against `main` on one emulator) arrived in
+  0.10, and the bundle size is recorded per release in `tools/vite-smoke/bundle-size.json` with a
+  ceiling of 2% over it.
 - Coverage gaps from the audit: golden tokens for TypeScript, CSS, HTML and Markdown; screenshot
   scenes for the popups and the find panel; tests for `RenameDialog`, `GoToLineDialog` and
   `KeyboardToolbarRow`; an LSP server through the web path. All done: the LSP server in 0.9
