@@ -149,6 +149,31 @@ tasks.withType<Test>().configureEach {
     providers.gradleProperty("aardink.viewShots").orNull?.let { systemProperty("aardink.viewShots", it) }
 }
 
+// The JVM performance gate (docs/AARDINK_ROADMAP.md §8.4): tests tagged `perf` run on their own,
+// never inside jvmTest, where they would time a machine busy with every other test.
+tasks.named<Test>("jvmTest") {
+    useJUnitPlatform { excludeTags("perf") }
+}
+
+tasks.register<Test>("jvmPerfTest") {
+    group = "verification"
+    description = "Runs the JVM performance gate on the reference document; writes build/perf-jvm.json."
+    val jvmTest = tasks.named<Test>("jvmTest").get()
+    testClassesDirs = jvmTest.testClassesDirs
+    classpath = jvmTest.classpath
+    useJUnitPlatform { includeTags("perf") }
+    maxHeapSize = "2g"
+    systemProperty(
+        "aardink.perfOut",
+        layout.buildDirectory
+            .file("perf-jvm.json")
+            .get()
+            .asFile.path,
+    )
+    testLogging { showStandardStreams = true }
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     kotlin {
         target("src/**/*.kt")

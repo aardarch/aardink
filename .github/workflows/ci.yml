@@ -64,6 +64,12 @@ jobs:
       - name: JVM unit tests
         run: ./gradlew :editor:jvmTest :languages:jvmTest :languages-lsp:jvmTest
 
+      # The editor on the 5,000-line reference document on the desktop JVM, as the web gate
+      # below measures it in Chrome (docs/AARDINK_ROADMAP.md section 8.4). On its own, after the
+      # unit tests, so nothing else runs while it times. Writes editor/build/perf-jvm.json.
+      - name: JVM performance
+        run: ./gradlew :editor:jvmPerfTest
+
       - name: wasmJs browser tests
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
@@ -132,6 +138,7 @@ jobs:
             tools/vite-smoke/dist/smoke.png
             tools/vite-smoke/dist/perf.json
             tools/vite-smoke/dist/bundle-size.json
+            editor/build/perf-jvm.json
           retention-days: 14
 
       - name: Upload sample APKs
