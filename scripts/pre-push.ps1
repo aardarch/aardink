@@ -115,6 +115,7 @@ try {
             (Join-Path $ProjectRoot 'sample-desktop' 'src'),
             (Join-Path $ProjectRoot 'sample-web' 'src'),
             (Join-Path $ProjectRoot 'sample' 'src'),
+            (Join-Path $ProjectRoot 'sample-benchmark' 'src'),
             (Join-Path $ProjectRoot 'tools' 'consumer-smoke' 'src')
         )
         $Sources = $SourceRoots |
@@ -139,7 +140,7 @@ try {
     # wasmJs-only libraries: no JVM target, so they join the Spotless and browser-test steps
     # but not the JVM one.
     $WebLibs = @(':editor-web')
-    $SpotlessModules = $Libs + $WebLibs + ':sample' + ':sample-web'
+    $SpotlessModules = $Libs + $WebLibs + ':sample' + ':sample-web' + ':sample-benchmark'
     $SpotlessTasks = if ($NoFix) {
         $SpotlessModules | ForEach-Object { "${_}:spotlessCheck" }
     } else {

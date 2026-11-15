@@ -1,5 +1,7 @@
 plugins {
     alias(libs.plugins.plugin.android.application) apply false
+    alias(libs.plugins.plugin.android.test) apply false
+    alias(libs.plugins.plugin.baselineprofile) apply false
     alias(libs.plugins.plugin.kotlin.compose) apply false
     alias(libs.plugins.plugin.kotlin.serialization) apply false
     alias(libs.plugins.plugin.kotlin.multiplatform) apply false

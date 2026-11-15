@@ -46,7 +46,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Spotless check
-        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck
+        run: ./gradlew :editor:spotlessCheck :languages:spotlessCheck :languages-lsp:spotlessCheck :editor-web:spotlessCheck :sample:spotlessCheck :sample-web:spotlessCheck :sample-benchmark:spotlessCheck
 
       # Only :sample runs Android Lint. The three libraries are now
       # com.android.kotlin.multiplatform.library modules, and that plugin registers no `lint`
@@ -178,3 +178,74 @@ jobs:
         with:
           name: lint-results
           path: sample/build/reports/lint-results-*.html
+
+  # The Android gate (docs/AARDINK_ROADMAP.md section 16, "Android performance"): :sample's
+  # cold start and its frames while typing and scrolling, for main and for the change, measured
+  # one after the other on the same emulator, since an emulator's timings are only comparable
+  # with its own. tools/android-perf/compare.mjs fails the job when the change is slower than
+  # main by more than its tolerance. Also generates the change's baseline profile. Pull requests
+  # only: on main itself there is nothing to compare with.
+  android-perf:
+    name: Android performance (emulator)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out the change
+        uses: actions/checkout@v7
+        with:
+          path: change
+
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6.4.1
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-provider: basic # MIT-licensed
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The emulator needs hardware acceleration, which the runner's KVM gives once it is open.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          chmod +x change/gradlew main/gradlew change/tools/android-perf/run.sh
+
+      - name: Benchmarks and baseline profile on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          working-directory: change
+          script: tools/android-perf/run.sh "$GITHUB_WORKSPACE/main" "$GITHUB_WORKSPACE/change" "$GITHUB_WORKSPACE/results"
+
+      - name: Compare with main
+        working-directory: results
+        run: node "$GITHUB_WORKSPACE/change/tools/android-perf/compare.mjs" main change
+
+      - name: Upload Android performance results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-perf
+          path: results/
+          retention-days: 14
