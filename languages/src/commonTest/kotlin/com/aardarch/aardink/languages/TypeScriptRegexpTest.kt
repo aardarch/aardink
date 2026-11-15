@@ -40,6 +40,8 @@ class TypeScriptRegexpTest {
         assertEquals(listOf("/a/"), regexps("// c\n/a/.exec(s)"), "a comment is looked past")
         assertEquals(listOf("/a/"), regexps("typeof /a/"))
         assertEquals(listOf("/y/u"), regexps("const f = (s) => /y/u.test(s)"))
+        assertEquals(listOf("/a/"), regexps("if (x) {}\n/a/.test(s)"), "after a block's brace")
+        assertEquals(listOf("/b/g"), regexps("function f() {} /b/g;"))
     }
 
     @Test
@@ -54,6 +56,8 @@ class TypeScriptRegexpTest {
             "x /= 2; y /= 3",
             "\"s\" / 2 / 1",
             "a\n/ b /\nc",
+            "const n = {valueOf: () => 6} / 2 / 3;",
+            "({} / x / y)",
         )) {
             assertEquals(emptyList(), regexps(text), text)
         }

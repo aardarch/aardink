@@ -28,16 +28,16 @@ import com.aardarch.aardink.languages.internal.HexColors
  * CSS's, and SCSS's and LESS's, which have no formatter of their own (CSS's would misread their
  * `//` comments and nesting).
  */
-internal open class CssColorService : BaseLanguageService() {
+internal open class CssColorService(private val lineComments: Boolean = false) : BaseLanguageService() {
 
-    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.cssTokens(document.text)
+    override suspend fun documentColors(document: CodeDocument): List<ColorInfo> = HexColors.cssTokens(document.text, lineComments)
 
     override suspend fun colorPresentations(document: CodeDocument, info: ColorInfo, color: Color): List<ColorPresentation> =
         HexColors.presentation(document, info, color, alphaFirst = false)
 }
 
-/** SCSS's and LESS's service: the colours alone. */
-internal object StyleSheetColorService : CssColorService()
+/** SCSS's and LESS's service: the colours alone, `//` comments skipped. */
+internal object StyleSheetColorService : CssColorService(lineComments = true)
 
 /** CSS's service: its colours, and [CssFormatter]. */
 internal object CssLanguageService : CssColorService() {

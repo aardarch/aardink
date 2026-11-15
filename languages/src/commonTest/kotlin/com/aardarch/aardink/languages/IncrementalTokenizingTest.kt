@@ -152,8 +152,11 @@ class IncrementalTokenizingTest {
             let q = a / b / c;
             if (/^\d+$/.test(s)) { x = f(y) / 2; }
             s.replace(/[/]x/i, "/") /* d */ / k
+            const n = {valueOf: () => 6} / 2 / 3;
+            if (n) {}
+            /re/.test(s)
         """.trimIndent()
-        val slashes = fragments + listOf("/", " / ", "/x/g", "(", ")", "=", "return ", "]", "\n/")
+        val slashes = fragments + listOf("/", " / ", "/x/g", "(", ")", "=", "return ", "]", "\n/", "{", "}", " 3", ".")
         val tokenizer = BuiltInLanguages.TypeScript.tokenizer
         repeat(6) { seed -> checkRandomEdits("typescript", tokenizer, sample, Random(seed * 13 + 5), fragments = slashes) }
         checkRandomEdits("typescript", tokenizer, (sample + "\n").repeat(10), Random(23), steps = 40, fragments = slashes)
