@@ -127,7 +127,9 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
         if (previousTokens.isEmpty()) return provisional(text, dirtyRange)
         val previous = scans.find(previousTokens) ?: return tokenizeFull(text)
         val diff = diffTexts(previous.text, text)
-        val starts = lineStartsOf(text)
+        // From the old line starts, not the whole text again: a partial pass over a large document
+        // must cost the edit, or the editor gives up on partial passes for it.
+        val starts = lineStartsAfter(previous.lineStarts, text, diff.start, diff.oldEnd, diff.newEnd)
         val oldCount = previous.lineStarts.size
         val lineDelta = starts.size - oldCount
         // The first line the edit touched: every line before it is the same text, in the same state.
@@ -500,4 +502,32 @@ class DeclarativeTokenizer(private val grammar: DeclarativeGrammar, private val 
             return lo
         }
     }
+}
+
+/**
+ * The line starts of the new [text], from the old text's [oldStarts] and the one edit between them:
+ * [start] until [oldEnd] in the old text became [start] until [newEnd] in the new. Lines starting
+ * up to the edit stay, those after it move by what it added, and only the edited text is read, so
+ * a partial pass over a large document costs the edit and not the document.
+ */
+internal fun lineStartsAfter(oldStarts: IntArray, text: String, start: Int, oldEnd: Int, newEnd: Int): IntArray {
+    // The lines starting at or before [start]: they and their starts are unchanged.
+    var lo = 0
+    var hi = oldStarts.size - 1
+    while (lo < hi) {
+        val mid = (lo + hi + 1) ushr 1
+        if (oldStarts[mid] <= start) lo = mid else hi = mid - 1
+    }
+    val kept = lo + 1
+    var after = kept
+    while (after < oldStarts.size && oldStarts[after] <= oldEnd) after++
+    var added = 0
+    for (i in start until newEnd) if (text[i] == '\n') added++
+    val starts = IntArray(kept + added + oldStarts.size - after)
+    oldStarts.copyInto(starts, 0, 0, kept)
+    var line = kept
+    for (i in start until newEnd) if (text[i] == '\n') starts[line++] = i + 1
+    val delta = newEnd - oldEnd
+    for (old in after until oldStarts.size) starts[line++] = oldStarts[old] + delta
+    return starts
 }

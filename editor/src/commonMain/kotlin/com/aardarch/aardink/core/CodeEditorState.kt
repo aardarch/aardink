@@ -104,6 +104,7 @@ class CodeEditorState(
             field = value
             lastTokenizerResult = null
             tokenizerIsIncremental = null
+            slowPartialPasses = 0
             scheduleTokenization(debounce = false)
         }
 
@@ -1650,10 +1651,15 @@ class CodeEditorState(
     /**
      * On a single-threaded host, whether [IncrementalTokenizer.tokenizeLines] is cheap for this
      * tokenizer (null until a call shows it). A tokenizer whose partial pass is really a full scan
-     * blocks the UI for as long as that scan takes, so once one call takes longer than
-     * [SLOW_PARTIAL_PASS_MS] the editor goes back to chunked full passes for it.
+     * blocks the UI for as long as that scan takes, so once [SLOW_PARTIAL_PASSES] calls in a row
+     * take longer than [SLOW_PARTIAL_PASS_MS] the editor goes back to chunked full passes for it.
+     * One slow call is not enough: the first ones after a mount run while the browser is still
+     * compiling the code, and a collection can land in any, and giving up is for the document's life.
      */
     private var tokenizerIsIncremental: Boolean? = null
+
+    /** Partial passes in a row that took longer than [SLOW_PARTIAL_PASS_MS]. */
+    private var slowPartialPasses = 0
 
     /**
      * The document lines on screen, reported by the layout. Highlighted first when a large
@@ -1719,7 +1725,7 @@ class CodeEditorState(
                 val started = TimeSource.Monotonic.markNow()
                 tokenizer.tokenizeLines(snapshot, lines, previous) to started.elapsedNow()
             }
-            if (large) tokenizerIsIncremental = took.inWholeMilliseconds < SLOW_PARTIAL_PASS_MS
+            if (large) countPartialPass(took.inWholeMilliseconds)
             // Every edit schedules a new pass and cancels this one; the version check covers an
             // edit made straight through the public CodeDocument, which schedules nothing.
             if (document.version != version) return
@@ -1743,6 +1749,16 @@ class CodeEditorState(
         tokenVersion++
     }
 
+    /** Counts a partial pass that took [millis]; [SLOW_PARTIAL_PASSES] slow ones in a row give up on them. */
+    private fun countPartialPass(millis: Long) {
+        if (millis < SLOW_PARTIAL_PASS_MS) {
+            slowPartialPasses = 0
+            tokenizerIsIncremental = true
+        } else if (++slowPartialPasses >= SLOW_PARTIAL_PASSES) {
+            tokenizerIsIncremental = false
+        }
+    }
+
     /**
      * Tokenizes just the visible lines, with no previous tokens (a provisional pass the built-in
      * tokenizers answer by scanning only those lines), so they are coloured before the full pass
@@ -1754,7 +1770,7 @@ class CodeEditorState(
         val lines = visible.first.coerceIn(0, last)..visible.last.coerceIn(0, last)
         val started = TimeSource.Monotonic.markNow()
         val provisional = tokenizer.tokenizeLines(snapshot, lines, emptyList())
-        if (started.elapsedNow().inWholeMilliseconds >= SLOW_PARTIAL_PASS_MS) tokenizerIsIncremental = false
+        countPartialPass(started.elapsedNow().inWholeMilliseconds)
         if (document.version != version) return
         tokenStore.merge(lines, provisional)
         tokenVersion++
@@ -1796,6 +1812,9 @@ private const val INITIAL_VISIBLE_LINES = 100
 
 /** A partial tokenization pass slower than this is treated as a full scan on single-threaded hosts. */
 private const val SLOW_PARTIAL_PASS_MS = 50L
+
+/** Slow partial passes in a row after which a tokenizer's partial passes are taken for full scans. */
+private const val SLOW_PARTIAL_PASSES = 3
 
 /** How many earlier selections cursor undo (Ctrl+U) can go back through. */
 private const val CURSOR_HISTORY = 64

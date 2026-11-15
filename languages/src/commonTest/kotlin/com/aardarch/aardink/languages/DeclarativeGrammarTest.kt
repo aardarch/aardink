@@ -218,6 +218,30 @@ class DeclarativeGrammarTest {
         assertEquals(tokenizer.tokenizeFull(text), tokenizer.tokenizeFullCooperative(text))
     }
 
+    @Test
+    fun `a partial pass works out the line starts from the old ones and the edit`() {
+        val random = Random(7)
+        var text = "a\nbc\n\ndef\n"
+        repeat(2_000) {
+            val start = random.nextInt(text.length + 1)
+            val end = (start + random.nextInt(4)).coerceAtMost(text.length)
+            val inserted = (0 until random.nextInt(4)).map { "x\n"[random.nextInt(2)] }.joinToString("")
+            val next = text.substring(0, start) + inserted + text.substring(end)
+            val oldStarts = DeclarativeTokenizerLines.of(text)
+            assertEquals(
+                DeclarativeTokenizerLines.of(next).toList(),
+                lineStartsAfter(oldStarts, next, start, end, start + inserted.length).toList(),
+                "'$text' to '$next'",
+            )
+            text = next.ifEmpty { "\n" }
+        }
+    }
+
+    /** The line starts of a text, as the tokenizer works them out in a whole pass. */
+    private object DeclarativeTokenizerLines {
+        fun of(text: String): IntArray = (listOf(0) + text.indices.filter { text[it] == '\n' }.map { it + 1 }).toIntArray()
+    }
+
     /** Applies [partial] (lines replaced as the editor replaces them) to [old] tokens of [text]. */
     private fun merge(text: String, old: List<Token>, partial: List<Token>): List<Token> {
         if (partial.isEmpty()) return old
