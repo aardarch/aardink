@@ -50,6 +50,9 @@ import com.aardarch.aardink.core.InlayHint
 import com.aardarch.aardink.core.InlineCompletion
 import com.aardarch.aardink.core.InlineCompletionProvider
 import com.aardarch.aardink.core.LanguageService
+import com.aardarch.aardink.core.ParameterInformation
+import com.aardarch.aardink.core.SignatureHelp
+import com.aardarch.aardink.core.SignatureInformation
 import com.aardarch.aardink.languages.LanguageRegistry
 import com.aardarch.aardink.ui.CodeBlock
 import com.aardarch.aardink.ui.CodeEditorLayout
@@ -581,6 +584,71 @@ class EditorSceneScreenshotTest {
                 composeTestRule.mainClock.advanceTimeBy(100)
             },
         )
+    }
+
+    // ── 0.10's chrome ────────────────────────────────────────────────────────
+
+    /** The editor with [service], [options] and the keyboard toolbar at [placement], for a scene whose picture includes a popup. */
+    private fun showForScreen(
+        state: CodeEditorState,
+        service: LanguageService? = null,
+        placement: KeyboardToolbarPlacement = KeyboardToolbarPlacement.Hidden,
+        options: EditorOptions = EditorOptions(),
+    ) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalEditorTheme provides EditorThemes.VsCodeDark) {
+                    CodeEditorLayout(
+                        state = state,
+                        languageService = service,
+                        options = options,
+                        keyboardToolbarPlacement = placement,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test
+    fun signatureHelp() {
+        // Signature help with the caret in the second argument of a call: two overloads, the first
+        // active, its second parameter highlighted, and its documentation.
+        val call = "greet(name, count)"
+        val text = "fun demo(name: String, count: Int) {\n    $call\n}\n"
+        val helping = object : LanguageService by kotlin.languageService!! {
+            override suspend fun signatureHelp(document: CodeDocument, offset: Int) = SignatureHelp(
+                signatures = listOf(
+                    SignatureInformation(
+                        label = "fun greet(name: String, times: Int): Unit",
+                        documentation = "Greets *name*, `times` times over.",
+                        parameters = listOf(ParameterInformation("name: String"), ParameterInformation("times: Int", "How often")),
+                    ),
+                    SignatureInformation(label = "fun greet(name: String): Unit"),
+                ),
+                activeSignature = 0,
+                activeParameter = 1,
+            )
+        }
+        val state = stateOf(text)
+        showForScreen(state, helping)
+        composeTestRule.onNode(hasSetTextAction()).performSemanticsAction(SemanticsActions.RequestFocus)
+        composeTestRule.runOnUiThread { state.selection = TextRange(text.indexOf("count)")) }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        captureScreenRoboImage("../screenshots/scene-signature-help.png", roborazziOptions = options)
+    }
+
+    @Test
+    fun keyboardToolbar() {
+        // The keyboard toolbar fixed at the bottom, as a host without a soft keyboard shows it:
+        // undo and redo, the cursor nudges and the language's quick characters.
+        val state = stateOf(code)
+        showForScreen(state, placement = KeyboardToolbarPlacement.BottomFixed)
+        composeTestRule.onRoot().captureRoboImage("../screenshots/scene-keyboard-toolbar.png", roborazziOptions = options)
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
