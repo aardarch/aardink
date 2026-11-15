@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-16
+
 0.10 widens what the editor reads and shows: twelve more built-in languages and configured services
 for TypeScript, CSS and Markdown; the view options VS Code users reach for (line number styles, caret
 styles, guides, rulers, smooth scrolling, wrapping indent, drag and drop); find in selection and
