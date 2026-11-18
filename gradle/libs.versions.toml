@@ -28,7 +28,7 @@ google-material = "1.14.0"
 junit-jupiter = "6.1.3"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.13.0"
-robolectric = "4.18" # https://github.com/robolectric/robolectric/releases
+robolectric = "4.18.1" # https://github.com/robolectric/robolectric/releases
 # Android performance (:sample and :sample-benchmark only). The baselineprofile plugin shares
 # the benchmark version.
 androidx-benchmark = "1.5.0"
