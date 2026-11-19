@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-20
+
 ### Added
 
 - Stylus handwriting on Android 14 and later. A stylus stroke over the text of an editable editor
