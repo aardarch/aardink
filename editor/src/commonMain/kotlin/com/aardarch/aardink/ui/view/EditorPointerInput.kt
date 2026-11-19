@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.areAnyPressed
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.isAltPressed
@@ -396,9 +397,11 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
     var clickCount = 0
     awaitEachGesture {
         val down = awaitAnyDown()
-        val stylus = down.type == PointerType.Stylus || down.type == PointerType.Eraser
         // A stylus tip reports no button pressed, so it goes the way of a finger, not of a mouse.
-        val touch = down.type == PointerType.Touch || stylus
+        // With a barrel button held (Compose reports it as the primary or secondary button) it
+        // selects or opens the menu, as those mouse buttons do.
+        val stylus = down.type == PointerType.Stylus || down.type == PointerType.Eraser
+        val touch = down.type == PointerType.Touch || (stylus && !currentEvent.buttons.areAnyPressed)
         val repeated = down.uptimeMillis - lastClickTime <= viewConfiguration.doubleTapTimeoutMillis &&
             (down.position - lastClickPosition).getDistance() <= viewConfiguration.touchSlop * 2
         if (!touch) {

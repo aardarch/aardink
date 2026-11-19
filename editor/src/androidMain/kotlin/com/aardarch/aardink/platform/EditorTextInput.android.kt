@@ -33,11 +33,14 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.platform.PlatformTextInputSession
 import androidx.compose.ui.text.TextRange
@@ -52,7 +55,18 @@ internal actual val editorImeWindowed: Boolean = false
 
 // As foundation's text fields have it: startStylusHandwriting from a view that is not an EditText
 // works from Android 14.
-internal actual val editorStylusHandwriting: Boolean = Build.VERSION.SDK_INT >= 34
+private val stylusHandwritingSupported: Boolean = Build.VERSION.SDK_INT >= 34
+
+@Composable
+internal actual fun rememberStylusHandwriting(): () -> Boolean {
+    val view = LocalView.current
+    return remember(view) {
+        val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        // Asked per stroke, not once: the user can switch input methods or turn handwriting off at
+        // any time. The platform caches the answer.
+        { Build.VERSION.SDK_INT >= 34 && imm.isStylusHandwritingAvailable }
+    }
+}
 
 internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter: EditorImeAdapter, geometry: EditorImeGeometry): Nothing {
     val view = view
@@ -107,7 +121,7 @@ internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter:
 private fun configure(outAttributes: EditorInfo, adapter: EditorImeAdapter) {
     outAttributes.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
     outAttributes.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_ENTER_ACTION or EditorInfo.IME_ACTION_NONE
-    if (editorStylusHandwriting) enableStylusHandwriting(outAttributes)
+    if (stylusHandwritingSupported) enableStylusHandwriting(outAttributes)
     val selection = adapter.documentSelection
     outAttributes.initialSelStart = selection.min
     outAttributes.initialSelEnd = selection.max

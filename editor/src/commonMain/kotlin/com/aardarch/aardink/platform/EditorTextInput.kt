@@ -15,6 +15,7 @@
  */
 package com.aardarch.aardink.platform
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.platform.PlatformTextInputSession
 import com.aardarch.aardink.ui.input.EditorImeAdapter
@@ -28,11 +29,13 @@ import com.aardarch.aardink.ui.input.EditorImeGeometry
 internal expect val editorImeWindowed: Boolean
 
 /**
- * Whether a stylus stroke over the text can be handed to the input method as handwriting: Android
- * 14 and later, where `InputMethodManager.startStylusHandwriting` takes a stroke from a view that
- * draws its own text. Elsewhere a stylus acts as a finger.
+ * Asks, each time a stylus touches the text, whether its stroke can be handed to the input method
+ * as handwriting: on Android 14 and later, where `InputMethodManager.startStylusHandwriting` takes
+ * a stroke from a view that draws its own text, when the current input method writes and the user
+ * has not turned handwriting off. Otherwise, and on other platforms, a stylus acts as a finger.
  */
-internal expect val editorStylusHandwriting: Boolean
+@Composable
+internal expect fun rememberStylusHandwriting(): () -> Boolean
 
 /**
  * Connects [adapter] to the platform's input method until the calling coroutine is cancelled:

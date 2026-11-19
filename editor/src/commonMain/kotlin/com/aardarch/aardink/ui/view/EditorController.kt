@@ -43,7 +43,6 @@ import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.platform.TypedTextDecoder
 import com.aardarch.aardink.platform.editorClipboardFromKeys
 import com.aardarch.aardink.platform.editorImeWindowed
-import com.aardarch.aardink.platform.editorStylusHandwriting
 import com.aardarch.aardink.platform.readPlainText
 import com.aardarch.aardink.platform.writePlainText
 import com.aardarch.aardink.ui.EditorKeyBinding
@@ -169,6 +168,9 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     /** Moves focus to the text area. */
     var requestFocus: () -> Unit = {}
 
+    /** Whether a stylus stroke can be handwriting now; see `rememberStylusHandwriting`. */
+    var stylusHandwriting: () -> Boolean = { false }
+
     // What the last copy or cut put on the clipboard: pasting the same text back as whole lines
     // puts them above the caret's line, as in VS Code.
     private var lastCopy: EditingCommands.Copied? = null
@@ -191,7 +193,7 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             if (typing) requestFocus()
             if (touch && typing && !readOnly) ime.keyboardRequests++
         }
-        pointer.handwriting = { editorStylusHandwriting && !readOnly }
+        pointer.handwriting = { !readOnly && stylusHandwriting() }
         pointer.onHandwriting = { active ->
             if (active) {
                 touchMode = true

@@ -75,6 +75,7 @@ import com.aardarch.aardink.platform.EditorClipboardEvents
 import com.aardarch.aardink.platform.EditorScrollbars
 import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.platform.editorMagnifier
+import com.aardarch.aardink.platform.rememberStylusHandwriting
 import com.aardarch.aardink.ui.view.EditorBody
 import com.aardarch.aardink.ui.view.EditorColors
 import com.aardarch.aardink.ui.view.EditorContextMenu
@@ -216,6 +217,7 @@ internal fun VirtualizedEditorBody(
     }
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboard.current
+    val stylusHandwriting = rememberStylusHandwriting()
     SideEffect {
         view.style = style
         view.inline.setStyles(hintStyle, decorationTextStyle, lensStyle, ghostStyle)
@@ -224,6 +226,7 @@ internal fun VirtualizedEditorBody(
         controller.pointer.dragAndDrop = options.dragAndDrop && !options.readOnly
         controller.clipboard = clipboard
         controller.requestFocus = { runCatching { focusRequester.requestFocus() } }
+        controller.stylusHandwriting = stylusHandwriting
     }
 
     // The carets blink while the editor has focus, and show solid again after every change.
