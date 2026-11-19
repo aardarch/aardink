@@ -3,5 +3,9 @@
     {
       "file": ".github/copilot-commit-message.instructions.md"
     }
-  ]
+  ],
+  "sonarlint.connectedMode.project": {
+    "connectionId": "aardarch",
+    "projectKey": "aardarch_aardink"
+  }
 }

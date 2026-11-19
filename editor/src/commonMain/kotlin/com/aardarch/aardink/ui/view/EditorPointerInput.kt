@@ -72,6 +72,18 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
     /** A single tap (touch), after it placed the caret at an offset. */
     var onTap: (offset: Int) -> Unit = {}
 
+    /**
+     * Whether a stylus stroke in the text is handwriting (the platform takes it and the text is
+     * editable). Otherwise a stylus acts as a finger: it taps, long-presses and scrolls.
+     */
+    var handwriting: () -> Boolean = { false }
+
+    /**
+     * A stylus stroke passed the handwriting slop ([active] true), after it placed the caret where the
+     * stroke began; then its end ([active] false), whether it lifted or the input method took it over.
+     */
+    var onHandwriting: (active: Boolean) -> Unit = {}
+
     /** A right click at a point (viewport coordinates): open the context menu there. */
     var onContextMenu: (Offset) -> Unit = {}
 
@@ -214,6 +226,16 @@ internal class EditorPointerHandler(private val view: EditorView, private val co
         }
     }
 
+    /** A handwriting stroke began at [position]: the text it writes goes there. */
+    fun handwritingStart(position: Offset) {
+        unit = SelectionUnit.Character
+        origin = null
+        kept = null
+        box = null
+        state.replaceSelections(SelectionSet.single(TextRange(view.offsetAt(position).offset)))
+        onHandwriting(true)
+    }
+
     /** A press with the middle button: a column selection starting where it was pressed. */
     fun columnPress(position: Offset) {
         onPress(false, true)
@@ -341,9 +363,32 @@ private suspend fun AwaitPointerEventScope.waitForUp(id: PointerId): PointerInpu
 }
 
 /**
+ * For a stylus that may write: its release, or its first move past [slop] (still pressed: a
+ * stroke), or null when something else consumed it.
+ */
+private suspend fun AwaitPointerEventScope.waitForUpOrStroke(down: PointerInputChange, slop: Float): PointerInputChange? {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return null
+        if (change.isConsumed) return null
+        if (change.changedToUp()) return change
+        if ((change.position - down.position).getDistance() > slop) return change
+    }
+}
+
+/** Consumes pointer [id] until it lifts, so nothing below scrolls or selects with it. */
+private suspend fun AwaitPointerEventScope.consumeUntilUp(id: PointerId) {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == id } ?: return
+        change.consume()
+        if (!change.pressed) return
+    }
+}
+
+/**
  * The pointer gestures of the text area, feeding [handler]. Mouse presses are consumed (a mouse
  * drag selects, never scrolls); touch moves are left alone until a long press, so the scrollable
- * below still scrolls on a swipe.
+ * below still scrolls on a swipe. A stylus acts as a finger, except that where it can write
+ * ([EditorPointerHandler.handwriting]) a stroke past the handwriting slop becomes handwriting.
  */
 internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointerHandler) {
     var lastClickTime = 0L
@@ -351,7 +396,9 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
     var clickCount = 0
     awaitEachGesture {
         val down = awaitAnyDown()
-        val touch = down.type == PointerType.Touch
+        val stylus = down.type == PointerType.Stylus || down.type == PointerType.Eraser
+        // A stylus tip reports no button pressed, so it goes the way of a finger, not of a mouse.
+        val touch = down.type == PointerType.Touch || stylus
         val repeated = down.uptimeMillis - lastClickTime <= viewConfiguration.doubleTapTimeoutMillis &&
             (down.position - lastClickPosition).getDistance() <= viewConfiguration.touchSlop * 2
         if (!touch) {
@@ -387,8 +434,25 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             handler.pointer { release(copy = if (PlatformInfo.isMacOs) held.isAltPressed else held.isCtrlPressed) }
             return@awaitEachGesture
         }
-        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUp(down.id) }
+        // The eraser end only taps and scrolls: the connection takes no handwriting gestures.
+        val writes = down.type == PointerType.Stylus && handler.handwriting()
+        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            if (writes) waitForUpOrStroke(down, viewConfiguration.handwritingSlop) else waitForUp(down.id)
+        }
         when {
+            // A stylus moved past the handwriting slop, still down: the input method writes it.
+            up != null && up.pressed -> {
+                up.consume()
+                clickCount = 0
+                handler.pointer { handwritingStart(down.position) }
+                try {
+                    consumeUntilUp(down.id)
+                } finally {
+                    // Also when the input method takes the stroke over, which cancels it here.
+                    handler.onHandwriting(false)
+                }
+            }
+
             // Held still: a long press.
             up == null && currentEvent.changes.any { it.id == down.id && it.pressed && !it.isConsumed } -> {
                 handler.pointer { longPress(down.position) }

@@ -43,6 +43,7 @@ import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.platform.TypedTextDecoder
 import com.aardarch.aardink.platform.editorClipboardFromKeys
 import com.aardarch.aardink.platform.editorImeWindowed
+import com.aardarch.aardink.platform.editorStylusHandwriting
 import com.aardarch.aardink.platform.readPlainText
 import com.aardarch.aardink.platform.writePlainText
 import com.aardarch.aardink.ui.EditorKeyBinding
@@ -189,6 +190,18 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             preferredX = null
             if (typing) requestFocus()
             if (touch && typing && !readOnly) ime.keyboardRequests++
+        }
+        pointer.handwriting = { editorStylusHandwriting && !readOnly }
+        pointer.onHandwriting = { active ->
+            if (active) {
+                touchMode = true
+                hoverAt = null
+                contextMenuAt = null
+                showToolbarAtCaret = false
+                preferredX = null
+                requestFocus()
+            }
+            ime.handwritingRequested = active
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
         pointer.onLinkClick = { actions.onOpenLink(state.selection.end) || actions.onGoToDefinition() }

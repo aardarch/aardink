@@ -36,6 +36,8 @@ import com.aardarch.aardink.ui.input.EditorImeGeometry
 
 internal actual val editorImeWindowed: Boolean = true
 
+internal actual val editorStylusHandwriting: Boolean = false
+
 internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter: EditorImeAdapter, geometry: EditorImeGeometry): Nothing =
     startInputMethod(EditorTextInputRequest(adapter, geometry))
 

@@ -28,6 +28,13 @@ import com.aardarch.aardink.ui.input.EditorImeGeometry
 internal expect val editorImeWindowed: Boolean
 
 /**
+ * Whether a stylus stroke over the text can be handed to the input method as handwriting: Android
+ * 14 and later, where `InputMethodManager.startStylusHandwriting` takes a stroke from a view that
+ * draws its own text. Elsewhere a stylus acts as a finger.
+ */
+internal expect val editorStylusHandwriting: Boolean
+
+/**
  * Connects [adapter] to the platform's input method until the calling coroutine is cancelled:
  * an `InputConnection` on Android, Compose's skiko `PlatformTextInputMethodRequest` on desktop and
  * the web. [geometry] places the input method's candidate window and the web's hidden text area.
