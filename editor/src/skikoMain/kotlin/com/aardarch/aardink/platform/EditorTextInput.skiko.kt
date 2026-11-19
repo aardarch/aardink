@@ -17,6 +17,7 @@
 
 package com.aardarch.aardink.platform
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -35,6 +36,9 @@ import com.aardarch.aardink.ui.input.EditorImeAdapter
 import com.aardarch.aardink.ui.input.EditorImeGeometry
 
 internal actual val editorImeWindowed: Boolean = true
+
+@Composable
+internal actual fun rememberStylusHandwriting(): () -> Boolean = { false }
 
 internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter: EditorImeAdapter, geometry: EditorImeGeometry): Nothing =
     startInputMethod(EditorTextInputRequest(adapter, geometry))

@@ -36,6 +36,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stylus handwriting on Android 14 and later. A stylus stroke over the text of an editable editor
+  is handed to the input method (`InputMethodManager.startStylusHandwriting`), as `BasicTextField`
+  does: it places the caret where the stroke began, focuses the editor and, when the editor was not
+  focused, starts the input session first. Only when the current input method writes and handwriting
+  is on (`InputMethodManager.isStylusHandwritingAvailable`, asked per stroke); otherwise a stroke
+  scrolls as a finger's does. The `EditorInfo` tells the input method the editor takes
+  handwriting (the platform flag on Android 15, androidx.core's extra on 14). Handwriting gestures
+  (scribble to delete, and the like) are not supported yet, so the eraser end only taps and scrolls.
+
+### Fixed
+
+- A stylus tip did nothing in the text on Android. It reports no button pressed, and the editor
+  took it for a mouse waiting for one. It now taps, long-presses and scrolls as a finger does. With
+  a barrel button held it still selects or opens the context menu, as the mouse buttons Compose
+  reports for those buttons do.
+
 ## [0.10.0] - 2026-11-16
 
 0.10 widens what the editor reads and shows: twelve more built-in languages and configured services

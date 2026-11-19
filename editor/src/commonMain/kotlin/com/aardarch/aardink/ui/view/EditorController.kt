@@ -168,6 +168,9 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
     /** Moves focus to the text area. */
     var requestFocus: () -> Unit = {}
 
+    /** Whether a stylus stroke can be handwriting now; see `rememberStylusHandwriting`. */
+    var stylusHandwriting: () -> Boolean = { false }
+
     // What the last copy or cut put on the clipboard: pasting the same text back as whole lines
     // puts them above the caret's line, as in VS Code.
     private var lastCopy: EditingCommands.Copied? = null
@@ -189,6 +192,18 @@ internal class EditorController(val state: CodeEditorState, val view: EditorView
             preferredX = null
             if (typing) requestFocus()
             if (touch && typing && !readOnly) ime.keyboardRequests++
+        }
+        pointer.handwriting = { !readOnly && stylusHandwriting() }
+        pointer.onHandwriting = { active ->
+            if (active) {
+                touchMode = true
+                hoverAt = null
+                contextMenuAt = null
+                showToolbarAtCaret = false
+                preferredX = null
+                requestFocus()
+            }
+            ime.handwritingRequested = active
         }
         pointer.onContextMenu = { position -> contextMenuAt = position }
         pointer.onLinkClick = { actions.onOpenLink(state.selection.end) || actions.onGoToDefinition() }

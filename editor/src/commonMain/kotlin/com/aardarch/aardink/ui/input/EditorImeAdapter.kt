@@ -109,6 +109,13 @@ internal class EditorImeAdapter(val state: CodeEditorState, val windowed: Boolea
     /** Bumped to ask for the on-screen keyboard (a tap in the text); the Android session shows it. */
     var keyboardRequests by mutableIntStateOf(0)
 
+    /**
+     * True while a stylus stroke over the text is waiting to become handwriting: the Android session
+     * hands it to the input method and clears it. The stroke's end clears it too, so a stroke whose
+     * session never started cannot start handwriting later, when no stylus is down.
+     */
+    var handwritingRequested by mutableStateOf(false)
+
     /** The text version after this adapter's own last edit; any other means the text changed elsewhere. */
     private var ownVersion = state.textVersion
 

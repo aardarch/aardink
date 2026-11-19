@@ -33,10 +33,14 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.platform.PlatformTextInputSession
 import androidx.compose.ui.text.TextRange
@@ -48,6 +52,21 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal actual val editorImeWindowed: Boolean = false
+
+// As foundation's text fields have it: startStylusHandwriting from a view that is not an EditText
+// works from Android 14.
+private val stylusHandwritingSupported: Boolean = Build.VERSION.SDK_INT >= 34
+
+@Composable
+internal actual fun rememberStylusHandwriting(): () -> Boolean {
+    val view = LocalView.current
+    return remember(view) {
+        val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        // Asked per stroke, not once: the user can switch input methods or turn handwriting off at
+        // any time. The platform caches the answer.
+        { Build.VERSION.SDK_INT >= 34 && imm.isStylusHandwritingAvailable }
+    }
+}
 
 internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter: EditorImeAdapter, geometry: EditorImeGeometry): Nothing {
     val view = view
@@ -70,6 +89,19 @@ internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter:
             launch {
                 snapshotFlow { adapter.keyboardRequests }.collect { if (it > 0) imm.showSoftInput(view, 0) }
             }
+            if (Build.VERSION.SDK_INT >= 34) {
+                launch {
+                    // A stroke on an unfocused editor starts this session; the input method must
+                    // have taken the connection first, which it does a frame after the request.
+                    withFrameMillis {}
+                    snapshotFlow { adapter.handwritingRequested }.collect { requested ->
+                        if (requested) {
+                            adapter.handwritingRequested = false
+                            imm.startStylusHandwriting(view)
+                        }
+                    }
+                }
+            }
             startInputMethod(
                 PlatformTextInputMethodRequest { outAttributes ->
                     configure(outAttributes, adapter)
@@ -82,10 +114,14 @@ internal actual suspend fun PlatformTextInputSession.runEditorTextInput(adapter:
     }
 }
 
-/** A multi-line text editor to the input method: corrections on, no fullscreen, Enter types a line break. */
+/**
+ * A multi-line text editor to the input method: corrections on, no fullscreen, Enter types a line
+ * break, and stylus handwriting welcome where the platform has it.
+ */
 private fun configure(outAttributes: EditorInfo, adapter: EditorImeAdapter) {
     outAttributes.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
     outAttributes.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_ENTER_ACTION or EditorInfo.IME_ACTION_NONE
+    if (stylusHandwritingSupported) enableStylusHandwriting(outAttributes)
     val selection = adapter.documentSelection
     outAttributes.initialSelStart = selection.min
     outAttributes.initialSelEnd = selection.max
@@ -97,6 +133,20 @@ private fun configure(outAttributes: EditorInfo, adapter: EditorImeAdapter) {
         outAttributes.setInitialSurroundingSubText(text.subSequence(start, end), start)
     }
 }
+
+/**
+ * Tells the input method this editor takes handwriting: the platform flag from Android 15, and
+ * before it the extra androidx.core's `EditorInfoCompat.setStylusHandwritingEnabled` writes, which
+ * input methods read on Android 14 (the editor does not depend on androidx.core for one key).
+ */
+private fun enableStylusHandwriting(outAttributes: EditorInfo) {
+    if (Build.VERSION.SDK_INT >= 35) outAttributes.isStylusHandwritingEnabled = true
+    val extras = outAttributes.extras ?: Bundle().also { outAttributes.extras = it }
+    extras.putBoolean(STYLUS_HANDWRITING_ENABLED_KEY, true)
+}
+
+/** androidx.core's `EditorInfoCompat.STYLUS_HANDWRITING_ENABLED_KEY`, which is not public. */
+private const val STYLUS_HANDWRITING_ENABLED_KEY = "androidx.core.view.inputmethod.EditorInfoCompat.STYLUS_HANDWRITING_ENABLED"
 
 /**
  * The editor's `InputConnection`, written directly rather than on `BaseInputConnection`, after
