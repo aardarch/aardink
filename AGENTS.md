@@ -270,7 +270,7 @@ The single source of truth for the published version is `VERSION_NAME` in
 `gradle.properties`. `editor`, `languages`, `languages-lsp` and `editor-web` read it through the
 vanniktech Maven Publish plugin, and `:sample-web` stamps it into the npm package — never
 hardcode a version in `build.gradle.kts`. Between releases `VERSION_NAME` is the next version
-with a `-SNAPSHOT` suffix (now `0.10.0-SNAPSHOT`); `create-release.ps1` suggests the version
+with a `-SNAPSHOT` suffix (now `0.12.0-SNAPSHOT`); `create-release.ps1` suggests the version
 without the suffix, and the first commit after a release moves `VERSION_NAME` to the next
 `-SNAPSHOT`.
 
