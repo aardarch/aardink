@@ -286,7 +286,7 @@ const MONACO_THEMES = { vs: 'vscode-light', 'vs-dark': 'vscode-dark' };
 /**
  * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap ('on', 'off',
  * 'wordWrapColumn', 'bounded'), its { enabled } objects for minimap and stickyScroll (a plain
- * boolean works too), its guides and its lineNumbers.
+ * boolean works too), its guides, its hover delays and its lineNumbers.
  */
 function toKotlinOptions(options) {
   const out = {};
@@ -309,6 +309,11 @@ function toKotlinOptions(options) {
     if (options.guides.indentation !== undefined) out.indentGuides = !!options.guides.indentation;
     // Monaco's 'active' shows only the caret's pair; here it shows them all.
     if (options.guides.bracketPairs !== undefined) out.bracketPairGuides = !!options.guides.bracketPairs;
+  }
+  if (options.hover !== undefined && options.hover !== null) {
+    // Whole milliseconds: the Kotlin side takes an Int.
+    if (Number.isFinite(options.hover.delay)) out.hoverDelay = Math.max(0, Math.round(options.hover.delay));
+    if (Number.isFinite(options.hover.hidingDelay)) out.hoverHidingDelay = Math.max(0, Math.round(options.hover.hidingDelay));
   }
   if (options.rulers !== undefined) {
     // Monaco's { column, color } rulers keep their column; one colour comes from the theme.

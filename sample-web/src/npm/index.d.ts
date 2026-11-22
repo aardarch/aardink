@@ -71,6 +71,12 @@ export interface AardinkOptions {
    * default, where Monaco's is on.
    */
   dragAndDrop?: boolean;
+  /**
+   * Monaco's `hover`: `delay`, the milliseconds the mouse rests before the hover card shows (500 by
+   * default, where Monaco's is 300), and `hidingDelay`, how long the card outlasts a mouse that
+   * moved off (300).
+   */
+  hover?: { delay?: number; hidingDelay?: number };
   readOnly?: boolean;
   showGutter?: boolean;
   showLineNumbers?: boolean;

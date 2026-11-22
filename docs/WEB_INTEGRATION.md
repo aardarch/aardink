@@ -423,6 +423,7 @@ files to apply them to.
 | `rulers`, `guides: { indentation, bracketPairs }` | The same | Off by default, where Monaco's indentation guides are on. A ruler's colour is the theme's `editorRuler.foreground`; `bracketPairs: 'active'` shows them all. |
 | `cursorStyle`, `cursorBlinking`, `cursorSurroundingLines`, `smoothScrolling` | The same | `'phase'` and `'expand'` blink as `'smooth'`. `smoothScrolling` animates the editor's own scrolls, not the wheel. |
 | `scrollBeyondLastLine`, `dragAndDrop` | The same | Off by default, where Monaco's are on. |
+| `hover: { delay, hidingDelay }` | The same | Milliseconds. `delay` is 500 by default, where Monaco's is 300; `hidingDelay` 300, as Monaco's. |
 | `formatOnType` | The same | With `provideOnTypeFormattingEdits` or a language server. Off by default, as Monaco's. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
