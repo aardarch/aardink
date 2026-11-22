@@ -16,13 +16,15 @@
 package com.aardarch.aardink.core.edit
 
 import com.aardarch.aardink.core.TextEdit
+import com.aardarch.aardink.core.diff.LineDiff
+import com.aardarch.aardink.core.diff.LineHunk
 
 /**
  * The edits that turn one text into another while touching as little as they can, for a formatter
  * that returns the whole formatted document: applied as they are, carets, folds and diagnostics
  * outside what changed stay where they were, as with Monaco's minimal edits.
  *
- * Lines are compared first (Myers' diff), then each run of differing lines is trimmed to the
+ * Lines are compared first (Myers' diff, in [LineDiff]), then each run of differing lines is trimmed to the
  * characters that differ. A diff that needs more than [MAX_LINE_EDITS] line insertions and
  * deletions, as reindenting a whole large file does, falls back to one edit spanning from the
  * first difference to the last.
@@ -39,12 +41,9 @@ internal object MinimalEdits {
         val oldStarts = starts(oldLines)
         val newStarts = starts(newLines)
         return hunks.map { hunk ->
-            trimmed(old, oldStarts[hunk.oldStart], oldStarts[hunk.oldEnd], new.substring(newStarts[hunk.newStart], newStarts[hunk.newEnd]))
+            trimmed(old, oldStarts[hunk.aStart], oldStarts[hunk.aEnd], new.substring(newStarts[hunk.bStart], newStarts[hunk.bEnd]))
         }
     }
-
-    /** Lines [oldStart, oldEnd) of the old text become lines [newStart, newEnd) of the new one. */
-    private class Hunk(val oldStart: Int, val oldEnd: Int, val newStart: Int, val newEnd: Int)
 
     /** [text]'s lines, each with its line break, so that they join back into [text]. */
     private fun splitLines(text: String): List<String> {
@@ -81,71 +80,11 @@ internal object MinimalEdits {
         return TextEdit(from until to, replacement.substring(prefix, replacement.length - suffix))
     }
 
-    /**
-     * Myers' diff of two line lists, as the runs of lines that differ; null past [MAX_LINE_EDITS].
-     * `trace[d]` holds, for every diagonal k in -d..d, how far along the old lines the furthest
-     * path with d edits reaches.
-     */
-    private fun diff(a: List<String>, b: List<String>): List<Hunk>? {
-        val n = a.size
-        val m = b.size
-        val limit = minOf(n + m, MAX_LINE_EDITS)
-        val trace = ArrayList<IntArray>()
-        var found = false
-        for (d in 0..limit) {
-            val v = IntArray(2 * d + 1)
-            val previous = trace.lastOrNull()
-            var k = -d
-            while (k <= d) {
-                var x = when {
-                    d == 0 -> 0
-                    k == -d || (k != d && previous!![k - 1 + d - 1] < previous[k + 1 + d - 1]) -> previous!![k + 1 + d - 1]
-                    else -> previous!![k - 1 + d - 1] + 1
-                }
-                var y = x - k
-                while (x < n && y < m && a[x] == b[y]) {
-                    x++
-                    y++
-                }
-                v[k + d] = x
-                if (x >= n && y >= m) found = true
-                k += 2
-            }
-            trace += v
-            if (found) break
-        }
-        if (!found) return null
-
-        // Back from the end: the diagonal runs (equal lines) of the path, last first.
-        val snakes = ArrayList<IntArray>()
-        var x = n
-        var y = m
-        for (d in trace.size - 1 downTo 1) {
-            val previous = trace[d - 1]
-            val k = x - y
-            val down = k == -d || (k != d && previous[k - 1 + d - 1] < previous[k + 1 + d - 1])
-            val previousK = if (down) k + 1 else k - 1
-            val previousX = previous[previousK + d - 1]
-            val previousY = previousX - previousK
-            val midX = if (down) previousX else previousX + 1
-            val midY = midX - k
-            snakes += intArrayOf(midX, midY, x, y)
-            x = previousX
-            y = previousY
-        }
-        snakes += intArrayOf(0, 0, x, y)
-        snakes.reverse()
-
-        val hunks = ArrayList<Hunk>()
-        var oldAt = 0
-        var newAt = 0
-        for (snake in snakes) {
-            if (snake[2] == snake[0]) continue // no equal lines: the edits on either side are one run
-            if (snake[0] > oldAt || snake[1] > newAt) hunks += Hunk(oldAt, snake[0], newAt, snake[1])
-            oldAt = snake[2]
-            newAt = snake[3]
-        }
-        if (oldAt < n || newAt < m) hunks += Hunk(oldAt, n, newAt, m)
-        return hunks
+    /** The runs of lines that differ, with the lines compared as they are, line breaks and whitespace included; null past [MAX_LINE_EDITS]. */
+    private fun diff(a: List<String>, b: List<String>): List<LineHunk>? {
+        val ids = HashMap<String, Int>()
+        val aIds = IntArray(a.size) { ids.getOrPut(a[it]) { ids.size } }
+        val bIds = IntArray(b.size) { ids.getOrPut(b[it]) { ids.size } }
+        return LineDiff.diff(aIds, bIds, MAX_LINE_EDITS)?.hunks
     }
 }
