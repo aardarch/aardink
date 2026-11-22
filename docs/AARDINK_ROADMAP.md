@@ -1303,6 +1303,7 @@ additions, each forced by the design or found while building it.
 | `defineTheme` reads the diff keys | The Kotlin parser read them already; the npm path dropped them, as a registered theme's `ChromeColors` copied only the older fields. It copies them all now | Found by the smoke test's pixels |
 | — | A read-only original refuses `executeEdits` from the web unless `originalEditable` | The state's read-only flag stops typing, not edits through the API |
 | `perf.mjs --diff` | The 5,000-line reference document as the modified side, a change about every 20 lines, side by side; in CI with `--gate`. Key to change is held to the plain run's limits. Key to idle is reported, not gated: the diff runs 300 ms after typing stops, inside the window that ends a key's time, so a key's time takes it in. On the dev machine: about 250 changes found 370 ms after mount, key to change p95 17 to 19 ms. A new original starts with one task of 65 to 96 ms, gated at 100 ms: a profile (`--diff --profile`) shows it is the first slices of the original's full highlighting pass, not the diff, which is one task of 13 to 14 ms, with 20 ms to publish | The highlighting pass is §9.6's, and plain `setValue` has the same task |
+| — | The wasm bundle grows 2.5 % gzipped with the diff editor: `aardink-web.wasm` 1,813,565 bytes against 0.10's 1,769,514. Recorded anew in `bundle-size.json`, as a change meant to grow the bundle is | Over the 2 % ceiling |
 
 ## 13. Verification
 
