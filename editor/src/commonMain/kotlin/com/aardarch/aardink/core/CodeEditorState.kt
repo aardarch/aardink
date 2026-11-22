@@ -653,6 +653,29 @@ class CodeEditorState(
         if (changed.isNotEmpty()) diffListeners.forEach { it(changed) }
     }
 
+    /**
+     * Puts [rows] on their lines in place of what those had, a null or empty list clearing one, and
+     * leaves every other line as it is. What [publishDiffRows] does for a few lines, without
+     * comparing the rest.
+     */
+    internal fun patchDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>?>) {
+        if (rows.isEmpty()) return
+        val next = HashMap(diffRows)
+        val changed = ArrayList<Int>()
+        for ((line, list) in rows) {
+            if (list.isNullOrEmpty()) {
+                if (next.remove(line) != null) changed += line
+            } else if (next[line] != list) {
+                next[line] = list
+                changed += line
+            }
+        }
+        if (changed.isEmpty()) return
+        diffRows = next
+        changed.sort()
+        diffListeners.forEach { it(changed) }
+    }
+
     private val diffRowMover = DocumentChangeListener { change ->
         if (diffRows.isEmpty()) return@DocumentChangeListener
         if (change.isReset) {

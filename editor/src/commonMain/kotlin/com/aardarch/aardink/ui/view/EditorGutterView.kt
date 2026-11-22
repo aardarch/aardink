@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.ui.ANNOTATION_LANE_WIDTH
+import com.aardarch.aardink.ui.DIFF_ACTION_WIDTH
 import com.aardarch.aardink.ui.DIFF_LANE_WIDTH
 import com.aardarch.aardink.ui.DiffColors
 import com.aardarch.aardink.ui.EditorDefaults
@@ -89,6 +90,9 @@ internal class GutterContent(
     val decorationMarks: List<LineMark> = emptyList(),
     /** A tap on a line's number: selects the line, as in VS Code. */
     val onLineNumberTap: (Int) -> Unit = {},
+    /** The lines whose diff lane offers an arrow (revert or accept), with [onDiffAction] to run it; null for none. */
+    val diffActionLines: Set<Int> = emptySet(),
+    val onDiffAction: ((Int) -> Unit)? = null,
 )
 
 /**
@@ -121,11 +125,22 @@ internal fun EditorGutterView(
         )
     }
     val hasDiffLane = content.reserveDiffLane || content.diffAnnotations.isNotEmpty() || content.deletedAbove.isNotEmpty()
+    val hasDiffActions = hasDiffLane && content.onDiffAction != null
     val hasFoldLane = content.reserveFoldLane || content.foldableLines.isNotEmpty()
     val hasAnnotationLane = content.reserveAnnotationLane || content.annotations.isNotEmpty()
-    val width =
-        rememberGutterWidth(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, content.showLineNumbers, density, measurer, textStyle)
-    val diffLane = with(density) { if (hasDiffLane) DIFF_LANE_WIDTH.toPx() else 0f }
+    val width = rememberGutterWidth(
+        lineCount,
+        hasDiffLane,
+        hasDiffActions,
+        hasFoldLane,
+        hasAnnotationLane,
+        content.showLineNumbers,
+        density,
+        measurer,
+        textStyle,
+    )
+    val barWidth = with(density) { if (hasDiffLane) DIFF_LANE_WIDTH.toPx() else 0f }
+    val diffLane = barWidth + with(density) { if (hasDiffActions) DIFF_ACTION_WIDTH.toPx() else 0f }
     val foldLane = with(density) { if (hasFoldLane) FOLD_LANE_WIDTH.toPx() else 0f }
     val annotationLane = with(density) { if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.toPx() else 0f }
     val padding = with(density) { EditorDefaults.gutterPaddingHorizontal.toPx() }
@@ -147,6 +162,9 @@ internal fun EditorGutterView(
                     val hit = frame.lines.lastOrNull { it.top - frame.scrollY <= position.y } ?: return@detectTapGestures
                     val tapped = current.value
                     when {
+                        tapped.onDiffAction != null && position.x < diffLane && hit.line in tapped.diffActionLines ->
+                            tapped.onDiffAction(hit.line)
+
                         position.x in diffLane..diffLane + foldLane && hit.line in tapped.foldableLines -> tapped.onToggleFold(hit.line)
 
                         position.x in diffLane + foldLane..diffLane + foldLane + annotationLane && hit.line in tapped.annotations ->
@@ -171,19 +189,22 @@ internal fun EditorGutterView(
                     val top = line.top - frame.scrollY + line.layout.textRow * lineHeight
                     val rowsHeight = line.layout.textRows * lineHeight
                     val diff = shown.diffAnnotations[line.line]
-                    if (diff != null && diff != LineDiffKind.Deleted && diffLane > 0f) {
+                    if (diff != null && diff != LineDiffKind.Deleted && barWidth > 0f) {
                         drawRect(
                             color = if (diff == LineDiffKind.Added) shown.diffColors.gutterAdded else shown.diffColors.gutterModified,
                             topLeft = Offset(0f, top + 1f),
-                            size = Size(diffLane, rowsHeight - 2f),
+                            size = Size(barWidth, rowsHeight - 2f),
                         )
                     }
-                    if (diffLane > 0f && shown.deletedAbove.isNotEmpty()) {
+                    if (barWidth > 0f && shown.deletedAbove.isNotEmpty()) {
                         // A wedge on the edge the deleted lines were at: above the line, or below the last.
-                        if (line.line in shown.deletedAbove) drawDeletedWedge(shown.diffColors.gutterDeleted, top, diffLane)
+                        if (line.line in shown.deletedAbove) drawDeletedWedge(shown.diffColors.gutterDeleted, top, barWidth)
                         if (line.line == lineCount - 1 && lineCount in shown.deletedAbove) {
-                            drawDeletedWedge(shown.diffColors.gutterDeleted, top + rowsHeight, diffLane)
+                            drawDeletedWedge(shown.diffColors.gutterDeleted, top + rowsHeight, barWidth)
                         }
+                    }
+                    if (diffLane > barWidth && line.line in shown.diffActionLines) {
+                        drawFoldTriangle(barWidth + (diffLane - barWidth) / 2f, top + lineHeight / 2f, expanded = false, color = foreground)
                     }
                     marks.lastOrNull { line.line in it.firstLine..it.lastLine }?.let { mark ->
                         drawRect(mark.color, Offset(size.width - markWidth, top), Size(markWidth, rowsHeight))
