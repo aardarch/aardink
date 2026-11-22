@@ -1079,3 +1079,118 @@ export function preloadAardink(): Promise<void>;
 
 /** The Aardink version this package was built from. */
 export const version: string;
+
+/**
+ * A diff editor's options: Monaco's `IDiffEditorOptions` names, with the editor options both sides
+ * take. Every field is optional; `updateOptions` changes only the ones you pass.
+ *
+ * Monaco takes two models; the models arrive with `setModel` in 0.13, so here the two texts are
+ * `original` and `modified`. Both sides share the editor options (`theme`, `fontSize`, `wordWrap`,
+ * `readOnly`, which makes the modified side read-only, and the rest), taken from the diff editor's own
+ * options. `language` is both sides' to begin with; `getOriginalEditor().updateOptions({ language })`
+ * changes one side's.
+ */
+export interface AardinkDiffOptions extends Omit<AardinkOptions, 'value'> {
+  /** The original text, on the left. Only read by `createDiffEditor`; see `setOriginalValue`. */
+  original?: string;
+  /** The modified text, the side that is edited. Only read by `createDiffEditor`; see `setModifiedValue`. */
+  modified?: string;
+  /** Show the two texts side by side. `false` shows the modified text with the original's deleted lines above it. `true` by default. */
+  renderSideBySide?: boolean;
+  /** A container narrower than this many CSS pixels shows the inline view even with `renderSideBySide`. 900 by default, as Monaco's. */
+  renderSideBySideInlineBreakpoint?: number;
+  /** Whitespace at the start and end of a line does not make it differ. `true` by default. */
+  ignoreTrimWhitespace?: boolean;
+  /** How long the diff may take, in milliseconds; 0 is no limit. Past it, lines it has not settled show as one change. 5000 by default, as Monaco's. */
+  maxComputationTime?: number;
+  /** The original can be edited, side by side. `false` by default. */
+  originalEditable?: boolean;
+  /**
+   * Folds runs of unchanged lines longer than twice `contextLineCount`, on both sides at once. A plain
+   * boolean is `enabled`. Off by default, as Monaco's; `contextLineCount` is 3 by default. Monaco's
+   * `minimumLineCount` and `revealLineCount` are not read.
+   */
+  hideUnchangedRegions?: boolean | { enabled?: boolean; contextLineCount?: number; minimumLineCount?: number; revealLineCount?: number };
+  /** The gutter's marks for added, modified and deleted lines, with an arrow on a change's first line to revert it. `true` by default. */
+  renderIndicators?: boolean;
+  /** The divider between the two sides can be dragged. `true` by default. */
+  enableSplitViewResizing?: boolean;
+}
+
+/** One character range of a change, as Monaco's `ICharChange`: 1-based positions, each end exclusive. */
+export interface AardinkCharChange {
+  originalStartLineNumber: number;
+  originalStartColumn: number;
+  originalEndLineNumber: number;
+  originalEndColumn: number;
+  modifiedStartLineNumber: number;
+  modifiedStartColumn: number;
+  modifiedEndLineNumber: number;
+  modifiedEndColumn: number;
+}
+
+/**
+ * A change between the two texts, as Monaco's `ILineChange`: 1-based line numbers, each end inclusive.
+ * A side with no lines (an insertion has none in the original, a deletion none in the modified text)
+ * has `EndLineNumber` 0 and a `StartLineNumber` that is the line before the place they would be (0 at
+ * the top), as Monaco's.
+ */
+export interface AardinkLineChange {
+  originalStartLineNumber: number;
+  originalEndLineNumber: number;
+  modifiedStartLineNumber: number;
+  modifiedEndLineNumber: number;
+  /** The characters that differ inside the change; absent when one side has no lines, or a side is over 10,000 characters. */
+  charChanges?: AardinkCharChange[];
+}
+
+/**
+ * A diff editor, as Monaco's `IStandaloneDiffEditor`. Each side is an editor of its own, with every
+ * method of `createEditor`'s. What only a whole editor can show is not shown on a side: the host's
+ * diagnostics (`setDiagnostics`), `setBaseline`, the find panel's state, `onOpenLink` and
+ * `onSearchWorkspace`; and `layout()` and `focus()` act on the diff editor as a whole. The two share
+ * their editor options, which come from the diff editor's options and the modified editor's
+ * `updateOptions`.
+ *
+ * The commands `editor.action.accessibleDiffViewer.next` and `.prev`, `editor.action.diffReview.next` and
+ * `.prev`, and `workbench.action.compareEditor.nextChange` and `.previousChange` can be run by `trigger`
+ * on either side (F7 and Shift+F7 go to the next and previous change).
+ */
+export interface AardinkDiffEditor {
+  /** The left side. Disposing it does nothing: `dispose()` the diff editor. */
+  getOriginalEditor(): AardinkEditor;
+  /** The side that is edited. Disposing it does nothing: `dispose()` the diff editor. */
+  getModifiedEditor(): AardinkEditor;
+  /** Replaces the original text, clearing its undo history, as `setValue` does. */
+  setOriginalValue(text: string): void;
+  /** Replaces the modified text, clearing its undo history. */
+  setModifiedValue(text: string): void;
+  /**
+   * The changes of the last diff, in order. The diff is worked out as the editor appears and 300 ms
+   * after typing stops on either side, off the keystroke, so this is empty until `onDidUpdateDiff` first
+   * fires and may be a little behind the text.
+   */
+  getLineChanges(): AardinkLineChange[];
+  /** Called each time a diff has been worked out, also when it found the same changes. */
+  onDidUpdateDiff(listener: () => void): { dispose(): void };
+  /** Moves the modified editor's caret to the next change, or the previous, going round at either end, and shows it. */
+  goToDiff(target: 'next' | 'previous'): void;
+  /**
+   * Puts the original's lines of the change at `index` of `getLineChanges()` back in the modified text,
+   * as one undo step. Returns whether the text changed: false for an index with no change, a read-only
+   * modified side, or text edited since the diff.
+   */
+  revertChange(index: number): boolean;
+  /** Changes only the options passed. */
+  updateOptions(options: Partial<AardinkDiffOptions>): void;
+  /** Stops both editors. Safe to call twice. Remove or reuse the container yourself. */
+  dispose(): void;
+}
+
+/**
+ * Mounts a diff editor that fills `container`: the original on the left and the modified text, which
+ * is the one edited, on the right, or one above the other in a container narrower than
+ * `renderSideBySideInlineBreakpoint`, with the lines and characters that differ marked. Loads the
+ * WebAssembly module on first use (see `preloadAardink`).
+ */
+export function createDiffEditor(container: HTMLElement, options?: AardinkDiffOptions): Promise<AardinkDiffEditor>;

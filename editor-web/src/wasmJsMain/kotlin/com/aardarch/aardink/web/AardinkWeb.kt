@@ -60,6 +60,7 @@ import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticRelatedInformation
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticTag
+import com.aardarch.aardink.core.DiffEditorState
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
 import com.aardarch.aardink.core.EditorTheme
@@ -75,6 +76,7 @@ import com.aardarch.aardink.core.Location
 import com.aardarch.aardink.core.NamedTokenType
 import com.aardarch.aardink.core.SelectionChangeReason
 import com.aardarch.aardink.core.SymbolKind
+import com.aardarch.aardink.core.TextDiffResult
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.TokenType
 import com.aardarch.aardink.languages.DeclarativeGrammar
@@ -465,8 +467,144 @@ object AardinkWeb {
             initialLanguage = language,
             initialOptions = options,
         )
-        // An element of the editor's own, filling the container, so dispose() can take out all
-        // Compose put in it (sometimes only after this returns) and nothing of the host's.
+        startViewport(handle, container, { event -> altCharacterKey(handle, event) }) { EditorContent(handle) }
+        mountedEditors += handle
+        followedByServers(handle)
+        return handle
+    }
+
+    /**
+     * Mounts a diff editor, as Monaco's `createDiffEditor` with the two texts as `original` and
+     * `modified` (Monaco takes models, which come later). The original is shown on the left, or above
+     * the modified text when the container is narrower than `renderSideBySideInlineBreakpoint`.
+     *
+     * [optionsJson] is a JSON object of [WebEditorOptions] fields, which both sides share, and of the
+     * diff editor's own, in Monaco's names: `renderSideBySide`, `renderSideBySideInlineBreakpoint` (CSS
+     * pixels), `ignoreTrimWhitespace`, `maxComputationTime` (milliseconds, 0 for no limit),
+     * `originalEditable`, `hideUnchangedRegions` (`{ enabled, contextLineCount }`), `renderIndicators` and
+     * `enableSplitViewResizing`. The two editors are [AardinkDiffHandle.original] and
+     * [AardinkDiffHandle.modified]; every per-editor function takes either, though what only a whole
+     * editor can show (the host's diagnostics, the diff lane's baseline, a find panel's state, a
+     * workspace search and links) is not shown on a side.
+     */
+    fun mountDiff(
+        containerId: String,
+        original: String,
+        modified: String,
+        optionsJson: String = "{}",
+        registry: LanguageRegistry = this.registry,
+        themes: Map<String, EditorTheme> = registeredThemes,
+    ): AardinkDiffHandle {
+        val container = requireNotNull(document.getElementById(containerId)) {
+            "No element with id '$containerId' in the document"
+        }
+        val options = parseOptions(optionsJson)
+        val diffOptions = json.decodeFromString(WebDiffOptions.serializer(), optionsJson)
+        val language = resolveLanguage(registry, options.language)
+        fun side(text: String): AardinkEditorHandle {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+            return AardinkEditorHandle(
+                registry = registry,
+                themes = themes,
+                scope = scope,
+                initialState = CodeEditorState(text, tokenizer = language.tokenizer, scope = scope),
+                initialLanguage = language,
+                initialOptions = options,
+            )
+        }
+        val originalSide = side(original)
+        val modifiedSide = side(modified)
+        val state = DiffEditorState(originalSide.state.value, modifiedSide.state.value)
+        val diff = AardinkDiffHandle(originalSide, modifiedSide, state, diffOptions)
+        val listener: (TextDiffResult) -> Unit = { result ->
+            diff.lineChangesJson = lineChangesJson(state.original.document, state.modified.document, result.changes)
+            diff.onDidUpdateDiff?.invoke()
+        }
+        diff.diffListener = listener
+        state.addDiffListener(listener)
+        // The modified side owns the viewport; the keys that are Alt and a character go to the side with the focus.
+        startViewport(modifiedSide, container, { event -> altCharacterKey(diff.focusedSide(), event) }) { DiffContent(diff) }
+        mountedEditors += originalSide
+        mountedEditors += modifiedSide
+        followedByServers(originalSide)
+        followedByServers(modifiedSide)
+        return diff
+    }
+
+    /** Replaces the original text, the modified text, or both, clearing each one's undo history, as [setValue] does. `null` leaves a side as it is. */
+    fun diffSetValues(diff: AardinkDiffHandle, original: String?, modified: String?) {
+        original?.let { setValue(diff.original, it) }
+        modified?.let { setValue(diff.modified, it) }
+    }
+
+    /** The changes of the last diff as a JSON array of Monaco's `ILineChange`, 1-based; empty until the first diff lands. */
+    fun diffLineChangesJson(diff: AardinkDiffHandle): String = diff.lineChangesJson
+
+    /**
+     * Moves the caret of the modified editor to the next change, or the previous, and shows it in the
+     * middle, going round at either end. Returns false when there is no change.
+     */
+    fun diffGoTo(diff: AardinkDiffHandle, next: Boolean): Boolean =
+        diff.state.modified.execute(if (next) EditorCommand.NextChange else EditorCommand.PreviousChange)
+
+    /**
+     * Puts the original's lines of the [index]th change of [diffLineChangesJson] back in the modified
+     * text, as one undo step. Returns whether the text changed: false for an index there is no change
+     * at, a read-only editor, or text edited since the diff.
+     */
+    fun diffRevert(diff: AardinkDiffHandle, index: Int): Boolean {
+        val change = diff.state.changes.getOrNull(index) ?: return false
+        val before = diff.state.modified.textVersion
+        diff.state.revert(change)
+        return diff.state.modified.textVersion != before
+    }
+
+    /**
+     * Applies only the options in [patchJson] on top of the current ones, as [patchOptions] does for
+     * one editor: the editor options to both sides, and the diff editor's own, `hideUnchangedRegions`
+     * key by key.
+     */
+    fun diffUpdateOptions(diff: AardinkDiffHandle, patchJson: String) {
+        val patch = json.parseToJsonElement(patchJson).jsonObject
+        patchOptions(diff.original, patchJson)
+        patchOptions(diff.modified, patchJson)
+        val current = json.encodeToJsonElement(WebDiffOptions.serializer(), diff.options.value).jsonObject
+        val hidden = (current["hideUnchangedRegions"] as? JsonObject).orEmpty() + (patch["hideUnchangedRegions"] as? JsonObject).orEmpty()
+        diff.options.value = json.decodeFromJsonElement(
+            WebDiffOptions.serializer(),
+            JsonObject(current + patch + ("hideUnchangedRegions" to JsonObject(hidden))),
+        )
+    }
+
+    /** Registers the single listener for a finished diff, replacing any previous one; `null` removes it. */
+    fun onDidUpdateDiff(diff: AardinkDiffHandle, callback: (() -> Unit)?) {
+        diff.onDidUpdateDiff = callback
+    }
+
+    /** Stops the diff editor and both its editors, as [dispose] does one. Safe to call more than once. */
+    fun diffDispose(diff: AardinkDiffHandle) {
+        if (diff.disposed) return
+        diff.disposed = true
+        diff.diffListener?.let(diff.state::removeDiffListener)
+        diff.diffListener = null
+        diff.onDidUpdateDiff = null
+        dispose(diff.modified)
+        dispose(diff.original)
+    }
+
+    /**
+     * Puts an element of the editor's own in [container], filling it, so dispose() can take out all
+     * Compose put in it (sometimes only after this returns) and nothing of the host's, and has Compose
+     * show [content] in it once Skiko has loaded. [owner] holds the window, and is the handle whose
+     * disposal ends it. [altKeys] gets the keys Compose never sees.
+     */
+    @OptIn(ExperimentalComposeUiApi::class)
+    private fun startViewport(
+        owner: AardinkEditorHandle,
+        container: Element,
+        altKeys: (KeyboardEvent) -> Unit,
+        content: @Composable () -> Unit,
+    ) {
         val viewport = (document.createElement("div") as HTMLElement).apply {
             style.width = "100%"
             style.height = "100%"
@@ -474,31 +612,28 @@ object AardinkWeb {
         }
         container.appendChild(viewport)
         // On the way down, ahead of the input element Compose has inside.
-        viewport.addEventListener("keydown", { event -> altCharacterKey(handle, event as KeyboardEvent) }, true)
+        viewport.addEventListener("keydown", { event -> altKeys(event as KeyboardEvent) }, true)
         // Compose builds the viewport once Skiko has loaded, on the same promise, which can be after
         // dispose(): an editor disposed by then is never started, so Skia does not set up WebGL on
         // a canvas that has left the page, which can fail and throw where nothing catches it.
         @OptIn(InternalSkikoApi::class)
         awaitSkiko.then {
-            if (!handle.disposed.value) {
+            if (!owner.disposed.value) {
                 ComposeViewport(viewport) {
                     val disposeWindow = composeWindowDisposal()
-                    if (handle.disposeWindow == null) {
-                        handle.disposeWindow = disposeWindow
+                    if (owner.disposeWindow == null) {
+                        owner.disposeWindow = disposeWindow
                         // Disposed between being started and composed: not from inside the
                         // composition, which disposing the window would close under itself.
-                        if (handle.disposed.value) afterThisTask { disposeEditorWindow(handle, viewport) }
+                        if (owner.disposed.value) afterThisTask { disposeEditorWindow(owner, viewport) }
                     }
-                    if (!handle.disposed.value) EditorContent(handle)
+                    if (!owner.disposed.value) content()
                 }
             }
             null
         }
-        handle.viewportElement = viewport
-        handle.stopFollowingSize = followSize(viewport)
-        mountedEditors += handle
-        followedByServers(handle)
-        return handle
+        owner.viewportElement = viewport
+        owner.stopFollowingSize = followSize(viewport)
     }
 
     /** The editor's current text. */
@@ -1472,74 +1607,12 @@ private fun EditorContent(handle: AardinkEditorHandle) {
     val inlineSources = AardinkWeb.inlineCompletionSources(options.language) ?: AardinkWeb.inlineCompletionSources(handle.language.value.id)
     val inlineCompletions = remember(inlineSources) { inlineSources?.let(::WebInlineCompletions) }
     var showGoToLine by remember { mutableStateOf(false) }
-
-    // Keyed on the state: a language change swaps it, and the new one's versions start over.
-    LaunchedEffect(state) {
-        snapshotFlow { state.textVersion }.collect { version ->
-            if (version != handle.reportedTextVersion) {
-                handle.reportedTextVersion = version
-                val text = state.document.text
-                val changes = AardinkWeb.contentChangesJson(handle.pendingChanges)
-                handle.pendingChanges.clear()
-                handle.onChange?.invoke(text)
-                handle.onContentChange?.invoke(text, version, state.lastChangeKind.name.lowercase(), changes)
-            }
-        }
-    }
-    LaunchedEffect(state) {
-        snapshotFlow { state.viewport }.collect { viewport ->
-            handle.onScrollChange?.invoke(
-                """{"scrollTop":${viewport.scrollTop},"scrollLeft":${viewport.scrollLeft},"scrollHeight":${viewport.contentHeight}}""",
-            )
-        }
-    }
-    // While owners' diagnostics are shown, the layout shows the list it is given; the language's
-    // own are collected here, on the layout's schedule, to go with them.
+    EditorEffects(handle, state, service)
     val owners = handle.ownerDiagnostics.toMap()
-    val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
-    LaunchedEffect(state, service, collectLanguage) {
-        if (!collectLanguage) return@LaunchedEffect
-        if (service == null) {
-            // A language server gone, or a language with no service: nothing here will ask again.
-            if (handle.languageDiagnostics.value.isNotEmpty()) {
-                handle.languageDiagnostics.value = emptyList()
-                AardinkWeb.reportDiagnostics(handle, emptyList())
-            }
-            return@LaunchedEffect
-        }
-        snapshotFlow { state.textVersion to handle.revalidations.intValue }.collectLatest { (asked, _) ->
-            delay(500)
-            val document = state.document.snapshot()
-            val list = service.diagnostics(document)
-            if (state.textVersion == asked) {
-                handle.languageDiagnostics.value = list
-                AardinkWeb.reportDiagnostics(handle, list)
-            }
-        }
-    }
-    LaunchedEffect(state) {
-        snapshotFlow { state.isFocused }.collect { focused ->
-            if (focused != handle.reportedFocus) {
-                handle.reportedFocus = focused
-                handle.onFocusChange?.invoke(focused)
-            }
-        }
-    }
-
-    // Registering a theme, language or font again changes what this editor shows.
-    val registrations = AardinkWeb.registrations.intValue
-    // A registered font named by the options, at once; else the bundled one. Nothing until that is
-    // there (or has had its time): no flash of another font. An editor in a registered font never
-    // asks for the bundled one, so a page that brings its own font does not fetch it.
-    val registeredFont = remember(options.fontFamily, registrations) { registeredFontIn(options.fontFamily) }
-    val fontFamily = registeredFont ?: rememberBundledMonoFont()
-    val typography = EditorTypography(
-        fontFamily = fontFamily ?: FontFamily.Monospace,
-        fontSize = options.fontSize.sp,
-        lineHeight = (options.fontSize * 20f / 14f).sp,
-    )
-
-    val theme = remember(options.theme, registrations) { handle.themes[options.theme] ?: EditorThemes.VsCodeDark }
+    val look = rememberEditorLook(handle, options)
+    val fontFamily = look.fontFamily
+    val typography = look.typography
+    val theme = look.theme
 
     // A focus() made before the editor is on screen (it waits for its font) is kept until it is.
     val focusRequester = remember { FocusRequester() }
@@ -1579,43 +1652,7 @@ private fun EditorContent(handle: AardinkEditorHandle) {
                 onCursorChange = { line, column -> handle.onCursorChange?.invoke(line, column) },
                 onDiagnosticsChange = { diagnostics -> AardinkWeb.reportDiagnostics(handle, diagnostics) },
                 keyboardToolbarPlacement = KeyboardToolbarPlacement.platformDefault,
-                options = EditorOptions(
-                    readOnly = options.readOnly,
-                    softWrap = options.wordWrap,
-                    wordWrapColumn = options.wordWrapColumn?.takeIf { it > 0 },
-                    showGutter = options.showGutter,
-                    showLineNumbers = options.showLineNumbers && options.lineNumbers != "off",
-                    lineNumbers = lineNumberStyleOf(options.lineNumbers),
-                    rulers = options.rulers.filter { it > 0 },
-                    indentGuides = options.indentGuides,
-                    bracketPairGuides = options.bracketPairGuides,
-                    cursorStyle = cursorStyleOf(options.cursorStyle),
-                    cursorBlinking = cursorBlinkingOf(options.cursorBlinking),
-                    smoothScrolling = options.smoothScrolling,
-                    scrollBeyondLastLine = options.scrollBeyondLastLine,
-                    wrappingIndent = wrappingIndentOf(options.wrappingIndent),
-                    cursorSurroundingLines = options.cursorSurroundingLines.coerceAtLeast(0),
-                    dragAndDrop = options.dragAndDrop,
-                    showFoldMarkers = options.showFoldMarkers,
-                    showMinimap = options.minimap,
-                    stickyScroll = options.stickyScroll,
-                    bracketPairColorization = options.bracketPairColorization,
-                    highlightCurrentLine = options.highlightCurrentLine,
-                    tabSize = options.tabSize.coerceIn(1, 16),
-                    insertSpaces = options.insertSpaces,
-                    renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
-                    quickSuggestions = options.quickSuggestions,
-                    overviewRuler = options.overviewRuler,
-                    occurrencesHighlight = options.occurrencesHighlight,
-                    linkedEditing = options.linkedEditing,
-                    colorDecorators = options.colorDecorators,
-                    breadcrumbs = options.breadcrumbs,
-                    fontLigatures = options.fontLigatures,
-                    semanticHighlighting = options.semanticHighlighting,
-                    inlayHints = options.inlayHints,
-                    codeLens = options.codeLens,
-                    formatOnType = options.formatOnType,
-                ),
+                options = editorOptionsOf(options),
                 onRequestGoToLine = { showGoToLine = true },
                 onOpenLink = remember(handle) { { target -> AardinkWeb.openLink(handle, target) } },
                 inlineCompletionProvider = inlineCompletions,
@@ -1870,7 +1907,7 @@ internal fun renderWhitespaceOf(value: String): RenderWhitespace = when (value) 
  * own, or the second of a chord whose first the host's bindings started. Returns whether the key
  * was the host's.
  */
-private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
+internal fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
     val pending = handle.pendingHostChord
     if (pending != null) {
         if (event.key in CHORD_MODIFIER_KEYS) return false
@@ -1909,7 +1946,7 @@ private fun hostKey(handle: AardinkEditorHandle, event: KeyEvent): Boolean {
  * alone when nothing runs, a key goes on to type what it types: Option on a Mac, or AltGr (which
  * holds Ctrl too) elsewhere, still types its characters.
  */
-private fun altCharacterKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
+internal fun altCharacterKey(handle: AardinkEditorHandle, event: KeyboardEvent) {
     if (!event.altKey || event.ctrlKey || event.metaKey) return
     val chord = KeyChord(key = characterKeyAt(event.code) ?: return, shift = event.shiftKey, alt = true)
     val action = handle.hostActions.lastOrNull { action -> action.keybindings.any { it == listOf(chord) } }
@@ -2017,3 +2054,124 @@ internal fun cssHexColor(text: String): Color? {
     val alpha = if (full.length == 8) full.substring(6, 8).toLong(16) else 0xFF
     return Color((alpha shl 24 or rgb).toInt())
 }
+
+/**
+ * What an editor reports to its host as its text, scroll, language diagnostics and focus change: the
+ * listeners that come with a handle, whether its editor is shown alone or as a side of a diff.
+ */
+@Composable
+internal fun EditorEffects(handle: AardinkEditorHandle, state: CodeEditorState, service: LanguageService?) {
+    // Keyed on the state: a language change swaps it, and the new one's versions start over.
+    LaunchedEffect(state) {
+        snapshotFlow { state.textVersion }.collect { version ->
+            if (version != handle.reportedTextVersion) {
+                handle.reportedTextVersion = version
+                val text = state.document.text
+                val changes = AardinkWeb.contentChangesJson(handle.pendingChanges)
+                handle.pendingChanges.clear()
+                handle.onChange?.invoke(text)
+                handle.onContentChange?.invoke(text, version, state.lastChangeKind.name.lowercase(), changes)
+            }
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.viewport }.collect { viewport ->
+            handle.onScrollChange?.invoke(
+                """{"scrollTop":${viewport.scrollTop},"scrollLeft":${viewport.scrollLeft},"scrollHeight":${viewport.contentHeight}}""",
+            )
+        }
+    }
+    // While owners' diagnostics are shown, the layout shows the list it is given; the language's
+    // own are collected here, on the layout's schedule, to go with them.
+    val owners = handle.ownerDiagnostics.toMap()
+    val collectLanguage = owners.isNotEmpty() && "language" !in owners && handle.diagnostics.value == null
+    LaunchedEffect(state, service, collectLanguage) {
+        if (!collectLanguage) return@LaunchedEffect
+        if (service == null) {
+            // A language server gone, or a language with no service: nothing here will ask again.
+            if (handle.languageDiagnostics.value.isNotEmpty()) {
+                handle.languageDiagnostics.value = emptyList()
+                AardinkWeb.reportDiagnostics(handle, emptyList())
+            }
+            return@LaunchedEffect
+        }
+        snapshotFlow { state.textVersion to handle.revalidations.intValue }.collectLatest { (asked, _) ->
+            delay(500)
+            val document = state.document.snapshot()
+            val list = service.diagnostics(document)
+            if (state.textVersion == asked) {
+                handle.languageDiagnostics.value = list
+                AardinkWeb.reportDiagnostics(handle, list)
+            }
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.isFocused }.collect { focused ->
+            if (focused != handle.reportedFocus) {
+                handle.reportedFocus = focused
+                handle.onFocusChange?.invoke(focused)
+            }
+        }
+    }
+}
+
+/** The font, size and theme an editor shows in, from its options and what the page has registered. */
+internal class EditorLook(val fontFamily: FontFamily?, val typography: EditorTypography, val theme: EditorTheme)
+
+@Composable
+internal fun rememberEditorLook(handle: AardinkEditorHandle, options: WebEditorOptions): EditorLook {
+    // Registering a theme, language or font again changes what this editor shows.
+    val registrations = AardinkWeb.registrations.intValue
+    // A registered font named by the options, at once; else the bundled one. Nothing until that is
+    // there (or has had its time): no flash of another font. An editor in a registered font never
+    // asks for the bundled one, so a page that brings its own font does not fetch it.
+    val registeredFont = remember(options.fontFamily, registrations) { registeredFontIn(options.fontFamily) }
+    val fontFamily = registeredFont ?: rememberBundledMonoFont()
+    val typography = EditorTypography(
+        fontFamily = fontFamily ?: FontFamily.Monospace,
+        fontSize = options.fontSize.sp,
+        lineHeight = (options.fontSize * 20f / 14f).sp,
+    )
+
+    val theme = remember(options.theme, registrations) { handle.themes[options.theme] ?: EditorThemes.VsCodeDark }
+    return EditorLook(fontFamily, typography, theme)
+}
+
+/** The editor's switches for a handle's [options]. */
+internal fun editorOptionsOf(options: WebEditorOptions): EditorOptions = EditorOptions(
+    readOnly = options.readOnly,
+    softWrap = options.wordWrap,
+    wordWrapColumn = options.wordWrapColumn?.takeIf { it > 0 },
+    showGutter = options.showGutter,
+    showLineNumbers = options.showLineNumbers && options.lineNumbers != "off",
+    lineNumbers = lineNumberStyleOf(options.lineNumbers),
+    rulers = options.rulers.filter { it > 0 },
+    indentGuides = options.indentGuides,
+    bracketPairGuides = options.bracketPairGuides,
+    cursorStyle = cursorStyleOf(options.cursorStyle),
+    cursorBlinking = cursorBlinkingOf(options.cursorBlinking),
+    smoothScrolling = options.smoothScrolling,
+    scrollBeyondLastLine = options.scrollBeyondLastLine,
+    wrappingIndent = wrappingIndentOf(options.wrappingIndent),
+    cursorSurroundingLines = options.cursorSurroundingLines.coerceAtLeast(0),
+    dragAndDrop = options.dragAndDrop,
+    showFoldMarkers = options.showFoldMarkers,
+    showMinimap = options.minimap,
+    stickyScroll = options.stickyScroll,
+    bracketPairColorization = options.bracketPairColorization,
+    highlightCurrentLine = options.highlightCurrentLine,
+    tabSize = options.tabSize.coerceIn(1, 16),
+    insertSpaces = options.insertSpaces,
+    renderWhitespace = renderWhitespaceOf(options.renderWhitespace),
+    quickSuggestions = options.quickSuggestions,
+    overviewRuler = options.overviewRuler,
+    occurrencesHighlight = options.occurrencesHighlight,
+    linkedEditing = options.linkedEditing,
+    colorDecorators = options.colorDecorators,
+    breadcrumbs = options.breadcrumbs,
+    fontLigatures = options.fontLigatures,
+    semanticHighlighting = options.semanticHighlighting,
+    inlayHints = options.inlayHints,
+    codeLens = options.codeLens,
+    formatOnType = options.formatOnType,
+)
