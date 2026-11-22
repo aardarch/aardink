@@ -121,6 +121,7 @@ final enum class com.aardarch.aardink.core/FoldKind : kotlin/Enum<com.aardarch.a
 
 final enum class com.aardarch.aardink.core/LineDiffKind : kotlin/Enum<com.aardarch.aardink.core/LineDiffKind> { // com.aardarch.aardink.core/LineDiffKind|null[0]
     enum entry Added // com.aardarch.aardink.core/LineDiffKind.Added|null[0]
+    enum entry Deleted // com.aardarch.aardink.core/LineDiffKind.Deleted|null[0]
     enum entry Modified // com.aardarch.aardink.core/LineDiffKind.Modified|null[0]
 
     final val entries // com.aardarch.aardink.core/LineDiffKind.entries|#static{}entries[0]
@@ -468,8 +469,24 @@ abstract interface com.aardarch.aardink.core/TokenType { // com.aardarch.aardink
     }
 }
 
+final class com.aardarch.aardink.core/CharChange { // com.aardarch.aardink.core/CharChange|null[0]
+    constructor <init>(kotlin.ranges/IntRange, kotlin.ranges/IntRange) // com.aardarch.aardink.core/CharChange.<init>|<init>(kotlin.ranges.IntRange;kotlin.ranges.IntRange){}[0]
+
+    final val modified // com.aardarch.aardink.core/CharChange.modified|{}modified[0]
+        final fun <get-modified>(): kotlin.ranges/IntRange // com.aardarch.aardink.core/CharChange.modified.<get-modified>|<get-modified>(){}[0]
+    final val original // com.aardarch.aardink.core/CharChange.original|{}original[0]
+        final fun <get-original>(): kotlin.ranges/IntRange // com.aardarch.aardink.core/CharChange.original.<get-original>|<get-original>(){}[0]
+
+    final fun component1(): kotlin.ranges/IntRange // com.aardarch.aardink.core/CharChange.component1|component1(){}[0]
+    final fun component2(): kotlin.ranges/IntRange // com.aardarch.aardink.core/CharChange.component2|component2(){}[0]
+    final fun copy(kotlin.ranges/IntRange = ..., kotlin.ranges/IntRange = ...): com.aardarch.aardink.core/CharChange // com.aardarch.aardink.core/CharChange.copy|copy(kotlin.ranges.IntRange;kotlin.ranges.IntRange){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/CharChange.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/CharChange.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/CharChange.toString|toString(){}[0]
+}
+
 final class com.aardarch.aardink.core/ChromeColors { // com.aardarch.aardink.core/ChromeColors|null[0]
-    constructor <init>(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ...) // com.aardarch.aardink.core/ChromeColors.<init>|<init>(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color){}[0]
+    constructor <init>(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ...) // com.aardarch.aardink.core/ChromeColors.<init>|<init>(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color){}[0]
 
     final val activeIndentGuide // com.aardarch.aardink.core/ChromeColors.activeIndentGuide|{}activeIndentGuide[0]
         final fun <get-activeIndentGuide>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.activeIndentGuide.<get-activeIndentGuide>|<get-activeIndentGuide>(){}[0]
@@ -477,8 +494,24 @@ final class com.aardarch.aardink.core/ChromeColors { // com.aardarch.aardink.cor
         final fun <get-bracketPairGuide>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.bracketPairGuide.<get-bracketPairGuide>|<get-bracketPairGuide>(){}[0]
     final val codeLens // com.aardarch.aardink.core/ChromeColors.codeLens|{}codeLens[0]
         final fun <get-codeLens>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.codeLens.<get-codeLens>|<get-codeLens>(){}[0]
+    final val diffFiller // com.aardarch.aardink.core/ChromeColors.diffFiller|{}diffFiller[0]
+        final fun <get-diffFiller>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.diffFiller.<get-diffFiller>|<get-diffFiller>(){}[0]
+    final val diffInsertedLine // com.aardarch.aardink.core/ChromeColors.diffInsertedLine|{}diffInsertedLine[0]
+        final fun <get-diffInsertedLine>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.diffInsertedLine.<get-diffInsertedLine>|<get-diffInsertedLine>(){}[0]
+    final val diffInsertedText // com.aardarch.aardink.core/ChromeColors.diffInsertedText|{}diffInsertedText[0]
+        final fun <get-diffInsertedText>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.diffInsertedText.<get-diffInsertedText>|<get-diffInsertedText>(){}[0]
+    final val diffRemovedLine // com.aardarch.aardink.core/ChromeColors.diffRemovedLine|{}diffRemovedLine[0]
+        final fun <get-diffRemovedLine>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.diffRemovedLine.<get-diffRemovedLine>|<get-diffRemovedLine>(){}[0]
+    final val diffRemovedText // com.aardarch.aardink.core/ChromeColors.diffRemovedText|{}diffRemovedText[0]
+        final fun <get-diffRemovedText>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.diffRemovedText.<get-diffRemovedText>|<get-diffRemovedText>(){}[0]
     final val ghostText // com.aardarch.aardink.core/ChromeColors.ghostText|{}ghostText[0]
         final fun <get-ghostText>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.ghostText.<get-ghostText>|<get-ghostText>(){}[0]
+    final val gutterAdded // com.aardarch.aardink.core/ChromeColors.gutterAdded|{}gutterAdded[0]
+        final fun <get-gutterAdded>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.gutterAdded.<get-gutterAdded>|<get-gutterAdded>(){}[0]
+    final val gutterDeleted // com.aardarch.aardink.core/ChromeColors.gutterDeleted|{}gutterDeleted[0]
+        final fun <get-gutterDeleted>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.gutterDeleted.<get-gutterDeleted>|<get-gutterDeleted>(){}[0]
+    final val gutterModified // com.aardarch.aardink.core/ChromeColors.gutterModified|{}gutterModified[0]
+        final fun <get-gutterModified>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.gutterModified.<get-gutterModified>|<get-gutterModified>(){}[0]
     final val indentGuide // com.aardarch.aardink.core/ChromeColors.indentGuide|{}indentGuide[0]
         final fun <get-indentGuide>(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.indentGuide.<get-indentGuide>|<get-indentGuide>(){}[0]
     final val inlayHint // com.aardarch.aardink.core/ChromeColors.inlayHint|{}inlayHint[0]
@@ -509,7 +542,15 @@ final class com.aardarch.aardink.core/ChromeColors { // com.aardarch.aardink.cor
     final fun component13(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component13|component13(){}[0]
     final fun component14(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component14|component14(){}[0]
     final fun component15(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component15|component15(){}[0]
+    final fun component16(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component16|component16(){}[0]
+    final fun component17(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component17|component17(){}[0]
+    final fun component18(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component18|component18(){}[0]
+    final fun component19(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component19|component19(){}[0]
     final fun component2(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component2|component2(){}[0]
+    final fun component20(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component20|component20(){}[0]
+    final fun component21(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component21|component21(){}[0]
+    final fun component22(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component22|component22(){}[0]
+    final fun component23(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component23|component23(){}[0]
     final fun component3(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component3|component3(){}[0]
     final fun component4(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component4|component4(){}[0]
     final fun component5(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component5|component5(){}[0]
@@ -517,7 +558,7 @@ final class com.aardarch.aardink.core/ChromeColors { // com.aardarch.aardink.cor
     final fun component7(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component7|component7(){}[0]
     final fun component8(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component8|component8(){}[0]
     final fun component9(): androidx.compose.ui.graphics/Color // com.aardarch.aardink.core/ChromeColors.component9|component9(){}[0]
-    final fun copy(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ...): com.aardarch.aardink.core/ChromeColors // com.aardarch.aardink.core/ChromeColors.copy|copy(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color){}[0]
+    final fun copy(androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ..., androidx.compose.ui.graphics/Color = ...): com.aardarch.aardink.core/ChromeColors // com.aardarch.aardink.core/ChromeColors.copy|copy(androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color;androidx.compose.ui.graphics.Color){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/ChromeColors.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/ChromeColors.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/ChromeColors.toString|toString(){}[0]
@@ -1264,6 +1305,25 @@ final class com.aardarch.aardink.core/InlineCompletion { // com.aardarch.aardink
     final fun toString(): kotlin/String // com.aardarch.aardink.core/InlineCompletion.toString|toString(){}[0]
 }
 
+final class com.aardarch.aardink.core/LineChange { // com.aardarch.aardink.core/LineChange|null[0]
+    constructor <init>(kotlin.ranges/IntRange, kotlin.ranges/IntRange, kotlin.collections/List<com.aardarch.aardink.core/CharChange>?) // com.aardarch.aardink.core/LineChange.<init>|<init>(kotlin.ranges.IntRange;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.CharChange>?){}[0]
+
+    final val charChanges // com.aardarch.aardink.core/LineChange.charChanges|{}charChanges[0]
+        final fun <get-charChanges>(): kotlin.collections/List<com.aardarch.aardink.core/CharChange>? // com.aardarch.aardink.core/LineChange.charChanges.<get-charChanges>|<get-charChanges>(){}[0]
+    final val modifiedLines // com.aardarch.aardink.core/LineChange.modifiedLines|{}modifiedLines[0]
+        final fun <get-modifiedLines>(): kotlin.ranges/IntRange // com.aardarch.aardink.core/LineChange.modifiedLines.<get-modifiedLines>|<get-modifiedLines>(){}[0]
+    final val originalLines // com.aardarch.aardink.core/LineChange.originalLines|{}originalLines[0]
+        final fun <get-originalLines>(): kotlin.ranges/IntRange // com.aardarch.aardink.core/LineChange.originalLines.<get-originalLines>|<get-originalLines>(){}[0]
+
+    final fun component1(): kotlin.ranges/IntRange // com.aardarch.aardink.core/LineChange.component1|component1(){}[0]
+    final fun component2(): kotlin.ranges/IntRange // com.aardarch.aardink.core/LineChange.component2|component2(){}[0]
+    final fun component3(): kotlin.collections/List<com.aardarch.aardink.core/CharChange>? // com.aardarch.aardink.core/LineChange.component3|component3(){}[0]
+    final fun copy(kotlin.ranges/IntRange = ..., kotlin.ranges/IntRange = ..., kotlin.collections/List<com.aardarch.aardink.core/CharChange>? = ...): com.aardarch.aardink.core/LineChange // com.aardarch.aardink.core/LineChange.copy|copy(kotlin.ranges.IntRange;kotlin.ranges.IntRange;kotlin.collections.List<com.aardarch.aardink.core.CharChange>?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/LineChange.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/LineChange.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/LineChange.toString|toString(){}[0]
+}
+
 final class com.aardarch.aardink.core/LineDiff { // com.aardarch.aardink.core/LineDiff|null[0]
     constructor <init>(kotlin/Int, com.aardarch.aardink.core/LineDiffKind) // com.aardarch.aardink.core/LineDiff.<init>|<init>(kotlin.Int;com.aardarch.aardink.core.LineDiffKind){}[0]
 
@@ -1429,6 +1489,44 @@ final class com.aardarch.aardink.core/SignatureInformation { // com.aardarch.aar
     final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/SignatureInformation.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/SignatureInformation.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.aardarch.aardink.core/SignatureInformation.toString|toString(){}[0]
+}
+
+final class com.aardarch.aardink.core/TextDiffOptions { // com.aardarch.aardink.core/TextDiffOptions|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean = ...) // com.aardarch.aardink.core/TextDiffOptions.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Boolean){}[0]
+
+    final val computeCharChanges // com.aardarch.aardink.core/TextDiffOptions.computeCharChanges|{}computeCharChanges[0]
+        final fun <get-computeCharChanges>(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffOptions.computeCharChanges.<get-computeCharChanges>|<get-computeCharChanges>(){}[0]
+    final val ignoreTrimWhitespace // com.aardarch.aardink.core/TextDiffOptions.ignoreTrimWhitespace|{}ignoreTrimWhitespace[0]
+        final fun <get-ignoreTrimWhitespace>(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffOptions.ignoreTrimWhitespace.<get-ignoreTrimWhitespace>|<get-ignoreTrimWhitespace>(){}[0]
+    final val maxComputationTimeMs // com.aardarch.aardink.core/TextDiffOptions.maxComputationTimeMs|{}maxComputationTimeMs[0]
+        final fun <get-maxComputationTimeMs>(): kotlin/Long // com.aardarch.aardink.core/TextDiffOptions.maxComputationTimeMs.<get-maxComputationTimeMs>|<get-maxComputationTimeMs>(){}[0]
+
+    final fun component1(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffOptions.component1|component1(){}[0]
+    final fun component2(): kotlin/Long // com.aardarch.aardink.core/TextDiffOptions.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffOptions.component3|component3(){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean = ...): com.aardarch.aardink.core/TextDiffOptions // com.aardarch.aardink.core/TextDiffOptions.copy|copy(kotlin.Boolean;kotlin.Long;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TextDiffOptions.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TextDiffOptions.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/TextDiffOptions.toString|toString(){}[0]
+}
+
+final class com.aardarch.aardink.core/TextDiffResult { // com.aardarch.aardink.core/TextDiffResult|null[0]
+    constructor <init>(kotlin.collections/List<com.aardarch.aardink.core/LineChange>, kotlin/Boolean, kotlin/Boolean) // com.aardarch.aardink.core/TextDiffResult.<init>|<init>(kotlin.collections.List<com.aardarch.aardink.core.LineChange>;kotlin.Boolean;kotlin.Boolean){}[0]
+
+    final val changes // com.aardarch.aardink.core/TextDiffResult.changes|{}changes[0]
+        final fun <get-changes>(): kotlin.collections/List<com.aardarch.aardink.core/LineChange> // com.aardarch.aardink.core/TextDiffResult.changes.<get-changes>|<get-changes>(){}[0]
+    final val hitTimeout // com.aardarch.aardink.core/TextDiffResult.hitTimeout|{}hitTimeout[0]
+        final fun <get-hitTimeout>(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffResult.hitTimeout.<get-hitTimeout>|<get-hitTimeout>(){}[0]
+    final val identical // com.aardarch.aardink.core/TextDiffResult.identical|{}identical[0]
+        final fun <get-identical>(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffResult.identical.<get-identical>|<get-identical>(){}[0]
+
+    final fun component1(): kotlin.collections/List<com.aardarch.aardink.core/LineChange> // com.aardarch.aardink.core/TextDiffResult.component1|component1(){}[0]
+    final fun component2(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffResult.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // com.aardarch.aardink.core/TextDiffResult.component3|component3(){}[0]
+    final fun copy(kotlin.collections/List<com.aardarch.aardink.core/LineChange> = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): com.aardarch.aardink.core/TextDiffResult // com.aardarch.aardink.core/TextDiffResult.copy|copy(kotlin.collections.List<com.aardarch.aardink.core.LineChange>;kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/TextDiffResult.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/TextDiffResult.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.aardarch.aardink.core/TextDiffResult.toString|toString(){}[0]
 }
 
 final class com.aardarch.aardink.core/TextEdit { // com.aardarch.aardink.core/TextEdit|null[0]
@@ -2062,10 +2160,22 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.LowerCase.toString|toString(){}[0]
     }
 
+    final object NextChange : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.NextChange|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.NextChange.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.NextChange.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.NextChange.toString|toString(){}[0]
+    }
+
     final object NextProblem : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.NextProblem|null[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.NextProblem.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.NextProblem.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.NextProblem.toString|toString(){}[0]
+    }
+
+    final object PreviousChange : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.PreviousChange|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.PreviousChange.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.PreviousChange.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.PreviousChange.toString|toString(){}[0]
     }
 
     final object PreviousProblem : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.PreviousProblem|null[0]
@@ -2090,6 +2200,12 @@ sealed class com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.c
         final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.Rename.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.Rename.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.Rename.toString|toString(){}[0]
+    }
+
+    final object RevertChange : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.RevertChange|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.aardarch.aardink.core/EditorCommand.RevertChange.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.aardarch.aardink.core/EditorCommand.RevertChange.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.aardarch.aardink.core/EditorCommand.RevertChange.toString|toString(){}[0]
     }
 
     final object SearchWorkspace : com.aardarch.aardink.core/EditorCommand { // com.aardarch.aardink.core/EditorCommand.SearchWorkspace|null[0]
@@ -2286,6 +2402,10 @@ final object com.aardarch.aardink.core/SimpleDiffProvider : com.aardarch.aardink
     final fun diff(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>): kotlin.collections/List<com.aardarch.aardink.core/LineDiff> // com.aardarch.aardink.core/SimpleDiffProvider.diff|diff(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>){}[0]
 }
 
+final object com.aardarch.aardink.core/TextDiff { // com.aardarch.aardink.core/TextDiff|null[0]
+    final fun compute(kotlin/CharSequence, kotlin/CharSequence, com.aardarch.aardink.core/TextDiffOptions = ...): com.aardarch.aardink.core/TextDiffResult // com.aardarch.aardink.core/TextDiff.compute|compute(kotlin.CharSequence;kotlin.CharSequence;com.aardarch.aardink.core.TextDiffOptions){}[0]
+}
+
 final object com.aardarch.aardink.platform/EditorDispatchers { // com.aardarch.aardink.platform/EditorDispatchers|null[0]
     final val compute // com.aardarch.aardink.platform/EditorDispatchers.compute|{}compute[0]
         final fun <get-compute>(): kotlinx.coroutines/CoroutineDispatcher // com.aardarch.aardink.platform/EditorDispatchers.compute.<get-compute>|<get-compute>(){}[0]
@@ -2344,6 +2464,7 @@ final val com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_UndoHist
 final val com.aardarch.aardink.core/NoOpFoldingProvider // com.aardarch.aardink.core/NoOpFoldingProvider|{}NoOpFoldingProvider[0]
     final fun <get-NoOpFoldingProvider>(): com.aardarch.aardink.core/FoldingProvider // com.aardarch.aardink.core/NoOpFoldingProvider.<get-NoOpFoldingProvider>|<get-NoOpFoldingProvider>(){}[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_BracketMatcher_Match$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_BracketMatcher_Match$stableprop|#static{}com_aardarch_aardink_core_BracketMatcher_Match$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_CharChange$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CharChange$stableprop|#static{}com_aardarch_aardink_core_CharChange$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_ChromeColors$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_ChromeColors$stableprop|#static{}com_aardarch_aardink_core_ChromeColors$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeAction$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeAction$stableprop|#static{}com_aardarch_aardink_core_CodeAction$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDescription$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDescription$stableprop|#static{}com_aardarch_aardink_core_CodeDescription$stableprop[0]
@@ -2390,12 +2511,15 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Inse
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextChange$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextChange$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_NextChange$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Redo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Redo$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Redo$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rename$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rename$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Rename$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_Reveal$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop|#static{}com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop[0]
@@ -2430,6 +2554,7 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_FormattingOptions$
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop|#static{}com_aardarch_aardink_core_HoverDoc$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_InlayHint$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_InlayHint$stableprop|#static{}com_aardarch_aardink_core_InlayHint$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_InlineCompletion$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_InlineCompletion$stableprop|#static{}com_aardarch_aardink_core_InlineCompletion$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_LineChange$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_LineChange$stableprop|#static{}com_aardarch_aardink_core_LineChange$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop|#static{}com_aardarch_aardink_core_LineDiff$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_LinkedEditingRanges$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_LinkedEditingRanges$stableprop|#static{}com_aardarch_aardink_core_LinkedEditingRanges$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop|#static{}com_aardarch_aardink_core_Location$stableprop[0]
@@ -2441,6 +2566,9 @@ final val com.aardarch.aardink.core/com_aardarch_aardink_core_SelectionRange$sta
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop|#static{}com_aardarch_aardink_core_SignatureHelp$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformation$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformation$stableprop|#static{}com_aardarch_aardink_core_SignatureInformation$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop|#static{}com_aardarch_aardink_core_SimpleDiffProvider$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiff$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiff$stableprop|#static{}com_aardarch_aardink_core_TextDiff$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffOptions$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffOptions$stableprop|#static{}com_aardarch_aardink_core_TextDiffOptions$stableprop[0]
+final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffResult$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffResult$stableprop|#static{}com_aardarch_aardink_core_TextDiffResult$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop|#static{}com_aardarch_aardink_core_TextEdit$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop|#static{}com_aardarch_aardink_core_Token$stableprop[0]
 final val com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop|#static{}com_aardarch_aardink_core_TokenFontStyle$stableprop[0]
@@ -2489,6 +2617,7 @@ final fun com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_EditingC
 final fun com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_TypingRules_FollowUp$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_TypingRules_FollowUp$stableprop_getter|com_aardarch_aardink_core_edit_TypingRules_FollowUp$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_UndoHistory_Entry$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core.edit/com_aardarch_aardink_core_edit_UndoHistory_Entry$stableprop_getter|com_aardarch_aardink_core_edit_UndoHistory_Entry$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_BracketMatcher_Match$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_BracketMatcher_Match$stableprop_getter|com_aardarch_aardink_core_BracketMatcher_Match$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CharChange$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CharChange$stableprop_getter|com_aardarch_aardink_core_CharChange$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_ChromeColors$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_ChromeColors$stableprop_getter|com_aardarch_aardink_core_ChromeColors$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeAction$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeAction$stableprop_getter|com_aardarch_aardink_core_CodeAction$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDescription$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_CodeDescription$stableprop_getter|com_aardarch_aardink_core_CodeDescription$stableprop_getter(){}[0]
@@ -2535,12 +2664,15 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Inse
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop_getter|com_aardarch_aardink_core_EditorCommand_JoinLines$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop_getter|com_aardarch_aardink_core_EditorCommand_JumpToBracket$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop_getter|com_aardarch_aardink_core_EditorCommand_LowerCase$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextChange$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextChange$stableprop_getter|com_aardarch_aardink_core_EditorCommand_NextChange$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop_getter|com_aardarch_aardink_core_EditorCommand_NextProblem$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop_getter|com_aardarch_aardink_core_EditorCommand_PreviousChange$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop_getter|com_aardarch_aardink_core_EditorCommand_PreviousProblem$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Redo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Redo$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Redo$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop_getter|com_aardarch_aardink_core_EditorCommand_RemoveLineComment$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rename$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Rename$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Rename$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter|com_aardarch_aardink_core_EditorCommand_Reveal$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop_getter|com_aardarch_aardink_core_EditorCommand_RevertChange$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ScrollLines$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter|com_aardarch_aardink_core_EditorCommand_ScrollTo$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter|com_aardarch_aardink_core_EditorCommand_SearchWorkspace$stableprop_getter(){}[0]
@@ -2575,6 +2707,7 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_FormattingOptions$
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_HoverDoc$stableprop_getter|com_aardarch_aardink_core_HoverDoc$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_InlayHint$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_InlayHint$stableprop_getter|com_aardarch_aardink_core_InlayHint$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_InlineCompletion$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_InlineCompletion$stableprop_getter|com_aardarch_aardink_core_InlineCompletion$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_LineChange$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_LineChange$stableprop_getter|com_aardarch_aardink_core_LineChange$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_LineDiff$stableprop_getter|com_aardarch_aardink_core_LineDiff$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_LinkedEditingRanges$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_LinkedEditingRanges$stableprop_getter|com_aardarch_aardink_core_LinkedEditingRanges$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Location$stableprop_getter|com_aardarch_aardink_core_Location$stableprop_getter(){}[0]
@@ -2586,6 +2719,9 @@ final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SelectionRange$sta
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureHelp$stableprop_getter|com_aardarch_aardink_core_SignatureHelp$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformation$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SignatureInformation$stableprop_getter|com_aardarch_aardink_core_SignatureInformation$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter|com_aardarch_aardink_core_SimpleDiffProvider$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiff$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiff$stableprop_getter|com_aardarch_aardink_core_TextDiff$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffOptions$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffOptions$stableprop_getter|com_aardarch_aardink_core_TextDiffOptions$stableprop_getter(){}[0]
+final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffResult$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextDiffResult$stableprop_getter|com_aardarch_aardink_core_TextDiffResult$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TextEdit$stableprop_getter|com_aardarch_aardink_core_TextEdit$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_Token$stableprop_getter|com_aardarch_aardink_core_Token$stableprop_getter(){}[0]
 final fun com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop_getter(): kotlin/Int // com.aardarch.aardink.core/com_aardarch_aardink_core_TokenFontStyle$stableprop_getter|com_aardarch_aardink_core_TokenFontStyle$stableprop_getter(){}[0]
@@ -2610,7 +2746,7 @@ final fun com.aardarch.aardink.ui.view/com_aardarch_aardink_ui_view_LineLayoutCa
 final fun com.aardarch.aardink.ui/AnnotationTooltip(kotlin/String, com.aardarch.aardink.core/DiagnosticSeverity, kotlin/Function0<kotlin/Unit>, androidx.compose.ui/Modifier?, kotlin/Function0<kotlin/Unit>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/AnnotationTooltip|AnnotationTooltip(kotlin.String;com.aardarch.aardink.core.DiagnosticSeverity;kotlin.Function0<kotlin.Unit>;androidx.compose.ui.Modifier?;kotlin.Function0<kotlin.Unit>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/CodeActionMenu(kotlin.collections/List<com.aardarch.aardink.core/CodeAction>, kotlin/Function1<com.aardarch.aardink.core/CodeAction, kotlin/Unit>, kotlin/Function0<kotlin/Unit>, androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeActionMenu|CodeActionMenu(kotlin.collections.List<com.aardarch.aardink.core.CodeAction>;kotlin.Function1<com.aardarch.aardink.core.CodeAction,kotlin.Unit>;kotlin.Function0<kotlin.Unit>;androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/CodeBlock(kotlin/String, com.aardarch.aardink.core/IncrementalTokenizer, androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeBlock|CodeBlock(kotlin.String;com.aardarch.aardink.core.IncrementalTokenizer;androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
-final fun com.aardarch.aardink.ui/CodeEditorLayout(com.aardarch.aardink.core/CodeEditorState, androidx.compose.ui/Modifier?, com.aardarch.aardink.ui/EditorOptions?, com.aardarch.aardink.core/LanguageService?, com.aardarch.aardink.core/FindReplaceState?, com.aardarch.aardink.core/FoldState?, com.aardarch.aardink.core/FoldingProvider?, kotlin.collections/List<com.aardarch.aardink.core/Diagnostic>?, kotlin/String?, kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/Unit>?, kotlin/Function1<kotlin.collections/List<com.aardarch.aardink.core/Diagnostic>, kotlin/Unit>?, kotlin/Function1<com.aardarch.aardink.core/Location, kotlin/Unit>?, com.aardarch.aardink.ui/KeyboardToolbarStyle?, com.aardarch.aardink.ui/KeyboardToolbarPlacement?, kotlin/Function0<kotlin/Unit>?, kotlin.collections/List<com.aardarch.aardink.ui/KeyboardToolbarItem>?, kotlin.collections/List<com.aardarch.aardink.ui/EditorMenuItem>?, kotlin.collections/List<com.aardarch.aardink.ui/EditorMenuItem>?, kotlin/Function1<kotlin/String, kotlin/Unit>?, kotlin/Function1<androidx.compose.ui.unit/TextUnit, kotlin/Unit>?, com.aardarch.aardink.core/InlineCompletionProvider?, kotlin/Function2<kotlin/String, com.aardarch.aardink.core/FindEngine.Options, kotlin/Unit>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeEditorLayout|CodeEditorLayout(com.aardarch.aardink.core.CodeEditorState;androidx.compose.ui.Modifier?;com.aardarch.aardink.ui.EditorOptions?;com.aardarch.aardink.core.LanguageService?;com.aardarch.aardink.core.FindReplaceState?;com.aardarch.aardink.core.FoldState?;com.aardarch.aardink.core.FoldingProvider?;kotlin.collections.List<com.aardarch.aardink.core.Diagnostic>?;kotlin.String?;kotlin.Function2<kotlin.Int,kotlin.Int,kotlin.Unit>?;kotlin.Function1<kotlin.collections.List<com.aardarch.aardink.core.Diagnostic>,kotlin.Unit>?;kotlin.Function1<com.aardarch.aardink.core.Location,kotlin.Unit>?;com.aardarch.aardink.ui.KeyboardToolbarStyle?;com.aardarch.aardink.ui.KeyboardToolbarPlacement?;kotlin.Function0<kotlin.Unit>?;kotlin.collections.List<com.aardarch.aardink.ui.KeyboardToolbarItem>?;kotlin.collections.List<com.aardarch.aardink.ui.EditorMenuItem>?;kotlin.collections.List<com.aardarch.aardink.ui.EditorMenuItem>?;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<androidx.compose.ui.unit.TextUnit,kotlin.Unit>?;com.aardarch.aardink.core.InlineCompletionProvider?;kotlin.Function2<kotlin.String,com.aardarch.aardink.core.FindEngine.Options,kotlin.Unit>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int){}[0]
+final fun com.aardarch.aardink.ui/CodeEditorLayout(com.aardarch.aardink.core/CodeEditorState, androidx.compose.ui/Modifier?, com.aardarch.aardink.ui/EditorOptions?, com.aardarch.aardink.core/LanguageService?, com.aardarch.aardink.core/FindReplaceState?, com.aardarch.aardink.core/FoldState?, com.aardarch.aardink.core/FoldingProvider?, kotlin.collections/List<com.aardarch.aardink.core/Diagnostic>?, kotlin/String?, kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/Unit>?, kotlin/Function1<kotlin.collections/List<com.aardarch.aardink.core/Diagnostic>, kotlin/Unit>?, kotlin/Function1<com.aardarch.aardink.core/Location, kotlin/Unit>?, com.aardarch.aardink.ui/KeyboardToolbarStyle?, com.aardarch.aardink.ui/KeyboardToolbarPlacement?, kotlin/Function0<kotlin/Unit>?, kotlin.collections/List<com.aardarch.aardink.ui/KeyboardToolbarItem>?, kotlin.collections/List<com.aardarch.aardink.ui/EditorMenuItem>?, kotlin.collections/List<com.aardarch.aardink.ui/EditorMenuItem>?, kotlin/Function1<kotlin/String, kotlin/Unit>?, kotlin/Function1<androidx.compose.ui.unit/TextUnit, kotlin/Unit>?, com.aardarch.aardink.core/InlineCompletionProvider?, kotlin/Function2<kotlin/String, com.aardarch.aardink.core/FindEngine.Options, kotlin/Unit>?, com.aardarch.aardink.core/DiffProvider?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CodeEditorLayout|CodeEditorLayout(com.aardarch.aardink.core.CodeEditorState;androidx.compose.ui.Modifier?;com.aardarch.aardink.ui.EditorOptions?;com.aardarch.aardink.core.LanguageService?;com.aardarch.aardink.core.FindReplaceState?;com.aardarch.aardink.core.FoldState?;com.aardarch.aardink.core.FoldingProvider?;kotlin.collections.List<com.aardarch.aardink.core.Diagnostic>?;kotlin.String?;kotlin.Function2<kotlin.Int,kotlin.Int,kotlin.Unit>?;kotlin.Function1<kotlin.collections.List<com.aardarch.aardink.core.Diagnostic>,kotlin.Unit>?;kotlin.Function1<com.aardarch.aardink.core.Location,kotlin.Unit>?;com.aardarch.aardink.ui.KeyboardToolbarStyle?;com.aardarch.aardink.ui.KeyboardToolbarPlacement?;kotlin.Function0<kotlin.Unit>?;kotlin.collections.List<com.aardarch.aardink.ui.KeyboardToolbarItem>?;kotlin.collections.List<com.aardarch.aardink.ui.EditorMenuItem>?;kotlin.collections.List<com.aardarch.aardink.ui.EditorMenuItem>?;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<androidx.compose.ui.unit.TextUnit,kotlin.Unit>?;com.aardarch.aardink.core.InlineCompletionProvider?;kotlin.Function2<kotlin.String,com.aardarch.aardink.core.FindEngine.Options,kotlin.Unit>?;com.aardarch.aardink.core.DiffProvider?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/CompletionDropdown(kotlin.collections/List<com.aardarch.aardink.core/CompletionItem>, kotlin/Boolean, kotlin/Function1<com.aardarch.aardink.core/CompletionItem, kotlin/Unit>, androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/CompletionDropdown|CompletionDropdown(kotlin.collections.List<com.aardarch.aardink.core.CompletionItem>;kotlin.Boolean;kotlin.Function1<com.aardarch.aardink.core.CompletionItem,kotlin.Unit>;androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/EditorAttributionBadge(androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/EditorAttributionBadge|EditorAttributionBadge(androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun com.aardarch.aardink.ui/FindReplacePanel(com.aardarch.aardink.core/FindReplaceState, kotlin/Function0<kotlin/Unit>, kotlin/Function0<kotlin/Unit>, kotlin/Function0<kotlin/Unit>, kotlin/Function0<kotlin/Unit>, kotlin/Function0<kotlin/Unit>, androidx.compose.ui/Modifier?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // com.aardarch.aardink.ui/FindReplacePanel|FindReplacePanel(com.aardarch.aardink.core.FindReplaceState;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;androidx.compose.ui.Modifier?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]

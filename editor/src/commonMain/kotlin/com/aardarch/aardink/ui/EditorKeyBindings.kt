@@ -150,6 +150,8 @@ object EditorKeyBindings {
         add(bind(KeyChord(Key.F12, shift = true), EditorCommand.FindReferences))
         add(bind(KeyChord(Key.F8), EditorCommand.NextProblem))
         add(bind(KeyChord(Key.F8, shift = true), EditorCommand.PreviousProblem))
+        add(bind(KeyChord(Key.F7), EditorCommand.NextChange))
+        add(bind(KeyChord(Key.F7, shift = true), EditorCommand.PreviousChange))
         add(bind(KeyChord(Key.F2), EditorCommand.Rename))
         add(bind(KeyChord(Key.Period, ctrlCmd = true), EditorCommand.ShowCodeActions))
         add(bind(KeyChord(Key.O, ctrlCmd = true, shift = true), EditorCommand.GoToSymbol))

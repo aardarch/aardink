@@ -197,6 +197,14 @@ object EditorThemeParser {
                 inlayHintBackground = colors.hexColor("editorInlayHint.background") ?: chrome.inlayHintBackground,
                 codeLens = colors.hexColor("editorCodeLens.foreground") ?: chrome.codeLens,
                 ghostText = colors.hexColor("editorGhostText.foreground") ?: chrome.ghostText,
+                diffInsertedLine = colors.hexColor("diffEditor.insertedLineBackground") ?: chrome.diffInsertedLine,
+                diffRemovedLine = colors.hexColor("diffEditor.removedLineBackground") ?: chrome.diffRemovedLine,
+                diffInsertedText = colors.hexColor("diffEditor.insertedTextBackground") ?: chrome.diffInsertedText,
+                diffRemovedText = colors.hexColor("diffEditor.removedTextBackground") ?: chrome.diffRemovedText,
+                diffFiller = colors.hexColor("diffEditor.diagonalFill") ?: chrome.diffFiller,
+                gutterAdded = colors.hexColor("editorGutter.addedBackground") ?: chrome.gutterAdded,
+                gutterModified = colors.hexColor("editorGutter.modifiedBackground") ?: chrome.gutterModified,
+                gutterDeleted = colors.hexColor("editorGutter.deletedBackground") ?: chrome.gutterDeleted,
             ),
         )
     }

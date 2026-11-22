@@ -31,6 +31,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -43,6 +45,7 @@ import com.aardarch.aardink.core.LineDiffKind
 import com.aardarch.aardink.core.LineMark
 import com.aardarch.aardink.ui.ANNOTATION_LANE_WIDTH
 import com.aardarch.aardink.ui.DIFF_LANE_WIDTH
+import com.aardarch.aardink.ui.DiffColors
 import com.aardarch.aardink.ui.EditorDefaults
 import com.aardarch.aardink.ui.EditorTestTags
 import com.aardarch.aardink.ui.FOLD_LANE_WIDTH
@@ -64,6 +67,10 @@ internal class GutterContent(
      */
     val reserveFoldLane: Boolean,
     val diffAnnotations: Map<Int, LineDiffKind>,
+    /** Lines with lines deleted just above them; the line count for after the last line. */
+    val deletedAbove: Set<Int> = emptySet(),
+    /** The lane's colours. */
+    val diffColors: DiffColors = DiffColors.Default,
     /**
      * Keeps the diff lane while there is a baseline, so the text does not shift sideways when the
      * first line changes or when a save clears the last bar.
@@ -113,7 +120,7 @@ internal fun EditorGutterView(
             color = foreground,
         )
     }
-    val hasDiffLane = content.reserveDiffLane || content.diffAnnotations.isNotEmpty()
+    val hasDiffLane = content.reserveDiffLane || content.diffAnnotations.isNotEmpty() || content.deletedAbove.isNotEmpty()
     val hasFoldLane = content.reserveFoldLane || content.foldableLines.isNotEmpty()
     val hasAnnotationLane = content.reserveAnnotationLane || content.annotations.isNotEmpty()
     val width =
@@ -164,15 +171,19 @@ internal fun EditorGutterView(
                     val top = line.top - frame.scrollY + line.layout.textRow * lineHeight
                     val rowsHeight = line.layout.textRows * lineHeight
                     val diff = shown.diffAnnotations[line.line]
-                    if (diff != null && diffLane > 0f) {
+                    if (diff != null && diff != LineDiffKind.Deleted && diffLane > 0f) {
                         drawRect(
-                            color = when (diff) {
-                                LineDiffKind.Added -> Color(0xFF4CAF50)
-                                LineDiffKind.Modified -> Color(0xFF2196F3)
-                            },
+                            color = if (diff == LineDiffKind.Added) shown.diffColors.gutterAdded else shown.diffColors.gutterModified,
                             topLeft = Offset(0f, top + 1f),
                             size = Size(diffLane, rowsHeight - 2f),
                         )
+                    }
+                    if (diffLane > 0f && shown.deletedAbove.isNotEmpty()) {
+                        // A wedge on the edge the deleted lines were at: above the line, or below the last.
+                        if (line.line in shown.deletedAbove) drawDeletedWedge(shown.diffColors.gutterDeleted, top, diffLane)
+                        if (line.line == lineCount - 1 && lineCount in shown.deletedAbove) {
+                            drawDeletedWedge(shown.diffColors.gutterDeleted, top + rowsHeight, diffLane)
+                        }
                     }
                     marks.lastOrNull { line.line in it.firstLine..it.lastLine }?.let { mark ->
                         drawRect(mark.color, Offset(size.width - markWidth, top), Size(markWidth, rowsHeight))
@@ -247,3 +258,15 @@ internal fun lineLabel(line: Int, content: GutterContent): String = when (conten
 
 /** [LineNumberStyle.Interval]'s step, VS Code's. */
 private const val LINE_NUMBER_INTERVAL = 10
+
+/** The lane's mark for deleted lines: a wedge pointing into the text, centred on the edge at [y]. */
+private fun DrawScope.drawDeletedWedge(color: Color, y: Float, lane: Float) {
+    val half = lane * 1.25f
+    val path = Path().apply {
+        moveTo(0f, y - half)
+        lineTo(lane * 2f, y)
+        lineTo(0f, y + half)
+        close()
+    }
+    drawPath(path, color)
+}

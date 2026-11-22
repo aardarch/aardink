@@ -623,6 +623,13 @@ class CodeEditorState(
     internal var diffRows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>> = emptyMap()
         private set
 
+    /**
+     * What runs [EditorCommand.NextChange], [EditorCommand.PreviousChange] and
+     * [EditorCommand.RevertChange], installed by a diff editor while it shows this state; null
+     * elsewhere, which leaves their keys to the host.
+     */
+    internal var diffCommands: ((EditorCommand) -> Boolean)? by mutableStateOf(null)
+
     /** Told which lines' [diffRows] changed, other than by an edit moving them. */
     internal var diffListeners: List<(lines: List<Int>) -> Unit> = emptyList()
 

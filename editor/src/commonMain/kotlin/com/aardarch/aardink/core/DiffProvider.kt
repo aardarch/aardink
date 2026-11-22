@@ -15,10 +15,27 @@
  */
 package com.aardarch.aardink.core
 
+/**
+ * What the gutter's diff lane marks: the lines of [currentLines] that differ from [baseLines]. The
+ * editor calls it on its compute dispatcher, 300 ms after typing stops.
+ */
 fun interface DiffProvider {
     fun diff(baseLines: List<String>, currentLines: List<String>): List<LineDiff>
 }
 
+/**
+ * Line [lineIndex] of the current text is [kind]. For [LineDiffKind.Deleted], lines were deleted
+ * just above it, and a [lineIndex] equal to the current line count means after the last line.
+ */
 data class LineDiff(val lineIndex: Int, val kind: LineDiffKind)
 
-enum class LineDiffKind { Added, Modified }
+enum class LineDiffKind {
+    /** The line is new. */
+    Added,
+
+    /** The line replaces lines of the base. */
+    Modified,
+
+    /** Lines of the base were deleted just above the line. */
+    Deleted,
+}

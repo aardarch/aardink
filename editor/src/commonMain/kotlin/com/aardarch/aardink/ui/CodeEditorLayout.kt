@@ -79,6 +79,7 @@ import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
+import com.aardarch.aardink.core.DiffProvider
 import com.aardarch.aardink.core.DocumentLink
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
@@ -195,6 +196,7 @@ fun CodeEditorLayout(
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
     inlineCompletionProvider: InlineCompletionProvider? = null,
     onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)? = null,
+    diffProvider: DiffProvider = SimpleDiffProvider,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -248,6 +250,7 @@ fun CodeEditorLayout(
             onOpenLink = onOpenLink,
             inlineCompletionProvider = inlineCompletionProvider,
             onSearchWorkspace = onSearchWorkspace,
+            diffProvider = diffProvider,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -287,11 +290,13 @@ private fun CodeEditorLayoutContent(
     onOpenLink: (target: String) -> Unit,
     inlineCompletionProvider: InlineCompletionProvider?,
     onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)?,
+    diffProvider: DiffProvider,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
+    val diffColors = remember(theme) { DiffColors.of(theme) }
     // A theme without a default token colour falls back to the chrome's text colour, not the host's.
     val textColor = theme.tokenColors[TokenType.Default] ?: remember(theme) { EditorChromeColors(theme).foreground }
 
@@ -524,10 +529,10 @@ private fun CodeEditorLayoutContent(
     }
 
     // Diff lane: compute line diffs when savedText or document changes
-    var diffAnnotations by remember { mutableStateOf<Map<Int, LineDiffKind>>(emptyMap()) }
-    LaunchedEffect(savedText, textVersion) {
+    var diffLane by remember { mutableStateOf(DiffLane.None) }
+    LaunchedEffect(savedText, textVersion, diffProvider) {
         if (savedText.isEmpty()) {
-            diffAnnotations = emptyMap()
+            diffLane = DiffLane.None
             return@LaunchedEffect
         }
         // Debounced like find and folding: the lane can lag typing by a moment, and a burst of
@@ -535,14 +540,12 @@ private fun CodeEditorLayoutContent(
         delay(DIFF_DEBOUNCE_MS)
         val current = state.document.text
         if (current == savedText) {
-            diffAnnotations = emptyMap()
+            diffLane = DiffLane.None
             return@LaunchedEffect
         }
-        diffAnnotations = withContext(state.computeDispatcher) {
-            SimpleDiffProvider.diff(savedText.lines(), current.lines())
-                .associate { it.lineIndex to it.kind }
-        }
+        diffLane = withContext(state.computeDispatcher) { DiffLane.of(diffProvider.diff(savedText.lines(), current.lines())) }
     }
+    val diffAnnotations = diffLane.marks
 
     // Gutter annotations: the most severe diagnostic starting on each line; hints get none.
     val gutterAnnotations = remember(shownDiagnostics) {
@@ -1462,6 +1465,9 @@ private fun CodeEditorLayoutContent(
 
             EditorCommand.SearchWorkspace -> searchWorkspace?.invoke() != null
 
+            EditorCommand.NextChange, EditorCommand.PreviousChange, EditorCommand.RevertChange -> state.diffCommands?.invoke(command) ==
+                true
+
             EditorCommand.ShowReplace -> findReplaceState?.let {
                 seedFind(it)
                 it.show(replace = true)
@@ -1519,6 +1525,7 @@ private fun CodeEditorLayoutContent(
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
         if (onSearchWorkspace != null) add(EditorCommand.SearchWorkspace)
+        state.diffCommands?.let { addAll(listOf(EditorCommand.NextChange, EditorCommand.PreviousChange, EditorCommand.RevertChange)) }
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
         if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))
@@ -1795,6 +1802,8 @@ private fun CodeEditorLayoutContent(
                     foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
                     reserveFoldLane = options.showFoldMarkers && foldState != null && foldingProvider !== NoOpFoldingProvider,
                     diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
+                    deletedAbove = if (options.showDiffMarkers) diffLane.deletedAbove else emptySet(),
+                    diffColors = diffColors,
                     reserveDiffLane = options.showDiffMarkers && savedText.isNotEmpty(),
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
@@ -2359,3 +2368,19 @@ internal fun replacePreviewOf(find: FindReplaceState, document: CodeDocument, re
 
 /** How much of the line the replace preview shows either side of the match. */
 private const val REPLACE_PREVIEW_CONTEXT = 30
+
+/** What the gutter's diff lane shows: a mark per line, and the lines with lines deleted above them. */
+@androidx.compose.runtime.Immutable
+internal class DiffLane(val marks: Map<Int, LineDiffKind>, val deletedAbove: Set<Int>) {
+    companion object {
+        val None = DiffLane(emptyMap(), emptySet())
+
+        fun of(diffs: List<com.aardarch.aardink.core.LineDiff>): DiffLane {
+            if (diffs.isEmpty()) return None
+            val marks = HashMap<Int, LineDiffKind>()
+            val deleted = HashSet<Int>()
+            for (diff in diffs) if (diff.kind == LineDiffKind.Deleted) deleted += diff.lineIndex else marks[diff.lineIndex] = diff.kind
+            return DiffLane(marks, deleted)
+        }
+    }
+}

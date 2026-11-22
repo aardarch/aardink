@@ -87,6 +87,21 @@ sealed class EditorCommand {
      */
     data object SearchWorkspace : EditorCommand()
 
+    /**
+     * F7: in a diff editor, moves the caret to the next change and shows it, after the last change
+     * the first. Runs only in a diff editor; elsewhere the key is left to the host.
+     */
+    data object NextChange : EditorCommand()
+
+    /** Shift+F7: in a diff editor, the previous change, before the first the last. */
+    data object PreviousChange : EditorCommand()
+
+    /**
+     * In a diff editor, puts the original's lines of the change at the caret back in place of the
+     * modified lines, as one undo step. Unbound by default.
+     */
+    data object RevertChange : EditorCommand()
+
     /** Ctrl+G: asks the host for its go-to-line dialog. */
     data object GoToLine : EditorCommand()
 
