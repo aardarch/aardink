@@ -146,6 +146,17 @@ class CodeEditorState(
         if (store.overlay(tokens, snapshot)) semanticVersion++
     }
 
+    /**
+     * Shows [tokens], the language service's answer about lines [lines] of [snapshot] alone, ahead of
+     * its answer about the whole text: the other lines keep what they show. An answer with no
+     * tokens changes nothing, as the lines it covers may simply have none yet.
+     */
+    internal suspend fun applySemanticTokensToLines(tokens: List<Token>, snapshot: CodeDocument, lines: IntRange) {
+        if (document.version != snapshot.version || tokens.isEmpty()) return
+        val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
+        if (store.overlay(tokens, snapshot, onlyLines = lines)) semanticVersion++
+    }
+
     /** Back to the syntax colours alone. */
     internal fun clearSemanticTokens() {
         val store = semanticStore ?: return

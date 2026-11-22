@@ -44,6 +44,7 @@ class CompositeLanguageServiceTest {
         val renameTo: String = "",
         override val completionsAreIncomplete: Boolean = true,
         val tokens: List<Token> = emptyList(),
+        val rangeTokens: List<Token>? = null,
         val hints: List<InlayHint> = emptyList(),
         override val formatOnTypeCharacters: Set<Char> = emptySet(),
         val onType: List<TextEdit> = emptyList(),
@@ -65,6 +66,8 @@ class CompositeLanguageServiceTest {
         override suspend fun rename(document: CodeDocument, offset: Int, newName: String) = listOf(TextEdit(0..0, renameTo))
 
         override suspend fun semanticTokens(document: CodeDocument) = tokens
+
+        override suspend fun semanticTokens(document: CodeDocument, range: IntRange) = rangeTokens
 
         override suspend fun inlayHints(document: CodeDocument, range: IntRange) = hints
 
@@ -212,6 +215,23 @@ class CompositeLanguageServiceTest {
         assertEquals(own, CompositeLanguageService(Fake(tokens = own), Fake(tokens = inherited)).semanticTokens(doc))
         assertEquals(inherited, CompositeLanguageService(Fake(), Fake(tokens = inherited)).semanticTokens(doc))
         assertEquals(emptyList(), CompositeLanguageService(Fake(), Fake()).semanticTokens(doc))
+    }
+
+    @Test
+    fun `semantic tokens of a range are the primary's when it has them, else the fallback's, else null`() = runTest {
+        val own = listOf(Token(0, 1, NamedTokenType("type.class")))
+        val inherited = listOf(Token(1, 2, NamedTokenType("variable.parameter")))
+
+        assertEquals(own, CompositeLanguageService(Fake(rangeTokens = own), Fake(rangeTokens = inherited)).semanticTokens(doc, 0..1))
+        assertEquals(
+            emptyList(),
+            CompositeLanguageService(Fake(rangeTokens = emptyList()), Fake(rangeTokens = inherited)).semanticTokens(
+                doc,
+                0..1,
+            ),
+        )
+        assertEquals(inherited, CompositeLanguageService(Fake(), Fake(rangeTokens = inherited)).semanticTokens(doc, 0..1))
+        assertNull(CompositeLanguageService(Fake(), Fake()).semanticTokens(doc, 0..1))
     }
 
     @Test

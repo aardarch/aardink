@@ -123,6 +123,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -793,8 +795,30 @@ private fun CodeEditorLayoutContent(
                 return@collectLatest
             }
             val document = state.document.snapshot()
-            val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
-            state.applySemanticTokens(tokens, document)
+            // The lines on screen are asked about on their own while the whole answer is on its way,
+            // so that they are coloured first. A service that cannot answer a range says null, and
+            // then nothing is shown before the whole answer.
+            val frame = view.frame
+            val runs = if (frame.lines.isEmpty()) {
+                emptyList()
+            } else {
+                val shown = frame.lines
+                InlineContent.hintWindow(null, shown.first().line..shown.last().line, shown.size, view.foldLayout, frame.lineCount).runs
+            }
+            coroutineScope {
+                val early = runs.map { lines ->
+                    launch {
+                        val part = withContext(state.computeDispatcher) {
+                            service.semanticTokens(document, InlineContent.hintRange(document, lines))
+                        }
+                        if (part != null) state.applySemanticTokensToLines(part, document, lines)
+                    }
+                }
+                val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
+                // The whole answer replaces any part of it, and a part must not land after it.
+                early.forEach { it.cancelAndJoin() }
+                state.applySemanticTokens(tokens, document)
+            }
         }
     }
 

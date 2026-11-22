@@ -960,6 +960,27 @@ class LspLanguageService(
     }
 
     /**
+     * The server's `textDocument/semanticTokens/range` answer for [range] of [document], for the
+     * editor to show on the lines on screen while [semanticTokens] is still on its way. Null, for the
+     * editor to wait for the whole answer, when the server did not declare or register `range`, when
+     * its capabilities are not known yet, or when the request fails. The numbers are read as a whole
+     * answer's are: the first token's line and start count from the start of the document, not of
+     * [range], as the specification has it. A range request does not touch what `full/delta` goes on
+     * from, and there is no delta for a range.
+     */
+    override suspend fun semanticTokens(document: CodeDocument, range: IntRange): List<Token>? {
+        val legend = semanticRangeLegend ?: return null
+        if (!sync.awaitOpen()) return null
+        val params = buildJsonObject {
+            put("textDocument", textDocumentJson)
+            put("range", encode(LspRange.serializer(), lspRangeOf(document, range)))
+        }
+        val answer = requestPatiently("textDocument/semanticTokens/range", params)
+        val data = ((answer as? LspResult.Value)?.element as? JsonObject)?.get("data") as? JsonArray ?: return null
+        return decodeSemanticTokens(data, legend, document)
+    }
+
+    /**
      * The server's last whole answer, as its `resultId` and numbers, for a `full/delta` request to
      * start from. A server that sends no `resultId` gets whole requests only.
      */
@@ -1151,6 +1172,20 @@ class LspLanguageService(
             val method = methodOf("semanticTokensProvider")
             val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
             return (listOfNotNull(declared) + registered).firstNotNullOfOrNull(LspSemanticLegend::from)
+        }
+
+    /**
+     * What the server's numbers mean in a `range` answer, from what it declared or else registered:
+     * null when it does not answer `semanticTokens/range` (`range: true` or an object, with a legend),
+     * or when its capabilities are not known.
+     */
+    private val semanticRangeLegend: LspSemanticLegend?
+        get() {
+            if (client.serverCapabilities !is JsonObject || !supports("semanticTokensProvider")) return null
+            val declared = (client.serverCapabilities as? JsonObject)?.get("semanticTokensProvider") as? JsonObject
+            val method = methodOf("semanticTokensProvider")
+            val registered = client.registrations.filter { it.method == method }.mapNotNull { it.options }
+            return (listOfNotNull(declared) + registered).firstNotNullOfOrNull { LspSemanticLegend.from(it, "range") }
         }
 
     /** Whether the server answers `semanticTokens/full/delta`, as it declared or registered `full: { delta: true }`. */

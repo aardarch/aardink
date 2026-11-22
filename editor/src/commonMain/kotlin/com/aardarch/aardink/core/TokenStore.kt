@@ -116,11 +116,20 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
      * The answer can be as long as the document, and is not an edit's worth of work: this runs on
      * the thread that edits the document, in slices paced by [pacer], and an edit between slices
      * ends it. A line that comes out the same keeps its [LineTokens], and with them its layout, so
-     * what an answer costs on screen is the lines it really changes.
+     * what an answer costs on screen is the lines it really changes. With [onlyLines], the answer is
+     * about those lines alone and the others keep what they had.
      */
-    suspend fun overlay(tokens: List<Token>, snapshot: CodeDocument, pacer: CooperativePacer = CooperativePacer()): Boolean {
+    suspend fun overlay(
+        tokens: List<Token>,
+        snapshot: CodeDocument,
+        pacer: CooperativePacer = CooperativePacer(),
+        onlyLines: IntRange? = null,
+    ): Boolean {
         val lastLine = snapshot.lineCount - 1
-        val buckets = Buckets(snapshot, 0, lastLine)
+        val firstLine = onlyLines?.first?.coerceAtLeast(0) ?: 0
+        val endLine = onlyLines?.last?.coerceAtMost(lastLine) ?: lastLine
+        if (firstLine > endLine) return false
+        val buckets = Buckets(snapshot, firstLine, endLine)
         var steps = 0
         for (token in tokens) {
             buckets.add(token)
@@ -133,7 +142,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
             pacer.onProgress(++steps)
             if (document.version != snapshot.version) return false
             val old = lineTokens(line)
-            val new = buckets.build(line)
+            val new = if (line in firstLine..endLine) buckets.build(line) else old
             if (new.sameRuns(old)) {
                 replaced.add(old)
             } else {
