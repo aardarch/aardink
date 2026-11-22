@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -307,6 +308,13 @@ private fun CodeEditorLayoutContent(
         view.attach()
         onDispose { view.detach() }
     }
+    val diffSide = LocalDiffSide.current
+    if (diffSide != null) {
+        DisposableEffect(view, diffSide.onView) {
+            diffSide.onView(view)
+            onDispose { diffSide.onView(null) }
+        }
+    }
     val controller = remember(view) { EditorController(state, view) }
 
     val textVersion = state.textVersion
@@ -532,8 +540,8 @@ private fun CodeEditorLayoutContent(
 
     // Diff lane: compute line diffs when savedText or document changes
     var diffLane by remember { mutableStateOf(DiffLane.None) }
-    LaunchedEffect(savedText, textVersion, diffProvider) {
-        if (savedText.isEmpty()) {
+    LaunchedEffect(savedText, textVersion, diffProvider, diffSide != null) {
+        if (savedText.isEmpty() || diffSide != null) {
             diffLane = DiffLane.None
             return@LaunchedEffect
         }
@@ -547,7 +555,8 @@ private fun CodeEditorLayoutContent(
         }
         diffLane = withContext(state.computeDispatcher) { DiffLane.of(diffProvider.diff(savedText.lines(), current.lines())) }
     }
-    val diffAnnotations = diffLane.marks
+    val shownDiffLane = diffSide?.lane ?: diffLane
+    val diffAnnotations = shownDiffLane.marks
 
     // Gutter annotations: the most severe diagnostic starting on each line; hints get none.
     val gutterAnnotations = remember(shownDiagnostics) {
@@ -1826,9 +1835,11 @@ private fun CodeEditorLayoutContent(
                     foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
                     reserveFoldLane = options.showFoldMarkers && foldState != null && foldingProvider !== NoOpFoldingProvider,
                     diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
-                    deletedAbove = if (options.showDiffMarkers) diffLane.deletedAbove else emptySet(),
-                    diffColors = diffColors,
-                    reserveDiffLane = options.showDiffMarkers && savedText.isNotEmpty(),
+                    deletedAbove = if (options.showDiffMarkers) shownDiffLane.deletedAbove else emptySet(),
+                    diffColors = diffSide?.colors ?: diffColors,
+                    reserveDiffLane = options.showDiffMarkers && (savedText.isNotEmpty() || diffSide != null),
+                    diffActionLines = if (options.showDiffMarkers) diffSide?.actionLines.orEmpty() else emptySet(),
+                    onDiffAction = diffSide?.onAction,
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
@@ -2408,3 +2419,22 @@ internal class DiffLane(val marks: Map<Int, LineDiffKind>, val deletedAbove: Set
         }
     }
 }
+
+/**
+ * What a diff editor gives one of its two editors, through [LocalDiffSide], so that
+ * [CodeEditorLayout]'s own signature stays as it is. [onView] hands over the editor's renderer while
+ * it is composed (and null when it leaves); [lane] and [colors] replace the gutter's lane, which then
+ * does not compare with `savedText`; [actionLines] are the lines whose lane offers an arrow, and
+ * [onAction] is told which was tapped.
+ */
+@androidx.compose.runtime.Immutable
+internal class DiffSide(
+    val onView: (EditorView?) -> Unit,
+    val lane: DiffLane,
+    val colors: DiffColors,
+    val actionLines: Set<Int> = emptySet(),
+    val onAction: ((Int) -> Unit)? = null,
+)
+
+/** Set by the diff editor around each of its two editors; null in any other [CodeEditorLayout]. */
+internal val LocalDiffSide = staticCompositionLocalOf<DiffSide?> { null }

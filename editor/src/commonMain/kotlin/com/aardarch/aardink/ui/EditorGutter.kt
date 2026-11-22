@@ -57,6 +57,9 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationDot(
 // ── Width calculation ─────────────────────────────────────────────────────────
 
 internal val DIFF_LANE_WIDTH = 4.dp
+
+/** What the diff lane widens by while it offers revert or accept arrows. */
+internal val DIFF_ACTION_WIDTH = 12.dp
 internal val FOLD_LANE_WIDTH = 16.dp
 internal val ANNOTATION_LANE_WIDTH = 12.dp
 
@@ -80,13 +83,14 @@ private val LANE_TO_NUMBER_GAP = 2.dp
 internal fun rememberGutterWidth(
     lineCount: Int,
     hasDiffLane: Boolean,
+    hasDiffActions: Boolean,
     hasFoldLane: Boolean,
     hasAnnotationLane: Boolean,
     showLineNumbers: Boolean,
     density: Density,
     textMeasurer: TextMeasurer,
     textStyle: TextStyle,
-): Dp = remember(lineCount, hasDiffLane, hasFoldLane, hasAnnotationLane, showLineNumbers, density, textStyle) {
+): Dp = remember(lineCount, hasDiffLane, hasDiffActions, hasFoldLane, hasAnnotationLane, showLineNumbers, density, textStyle) {
     val digits = lineCount.toString().length.coerceAtLeast(EditorDefaults.GUTTER_MIN_DIGITS)
     with(density) {
         val numbersWidth = if (showLineNumbers) {
@@ -95,6 +99,7 @@ internal fun rememberGutterWidth(
             0f
         }
         val lanesExtra = (if (hasDiffLane) DIFF_LANE_WIDTH.value else 0f) +
+            (if (hasDiffLane && hasDiffActions) DIFF_ACTION_WIDTH.value else 0f) +
             (if (hasFoldLane) FOLD_LANE_WIDTH.value else 0f) +
             (if (hasAnnotationLane) ANNOTATION_LANE_WIDTH.value else 0f)
         val hasAnyLane = hasDiffLane || hasFoldLane || hasAnnotationLane

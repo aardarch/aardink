@@ -94,7 +94,9 @@ internal object DiffRows {
 
     /**
      * The original's deleted lines as rows of the modified side, before each block's first modified
-     * line, in the original's token colours over [background].
+     * line, in the original's token colours over [background]. A block shows at most [cap] rows,
+     * then one row saying how many lines more were deleted, with [MoreDeletedRows] as its id; a
+     * block whose first original line is in [expanded] shows them all.
      */
     fun inline(
         blocks: List<LineChange>,
@@ -103,39 +105,55 @@ internal object DiffRows {
         tokenStyle: (TokenType) -> SpanStyle?,
         background: Color,
         tabSize: Int,
+        cap: Int = MAX_INLINE_ROWS,
+        expanded: Set<Int> = emptySet(),
     ): Map<Int, List<Injection>> {
         val rows = HashMap<Int, MutableList<Injection>>()
         for (block in blocks) {
             if (block.originalLines == 0) continue
             val below = block.modifiedStart >= modified.lineCount
             val target = if (below) modified.lineCount - 1 else block.modifiedStart
-            for (line in block.originalStart until block.originalEnd) {
-                val (text, spans) = shownLine(original, line, tokenStyle, tabSize)
-                rows.getOrPut(target) { ArrayList() } += if (below) {
+            val capped = block.originalLines > cap && block.originalStart !in expanded
+            val shown = if (capped) cap else block.originalLines
+            val into = rows.getOrPut(target) { ArrayList() }
+            fun add(text: String, spans: List<InjectedSpan>, id: Any? = null) {
+                into += if (below) {
                     Injection(
                         modified.lineEnd(target) - modified.lineStart(target),
                         "\n" + text,
+                        id = id,
                         background = background,
                         spans = spans.shifted(1),
                     )
                 } else {
-                    Injection(0, text + "\n", caretAfter = true, background = background, spans = spans)
+                    Injection(0, text + "\n", caretAfter = true, id = id, background = background, spans = spans)
                 }
             }
+            for (line in block.originalStart until block.originalStart + shown) {
+                val (text, spans) = shownLine(original, line, tokenStyle, tabSize)
+                add(text, spans)
+            }
+            if (capped) add("${block.originalLines - shown} more deleted lines", emptyList(), MoreDeletedRows(block.originalStart))
         }
         return rows
     }
 
+    /** One row of [rows] filler lines on [document]: before line [before], or after the last line when there is none. */
+    fun filler(document: CodeDocument, before: Int, rows: Int, color: Color): Injection =
+        if (before >= document.lineCount) {
+            val last = document.lineCount - 1
+            Injection(document.lineEnd(last) - document.lineStart(last), "\n".repeat(rows), background = color)
+        } else {
+            Injection(0, "\n".repeat(rows), caretAfter = true, background = color)
+        }
+
+    /** Rows of deleted lines an inline block shows before the row that shows the rest. */
+    const val MAX_INLINE_ROWS = 1_000
+
     private fun List<InjectedSpan>.shifted(by: Int) = map { it.copy(start = it.start + by, end = it.end + by) }
 
     private fun addFiller(into: HashMap<Int, MutableList<Injection>>, document: CodeDocument, before: Int, rows: Int, color: Color) {
-        if (before >= document.lineCount) {
-            val last = document.lineCount - 1
-            into.getOrPut(last) { ArrayList() } +=
-                Injection(document.lineEnd(last) - document.lineStart(last), "\n".repeat(rows), background = color)
-        } else {
-            into.getOrPut(before) { ArrayList() } += Injection(0, "\n".repeat(rows), caretAfter = true, background = color)
-        }
+        into.getOrPut(before.coerceAtMost(document.lineCount - 1)) { ArrayList() } += filler(document, before, rows, color)
     }
 
     /** [line] of [state] as one row of injected text, tabs as spaces to their stops, with its token colours. */
@@ -175,3 +193,9 @@ internal object DiffRows {
 
 private val LineChange.originalLines: Int get() = originalEnd - originalStart
 private val LineChange.modifiedLines: Int get() = modifiedEnd - modifiedStart
+
+/** The id of the row that stands for the lines of a deleted block that are not shown: [firstLine] is the block's first original line. */
+internal data class MoreDeletedRows(val firstLine: Int)
+
+internal val LineChange.originalSize: Int get() = originalEnd - originalStart
+internal val LineChange.modifiedSize: Int get() = modifiedEnd - modifiedStart
