@@ -158,6 +158,12 @@ class GrammarLanguagesTest {
         assertScope(yaml, nested, "d", "string")
         assertScope(yaml, nested, "next", "type")
         assertScope(yaml, nested, "e, f", "string")
+        // A verbatim tag keeps its commas, in a flow collection too.
+        val tags = "a: [!<tag:yaml.org,2002:str> value, !t b]\nc: !<tag:yaml.org,2002:int> 1"
+        assertScope(yaml, tags, "!<tag:yaml.org,2002:str>", "tag")
+        assertScope(yaml, tags, "value", "string")
+        assertScope(yaml, tags, "!t", "tag")
+        assertScope(yaml, tags, "!<tag:yaml.org,2002:int>", "tag")
     }
 
     @Test
