@@ -18,6 +18,7 @@ package com.aardarch.aardink.languages
 import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.languages.internal.EmbeddedScanCounter
 import com.aardarch.aardink.languages.internal.html.HtmlTokenizer
 import com.aardarch.aardink.languages.internal.kotlin.KotlinTokenizer
 import kotlin.random.Random
@@ -143,6 +144,75 @@ class IncrementalTokenizingTest {
         checkRandomEdits("html", HtmlTokenizer, (sample + "\n").repeat(8), Random(11), steps = 40, fragments = markup)
     }
 
+    // An edit inside a body rescans the body from its own scan; one that reaches a tag, adds or
+    // removes a type, or makes or breaks a closing tag starts at the opening tag again.
+    @Test
+    fun `incremental passes agree with a full scan in HTML with long script and style bodies`() {
+        val css = (1..24).joinToString("\n") { "  .rule$it { color: #fff; margin: 0 ${it}px; } /* c$it */" }
+        val js = (1..24).joinToString("\n") { "  const v$it = compute(\"a string\", $it) / 2; // c$it" }
+        // A JSON body is short: a string or a comment that no closing quote or `*/` ends is not a
+        // token, and a long one, closed by an edit more than a rescan's lookback away, is found
+        // only by a full scan, in a top-level document as much as here (the quotes and the other
+        // openers are left out of the fragments for that reason).
+        val json = (1..4).joinToString(",\n") { "  \"k$it\": [$it, null]" }
+        val sample = "<html><head>\n<style>\n$css\n</style>\n<script type=\"module\">\n$js\n</script>\n" +
+            "<script type=\"application/json\">{\n$json\n}</script>\n" +
+            "<script type=\"text/template\"><p>$js</p></script>\n</head><body><p>after</p>\n" +
+            "<STYLE>\n$css\n</STYLE >\n</body></html>"
+        val bodies = fragments.filter { it !in listOf("\"", "`", "\"\"\"", "/*", "*/") } + listOf(
+            "</script>", "</script", "</scr", "ipt>", "<script>", "</style>", "</style", "<style>", "<script type=\"module\">",
+            " type=\"module\"", " type=\"application/json\"", " type=\"x\"", "type", "const a = 1;\n", "/re/g", "(", ")", ";",
+            ".a { b: c }\n", "// c\n", "</", ">",
+        )
+        repeat(2) { seed ->
+            checkRandomEdits("html", HtmlTokenizer, sample, Random(seed * 29 + 1), steps = 60, fragments = bodies, againstFullScan = true)
+        }
+    }
+
+    @Test
+    fun `an edit in a script body rescans only its own lines`() {
+        val line = "  const value = compute(\"a string\", 42) / 2; // comment\n"
+        for (element in listOf("script", "style")) {
+            val open = "<html><head><$element>\n"
+            var text = open + line.repeat(2000) + "</$element></head></html>\n"
+            EmbeddedScanCounter.characters = 0
+            var previous = HtmlTokenizer.tokenizeFull(text)
+            val wholeBody = EmbeddedScanCounter.characters
+            assertTrue(wholeBody >= line.length * 2000L, "a full scan takes the body: $wholeBody")
+
+            repeat(3) { step ->
+                val offset = open.length + (step + 1) * (line.length * 400) + 7
+                text = text.substring(0, offset) + "x" + text.substring(offset)
+                val startLine = lineOf(text, offset)
+                EmbeddedScanCounter.characters = 0
+                val result = HtmlTokenizer.tokenizeLines(text, startLine..startLine, previous)
+                val scanned = EmbeddedScanCounter.characters
+                previous = result
+                assertTrue(scanned < 1000, "$element: a one-character edit scanned $scanned of $wholeBody characters")
+                val real = result.filter { it.end > it.start }
+                assertTrue(real.size < 200, "$element: returned ${real.size} tokens")
+                if (step == 2) {
+                    val full = HtmlTokenizer.tokenizeFull(text)
+                    assertEquals(full.filter { it.start >= result.first().start && it.end <= result.last().end }, real)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `an edit after a script body does not rescan the body`() {
+        val line = "  const value = compute(\"a string\", 42) / 2; // comment\n"
+        var text = "<script>\n" + line.repeat(500) + "</script>\n<p>after</p>"
+        val previous = HtmlTokenizer.tokenizeFull(text)
+        val offset = text.length - 3
+        text = text.substring(0, offset) + "x" + text.substring(offset)
+        EmbeddedScanCounter.characters = 0
+        val result = HtmlTokenizer.tokenizeLines(text, 500..500, previous)
+        assertEquals(0L, EmbeddedScanCounter.characters)
+        val full = HtmlTokenizer.tokenizeFull(text)
+        assertEquals(full.filter { it.start >= result.first().start && it.end <= result.last().end }, result.filter { it.end > it.start })
+    }
+
     // Whether a `/` divides or starts a regular expression depends on the token before it, so an
     // edit can change how a later line reads without changing that line.
     @Test
@@ -169,6 +239,7 @@ class IncrementalTokenizingTest {
         random: Random,
         steps: Int = 60,
         fragments: List<String> = this.fragments,
+        againstFullScan: Boolean = false,
     ) {
         var text = sample
         var full = tokenizer.tokenizeFull(text)
@@ -197,6 +268,7 @@ class IncrementalTokenizingTest {
             previousResult = incremental
             full = tokenizer.tokenizeLines(text, 0..lineCount(text), emptyList())
             val where = "$id step $step after ${edit.describe()}"
+            if (againstFullScan) assertEquals(tokenizer.tokenizeFull(text), full, "$where: the stateless full scan")
 
             val newLines = splitByLine(text, full)
             val oldLines = splitByLine(old, oldFull)
@@ -214,6 +286,7 @@ class IncrementalTokenizingTest {
                         oldLines[oldLine].orEmpty(),
                         newLines[line].orEmpty(),
                         "$where: line $line kept from line $oldLine\nold=${old.quoted()}\nnew=${text.quoted()}" +
+                            "\ncovered=$covered oldLine=${oldLines[oldLine]} newLine=${newLines[line]}" +
                             "\nincremental=$incremental\nfull=$full\noldFull=$oldFull",
                     )
                 }

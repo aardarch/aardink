@@ -20,6 +20,7 @@ import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.languages.internal.CooperativePacer
 import com.aardarch.aardink.languages.internal.RegexTokenizer
+import com.aardarch.aardink.languages.internal.ScanSnapshot
 import com.aardarch.aardink.languages.internal.css.CssTokenizer
 import com.aardarch.aardink.languages.internal.json.JsonTokenizer
 import com.aardarch.aardink.languages.internal.typescript.TypeScriptTokenizer
@@ -48,22 +49,41 @@ object HtmlTokenizer : IncrementalTokenizer {
 
     override fun keyboardToolbarChars(): List<Char> = listOf('<', '>', '/', '=', '"', '&', ';', '#', '.')
 
-    /** A body in [tokenizer]'s language: scans that it does not remember for an incremental pass of its own. */
+    /**
+     * A body in [tokenizer]'s language: the scans stay with the page, one per body, not in the
+     * tokenizer's cache of four.
+     */
     private class Embedded(private val tokenizer: RegexTokenizer) : MarkupTokenizer.EmbeddedLanguage {
-        override fun tokenize(body: String): List<Token> = tokenizer.tokenizeEmbedded(body)
+        override fun scan(body: String): MarkupTokenizer.BodyScan = Body(tokenizer, tokenizer.scanEmbeddedBody(body))
 
-        override suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token> =
-            tokenizer.tokenizeEmbeddedCooperative(body, pacer, tokenBase)
+        override suspend fun scanCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): MarkupTokenizer.BodyScan =
+            Body(tokenizer, tokenizer.scanEmbeddedBodyCooperatively(body, pacer, tokenBase))
+    }
+
+    private class Body(private val tokenizer: RegexTokenizer, private val scan: ScanSnapshot) : MarkupTokenizer.BodyScan {
+        override fun tokens(): List<Token> = tokenizer.embeddedBodyTokens(scan)
+
+        override fun rescan(body: String): MarkupTokenizer.BodyRescan {
+            val rescan = tokenizer.rescanEmbeddedBody(scan, body)
+            return MarkupTokenizer.BodyRescan(Body(tokenizer, rescan.scan), rescan.fromOffset, rescan.toOffset, rescan.tokens)
+        }
     }
 
     private val css = Embedded(CssTokenizer)
     private val javaScript = Embedded(TypeScriptTokenizer)
     private val json = Embedded(JsonTokenizer)
 
-    private val plainText = object : MarkupTokenizer.EmbeddedLanguage {
-        override fun tokenize(body: String): List<Token> = emptyList()
+    /** A body with no tokens, such as a template's. */
+    private object PlainBody : MarkupTokenizer.BodyScan {
+        override fun tokens(): List<Token> = emptyList()
 
-        override suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token> = emptyList()
+        override fun rescan(body: String) = MarkupTokenizer.BodyRescan(this, 0, 0, emptyList())
+    }
+
+    private val plainText = object : MarkupTokenizer.EmbeddedLanguage {
+        override fun scan(body: String): MarkupTokenizer.BodyScan = PlainBody
+
+        override suspend fun scanCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): MarkupTokenizer.BodyScan = PlainBody
     }
 
     private fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): MarkupTokenizer.EmbeddedLanguage? = when {

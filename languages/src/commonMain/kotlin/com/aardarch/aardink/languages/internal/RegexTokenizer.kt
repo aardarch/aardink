@@ -66,34 +66,6 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         return remembered(text, raw, refined(text, raw, 0, raw.size), noMatchFrom)
     }
 
-    /**
-     * [text]'s tokens, as [tokenizeFull] gives them, but not remembered for an incremental pass:
-     * for a language embedded in another, whose own tokenizer keeps the scans. Remembered, they
-     * would push this tokenizer's own documents' scans out of its few.
-     */
-    internal fun tokenizeEmbedded(text: String): List<Token> {
-        val builder = PackedTokenBuilder(text.length / 8)
-        val noMatchFrom = unknownHorizons()
-        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { }, converged = { false })
-        val raw = builder.build()
-        return refined(text, raw, 0, raw.size)
-    }
-
-    /**
-     * [tokenizeEmbedded], letting the page draw as it goes: the scan of a large `<script>` in a
-     * cooperative pass of the page around it. [pacer] is that pass's, which has [tokenBase] tokens
-     * so far.
-     */
-    internal suspend fun tokenizeEmbeddedCooperative(text: String, pacer: CooperativePacer, tokenBase: Int): List<Token> {
-        val builder = PackedTokenBuilder(text.length / 8)
-        val noMatchFrom = unknownHorizons()
-        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { tokenCount ->
-            pacer.onProgress(tokenBase + tokenCount)
-        }, converged = { false })
-        val raw = builder.build()
-        return refined(text, raw, 0, raw.size)
-    }
-
     private fun remembered(text: String, raw: PackedTokens, result: List<Token>, noMatchFrom: IntArray): List<Token> {
         scans.remember(result, ScanSnapshot(text, raw, noMatchFrom))
         return result
@@ -114,6 +86,44 @@ abstract class RegexTokenizer : IncrementalTokenizer {
     override fun tokenizeLines(text: String, dirtyRange: IntRange, previousTokens: List<Token>): List<Token> {
         if (previousTokens.isEmpty()) return scanLinesProvisionally(text, dirtyRange)
         val previous = scans.find(previousTokens) ?: return tokenizeFull(text)
+        val rescan = rescan(previous, text)
+        val diff = rescan.diff
+        val raw = rescan.raw
+        val restart = rescan.restart
+        val rescannedUntil = rescan.rescannedUntil
+
+        // Return whole lines: from the line where the rescan started to the line after the last
+        // rescanned token, which a refine() rule may have retyped because of it; to the end of the
+        // text when the rescan never got back in step, since everything after it may have changed.
+        val toOffset = if (rescan.resumeOld < 0) {
+            text.length
+        } else {
+            val lastRescanned = if (rescannedUntil > 0) raw.ends[rescannedUntil - 1] - 1 else 0
+            val next = if (rescannedUntil < raw.size) raw.starts[rescannedUntil] else lastRescanned
+            lineEndAt(text, maxOf(lastRescanned, next, diff.newEnd))
+        }
+        val fromOffset = lineStartAt(text, minOf(restart, diff.start))
+        val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> refined(text, raw, from, to) }
+        return remembered(text, raw, result, rescan.noMatchFrom)
+    }
+
+    /** What [rescan] found: the new raw tokens, and which of them it scanned afresh. */
+    private class Rescan(
+        val raw: PackedTokens,
+        val noMatchFrom: IntArray,
+        val diff: TextDiff,
+        /** Where the scan restarted in the new text. */
+        val restart: Int,
+        /** How many of the old scan's first tokens it kept. */
+        val kept: Int,
+        /** The index of the first raw token taken from the old scan; the count when none was. */
+        val rescannedUntil: Int,
+        /** The index in the old scan of that token; -1 when the rescan never got back in step. */
+        val resumeOld: Int,
+    )
+
+    /** [text]'s raw tokens, from the scan [previous] of the text before the edit. */
+    private fun rescan(previous: ScanSnapshot, text: String): Rescan {
         val diff = diffTexts(previous.text, text)
         val old = previous.tokens
 
@@ -148,21 +158,65 @@ abstract class RegexTokenizer : IncrementalTokenizer {
         }
         val rescannedUntil = builder.size
         if (resumeOld >= 0) builder.addAll(old, resumeOld, old.size, diff.delta)
-        val raw = builder.build()
+        return Rescan(builder.build(), noMatchFrom, diff, restart, kept, rescannedUntil, resumeOld)
+    }
 
-        // Return whole lines: from the line where the rescan started to the line after the last
-        // rescanned token, which a refine() rule may have retyped because of it; to the end of the
-        // text when the rescan never got back in step, since everything after it may have changed.
-        val toOffset = if (resumeOld < 0) {
-            text.length
+    /**
+     * A body of this language scanned as part of a page in another, for an incremental pass of its
+     * own: the scan's text, raw tokens and rule horizons, which the page keeps with the body, not
+     * this tokenizer's cache of four. Counted in [EmbeddedScanCounter].
+     */
+    internal fun scanEmbeddedBody(text: String): ScanSnapshot {
+        EmbeddedScanCounter.characters += text.length
+        val builder = PackedTokenBuilder(text.length / 8)
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { }, converged = { false })
+        return ScanSnapshot(text, builder.build(), noMatchFrom)
+    }
+
+    /**
+     * [scanEmbeddedBody], letting the page draw as it goes: the scan of a large `<script>` in a
+     * cooperative pass of the page around it. [pacer] is that pass's, which has [tokenBase] tokens
+     * so far.
+     */
+    internal suspend fun scanEmbeddedBodyCooperatively(text: String, pacer: CooperativePacer, tokenBase: Int): ScanSnapshot {
+        EmbeddedScanCounter.characters += text.length
+        val builder = PackedTokenBuilder(text.length / 8)
+        val noMatchFrom = unknownHorizons()
+        scan(text, 0, builder, horizons = null, noMatchFrom, onStep = { tokenCount ->
+            pacer.onProgress(tokenBase + tokenCount)
+        }, converged = { false })
+        return ScanSnapshot(text, builder.build(), noMatchFrom)
+    }
+
+    /** All the tokens of [scan], refined, as [tokenizeFull] gives them. */
+    internal fun embeddedBodyTokens(scan: ScanSnapshot): List<Token> = refined(scan.text, scan.tokens, 0, scan.tokens.size)
+
+    /**
+     * What a rescan of an embedded body found: its new [scan], and [tokens], the refined tokens of
+     * the span [fromOffset, toOffset) of the new body. Every old token before [fromOffset] is
+     * unchanged, and so is every old token from [toOffset] on, shifted by the change in length.
+     */
+    internal class EmbeddedRescan(val scan: ScanSnapshot, val fromOffset: Int, val toOffset: Int, val tokens: List<Token>)
+
+    /** The body [text], rescanned from the scan [previous] of the body before an edit. */
+    internal fun rescanEmbeddedBody(previous: ScanSnapshot, text: String): EmbeddedRescan {
+        val rescan = rescan(previous, text)
+        val raw = rescan.raw
+        val scanned = if (rescan.resumeOld < 0 || rescan.rescannedUntil == 0) {
+            text.length - rescan.restart
         } else {
-            val lastRescanned = if (rescannedUntil > 0) raw.ends[rescannedUntil - 1] - 1 else 0
-            val next = if (rescannedUntil < raw.size) raw.starts[rescannedUntil] else lastRescanned
-            lineEndAt(text, maxOf(lastRescanned, next, diff.newEnd))
+            raw.ends[rescan.rescannedUntil - 1] - rescan.restart
         }
-        val fromOffset = lineStartAt(text, minOf(restart, diff.start))
-        val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> refined(text, raw, from, to) }
-        return remembered(text, raw, result, noMatchFrom)
+        EmbeddedScanCounter.characters += scanned
+        // A refine() rule sees a raw token either side, so the token before the first one scanned
+        // and the one after the last are refined again.
+        val from = maxOf(rescan.kept - 1, 0)
+        val to = if (rescan.resumeOld < 0) raw.size else minOf(rescan.rescannedUntil + 1, raw.size)
+        val fromOffset = if (rescan.kept == 0 || from >= raw.size) 0 else raw.starts[from]
+        val toOffset = if (to < raw.size) raw.starts[to] else text.length
+        val tokens = refined(text, raw, from, maxOf(from, to))
+        return EmbeddedRescan(ScanSnapshot(text, raw, rescan.noMatchFrom), fromOffset, toOffset, tokens)
     }
 
     /** Whether token [newIndex] of [builder], in [text], is token [oldIndex] of [old], in [oldText]: not a comment, same type, same text. */
@@ -452,3 +506,12 @@ internal val KEYWORD_FLOW: TokenType = NamedTokenType("keyword.flow")
 internal val NUMBER_HEX: TokenType = NamedTokenType("number.hex")
 internal val NUMBER_BINARY: TokenType = NamedTokenType("number.binary")
 internal val NUMBER_FLOAT: TokenType = NamedTokenType("number.float")
+
+/**
+ * How many characters of HTML `<script>` and `<style>` bodies the embedded scans have been asked
+ * to scan, a full scan counting its body and a rescan only the text from where it restarted to
+ * where it got back in step. For tests to show a rescan does not take the whole body.
+ */
+internal object EmbeddedScanCounter {
+    var characters: Long = 0
+}
