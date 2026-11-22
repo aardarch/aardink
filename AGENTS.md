@@ -254,7 +254,8 @@ The `editor` module is intentionally language-agnostic:
 
 ## Versioning
 
-SemVer, pre-1.0: a minor bump (0.x → 0.x+1) may break the API; a patch never does. Don't
+SemVer, and versions stay 0.x (there is no 1.0): each release raises the minor (0.x → 0.x+1)
+and may break the API; a patch, kept for a fix that cannot wait, never does. Don't
 introduce breaking changes lightly. After any intentional public API change, run
 `./gradlew updateAbiAll` and commit the updated dumps under `*/api/`.
 
@@ -262,7 +263,7 @@ introduce breaking changes lightly. After any intentional public API change, run
 [docs/AARDINK_0.6_PLAN.md](docs/AARDINK_0.6_PLAN.md)). Removals and signature changes are
 allowed on the 0.6 line only when they are in the plan's §5 API ledger, and each one gets a
 before/after entry in `docs/MIGRATION_0.6.md` in the same PR. Mark breaking commits with `!`
-(`feat(editor)!:`). What comes after 0.6 (0.6.3, 0.7, 0.8, 0.9, 0.10, 1.0) is planned in
+(`feat(editor)!:`). What comes after 0.6 (0.6.3 to 0.11, then 0.12 onward) is planned in
 [docs/AARDINK_ROADMAP.md](docs/AARDINK_ROADMAP.md), with the same ledger rule per version.
 
 The single source of truth for the published version is `VERSION_NAME` in
