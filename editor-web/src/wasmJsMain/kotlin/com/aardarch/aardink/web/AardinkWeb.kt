@@ -162,6 +162,9 @@ class AardinkEditorHandle internal constructor(
     internal val language: MutableState<LanguageDefinition> = mutableStateOf(initialLanguage)
     internal val options: MutableState<WebEditorOptions> = mutableStateOf(initialOptions)
 
+    /** Set for the original side of a diff editor that is not `originalEditable`: edits through the API are refused as in a read-only editor. */
+    internal var readOnlyOverride: Boolean = false
+
     /** The language servers following this editor, oldest first; see [AardinkWeb.connectLanguageServer]. */
     internal val languageServers = mutableStateListOf<ServerDocument>()
 
@@ -515,6 +518,7 @@ object AardinkWeb {
         val originalSide = side(original)
         val modifiedSide = side(modified)
         val state = DiffEditorState(originalSide.state.value, modifiedSide.state.value)
+        originalSide.readOnlyOverride = !diffOptions.originalEditable
         val diff = AardinkDiffHandle(originalSide, modifiedSide, state, diffOptions)
         val listener: (TextDiffResult) -> Unit = { result ->
             diff.lineChangesJson = lineChangesJson(state.original.document, state.modified.document, result.changes)
@@ -574,6 +578,7 @@ object AardinkWeb {
             WebDiffOptions.serializer(),
             JsonObject(current + patch + ("hideUnchangedRegions" to JsonObject(hidden))),
         )
+        diff.original.readOnlyOverride = !diff.options.value.originalEditable
     }
 
     /** Registers the single listener for a finished diff, replacing any previous one; `null` removes it. */
@@ -670,7 +675,7 @@ object AardinkWeb {
      * @throws IllegalArgumentException if two edits overlap.
      */
     fun executeEdits(handle: AardinkEditorHandle, edits: List<WebEdit>, endSelections: List<WebSelection>? = null): Boolean {
-        if (handle.options.value.readOnly) return false
+        if (handle.options.value.readOnly || handle.readOnlyOverride) return false
         val state = handle.state.value
         val document = state.document
         val textEdits = edits.map { edit ->

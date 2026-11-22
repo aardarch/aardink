@@ -16,6 +16,7 @@
 package com.aardarch.aardink.sampleweb
 
 import com.aardarch.aardink.languages.LanguageRegistry
+import com.aardarch.aardink.web.AardinkDiffHandle
 import com.aardarch.aardink.web.AardinkEditorHandle
 import com.aardarch.aardink.web.AardinkWeb
 import com.aardarch.aardink.web.WebEditorOptions
@@ -54,6 +55,7 @@ private class Harness {
     private val status = element<HTMLElement>("status")
 
     private lateinit var editor: AardinkEditorHandle
+    private var diff: AardinkDiffHandle? = null
 
     fun start() {
         registry.all.forEach { language.add(option(it.id, it.displayName)) }
@@ -68,6 +70,7 @@ private class Harness {
         listOf(language, theme, wordWrap, showGutter, readOnly, structure).forEach { control ->
             control.addEventListener("change", { AardinkWeb.updateOptions(editor, currentOptions()) })
         }
+        element<HTMLButtonElement>("diff").addEventListener("click", { toggleDiff() })
         element<HTMLButtonElement>("load-large").addEventListener("click", { loadLargeFile() })
         element<HTMLButtonElement>("stress").addEventListener("click", { mountAndDispose(times = 50) })
     }
@@ -85,6 +88,32 @@ private class Harness {
         colorDecorators = structure.checked,
         stickyScroll = structure.checked,
     )
+
+    /**
+     * Shows the sample against an edited copy of it as a diff editor, in place of the editor; the
+     * button again goes back. Side by side while the page is wide enough, inline below 900 px.
+     */
+    private fun toggleDiff() {
+        val shown = diff
+        val editorBox = element<HTMLElement>("editor")
+        val diffBox = element<HTMLElement>("diff-editor")
+        if (shown != null) {
+            AardinkWeb.diffDispose(shown)
+            diff = null
+            diffBox.hidden = true
+            editorBox.hidden = false
+            status.textContent = "Back to the editor"
+            return
+        }
+        editorBox.hidden = true
+        diffBox.hidden = false
+        val modified = AardinkWeb.getValue(editor)
+        val original = modified.replace("times: Int = 3", "times: Int = 1").replace("Hello", "Hi").replace("val greeting", "var greeting")
+        val options = """{ "language": "kotlin", "theme": "${theme.value.ifEmpty { "vscode-dark" }}", "wordWrap": true }"""
+        val handle = AardinkWeb.mountDiff("diff-editor", original, modified, options, registry)
+        AardinkWeb.onDidUpdateDiff(handle) { status.textContent = "Diff worked out" }
+        diff = handle
+    }
 
     private fun showStats(text: String) {
         stats.textContent = "${text.count { it == '\n' } + 1} lines · ${text.length} chars"

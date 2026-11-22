@@ -184,6 +184,15 @@ class WebDiffTest {
             assertEquals("one\n2\nthree\nfour\nfive\nsix", aardinkGetValue(modified))
             assertEquals("[]", aardinkDiffLineChanges(diff), "nothing has been worked out yet")
 
+            // The original is read-only unless originalEditable, for the API as for the keys.
+            val edit = """[{ "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 }, "text": "x" }]"""
+            assertEquals("read-only", aardinkExecuteEdits(original, edit, "null"))
+            aardinkDiffUpdateOptions(diff, """{ "originalEditable": true }""")
+            assertEquals("", aardinkExecuteEdits(original, edit, "null"))
+            assertTrue(aardinkUndo(original))
+            aardinkDiffUpdateOptions(diff, """{ "originalEditable": false }""")
+            assertEquals("one\ntwo\nthree\nfour\nfive", aardinkGetValue(original))
+
             var updates = 0
             aardinkOnDidUpdateDiff(diff) { updates++ }
             withContext(Dispatchers.Main) { withTimeout(10_000) { while (updates == 0) delay(16) } }

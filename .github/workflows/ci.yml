@@ -143,6 +143,14 @@ jobs:
         working-directory: tools/vite-smoke
         run: node perf.mjs --semantic --gate --keys 20
 
+      # The diff editor over the same document: typing in the modified side against 250 changes, and
+      # the diff landing as one long task at most.
+      - name: Web performance of the diff editor
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        working-directory: tools/vite-smoke
+        run: node perf.mjs --diff --gate --keys 20
+
       - name: Upload web sample
         uses: actions/upload-artifact@v7
         with:
