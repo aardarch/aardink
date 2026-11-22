@@ -83,9 +83,11 @@ const BASE_LIMITS = {
 // is the network's, and its set-value includes the server asking again.
 const MODE_LIMITS = {
   hints: {},
-  // The diff of 250 changes over 5,000 lines runs as one task on the web (the compute dispatcher is the UI
-  // loop): 67 ms measured here, over the 50 ms of a long task, so it is gated at 100 ms until :editor slices
-  // it. Key to idle is informational: the diff lands 300 ms after the key, as the 20 smooth frames that end
+  // The landing's longest task (67-96 ms here) is not the diff. A profile of the landing (--diff --profile,
+  // which also writes dist/perf-diff-landing.trace.json) puts it at the very start: the new original's full
+  // tokenization, whose first slices cannot be paced, because each rule's first regex find runs on through
+  // the text to its next match (RegexTokenizer.scan). The diff itself is a 13 ms task and publishing its
+  // marks and rows another 20 ms. So it stays gated at 100 ms until those first finds are bounded. Key to idle is informational: the diff lands 300 ms after the key, as the 20 smooth frames that end
   // a key's time are ending, so the frame it takes either falls inside a key's window or after it.
   diff: {
     // Two editors and the first diff to mount (the diff lands 370 ms after the mount here).
@@ -366,6 +368,13 @@ try {
     if (await page.evaluate(() => window.__perfDiffUpdates.count === 0)) throw new Error('The first diff never landed');
     results.diffMountToFirstDiffMs = await page.evaluate(() => window.__perfDiffUpdates.firstMs);
     results.diffChanges = await page.evaluate(() => window.__perfDiff.getLineChanges().length);
+    const landingProfiler = profile ? await page.createCDPSession() : null;
+    if (landingProfiler) {
+      await landingProfiler.send('Profiler.enable');
+      await landingProfiler.send('Profiler.setSamplingInterval', { interval: 100 });
+      await landingProfiler.send('Profiler.start');
+      await page.tracing.start({ path: 'dist/perf-diff-landing.trace.json', categories: ['devtools.timeline'] });
+    }
     const landed = await page.evaluate(async (next) => {
       const updates = window.__perfDiffUpdates;
       const landing = { from: performance.now(), frames: [], longTasks: [], recording: true };
@@ -394,6 +403,13 @@ try {
         changes: window.__perfDiff.getLineChanges().length,
       };
     }, editedLines(text, 20, 10));
+    if (landingProfiler) {
+      await page.tracing.stop();
+      const { profile: recorded } = await landingProfiler.send('Profiler.stop');
+      writeFileSync('dist/perf-diff-landing.cpuprofile', JSON.stringify(recorded));
+      printHotFunctions(recorded, 'dist/perf-diff-landing.cpuprofile');
+      await landingProfiler.detach();
+    }
     results.diffLandToUpdateMs = landed.update;
     results.diffLandToIdleMs = landed.idle;
     results.diffLandLongestTaskMs = landed.longestTask;
