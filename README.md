@@ -54,7 +54,9 @@ draws only the lines on screen, so a keystroke costs the same in a 5,000-line fi
 | Colour swatches with a picker; linked editing of tag pairs; links opened with Ctrl+click | ✓ | ✓ | ✓ |
 | Keybindings as data, with the host's overrides; Ctrl+K chords; region markers and indentation folding | ✓ | ✓ | ✓ |
 | Zoom: pinch, Ctrl+wheel, Ctrl+= and Ctrl+-; Material 3 colours from the app's scheme | ✓ | ✓ | ✓ |
-| Diff lane against a saved baseline | ✓ | ✓ | ✓ |
+| Diff editor (`CodeDiffEditorLayout`, `createDiffEditor`): side by side or inline, aligned under soft wrap, F7 through the changes, revert and accept, unchanged regions folded | ✓ | ✓ | ✓ |
+| Diff lane against a saved baseline, with deleted lines marked | ✓ | ✓ | ✓ |
+| `TextDiff`: the lines and characters that differ between two texts | ✓ | ✓ | ✓ |
 | VS Code's keyboard shortcuts (Cmd on macOS) | with a keyboard | ✓ | ✓ |
 | Input methods: composition, and a phone keyboard's autocorrect and voice input | ✓ | ✓ | ✓ |
 | Touch: selection handles, text menu | ✓ | | ✓ |
@@ -159,6 +161,25 @@ edit with `state.applyTextEdits(...)`. `state.addContentListener { changes -> �
 edit with its range; `state.execute(EditorCommand.Format)` and the other commands drive a
 toolbar, `state.availableCommands` enabling its buttons. See the [`sample/`](sample/) module for
 a runnable example.
+
+### A diff editor
+
+```kotlin
+val original = rememberCodeEditorState(initialText = savedText, tokenizer = BuiltInLanguages.Kotlin.tokenizer)
+val modified = rememberCodeEditorState(initialText = currentText, tokenizer = BuiltInLanguages.Kotlin.tokenizer)
+val diff = rememberDiffEditorState(original, modified)
+CodeDiffEditorLayout(
+    state = diff,
+    modifier = Modifier.fillMaxSize(),
+    options = DiffEditorOptions(hideUnchangedRegions = true),
+)
+```
+
+Side by side it shows the original on the left, read-only unless `originalEditable`, and keeps the
+two sides aligned with filler rows, under soft wrap too. Narrower than 900 dp, or with
+`renderSideBySide = false`, it is one editor with the deleted lines as rows above. F7 and Shift+F7
+go through the changes; the gutter's arrow and the context menu revert one. `diff.changes` holds
+the changes, and `TextDiff.compute(a, b)` works them out for any two texts.
 
 ## Using Aardink in a web app
 

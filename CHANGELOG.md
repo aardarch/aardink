@@ -36,6 +36,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.12 adds a diff editor, on Android, the desktop and the web. `docs/MIGRATION_0.12.md` covers the
+few changes that can reach an upgrade.
+
+### Added
+
+- `CodeDiffEditorLayout` and `DiffEditorState` (`rememberDiffEditorState`): two editors side by side,
+  or one with the deleted lines as rows above, below `renderSideBySideInlineBreakpoint` (900 dp) or
+  with `renderSideBySide = false`. Inserted and removed lines and characters are coloured, the two
+  sides stay aligned with filler rows, under soft wrap and at any split too, and share one scroll
+  position. F7 and Shift+F7 go through the changes; the gutter's arrow and the context menu revert a
+  change, or accept it into an editable original, as one undo step. `hideUnchangedRegions` folds long
+  runs of unchanged lines on both sides at once. `DiffEditorOptions` takes Monaco's options.
+- `TextDiff.compute`: the lines and characters that differ between two texts (Myers's diff, with a
+  time limit), as `TextDiffResult`, `LineChange` and `CharChange`.
+- On the web, `createDiffEditor(container, options)` with Monaco's diff editor API:
+  `getOriginalEditor`, `getModifiedEditor`, `getLineChanges` in Monaco's shape, `onDidUpdateDiff`,
+  `goToDiff`, `revertChange`, `updateOptions` and `dispose`; `trigger` takes Monaco's ids for the next
+  and previous change. `defineTheme` reads the `diffEditor.*` and `editorGutter.*` keys.
+- `EditorCommand.NextChange`, `PreviousChange` and `RevertChange`, run in a diff editor.
+- `ChromeColors.diffInsertedLine`, `diffRemovedLine`, `diffInsertedText`, `diffRemovedText`,
+  `diffFiller`, `gutterAdded`, `gutterModified` and `gutterDeleted`, read from Monaco's and VS Code's
+  keys.
+- `CodeEditorLayout(diffProvider)`, and `LineDiffKind.Deleted`: the lane marks deleted lines.
+- `LanguageService.semanticTokens(document, range)`: the editor asks for the lines on screen while the
+  whole document's answer is on its way. `LspLanguageService` answers it with
+  `textDocument/semanticTokens/range`.
+- A diff editor page in the Android sample and in the web sample.
+
+### Changed
+
+- The gutter's diff lane marks the lines a real diff finds, where it compared lines in place: a line
+  moved by an insertion above it is no longer marked modified.
+- An edit inside a large HTML `<script>` or `<style>` body rescans only its changed lines, where it
+  rescanned the whole body: a one-character edit in a 2,000-line script scans 270 characters, not
+  112,001.
+- Formatting and `replaceValue` work out their minimal edits with the new diff, which needs memory in
+  proportion to the texts, not to the square of the changes.
+
+### Known issues
+
+- On the web, a diff of about 250 changes in 5,000 lines lands as one task of 67 to 84 ms.
+- A diff's character changes are by character: two different lines can share scattered letters,
+  where Monaco extends changes to whole words.
+- A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an
+  edit more than 256 characters after it closes it. This was already so in JSON, TypeScript and CSS
+  documents, and is now so in HTML bodies too.
+
 ## [0.11.0] - 2026-11-20
 
 ### Added

@@ -484,6 +484,34 @@ files to apply them to.
 | `fontFamily` | The same | The first name in the list given to `registerFont`; see [Your own font](#your-own-font). |
 | `automaticLayout` | None | The editor always follows its container's size. |
 
+## A diff editor
+
+```ts
+import { createDiffEditor } from '@aardarch/aardink-web';
+
+const diff = await createDiffEditor(container, {
+  original: savedText,
+  modified: currentText,
+  language: 'typescript',
+  hideUnchangedRegions: { enabled: true, contextLineCount: 3 },
+});
+diff.onDidUpdateDiff(() => console.log(diff.getLineChanges()));
+diff.getModifiedEditor().onDidChangeContent((text) => save(text));
+```
+
+It takes Monaco's diff options (`renderSideBySide`, `renderSideBySideInlineBreakpoint`,
+`ignoreTrimWhitespace`, `maxComputationTime`, `originalEditable`, `hideUnchangedRegions`,
+`renderIndicators`, `enableSplitViewResizing`) with `createEditor`'s options for both sides. Where
+Monaco takes two models it takes the two texts, and `setOriginalValue` and `setModifiedValue` replace
+them; models come in 0.13. `getLineChanges()` answers in Monaco's `ILineChange` shape, 1-based, with
+an end line of 0 on the side of an insertion or a deletion. `goToDiff('next')`, F7 and `trigger` with
+Monaco's ids (`editor.action.accessibleDiffViewer.next` and the rest) move through the changes, and
+`revertChange(index)` puts one back as one undo step.
+
+Each side is an ordinary `AardinkEditor`, but the diff editor owns what it shows: a side's host
+diagnostics, baseline, find state, `onOpenLink` and `onSearchWorkspace` are not shown, and disposing a
+side does nothing. `dispose()` the diff editor to end both.
+
 ## Fonts
 
 The browser canvas has no system fonts, so `aardink-editor-web` bundles **JetBrains Mono
