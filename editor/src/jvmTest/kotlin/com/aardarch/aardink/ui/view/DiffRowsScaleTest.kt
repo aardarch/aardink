@@ -65,7 +65,9 @@ class DiffRowsScaleTest {
         val originalText = "before\n" + (0 until deleted).joinToString("\n") { "deleted line $it with some text after it" } + "\nafter"
         val original = viewOf(originalText).state
         val view = viewOf("before\nafter", height = 400)
-        val rows = DiffRows.inline(listOf(LineChange(1, 1 + deleted, 1, 1, null)), original, view.state.document, { null }, band, 4)
+        val rows = DiffRows.inline(listOf(LineChange(1, 1 + deleted, 1, 1, null)), original, view.state.document, {
+            null
+        }, band, 4, cap = Int.MAX_VALUE)
         view.state.publishDiffRows(rows)
         val firstLayout = measureTime { view.prepare(600, 400) }
         val shownRows = view.lineMap.rowsOf(1) - 1
