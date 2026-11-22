@@ -22,6 +22,7 @@ import com.aardarch.aardink.languages.internal.PackedTokenBuilder
 import com.aardarch.aardink.languages.internal.PackedTokens
 import com.aardarch.aardink.languages.internal.RESCAN_LOOKBACK
 import com.aardarch.aardink.languages.internal.ScanCache
+import com.aardarch.aardink.languages.internal.TextDiff
 import com.aardarch.aardink.languages.internal.diffTexts
 import com.aardarch.aardink.languages.internal.lineEndAt
 import com.aardarch.aardink.languages.internal.lineSpan
@@ -44,8 +45,10 @@ import com.aardarch.aardink.languages.internal.partialResult
  *
  * With [embedded], an element it names a language for is raw text, as HTML's `<style>` and
  * `<script>` are: its body, up to the element's closing tag, is that language's tokens. The opening
- * tag and the body are one construct, so a rescan that starts in either starts at the tag, and the
- * body is never taken as in step on its own (the tag before it decides its language).
+ * tag and the body are one construct, so a rescan that starts in the tag starts at the tag, and the
+ * body is never taken as in step on its own (the tag before it decides its language). An edit
+ * inside the body alone, with both tags as they were, rescans only the body's changed lines: each
+ * body keeps its own scan, which the language rescans as its own tokenizer would.
  *
  * [tokenizeLines] is incremental. Between constructs (a tag, a comment, an entity...) the scanner
  * has no state but its position, so after an edit it restarts outside any construct a little
@@ -63,21 +66,66 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         fun tokenizerOf(text: String, tagStart: Int, tagEnd: Int): EmbeddedLanguage?
     }
 
-    /** The language of a raw-text element's body. Its scans are not kept: the markup's are. */
+    /** The language of a raw-text element's body. The markup's scan keeps each body's own scan. */
     interface EmbeddedLanguage {
-        /** [body]'s tokens, from 0. */
-        fun tokenize(body: String): List<Token>
+        /** The scan of [body]. */
+        fun scan(body: String): BodyScan
 
-        /** [body]'s tokens, letting the page draw as [pacer] has it; the markup's scan has [tokenBase] tokens so far. */
-        suspend fun tokenizeCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): List<Token>
+        /** The scan of [body], letting the page draw as [pacer] has it; the markup's scan has [tokenBase] tokens so far. */
+        suspend fun scanCooperatively(body: String, pacer: CooperativePacer, tokenBase: Int): BodyScan
+    }
+
+    /** One body's scan, with what a rescan of it after an edit needs. */
+    interface BodyScan {
+        /** All the body's tokens, from 0. */
+        fun tokens(): List<Token>
+
+        /** The scan of [body], the text of this scan's body after an edit, from this scan. */
+        fun rescan(body: String): BodyRescan
+    }
+
+    /**
+     * A body's rescan: the new [scan] and [tokens], the tokens of the span [fromOffset, toOffset)
+     * of the new body. Every old token before [fromOffset] is unchanged, and so is every one from
+     * the old span's end on (`toOffset` less the change in length), moved by that change.
+     */
+    internal class BodyRescan(val scan: BodyScan, val fromOffset: Int, val toOffset: Int, val tokens: List<Token>)
+
+    /**
+     * A raw-text element whose body has a scan of its own: the opening tag from [tagStart] and the
+     * body from [bodyStart] to [bodyEnd], where its closing tag starts; [nameLength] is the
+     * element name's length.
+     */
+    private class Block(val tagStart: Int, val bodyStart: Int, val bodyEnd: Int, val nameLength: Int, val scan: BodyScan) {
+        fun movedBy(delta: Int) = Block(tagStart + delta, bodyStart + delta, bodyEnd + delta, nameLength, scan)
     }
 
     /**
      * The last complete scan: its tokens, the span of every construct (the scanner was between
-     * constructs everywhere else), and where an unclosed tag ended the scan (the text's length
-     * when none did; nothing after it was tokenized).
+     * constructs everywhere else), the raw-text [blocks] by position, and where an unclosed tag
+     * ended the scan (the text's length when none did; nothing after it was tokenized).
      */
-    private class MarkupScan(val text: String, val tokens: PackedTokens, val constructs: PackedTokens, val stoppedAt: Int) {
+    private class MarkupScan(
+        val text: String,
+        val tokens: PackedTokens,
+        val constructs: PackedTokens,
+        val blocks: List<Block>,
+        val stoppedAt: Int,
+    ) {
+        /** The block whose opening tag starts at [tagStart], if any. */
+        fun blockAt(tagStart: Int): Block? = blocks.getOrNull(firstBlockAtOrAfter(tagStart))?.takeIf { it.tagStart == tagStart }
+
+        /** Index of the first block whose opening tag starts at or after [offset]. */
+        fun firstBlockAtOrAfter(offset: Int): Int {
+            var lo = 0
+            var hi = blocks.size
+            while (lo < hi) {
+                val mid = (lo + hi) ushr 1
+                if (blocks[mid].tagStart < offset) lo = mid + 1 else hi = mid
+            }
+            return lo
+        }
+
         /** Whether the scanner stood at [offset] between constructs. */
         fun isBetweenConstructs(offset: Int): Boolean {
             if (offset > stoppedAt) return false
@@ -92,9 +140,10 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
     fun tokenizeFull(text: String): List<Token> {
         val tokens = PackedTokenBuilder(text.length / 8)
         val constructs = PackedTokenBuilder(text.length / 16)
-        val stoppedAt = scan(text, 0, tokens, constructs, onStep = { }, converged = { false })
+        val blocks = ArrayList<Block>()
+        val stoppedAt = scan(text, 0, tokens, constructs, blocks, onStep = { }, converged = { false })
         val raw = tokens.build()
-        return remembered(MarkupScan(text, raw, constructs.build(), stoppedAt), raw.toTokens())
+        return remembered(MarkupScan(text, raw, constructs.build(), blocks, stoppedAt), raw.toTokens())
     }
 
     private fun remembered(scan: MarkupScan, result: List<Token>): List<Token> {
@@ -106,18 +155,20 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         val pacer = CooperativePacer()
         val tokens = PackedTokenBuilder(text.length / 8)
         val constructs = PackedTokenBuilder(text.length / 16)
+        val blocks = ArrayList<Block>()
         val stoppedAt = scan(
             text,
             0,
             tokens,
             constructs,
+            blocks,
             onStep = { tokenCount -> pacer.onProgress(tokenCount) },
             converged = { false },
             // A large `<script>` body yields too, not only the markup around it.
-            embed = { language, body, tokenCount -> language.tokenizeCooperatively(body, pacer, tokenCount) },
+            embed = { language, body, tokenCount -> language.scanCooperatively(body, pacer, tokenCount) },
         )
         val raw = tokens.build()
-        return remembered(MarkupScan(text, raw, constructs.build(), stoppedAt), raw.toTokens())
+        return remembered(MarkupScan(text, raw, constructs.build(), blocks, stoppedAt), raw.toTokens())
     }
 
     /**
@@ -137,22 +188,32 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         if (holding < previous.constructs.size && previous.constructs.starts[holding] < restart) {
             restart = previous.constructs.starts[holding]
         }
+        previous.blockAt(restart)?.let { block ->
+            if (diff.start > block.bodyEnd + block.nameLength + 2) {
+                // The edit is past the closing tag and the character that ends its name: the
+                // block is as it was, and the scan restarts after its body.
+                restart = block.bodyEnd
+            } else {
+                rescanBody(text, previous, block, diff, dirtyRange)?.let { return it }
+            }
+        }
         val keptTokens = previous.tokens.firstEndingAfter(restart)
         val keptConstructs = previous.constructs.firstEndingAfter(restart)
         val tokens = PackedTokenBuilder(previous.tokens.size + 16)
         val constructs = PackedTokenBuilder(previous.constructs.size + 8)
+        val blocks = ArrayList<Block>()
         tokens.addAll(previous.tokens, 0, keptTokens)
         constructs.addAll(previous.constructs, 0, keptConstructs)
+        for (k in 0 until previous.firstBlockAtOrAfter(restart)) blocks.add(previous.blocks[k])
 
         var resumeAt = -1
-        val stopped = scan(text, restart, tokens, constructs, onStep = { }, converged = { position ->
+        val stopped = scan(text, restart, tokens, constructs, blocks, onStep = { }, converged = { position ->
             // In step again once past the change, at a place the old scan also stood between
             // constructs: the text from here on is the same, so the scan would be too.
             val inStep = position - 1 >= diff.newEnd && previous.isBetweenConstructs(position - diff.delta)
             if (inStep) resumeAt = position
             inStep
         })
-        val rescannedUntil = tokens.size
         val stoppedAt = if (resumeAt >= 0) {
             val oldPosition = resumeAt - diff.delta
             tokens.addAll(previous.tokens, previous.tokens.firstStartingAtOrAfter(oldPosition), previous.tokens.size, diff.delta)
@@ -162,6 +223,9 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
                 previous.constructs.size,
                 diff.delta,
             )
+            for (k in previous.firstBlockAtOrAfter(oldPosition) until previous.blocks.size) {
+                blocks.add(previous.blocks[k].movedBy(diff.delta))
+            }
             if (previous.stoppedAt < previous.text.length) previous.stoppedAt + diff.delta else text.length
         } else {
             stopped
@@ -173,7 +237,64 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         val toOffset = if (resumeAt < 0) text.length else lineEndAt(text, maxOf(resumeAt - 1, diff.newEnd))
         val fromOffset = lineStartAt(text, minOf(restart, diff.start))
         val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> raw.toTokens(from, to) }
-        return remembered(MarkupScan(text, raw, constructs.build(), stoppedAt), result)
+        return remembered(MarkupScan(text, raw, constructs.build(), blocks, stoppedAt), result)
+    }
+
+    /**
+     * The tokens after an edit inside [block]'s body that leaves its opening and closing tags as
+     * they were: the body is rescanned from its own scan, only where the edit is, and the rest of
+     * the old scan is kept, moved. Null when the edit reaches either tag or makes an earlier
+     * closing tag: the opening tag and the body are one construct, whose scan starts at the tag.
+     */
+    private fun rescanBody(text: String, previous: MarkupScan, block: Block, diff: TextDiff, dirtyRange: IntRange): List<Token>? {
+        if (diff.start < block.bodyStart || diff.oldEnd > block.bodyEnd) return null
+        // The old closing tag still ends the body when no closing tag starts in the changed text,
+        // or just before it, where its name could begin: from the edit on, the old text is the new.
+        val name = nameAt(text, block.tagStart + 1)
+        val searchFrom = maxOf(block.bodyStart, diff.start - name.length - 2)
+        for (at in searchFrom until minOf(diff.newEnd, text.length - 1)) {
+            if (isClosingTagAt(text, at, name)) return null
+        }
+        val bodyEnd = block.bodyEnd + diff.delta
+        val rescan = block.scan.rescan(text.substring(block.bodyStart, bodyEnd))
+        val oldFrom = previous.tokens.firstStartingAtOrAfter(block.bodyStart + rescan.fromOffset)
+        val oldTo = previous.tokens.firstStartingAtOrAfter(block.bodyStart + rescan.toOffset - diff.delta)
+        val oldEnd = previous.tokens.firstStartingAtOrAfter(block.bodyEnd)
+        if (oldFrom > oldTo || oldTo > oldEnd) return null
+
+        val tokens = PackedTokenBuilder(previous.tokens.size + 16)
+        tokens.addAll(previous.tokens, 0, oldFrom)
+        for (token in rescan.tokens) {
+            if (token.end > token.start) tokens.add(token.start + block.bodyStart, token.end + block.bodyStart, token.type)
+        }
+        tokens.addAll(previous.tokens, oldTo, previous.tokens.size, diff.delta)
+
+        // The block's construct ends where the body does, at the old end moved.
+        val constructs = PackedTokenBuilder(previous.constructs.size + 8)
+        constructs.addAll(previous.constructs, 0, previous.constructs.firstEndingAfter(block.tagStart))
+        constructs.add(block.tagStart, bodyEnd, TokenType.Punctuation)
+        constructs.addAll(
+            previous.constructs,
+            previous.constructs.firstStartingAtOrAfter(block.bodyEnd),
+            previous.constructs.size,
+            diff.delta,
+        )
+
+        val blocks = ArrayList<Block>(previous.blocks.size)
+        for (k in 0 until previous.firstBlockAtOrAfter(block.tagStart)) blocks.add(previous.blocks[k])
+        blocks.add(Block(block.tagStart, block.bodyStart, bodyEnd, block.nameLength, rescan.scan))
+        for (k in previous.firstBlockAtOrAfter(block.bodyEnd) until previous.blocks.size) {
+            blocks.add(previous.blocks[k].movedBy(diff.delta))
+        }
+        val stoppedAt = if (previous.stoppedAt < previous.text.length) previous.stoppedAt + diff.delta else text.length
+        val raw = tokens.build()
+
+        // Whole lines from the first rescanned token to the end of the last, or of the body when
+        // the rescan never got back in step.
+        val fromOffset = lineStartAt(text, minOf(block.bodyStart + rescan.fromOffset, diff.start))
+        val toOffset = lineEndAt(text, maxOf(block.bodyStart + rescan.toOffset - 1, diff.newEnd))
+        val result = partialResult(text, raw, fromOffset, toOffset, dirtyRange) { from, to -> raw.toTokens(from, to) }
+        return remembered(MarkupScan(text, raw, constructs.build(), blocks, stoppedAt), result)
     }
 
     /** Scans only the lines of [lines], assuming the first starts between constructs. */
@@ -181,7 +302,7 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         val span = lineSpan(text, lines) ?: return emptyList()
         val slice = text.substring(span.first, span.last)
         val tokens = PackedTokenBuilder()
-        scan(slice, 0, tokens, PackedTokenBuilder(), onStep = { }, converged = { false })
+        scan(slice, 0, tokens, PackedTokenBuilder(), ArrayList(), onStep = { }, converged = { false })
         val raw = tokens.build()
         return List(raw.size) { Token(raw.starts[it] + span.first, raw.ends[it] + span.first, raw.types[it]) }
     }
@@ -199,13 +320,14 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
         from: Int,
         tokens: PackedTokenBuilder,
         constructs: PackedTokenBuilder,
+        blocks: MutableList<Block>,
         onStep: (tokenCount: Int) -> Unit,
         converged: (position: Int) -> Boolean,
         embed: (
             language: EmbeddedLanguage,
             body: String,
             tokenCount: Int,
-        ) -> List<Token> = { language, body, _ -> language.tokenize(body) },
+        ) -> BodyScan = { language, body, _ -> language.scan(body) },
     ): Int {
         var i = from
         val n = text.length
@@ -260,11 +382,14 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
                     continue
                 }
                 val bodyStart = tagEnd + 1
-                val bodyEnd = closingTagAt(text, bodyStart, nameAt(text, i + 1))
+                val name = nameAt(text, i + 1)
+                val bodyEnd = closingTagAt(text, bodyStart, name)
                 if (bodyEnd > bodyStart) {
-                    for (token in embed(language, text.substring(bodyStart, bodyEnd), tokens.size)) {
+                    val bodyScan = embed(language, text.substring(bodyStart, bodyEnd), tokens.size)
+                    for (token in bodyScan.tokens()) {
                         if (token.end > token.start) tokens.add(token.start + bodyStart, token.end + bodyStart, token.type)
                     }
+                    blocks.add(Block(i, bodyStart, bodyEnd, name.length, bodyScan))
                 }
                 constructs.add(i, bodyEnd, TokenType.Punctuation)
                 i = bodyEnd
@@ -299,15 +424,18 @@ internal class MarkupTokenizer(private val embedded: EmbeddedLanguages? = null) 
     private fun closingTagAt(text: String, from: Int, name: String): Int {
         var at = text.indexOf("</", from)
         while (at >= 0) {
-            val after = at + 2 + name.length
-            if (text.regionMatches(at + 2, name, 0, name.length, ignoreCase = true) &&
-                (after >= text.length || text[after].isWhitespace() || text[after] == '/' || text[after] == '>')
-            ) {
-                return at
-            }
+            if (isClosingTagAt(text, at, name)) return at
             at = text.indexOf("</", at + 2)
         }
         return text.length
+    }
+
+    /** Whether the closing tag of the raw-text element [name] starts at [at]: `</`, the name, then whitespace, `/`, `>` or the end. */
+    private fun isClosingTagAt(text: String, at: Int, name: String): Boolean {
+        if (!text.startsWith("</", at)) return false
+        val after = at + 2 + name.length
+        return text.regionMatches(at + 2, name, 0, name.length, ignoreCase = true) &&
+            (after >= text.length || text[after].isWhitespace() || text[after] == '/' || text[after] == '>')
     }
 
     private fun Char.isNameCharacter() = isLetterOrDigit() || this == ':' || this == '-' || this == '_'
