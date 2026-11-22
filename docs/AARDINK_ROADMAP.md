@@ -566,6 +566,9 @@ The work:
 - `signatureHelpTriggerCharacters` is accepted on the web and not used (§16.1).
 - A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an
   edit more than 256 characters after it closed it; in JSON, TypeScript, CSS and HTML bodies (§17.1).
+- A diff's character changes are by character, so two different lines can share scattered letters
+  (`pr`, `intln(`) and a run across lines takes the next line's indentation; Monaco extends them
+  to word boundaries (§17.1).
 
 ## 10. Threads through every version
 
@@ -1289,6 +1292,7 @@ additions, each forced by the design or found while building it.
 | `hideUnchangedRegions` | A hidden run is a fold on each side, its first line the last line of context, with "N unchanged lines" after it. Opening one opens the other side's. A region opened stays open when the diff is worked out again; new ones start folded. `unchangedContextLines` is at least 1 | The fold machinery hides lines and rows already |
 | The inline view's cap | 1,000 rows of a block, then a row with the number of lines left, which shows them all when clicked. The deleted lines take the original's token colours, and follow them as the original is highlighted | §17's choice |
 | — | `EditorView.attach` shows rows published before the view was attached, which it missed before | Found by the layout's first UI test |
+| — | The inline view's deleted rows mark the characters a change removed, as the original side does | Found looking at the `diff-inline` scene |
 
 ## 13. Verification
 

@@ -228,6 +228,7 @@ fun CodeDiffEditorLayout(
                             colors.removedLine,
                             editorOptions.tabSize,
                             expanded = expanded,
+                            removedText = colors.removedText,
                         ),
                     )
                 }
@@ -404,7 +405,20 @@ private const val MIN_SPLIT = 0.1f
 private val DIVIDER_WIDTH = 5.dp
 
 private fun List<LineChange>.toBlocks(): List<Block> = map {
-    Block(it.originalLines.first, it.originalLines.last + 1, it.modifiedLines.first, it.modifiedLines.last + 1, null)
+    Block(
+        it.originalLines.first,
+        it.originalLines.last + 1,
+        it.modifiedLines.first,
+        it.modifiedLines.last + 1,
+        it.charChanges?.map { c ->
+            com.aardarch.aardink.core.diff.CharChange(
+                c.original.first,
+                c.original.last + 1,
+                c.modified.first,
+                c.modified.last + 1,
+            )
+        },
+    )
 }
 
 // ── The commands ─────────────────────────────────────────────────────────────

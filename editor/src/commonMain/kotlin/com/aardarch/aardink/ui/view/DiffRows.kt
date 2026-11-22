@@ -107,6 +107,7 @@ internal object DiffRows {
         tabSize: Int,
         cap: Int = MAX_INLINE_ROWS,
         expanded: Set<Int> = emptySet(),
+        removedText: Color = Color.Unspecified,
     ): Map<Int, List<Injection>> {
         val rows = HashMap<Int, MutableList<Injection>>()
         for (block in blocks) {
@@ -130,7 +131,14 @@ internal object DiffRows {
                 }
             }
             for (line in block.originalStart until block.originalStart + shown) {
-                val (text, spans) = shownLine(original, line, tokenStyle, tabSize)
+                val removed = if (removedText ==
+                    Color.Unspecified
+                ) {
+                    emptyList()
+                } else {
+                    block.charChanges.orEmpty().map { it.originalStart until it.originalEnd }
+                }
+                val (text, spans) = shownLine(original, line, tokenStyle, tabSize, removed, removedText)
                 add(text, spans)
             }
             if (capped) add("${block.originalLines - shown} more deleted lines", emptyList(), MoreDeletedRows(block.originalStart))
@@ -161,6 +169,8 @@ internal object DiffRows {
         line: Int,
         tokenStyle: (TokenType) -> SpanStyle?,
         tabSize: Int,
+        removed: List<IntRange> = emptyList(),
+        removedText: Color = Color.Unspecified,
     ): Pair<String, List<InjectedSpan>> {
         val document = state.document
         val raw = document.subSequence(document.lineStart(line), document.lineEnd(line)).toString().take(EditorView.MAX_RENDERED_LINE_CHARS)
@@ -185,6 +195,13 @@ internal object DiffRows {
                 val to = at[tokens.end(i).coerceIn(0, raw.length)]
                 if (to > from) spans += InjectedSpan(from, to, style)
             }
+        }
+        // The characters the change removed from this line: offsets of the original, from the diff.
+        val lineStart = document.lineStart(line)
+        for (range in removed) {
+            val first = (range.first - lineStart).coerceIn(0, raw.length)
+            val end = (range.last + 1 - lineStart).coerceIn(0, raw.length)
+            if (end > first) spans += InjectedSpan(at[first], at[end], SpanStyle(background = removedText))
         }
         return text.toString() to spans
     }

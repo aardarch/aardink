@@ -316,4 +316,15 @@ class DiffRowsTest {
         val deletedLines = diff.changes.sumOf { it.originalEnd - it.originalStart }
         assertEquals(inline.state.document.lineCount + deletedLines, inline.lineMap.totalRows)
     }
+
+    @Test
+    fun `inline, the characters a change removed are marked inside the deleted row`() {
+        val original = InlineFixture.stateOf("keep\nprintln(start)\nkeep")
+        val modified = InlineFixture.stateOf("keep\nprintln(begin)\nkeep").document
+        // "start" is offsets 13 until 18 of the original.
+        val change = LineChange(1, 2, 1, 2, listOf(com.aardarch.aardink.core.diff.CharChange(13, 18, 13, 18)))
+        val marked = Color(0x4DFF0000)
+        val row = DiffRows.inline(listOf(change), original, modified, { null }, removed, 4, removedText = marked).getValue(1).single()
+        assertEquals(listOf(8 to 13), row.spans.filter { it.style.background == marked }.map { it.start to it.end })
+    }
 }
