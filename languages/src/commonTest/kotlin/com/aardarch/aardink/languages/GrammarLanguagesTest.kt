@@ -119,6 +119,48 @@ class GrammarLanguagesTest {
     }
 
     @Test
+    fun `yaml reads a hash inside a word, flow mappings and a list item's dash`() {
+        val yaml = BuiltInLanguages.Yaml
+        // The three cases of issue #47.
+        assertScope(yaml, "url: http://x.org/#part", "http://x.org/#part", "string")
+        val flow = "amount: { type: number, required: true }"
+        assertScope(yaml, flow, "amount", "type")
+        assertScope(yaml, flow, "type", "type")
+        assertScope(yaml, flow, "required", "type")
+        assertScope(yaml, flow, "number", "string")
+        assertScope(yaml, flow, ",", "delimiter")
+        assertScope(yaml, flow, "true", "keyword")
+        assertScope(yaml, flow, "{", "delimiter")
+        assertScope(yaml, flow, "}", "delimiter")
+        val item = "steps:\n  - type: task"
+        assertScope(yaml, item, "-", "operator")
+        assertScope(yaml, item, "type", "type")
+        assertScope(yaml, item, "task", "string")
+        // A hash after whitespace is still a comment, and a number before one is still a number.
+        assertScope(yaml, "value: a #note", "#note", "comment")
+        assertScope(yaml, "value: a #note", "a", "string")
+        assertScope(yaml, "port: 80 # http", "80", "number")
+        assertScope(yaml, "name: a#b", "a#b", "string")
+        // Outside a flow collection, commas and brackets are text.
+        assertScope(yaml, "title: Hello, world", "Hello, world", "string")
+        assertScope(yaml, "list[0]: x", "list[0]", "type")
+        assertScope(yaml, "a, b: c", "a, b", "type")
+        assertScope(yaml, "-foo: x", "-foo", "type")
+        // A flow collection can span lines and nest.
+        val lines = "amount: {\n  type: number,\n  required: true\n}"
+        assertScope(yaml, lines, "type", "type")
+        assertScope(yaml, lines, "required", "type")
+        assertScope(yaml, lines, "number", "string")
+        val nested = "items: [a, {b: c}, [d]]\nnext: e, f"
+        assertScope(yaml, nested, "a", "string")
+        assertScope(yaml, nested, "b", "type")
+        assertScope(yaml, nested, "c", "string")
+        assertScope(yaml, nested, "d", "string")
+        assertScope(yaml, nested, "next", "type")
+        assertScope(yaml, nested, "e, f", "string")
+    }
+
+    @Test
     fun properties() {
         val text = "# comment\napp.name = Aardink\nlong.value = first \\\n  second\nnext=1"
         val properties = BuiltInLanguages.Properties
