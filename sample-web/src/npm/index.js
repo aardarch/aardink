@@ -311,9 +311,10 @@ function toKotlinOptions(options) {
     if (options.guides.bracketPairs !== undefined) out.bracketPairGuides = !!options.guides.bracketPairs;
   }
   if (options.hover !== undefined && options.hover !== null) {
-    // Whole milliseconds: the Kotlin side takes an Int.
-    if (Number.isFinite(options.hover.delay)) out.hoverDelay = Math.max(0, Math.round(options.hover.delay));
-    if (Number.isFinite(options.hover.hidingDelay)) out.hoverHidingDelay = Math.max(0, Math.round(options.hover.hidingDelay));
+    // Whole milliseconds within an Int: the Kotlin side takes one, and more would fail to decode.
+    const ms = (value) => Math.min(2147483647, Math.max(0, Math.round(value)));
+    if (Number.isFinite(options.hover.delay)) out.hoverDelay = ms(options.hover.delay);
+    if (Number.isFinite(options.hover.hidingDelay)) out.hoverHidingDelay = ms(options.hover.hidingDelay);
   }
   if (options.rulers !== undefined) {
     // Monaco's { column, color } rulers keep their column; one colour comes from the theme.
