@@ -181,4 +181,40 @@ class DiffEditorStateTest {
         assertTrue(state.isCurrent)
         assertTrue(state.changes.isEmpty())
     }
+
+    @Test
+    fun `a change kept from before the text was edited and the diff worked out again is refused`() = runTest {
+        val state = diff("a\nb\nc", "a\nB\nc")
+        val kept = state.changes.single()
+        state.modified.executeEdits(listOf(TextEdit(0 until 0, "x\n")))
+        state.recompute(TextDiffOptions())
+        state.revert(kept)
+        assertEquals("x\na\nB\nc", state.modified.text, "the old change no longer fits the text")
+        state.revert(state.changes.single { it.originalLines == 1 until 2 })
+        assertEquals("x\na\nb\nc", state.modified.text)
+    }
+
+    @Test
+    fun `revert keeps CRLF, an insertion at the end goes with its whole break`() = runTest {
+        val state = diff("a\r\nb", "a\r\nb\r\nc")
+        state.revert(state.changes.single())
+        assertEquals("a\r\nb", state.modified.text)
+    }
+
+    @Test
+    fun `revert keeps CRLF, lines deleted at the end come back with the target's break`() = runTest {
+        val state = diff("a\r\nb\r\nc", "a\r\nb")
+        state.revert(state.changes.single())
+        assertEquals("a\r\nb\r\nc", state.modified.text)
+    }
+
+    @Test
+    fun `revert keeps CRLF, lines put back in the middle are joined by the target's break`() = runTest {
+        val state = diff("a\r\nb\r\nc\r\nd", "a\r\nd")
+        state.revert(state.changes.single())
+        assertEquals("a\r\nb\r\nc\r\nd", state.modified.text)
+        val replaced = diff("a\r\nb\r\nc", "a\r\nX\r\nY\r\nc")
+        replaced.revert(replaced.changes.single())
+        assertEquals("a\r\nb\r\nc", replaced.modified.text)
+    }
 }

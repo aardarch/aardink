@@ -149,10 +149,12 @@ class CodeEditorState(
     /**
      * Shows [tokens], the language service's answer about lines [lines] of [snapshot] alone, ahead of
      * its answer about the whole text: the other lines keep what they show. An answer with no
-     * tokens changes nothing, as the lines it covers may simply have none yet.
+     * tokens clears the lines it covers of tokens an earlier answer left there.
      */
     internal suspend fun applySemanticTokensToLines(tokens: List<Token>, snapshot: CodeDocument, lines: IntRange) {
-        if (document.version != snapshot.version || tokens.isEmpty()) return
+        if (document.version != snapshot.version) return
+        // An empty answer says the lines have no tokens: it clears what an earlier answer left there, if anything.
+        if (tokens.isEmpty() && semanticStore == null) return
         val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
         if (store.overlay(tokens, snapshot, onlyLines = lines)) semanticVersion++
     }
@@ -631,8 +633,10 @@ class CodeEditorState(
      * its end. An edit moves them with the lines below it and drops those on the lines it replaced,
      * until the diff is worked out again.
      */
-    internal var diffRows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>> = emptyMap()
-        private set
+    internal val diffRows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>> get() = rowTable
+
+    /** [diffRows], changed in place: a patch or an edit within a line touches only its own lines. */
+    private var rowTable = HashMap<Int, List<com.aardarch.aardink.ui.view.Injection>>()
 
     /**
      * What runs [EditorCommand.NextChange], [EditorCommand.PreviousChange] and
@@ -646,9 +650,9 @@ class CodeEditorState(
 
     /** Shows [rows] in place of those before. */
     internal fun publishDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>>) {
-        val before = diffRows
+        val before = rowTable
         if (rows == before) return
-        diffRows = rows
+        rowTable = HashMap(rows)
         val changed = (before.keys + rows.keys).filter { before[it] != rows[it] }.sorted()
         if (changed.isNotEmpty()) diffListeners.forEach { it(changed) }
     }
@@ -660,26 +664,35 @@ class CodeEditorState(
      */
     internal fun patchDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>?>) {
         if (rows.isEmpty()) return
-        val next = HashMap(diffRows)
         val changed = ArrayList<Int>()
         for ((line, list) in rows) {
             if (list.isNullOrEmpty()) {
-                if (next.remove(line) != null) changed += line
-            } else if (next[line] != list) {
-                next[line] = list
+                if (rowTable.remove(line) != null) changed += line
+            } else if (rowTable[line] != list) {
+                rowTable[line] = list
                 changed += line
             }
         }
         if (changed.isEmpty()) return
-        diffRows = next
         changed.sort()
         diffListeners.forEach { it(changed) }
     }
 
     private val diffRowMover = DocumentChangeListener { change ->
-        if (diffRows.isEmpty()) return@DocumentChangeListener
+        if (rowTable.isEmpty()) return@DocumentChangeListener
         if (change.isReset) {
-            diffRows = emptyMap()
+            rowTable = HashMap()
+            return@DocumentChangeListener
+        }
+        if (change.lineDelta == 0 && change.removedLines == 0) {
+            // Typing within a line: only that line's rows can change, and no other line moves.
+            val rows = rowTable[change.startLine] ?: return@DocumentChangeListener
+            val kept = rows.filter { it.isRowAbove }
+            when {
+                kept.size == rows.size -> Unit
+                kept.isEmpty() -> rowTable.remove(change.startLine)
+                else -> rowTable[change.startLine] = kept
+            }
             return@DocumentChangeListener
         }
         val replacedEnd = change.startLine + change.removedLines
@@ -694,7 +707,7 @@ class CodeEditorState(
                 line == change.startLine -> rows.filter { it.isRowAbove }.takeIf { it.isNotEmpty() }?.let { moved[line] = it }
             }
         }
-        diffRows = moved
+        rowTable = moved
     }
 
     /** Told which lines' ghost text changed, other than by an edit moving it. */

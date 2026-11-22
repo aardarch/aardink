@@ -136,6 +136,24 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
             pacer.onProgress(++steps)
             if (document.version != snapshot.version) return false
         }
+        if (onlyLines != null) {
+            // Committed into the lines as they are now, with nothing suspended between reading and
+            // writing them: another range's answer that landed while this one was paced keeps its own.
+            if (document.version != snapshot.version) return false
+            val current = lines
+            var copy: ArrayList<LineTokens>? = null
+            for (line in firstLine..endLine) {
+                val old = current.getOrNull(line) ?: break
+                val new = buckets.build(line)
+                if (new.sameRuns(old)) continue
+                if (copy == null) copy = ArrayList(current)
+                copy[line] = new
+            }
+            if (copy == null) return false
+            lines = copy
+            flat = null
+            return true
+        }
         val replaced = ArrayList<LineTokens>(lastLine + 1)
         var changed = false
         for (line in 0..lastLine) {
@@ -273,7 +291,9 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
     private class Buckets(private val document: CodeDocument, private val from: Int, private val to: Int) {
         private val builders = arrayOfNulls<Builder>(to - from + 1)
         private val length = document.length
-        private var line = 0
+
+        // From the first line asked about: a range near the end of a large document does not walk the lines above it.
+        private var line = from.coerceIn(0, (document.lineCount - 1).coerceAtLeast(0))
 
         fun add(token: Token) {
             var start = token.start.coerceAtMost(length)

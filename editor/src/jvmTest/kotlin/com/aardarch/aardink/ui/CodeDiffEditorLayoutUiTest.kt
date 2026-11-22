@@ -173,7 +173,8 @@ class CodeDiffEditorLayoutUiTest {
     fun `under soft wrap, panes of different widths still line up what is on screen`() = runComposeUiTest {
         val lines = (0 until 40).map { if (it % 3 == 0) "line $it " + "word ".repeat(40) else "line $it" }
         val state = diffOf(lines.joinToString("\n"), lines.filterIndexed { i, _ -> i != 7 }.joinToString("\n"))
-        show(state, height = 1200.dp, options = DiffEditorOptions(splitRatio = 0.3f), editorOptions = EditorOptions(softWrap = true))
+        // Tall enough for more than ten unchanged lines on screen with any platform's font: on Linux they wrap more.
+        show(state, height = 2400.dp, options = DiffEditorOptions(splitRatio = 0.3f), editorOptions = EditorOptions(softWrap = true))
         repeat(3) {
             mainClock.advanceTimeBy(200)
             waitForIdle()

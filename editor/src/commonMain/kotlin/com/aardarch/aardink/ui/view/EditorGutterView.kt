@@ -162,7 +162,12 @@ internal fun EditorGutterView(
                     val hit = frame.lines.lastOrNull { it.top - frame.scrollY <= position.y } ?: return@detectTapGestures
                     val tapped = current.value
                     when {
-                        tapped.onDiffAction != null && position.x < diffLane && hit.line in tapped.diffActionLines ->
+                        // Only on the row the arrow is drawn on: the line's first row of text, not the
+                        // deleted or filler rows above it, which a tap must not revert.
+                        tapped.onDiffAction != null && position.x < diffLane && hit.line in tapped.diffActionLines &&
+                            (position.y - (hit.top - frame.scrollY + hit.layout.textRow * frame.metrics.lineHeight)).let {
+                                it >= 0f && it < frame.metrics.lineHeight
+                            } ->
                             tapped.onDiffAction(hit.line)
 
                         position.x in diffLane..diffLane + foldLane && hit.line in tapped.foldableLines -> tapped.onToggleFold(hit.line)

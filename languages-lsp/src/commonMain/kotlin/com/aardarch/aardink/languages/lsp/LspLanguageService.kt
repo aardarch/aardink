@@ -937,8 +937,9 @@ class LspLanguageService(
     /**
      * The server's `textDocument/semanticTokens/full` answer for [document], which should be what it
      * was last sent, read through the legend it declared in `semanticTokensProvider` or registered.
-     * A server that declared neither, or none that answers a `full` request, is not asked, and neither
-     * is one whose capabilities are not known, since its numbers could not be read.
+     * A server that declared neither is not asked, and neither is one whose capabilities are not known,
+     * since its numbers could not be read. One that answers ranges and not `full` requests is asked for
+     * the whole document as a range.
      *
      * The editor asks once per edit, so a request that comes too soon may be the only one an unedited
      * document gets, as with [LspFoldingProvider]: this waits for the document to open, and asks a few
@@ -953,7 +954,9 @@ class LspLanguageService(
      */
     override suspend fun semanticTokens(document: CodeDocument): List<Token> {
         if (supports("semanticTokensProvider") && !sync.awaitOpen()) return emptyList()
-        val legend = semanticLegend ?: return emptyList()
+        // A server that answers ranges and not whole documents is asked for the whole document as a
+        // range, so that its answer is the whole answer and the editor keeps it.
+        val legend = semanticLegend ?: return semanticTokens(document, 0 until document.length).orEmpty()
         val previous = lastSemantic?.takeIf { semanticDeltas }
         val data = previous?.let { semanticTokensSince(it) } ?: wholeSemanticTokens() ?: return emptyList()
         return decodeSemanticTokens(data, legend, document)

@@ -327,4 +327,20 @@ class DiffRowsTest {
         val row = DiffRows.inline(listOf(change), original, modified, { null }, removed, 4, removedText = marked).getValue(1).single()
         assertEquals(listOf(8 to 13), row.spans.filter { it.style.background == marked }.map { it.start to it.end })
     }
+
+    @Test
+    fun `typing within a line changes only that line's rows, in place`() {
+        val original = InlineFixture.stateOf("alpha\nbeta\ndelta\nomega")
+        val view = viewOf("alpha\ndelta\nomega")
+        view.publish(
+            DiffRows.inline(listOf(LineChange(1, 2, 1, 1, null), LineChange(3, 3, 2, 3, null)), original, view.state.document, {
+                null
+            }, removed, 4),
+        )
+        val table = view.state.diffRows
+        val rowsOnDelta = table[1]
+        view.state.executeEdits(listOf(TextEdit(0 until 0, "x")))
+        assertTrue(table === view.state.diffRows, "no copy of the table for a keystroke")
+        assertTrue(rowsOnDelta === view.state.diffRows[1], "another line's rows are untouched")
+    }
 }

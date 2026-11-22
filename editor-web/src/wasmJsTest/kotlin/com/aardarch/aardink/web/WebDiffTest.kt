@@ -216,6 +216,17 @@ class WebDiffTest {
             assertTrue(aardinkTrigger(original, "workbench.action.compareEditor.nextChange", "null"))
             assertEquals("Go to Previous Difference", aardinkActionLabel(modified, "editor.action.diffReview.prev"))
 
+            // Each side tells its cursor listener where its caret is, 1-based, as a single editor does.
+            var modifiedCursor = 0 to 0
+            var originalCursor = 0 to 0
+            aardinkOnCursorChange(modified) { line, column -> modifiedCursor = line to column }
+            aardinkOnCursorChange(original) { line, column -> originalCursor = line to column }
+            aardinkSetPosition(modified, 3, 2)
+            aardinkSetPosition(original, 4, 3)
+            withContext(Dispatchers.Main) {
+                withTimeout(5_000) { while (modifiedCursor != (3 to 2) || originalCursor != (4 to 3)) delay(16) }
+            }
+
             // Reverting puts the original's lines back, as one undo step on the modified side.
             assertTrue(aardinkDiffRevert(diff, 0))
             assertEquals("one\ntwo\nthree\nfour\nfive\nsix", aardinkGetValue(modified))

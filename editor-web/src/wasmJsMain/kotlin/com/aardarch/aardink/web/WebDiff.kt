@@ -23,6 +23,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -110,6 +111,16 @@ internal fun DiffContent(diff: AardinkDiffHandle) {
     val modified = diff.modified
     EditorEffects(original, original.state.value, original.languageService)
     EditorEffects(modified, modified.state.value, modified.languageService)
+    // Each side's caret to its handle's `onDidChangeCursor`, 1-based, as a single editor's layout reports it.
+    for (side in listOf(original, modified)) {
+        val sideState = side.state.value
+        LaunchedEffect(side, sideState) {
+            snapshotFlow { sideState.selection }.collect { selection ->
+                val (line, column) = sideState.document.offsetToLineCol(selection.start)
+                side.onCursorChange?.invoke(line + 1, column + 1)
+            }
+        }
+    }
     // Both sides share the modified side's editor options, font and theme.
     val options = modified.options.value
     val look = rememberEditorLook(modified, options)

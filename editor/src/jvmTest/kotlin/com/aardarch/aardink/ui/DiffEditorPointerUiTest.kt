@@ -25,6 +25,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -98,6 +99,21 @@ class DiffEditorPointerUiTest {
         // The first change is still there, and the diff is worked out again.
         waitUntil(timeoutMillis = 5_000) { state.changes.size == 1 }
         assertEquals(5, state.changes.single().modifiedLines.first)
+    }
+
+    @Test
+    fun `inline, tapping the lane beside a deleted row above a change does nothing`() = runComposeUiTest {
+        val state = diffOf(original, modified)
+        show(state, options = DiffEditorOptions(renderSideBySide = false))
+        val view = assertNotNull(state.modifiedView)
+        val line = state.changes[1].modifiedLines.first
+        val deletedRow = Offset(density.density * 10f, view.textTop(line) - view.scroll.scrollY - view.frame.metrics.lineHeight / 2f)
+        onAllNodesWithTag(EditorTestTags.GUTTER).onFirst().performTouchInput { click(deletedRow) }
+        waitForIdle()
+        assertEquals(modified, state.modified.text, "no arrow is drawn beside a deleted row")
+        onAllNodesWithTag(EditorTestTags.GUTTER).onFirst().performTouchInput { click(rowCenter(view, line, density * 10f)) }
+        waitForIdle()
+        assertEquals(modified.replace("twenty changed", "line 20"), state.modified.text, "the arrow on the line's own row still reverts")
     }
 
     @Test

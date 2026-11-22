@@ -108,21 +108,22 @@ class DiffEditorState(val original: CodeEditorState, val modified: CodeEditorSta
     /**
      * Puts the original's lines of [change] back in the modified text, in place of its modified
      * lines, as one undo step of [modified]. Nothing happens when the modified side is read-only
-     * (a layout sets that from its options), or when the text has been edited since the diff and
-     * [change] no longer fits it.
+     * (a layout sets that from its options), or when [change] is not one of [changes]: the text has
+     * been edited, and the diff worked out again, since it was taken.
      */
     fun revert(change: LineChange) {
-        if (modified.readOnly) return
+        if (modified.readOnly || change !in changes) return
         replaceLines(modified, change.modifiedLines, original, change.originalLines)
     }
 
     /**
      * Puts the modified lines of [change] into the original text, in place of its original lines, as
      * one undo step of [original]. A layout only offers it when `DiffEditorOptions.originalEditable`
-     * is set, and while it shows the state, the original being read-only makes this do nothing.
+     * is set, and while it shows the state, the original being read-only makes this do nothing. As
+     * with [revert], a [change] that is not one of [changes] does nothing.
      */
     fun accept(change: LineChange) {
-        if (original.readOnly) return
+        if (original.readOnly || change !in changes) return
         replaceLines(original, change.originalLines, modified, change.modifiedLines)
     }
 
@@ -148,22 +149,22 @@ class DiffEditorState(val original: CodeEditorState, val modified: CodeEditorSta
         if (!isCurrent) return
         val targetDocument = target.document
         val sourceDocument = source.document
-        val text = if (sourceLines.isEmpty()) {
-            ""
-        } else {
-            sourceDocument.subSequence(sourceDocument.lineStart(sourceLines.first), sourceDocument.lineEnd(sourceLines.last)).toString()
+        // The target's own line break, between the lines put in and around them.
+        val eol = target.lineEnding.text
+        val text = sourceLines.joinToString(eol) { line ->
+            sourceDocument.subSequence(sourceDocument.lineStart(line), contentEnd(sourceDocument, line)).toString()
         }
         val lineCount = targetDocument.lineCount
         val edit = when {
-            // Lines for lines: the text between the first line's start and the last line's end.
+            // Lines for lines: the first line's start to the last line's content, its break kept.
             !targetLines.isEmpty() && !sourceLines.isEmpty() ->
-                TextEdit(targetDocument.lineStart(targetLines.first) until targetDocument.lineEnd(targetLines.last), text)
+                TextEdit(targetDocument.lineStart(targetLines.first) until contentEnd(targetDocument, targetLines.last), text)
 
-            // Lines to take away, with the break that ends them, or the one before them at the end.
+            // Lines to take away, with the break that ends them, or the whole break before them at the end.
             !targetLines.isEmpty() -> if (targetLines.last + 1 < lineCount) {
                 TextEdit(targetDocument.lineStart(targetLines.first) until targetDocument.lineStart(targetLines.last + 1), "")
             } else if (targetLines.first > 0) {
-                TextEdit(targetDocument.lineEnd(targetLines.first - 1) until targetDocument.lineEnd(targetLines.last), "")
+                TextEdit(contentEnd(targetDocument, targetLines.first - 1) until targetDocument.lineEnd(targetLines.last), "")
             } else {
                 TextEdit(0 until targetDocument.length, "")
             }
@@ -171,11 +172,17 @@ class DiffEditorState(val original: CodeEditorState, val modified: CodeEditorSta
             // Lines to put in, before the line they were before, or after the last line.
             sourceLines.isEmpty() -> return
 
-            targetLines.first < lineCount -> targetDocument.lineStart(targetLines.first).let { TextEdit(it until it, text + "\n") }
+            targetLines.first < lineCount -> targetDocument.lineStart(targetLines.first).let { TextEdit(it until it, text + eol) }
 
-            else -> targetDocument.length.let { TextEdit(it until it, "\n" + text) }
+            else -> targetDocument.length.let { TextEdit(it until it, eol + text) }
         }
         target.executeEdits(listOf(edit))
+    }
+
+    /** Where [line]'s text ends: before the carriage return of a CRLF break, which a line's end includes. */
+    private fun contentEnd(document: CodeDocument, line: Int): Int {
+        val end = document.lineEnd(line)
+        return if (line + 1 < document.lineCount && end > document.lineStart(line) && document[end - 1] == '\r') end - 1 else end
     }
 }
 

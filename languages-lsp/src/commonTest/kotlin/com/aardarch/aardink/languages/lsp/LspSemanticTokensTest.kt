@@ -269,11 +269,17 @@ class LspSemanticTokensTest {
     }
 
     @Test
-    fun `a server that answers only for a range is sent nothing`() = withServer("x") {
+    fun `a server that answers only for a range is asked for the whole document as a range`() = withServer("one\ntwo three") {
         open("""{"semanticTokensProvider":{"legend":$LEGEND,"range":true}}""")
 
-        assertEquals(emptyList(), service.semanticTokens(doc))
-        assertNothingSent("a whole request is not for a server with no full")
+        val server = async { respond(RANGE, """{"data":[1,4,5,2,0]}""") }
+        val tokens = service.semanticTokens(doc)
+        val sent = server.await()
+
+        assertEquals(listOf(8..12 to "variable"), tokens.spans, "the answer is the whole answer, which the editor keeps")
+        val range = sent.params["range"]!!.jsonObject
+        assertEquals(0, range["start"]!!.jsonObject["line"]!!.jsonPrimitive.content.toInt())
+        assertEquals(1, range["end"]!!.jsonObject["line"]!!.jsonPrimitive.content.toInt())
     }
 
     @Test
