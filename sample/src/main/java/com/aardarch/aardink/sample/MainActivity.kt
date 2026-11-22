@@ -67,6 +67,9 @@ import com.aardarch.aardink.sample.lsp.DEMO_CSS_DOCUMENT_URI
 import com.aardarch.aardink.sample.lsp.createDemoCssLspConnection
 import com.aardarch.aardink.sample.samples.SampleAssets
 import com.aardarch.aardink.sample.theme.AardinkSampleTheme
+import com.aardarch.aardink.sample.ui.DIFF_SAMPLE_ID
+import com.aardarch.aardink.sample.ui.DiffSampleCard
+import com.aardarch.aardink.sample.ui.DiffSampleScreen
 import com.aardarch.aardink.sample.ui.LanguageCard
 import com.aardarch.aardink.sample.ui.SampleThemeChoice
 import com.aardarch.aardink.sample.ui.ThemePicker
@@ -142,6 +145,7 @@ private fun SampleApp() {
         selectedId = selectedId,
         onThemeChange = { themeId = it.id },
         onSelect = { selectedId = it.id },
+        onOpenDiff = { selectedId = DIFF_SAMPLE_ID },
         onBack = { selectedId = null },
     )
 }
@@ -159,17 +163,25 @@ internal fun SampleAppContent(
     onThemeChange: (SampleThemeChoice) -> Unit,
     onSelect: (LanguageDefinition) -> Unit,
     onBack: () -> Unit,
+    onOpenDiff: () -> Unit = {},
     tokenizeDebounceMs: Long = 150L,
 ) {
     val selected = selectedId?.let(registry::byId)
 
     AardinkSampleTheme(editorTheme = themeChoice.theme) {
-        if (selected == null) {
+        if (selectedId == DIFF_SAMPLE_ID) {
+            DiffSampleScreen(
+                kotlin = registry.byId("kotlin") ?: registry.all.first(),
+                onBack = onBack,
+                tokenizeDebounceMs = tokenizeDebounceMs,
+            )
+        } else if (selected == null) {
             StartScreen(
                 languages = registry.all,
                 currentTheme = themeChoice,
                 onThemeChange = onThemeChange,
                 onSelect = onSelect,
+                onOpenDiff = onOpenDiff,
             )
         } else {
             EditorScreen(
@@ -188,6 +200,7 @@ private fun StartScreen(
     currentTheme: SampleThemeChoice,
     onThemeChange: (SampleThemeChoice) -> Unit,
     onSelect: (LanguageDefinition) -> Unit,
+    onOpenDiff: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -267,6 +280,15 @@ private fun StartScreen(
                 items(items = textEditor, key = { it.id }) { def ->
                     LanguageCard(language = def, onClick = { onSelect(def) })
                 }
+            }
+            item("section-compare") {
+                SectionHeader(
+                    title = "Compare",
+                    subtitle = "Two versions of a file, side by side or inline",
+                )
+            }
+            item("diff-editor") {
+                DiffSampleCard(onClick = onOpenDiff)
             }
         }
     }
