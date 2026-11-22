@@ -925,6 +925,14 @@ private fun ChromeColors.orElse(base: ChromeColors): ChromeColors {
         inlayHintBackground = inlayHintBackground.or(base.inlayHintBackground),
         codeLens = codeLens.or(base.codeLens),
         ghostText = ghostText.or(base.ghostText),
+        diffInsertedLine = diffInsertedLine.or(base.diffInsertedLine),
+        diffRemovedLine = diffRemovedLine.or(base.diffRemovedLine),
+        diffInsertedText = diffInsertedText.or(base.diffInsertedText),
+        diffRemovedText = diffRemovedText.or(base.diffRemovedText),
+        diffFiller = diffFiller.or(base.diffFiller),
+        gutterAdded = gutterAdded.or(base.gutterAdded),
+        gutterModified = gutterModified.or(base.gutterModified),
+        gutterDeleted = gutterDeleted.or(base.gutterDeleted),
     )
 }
 

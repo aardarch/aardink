@@ -163,6 +163,22 @@ internal object MonacoActions {
         put("editor.action.insertLineBefore", "Insert Line Above" to EditorCommand.InsertLineAbove)
         put("expandLineSelection", "Expand Line Selection" to EditorCommand.SelectLine)
         put("editor.action.showColorPicker", "Show Color Picker" to EditorCommand.ShowColorPicker)
+        // The diff editor's: Monaco's ids for the accessible diff viewer's next and previous difference, which F7 and
+        // Shift+F7 run (older Monaco: diffReview), and the workbench's compare ones; each runs in either side of a diff editor.
+        for (id in listOf(
+            "editor.action.accessibleDiffViewer.next",
+            "editor.action.diffReview.next",
+            "workbench.action.compareEditor.nextChange",
+        )) {
+            put(id, "Go to Next Difference" to EditorCommand.NextChange)
+        }
+        for (id in listOf(
+            "editor.action.accessibleDiffViewer.prev",
+            "editor.action.diffReview.prev",
+            "workbench.action.compareEditor.previousChange",
+        )) {
+            put(id, "Go to Previous Difference" to EditorCommand.PreviousChange)
+        }
     }
 
     fun command(id: String): EditorCommand? = byId[id]?.second

@@ -25,7 +25,8 @@
         body { display: flex; flex-direction: column; }
         header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #8884; }
         header label { display: inline-flex; gap: 4px; align-items: center; font-size: 14px; }
-        #editor { flex: 1; min-height: 0; position: relative; }
+        #editor, #diff-editor { flex: 1; min-height: 0; position: relative; }
+        #diff-editor[hidden] { display: none; }
         footer { display: flex; gap: 16px; padding: 4px 12px; font: 12px ui-monospace, monospace; border-top: 1px solid #8884; }
         #stress-box { position: absolute; left: -10000px; width: 400px; height: 300px; }
     </style>
@@ -38,10 +39,12 @@
     <label><input type="checkbox" id="showGutter" checked> Gutter</label>
     <label><input type="checkbox" id="readOnly"> Read-only</label>
     <label title="Overview ruler, breadcrumbs, occurrences, linked tags, colour swatches, sticky scroll"><input type="checkbox" id="structure"> 0.8</label>
+    <button id="diff" type="button" title="Shows the sample against an edited copy, side by side or inline by the window's width">Diff</button>
     <button id="load-large" type="button">Load 5,000-line file</button>
     <button id="stress" type="button" title="W-1: mount and dispose 50 editors, then report heap">Mount/dispose ×50</button>
 </header>
 <div id="editor"></div>
+<div id="diff-editor" hidden></div>
 <footer>
     <span id="stats"></span>
     <span id="caret"></span>
