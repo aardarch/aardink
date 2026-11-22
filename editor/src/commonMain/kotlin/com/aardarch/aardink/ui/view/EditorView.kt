@@ -336,6 +336,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         document.addChangeListener(this)
         state.inlineListeners += inlineSourceChanged
         state.ghostListeners += ghostChanged
+        state.diffListeners += ghostChanged
         inline.changed()
         structureDirty = true
     }
@@ -344,6 +345,7 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         document.removeChangeListener(this)
         state.inlineListeners -= inlineSourceChanged
         state.ghostListeners -= ghostChanged
+        state.diffListeners -= ghostChanged
     }
 
     /**
@@ -785,7 +787,12 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
             appended = injection.column
             val injectedStyle = injection.style
             if (injectedStyle != null) builder.pushStyle(injectedStyle)
+            val at = builder.length
             builder.append(injection.text)
+            for (span in injection.spans) {
+                val from = (at + span.start).coerceAtMost(builder.length)
+                builder.addStyle(span.style, from, (at + span.end).coerceIn(from, builder.length))
+            }
             if (injectedStyle != null) builder.pop()
         }
         appendText(builder, text, appended, text.length, indent)

@@ -613,6 +613,49 @@ class CodeEditorState(
         inlineChanged()
     }
 
+    /**
+     * Rows a diff shows on lines of this document that are not its text: another document's deleted
+     * lines and blank filler rows, by line, each already styled. Rows above a line are
+     * [com.aardarch.aardink.ui.view.Injection.isRowAbove]; rows after the last line are injected at
+     * its end. An edit moves them with the lines below it and drops those on the lines it replaced,
+     * until the diff is worked out again.
+     */
+    internal var diffRows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>> = emptyMap()
+        private set
+
+    /** Told which lines' [diffRows] changed, other than by an edit moving them. */
+    internal var diffListeners: List<(lines: List<Int>) -> Unit> = emptyList()
+
+    /** Shows [rows] in place of those before. */
+    internal fun publishDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>>) {
+        val before = diffRows
+        if (rows == before) return
+        diffRows = rows
+        val changed = (before.keys + rows.keys).filter { before[it] != rows[it] }.sorted()
+        if (changed.isNotEmpty()) diffListeners.forEach { it(changed) }
+    }
+
+    private val diffRowMover = DocumentChangeListener { change ->
+        if (diffRows.isEmpty()) return@DocumentChangeListener
+        if (change.isReset) {
+            diffRows = emptyMap()
+            return@DocumentChangeListener
+        }
+        val replacedEnd = change.startLine + change.removedLines
+        val moved = HashMap<Int, List<com.aardarch.aardink.ui.view.Injection>>(diffRows.size)
+        for ((line, rows) in diffRows) {
+            when {
+                line < change.startLine -> moved[line] = rows
+
+                line > replacedEnd -> moved[line + change.lineDelta] = rows
+
+                // Rows above the first changed line stay with it; any others there went with the text.
+                line == change.startLine -> rows.filter { it.isRowAbove }.takeIf { it.isNotEmpty() }?.let { moved[line] = it }
+            }
+        }
+        diffRows = moved
+    }
+
     /** Told which lines' ghost text changed, other than by an edit moving it. */
     internal var ghostListeners: List<(lines: List<Int>) -> Unit> = emptyList()
 
@@ -1671,6 +1714,7 @@ class CodeEditorState(
         document.addChangeListener(contentRecorder)
         document.addChangeListener(symbolTracker)
         document.addChangeListener(decorationMover)
+        document.addChangeListener(diffRowMover)
         document.addChangeListener(hintTracker)
         document.addChangeListener(lensTracker)
         document.addChangeListener(colorTracker)
