@@ -187,7 +187,6 @@ hover, diagnostics, inlay hints and code lenses answered by JavaScript functions
 `language-configuration.json` for typing, and a theme as Monaco's `defineTheme` data.
 `connectLanguageServer(url, languageId)` adds a language server over a WebSocket, and
 `registerInlineCompletionsProvider` an assistant's ghost text.
-[`docs/AARDFLEX_WEB_SWITCHOVER.md`](docs/AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco app over.
 
 > **On the web:** a keystroke settles in about 10 ms, and nearly always under 35 ms, whatever the size of the document (measured
 > in [`docs/WEB_INTEGRATION.md`](docs/WEB_INTEGRATION.md#performance)). A disposed editor is not

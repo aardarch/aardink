@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Uses the package exactly as aardflex-web-app's EditorPane will, and reports the outcome on
+// Uses the package exactly as a host app's editor pane will, and reports the outcome on
 // window.__aardinkSmoke for smoke.mjs to assert on.
 import {
   connectLanguageServer,

@@ -629,10 +629,10 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `include`, `@rematch`, `defaultToken`, `ignoreCase`, `tokenPostfix`, `@name` regex attributes),
   and `DeclarativeTokenizer(grammar)` highlights with it, a line at a time and incrementally.
   Lookbehind is refused when the grammar is read, with where it is. Tokens get a
-  `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`, `comment.doc`); the bare names
+  `NamedTokenType(name)`, dotted as in Monaco (`tag.mylang`, `comment.doc`); the bare names
   `comment` and `string` get the editor's own types, and any name with a `comment` or `string`
-  part is a comment or a string to the editor (no bracket colours inside it). aardflex-web-app's Monaco grammar reads unchanged and passes the cases its
-  Monaco tests check.
+  part is a comment or a string to the editor (no bracket colours inside it). A Monarch grammar
+  exported from Monaco reads unchanged.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
@@ -645,7 +645,7 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `registerLanguage` takes a Monarch grammar (with `extends: "xml"` to keep a built-in language's
   service) and JavaScript functions for completions, hover and diagnostics, answered at once or
   with a Promise; `defineTheme` / `registerTheme` take Monaco's theme data or VS Code theme JSON,
-  whose colours and font styles reach token names by dotted prefix (`tag.aardflex`, then `tag`). In
+  whose colours and font styles reach token names by dotted prefix (`tag.mylang`, then `tag`). In
   Kotlin, `AardinkWeb.registerLanguage` with `WebLanguageProviders`, and `registerTheme`.
 - **Web:** more of Monaco's editor API: `getSelections` / `setSelections`, `canUndo`, `canRedo`,
   `pushUndoStop`, `getAlternativeVersionId`, `format()`, `focus()`, `setBaseline(text)` for the

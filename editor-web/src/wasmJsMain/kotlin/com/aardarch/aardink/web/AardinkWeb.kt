@@ -406,7 +406,7 @@ object AardinkWeb {
 
     /**
      * Adds (or replaces) a theme, for [WebEditorOptions.theme] to name: VS Code theme JSON, whose
-     * `tokenColors` scopes also colour grammars' token names by dotted prefix (`tag.aardflex`, then
+     * `tokenColors` scopes also colour grammars' token names by dotted prefix (`tag.mylang`, then
      * `tag`). What it does not set comes from `base` (a theme key) if given, else `vscode-light`
      * for a `"type": "light"` theme and `vscode-dark` otherwise. Throws [IllegalArgumentException]
      * for JSON it cannot read.

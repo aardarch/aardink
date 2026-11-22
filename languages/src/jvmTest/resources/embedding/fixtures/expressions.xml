@@ -1,0 +1,7 @@
+<label>{title}</label>
+<label>{$title}</label>
+<label for="{user.name}">
+<link href="{site.url}" text="{user.name | upper}">
+<item>{count | pad: 3 | suffix: x}%</item>
+<note>{oops</note>
+<item id="x">ok</item>

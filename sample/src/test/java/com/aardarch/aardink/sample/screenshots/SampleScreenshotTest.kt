@@ -119,7 +119,7 @@ class SampleScreenshotTest {
     /**
      * Captures every page for [themeChoice]. `setContent` can only be called once per test, so
      * pages are driven by swapping the `selectedId` state and letting Compose recompose —
-     * the same pattern aardflex's PromoScreenshotTest uses to cycle wallpaper pages.
+     * the usual way to cycle the pages of one screenshot test.
      */
     private fun captureTheme(themeChoice: SampleThemeChoice) {
         // Clear this theme's stale PNGs so a removed sample page does not leave an orphan

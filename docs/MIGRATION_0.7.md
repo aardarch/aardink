@@ -106,7 +106,7 @@ carries `endLineNumber`.
 
 | 0.6 | 0.7 |
 | --- | --- |
-| Eight kinds, for XML and aardflex | The eight, then Monaco's: `Method`, `Function`, `Constructor`, `Field`, `Variable`, `Class`, `Struct`, `Interface`, `Enum`, `EnumMember`, `Keyword`, `Text`, `Color`, `File`, `Folder`, `Reference`, `Constant`, `Event`, `Operator`, `TypeParameter`, `Unit`, `User`, `Issue`. A `when` over the kind needs an `else` |
+| Eight kinds, for XML and a typical consumer's own language | The eight, then Monaco's: `Method`, `Function`, `Constructor`, `Field`, `Variable`, `Class`, `Struct`, `Interface`, `Enum`, `EnumMember`, `Keyword`, `Text`, `Color`, `File`, `Folder`, `Reference`, `Constant`, `Event`, `Operator`, `TypeParameter`, `Unit`, `User`, `Issue`. A `when` over the kind needs an `else` |
 | `filterText` and `sortPriority` documented, never read | The editor orders the list by `sortPriority`, keeping your order among equals. With `completionsAreIncomplete = false` it also filters by `filterText` |
 | (none) | `detail`, shown beside the label; `commitCharacters`, which accept the selected item when typed |
 
@@ -181,18 +181,18 @@ template's new `aardinkOnContentChange` and the new exports (`aardinkOnSelection
   `completionsAreIncomplete = false`; on the web, answer `{ suggestions, incomplete: false }`.
   `EditorOptions(quickSuggestions = true)` opens the list on letters.
 
-## Example: the aardflex Android app
+## Example: an Android host upgrade
 
-The app (`apps/android/aardflex/v1.0`) is on 0.6.2. Its upgrade:
+A consumer Android app is on 0.6.2. Its upgrade:
 
 1. `gradle/libs.versions.toml`: `aardink = "0.7.0"`.
-2. `service/language/AardflexXmlLanguageService.kt`: `smartIndent(document, lineIndex, options)`
+2. `service/language/MyXmlLanguageService.kt`: `smartIndent(document, lineIndex, options)`
    returns `options.indentAfter(previousLine, levels)`; `format(document, options)` passes
    `options.indentUnit` to `XmlPrettyPrinter`; the `Diagnostic(...)` call drops `lineNumber` and
    can now give the validator's exact range and `FriendlyErrorMapper`'s message.
 3. Compose it with the built-in XML service, so its tag checks, closing tags on `>` and quotes come
-   back: `CompositeLanguageService(AardflexXmlLanguageService(...), BuiltInLanguages.Xml.languageService!!)`,
-   or better, generate an `XmlSchema` from `shared/generated/reference.json` plus the
+   back: `CompositeLanguageService(MyXmlLanguageService(...), BuiltInLanguages.Xml.languageService!!)`,
+   or better, generate an `XmlSchema` from a reference JSON file plus the
    structural descriptors and use `XmlSchemaLanguageService(schema)` with the expression
    completions as the primary.
 4. `viewmodel/XmlEditorViewModel.kt`: replace the cursor-callback refresh and the 500 ms timer
@@ -202,19 +202,19 @@ The app (`apps/android/aardflex/v1.0`) is on 0.6.2. Its upgrade:
    KeyboardToolbarItem.Character(':'), KeyboardToolbarItem.Character('$'),
    KeyboardToolbarItem.Action("Format", command = EditorCommand.Format))`, and a Validate
    button that runs `EditorCommand.NextProblem`.
-6. `ui/theme/AardflexEditorTheme.kt`: `EditorThemeParser.fromMonacoJson(sharedThemeJson)` instead
+6. `ui/theme/MyEditorTheme.kt`: `EditorThemeParser.fromMonacoJson(sharedThemeJson)` instead
    of the hand-copied palette.
 
-## Example: aardflex-web-app
+## Example: a Monaco web host
 
 1. `pnpm add @aardarch/aardink-web@^0.7.0`.
-2. `src/editor/editor.ts`: `quickSuggestions: true`; answer completions with
-   `{ suggestions, incomplete: false }` and drop the app's own ranking in `completions.ts`.
-3. `AppShell.svelte`: replace the capture-phase Ctrl+S and F8 handlers with
+2. `quickSuggestions: true`; answer completions with
+   `{ suggestions, incomplete: false }` and drop the app's own ranking.
+3. Replace the capture-phase Ctrl+S and F8 handlers with
    `editor.addCommand('CtrlCmd+S', save)`; F8 and Shift+F8 are the editor's own now. Remove the
    comment about F8 typing a `w`.
-4. `registerLanguage({ id: 'aardflex-xml', extends: 'xml', schema, … })` with the schema built
-   from `reference.json`, and delete what it replaces in `schema.ts`, `completions.ts` and
-   `diagnostics.ts`. Keep the expression completions and hover in the providers.
-5. `ProblemsPanel.svelte`: diagnostics now span lines (`endLineNumber`); `scan.ts` no longer needs
-   to cut them to one.
+4. `registerLanguage({ id: 'mylang-xml', extends: 'xml', schema, … })` with the schema built
+   from the reference JSON, and delete the hand-written schema, completion and
+   diagnostic code it replaces. Keep the expression completions and hover in the providers.
+5. A problems panel: diagnostics now span lines (`endLineNumber`); code that cut them to one
+   line is no longer needed.

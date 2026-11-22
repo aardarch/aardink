@@ -210,10 +210,10 @@ import { createEditor, defineTheme, registerLanguage } from '@aardarch/aardink-w
 
 await registerLanguage(
   {
-    id: 'aardflex',
+    id: 'mylang',
     extends: 'xml', // XML's completions, diagnostics and folding too
     grammar: {
-      tokenPostfix: '.aardflex',
+      tokenPostfix: '.mylang',
       tokenizer: {
         root: [
           [/<\/?(layer|text)\b/, 'tag'],
@@ -231,12 +231,12 @@ await registerLanguage(
     provideDiagnostics: async (text) => validate(text), // AardinkDiagnostic[]
   },
 );
-await defineTheme('aardflex-dark', {
+await defineTheme('mylang-dark', {
   base: 'vs-dark',
   inherit: true,
-  rules: [{ token: 'tag.aardflex', foreground: 'c586c0' }],
+  rules: [{ token: 'tag.mylang', foreground: 'c586c0' }],
 });
-const editor = await createEditor(container, save, { language: 'aardflex', theme: 'aardflex-dark' });
+const editor = await createEditor(container, save, { language: 'mylang', theme: 'mylang-dark' });
 ```
 
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
@@ -261,10 +261,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   `$1`-style capture groups in guards, `next` and `nextEmbedded`, and `$Sn` in a rule's regex,
   which stay literal text. The grammar highlights a line at a time, so an edit
   rescans only until the lines below are back in the state they were in.
-  [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco language over this
-  way.
-- **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.aardflex`
-  takes the theme's `tag.aardflex` rule, else its `tag` rule, else the built-in themes' colour for
+- **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.mylang`
+  takes the theme's `tag.mylang` rule, else its `tag` rule, else the built-in themes' colour for
   Monaco's standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). A
   name with a `comment` or `string` part (`comment.doc`, `string.format`) is a comment or a string
   to the editor, as in Monaco: no bracket colours or matching inside it.

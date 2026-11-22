@@ -950,7 +950,7 @@ export function registerLanguage(definition: AardinkLanguageDefinition, provider
 
 /**
  * Monaco's `defineTheme` data. Token rules name tokens as Monaco does, and the longest matching
- * prefix wins: `tag` also colours `tag.aardflex`, `comment.doc` only documentation comments. A
+ * prefix wins: `tag` also colours `tag.mylang`, `comment.doc` only documentation comments. A
  * rule's `fontStyle` (`'bold'`, `'italic'`, `'underline'`, `'strikethrough'`, or `''` for none)
  * applies too, and its `background` is drawn behind the token's text; the empty token's sets the
  * editor's. `colors` takes VS Code's keys, the editor's chrome too (`minimap.background`,
