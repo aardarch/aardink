@@ -1,0 +1,7 @@
+<page title="Home">
+  <!-- a note {user.name} -->
+  <section class="intro" hidden>
+    <label>Hello</label>
+    <widget size="1" />
+  </section>
+</page>

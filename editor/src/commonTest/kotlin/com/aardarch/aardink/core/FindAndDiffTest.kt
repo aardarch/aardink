@@ -22,6 +22,7 @@ import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FindAndDiffTest {
@@ -88,5 +89,43 @@ class FindAndDiffTest {
     @Test
     fun `identical texts have no diff`() {
         assertTrue(SimpleDiffProvider.diff(listOf("a", "b"), listOf("a", "b")).isEmpty())
+    }
+
+    @Test
+    fun `deleted lines mark the line below them, or past the last`() {
+        assertEquals(listOf(LineDiff(1, LineDiffKind.Deleted)), SimpleDiffProvider.diff(listOf("a", "b", "c"), listOf("a", "c")))
+        assertEquals(listOf(LineDiff(2, LineDiffKind.Deleted)), SimpleDiffProvider.diff(listOf("a", "b", "c", "d"), listOf("a", "b")))
+    }
+
+    @Test
+    fun `a line moved down by an insertion above it is not marked`() {
+        val base = listOf("a", "b", "c", "x", "d")
+        val current = listOf("a", "new", "b", "c", "d")
+        assertEquals(
+            listOf(LineDiff(1, LineDiffKind.Added), LineDiff(4, LineDiffKind.Deleted)),
+            SimpleDiffProvider.diff(base, current),
+        )
+    }
+
+    @Test
+    fun `whitespace counts in the lane`() {
+        assertEquals(listOf(LineDiff(0, LineDiffKind.Modified)), SimpleDiffProvider.diff(listOf("a"), listOf("  a")))
+    }
+
+    @Test
+    fun `text diff gives line and character changes as ranges`() {
+        val result = TextDiff.compute("one\ntwo\nthree", "one\nTWO\nthree\nfour")
+        assertFalse(result.identical)
+        assertFalse(result.hitTimeout)
+        assertEquals(2, result.changes.size)
+        val (changed, added) = result.changes
+        assertEquals(1 until 2, changed.originalLines)
+        assertEquals(1 until 2, changed.modifiedLines)
+        assertEquals(listOf(CharChange(4 until 7, 4 until 7)), changed.charChanges)
+        assertTrue(added.originalLines.isEmpty())
+        assertEquals(3 until 4, added.modifiedLines)
+        assertEquals(3, added.originalLines.first, "an insertion is placed before the original's line 3")
+        assertNull(added.charChanges)
+        assertTrue(TextDiff.compute("a\r\nb", "a\nb").identical)
     }
 }

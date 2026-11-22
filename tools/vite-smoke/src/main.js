@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-// Uses the package exactly as aardflex-web-app's EditorPane will, and reports the outcome on
+// Uses the package exactly as a host app's editor pane will, and reports the outcome on
 // window.__aardinkSmoke for smoke.mjs to assert on.
 import {
   connectLanguageServer,
+  createDiffEditor,
   createEditor,
   defineTheme,
   registerFont,
@@ -29,7 +30,7 @@ import {
 
 const report = (window.__aardinkSmoke = { done: false, checks: {}, error: null, version });
 // checklist.mjs drives further editors through the same public API.
-window.__aardink = { connectLanguageServer, createEditor, defineTheme, registerFont, registerInlineCompletionsProvider, registerLanguage };
+window.__aardink = { connectLanguageServer, createDiffEditor, createEditor, defineTheme, registerFont, registerInlineCompletionsProvider, registerLanguage };
 
 function waitFor(condition, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {

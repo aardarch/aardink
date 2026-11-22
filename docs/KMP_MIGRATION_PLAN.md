@@ -36,7 +36,7 @@ Gradle snippets, and Kotlin signatures rather than general guidance.
 | 8 | Done | `:editor-web`; see §6.5 for what differs from the sketch. |
 | 9 | Done | `:sample-web`, npm package, `tools/vite-smoke/`, checklist. See §7.4: W-1 leak and W-10 latency are open. |
 | 10 | Done | 0.5.0 released as-is: §7.4's W-1 leak and W-10 latency ship as documented known issues (CHANGELOG, README, `docs/WEB_INTEGRATION.md`). Gradle 9.8.0. No `-rc1` dry run: an rc tag publishes to Maven Central just the same, so CI on `main` served as the dry run instead. |
-| 11 | **Superseded** | Replaced by [`docs/AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) (planned in `docs/AARDINK_0.6_PLAN.md` §7.1): aardflex-web-app consumes `@aardarch/aardink-web` from npmjs instead of building its own wasm executable. |
+| 11 | **Superseded** | Replaced by consuming the published npm package `@aardarch/aardink-web` (see [`docs/WEB_INTEGRATION.md`](WEB_INTEGRATION.md); planned in `docs/AARDINK_0.6_PLAN.md` §7.1): a web host installs it from npmjs instead of building its own wasm executable. |
 
 **Post-release:** this plan is complete through 0.5.0 and is now a historical record. Work continues
 in `docs/AARDINK_0.6_PLAN.md`, which covers §7.4's open items, the manual web checklist and §11.
@@ -45,17 +45,17 @@ in `docs/AARDINK_0.6_PLAN.md`, which covers §7.4's open items, the manual web c
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Platform targets | Android (zero regression) + `jvm()` desktop + `wasmJs` browser. No iOS. | Android is the existing published product; desktop gives the fastest dev/test loop; wasmJs is the path to replacing Monaco in `aardflex-web-app`. |
+| Platform targets | Android (zero regression) + `jvm()` desktop + `wasmJs` browser. No iOS. | Android is the existing published product; desktop gives the fastest dev/test loop; wasmJs is the path to replacing Monaco in web hosts. |
 | Text input | Migrate `BasicTextField(TextFieldValue)` + `VisualTransformation` to `BasicTextField(TextFieldState)` + `InputTransformation`/`OutputTransformation` **now**, before any KMP source move. | The old API is deprecated; doing the rewrite once, on the Android-only build, isolates its risk from the multiplatform move and lets Roborazzi/manual testing prove it before the source tree changes shape. |
-| `aardflex-xml` grammar location | Owned by `aardflex-web-app` in its own small Gradle wasmJs module, **not** shipped inside Aardink. | Keeps Aardink product-agnostic; Aardflex's schema can evolve without an Aardink release. |
-| Web delivery | Gradle-built npm package `@aardarch/aardink-web` published to GitHub Packages; `aardflex-web-app` consumes it via `pnpm`/Vite. | One registry, ordinary `package.json` version pinning, no submodules. |
+| Language grammar location | Owned by the consuming host in its own small Gradle wasmJs module, **not** shipped inside Aardink. | Keeps Aardink product-agnostic; a host's schema can evolve without an Aardink release. |
+| Web delivery | Gradle-built npm package `@aardarch/aardink-web` published to GitHub Packages; a web host consumes it via `pnpm`/Vite. | One registry, ordinary `package.json` version pinning, no submodules. |
 
 Reconciling the last two: Aardink publishes ordinary Maven artifacts for `:editor`,
 `:languages`, `:languages-lsp` on all three targets, **plus** a new wasmJs-only library
 `:editor-web` that wraps `CodeEditorLayout` behind a small `@JsExport` surface and ships
-its Kotlin sources as a copyable template (see §6). `aardflex-web-app` gets its own tiny
-Gradle project (`editor-wasm/`, living in that repo) that depends on `:editor-web` +
-`:languages` and adds one file, `AardflexLanguages.kt`, containing the ported Monarch
+its Kotlin sources as a copyable template (see §6). A web host gets its own tiny
+Gradle project (`editor-wasm/`, living in the host's repo) that depends on `:editor-web` +
+`:languages` and adds one file, `MyLanguages.kt`, containing the ported Monarch
 grammar. That project's wasmJs **executable** build produces the `.mjs`/`.wasm` that is
 packaged and published as `@aardarch/aardink-web` from *that* repo's CI — Aardink itself
 never builds an executable, only libraries. §11 gives that repo's side of the work.
@@ -79,7 +79,7 @@ languages-lsp/           com.aardarch:aardink-languages-lsp  android, jvm, wasmJ
 editor-web/              com.aardarch:aardink-editor-web     wasmJs only            (bridge library, NEW)
 sample/                  Android app                                                (unchanged sources — the zero-regression gate)
 sample-desktop/          jvm application                                            (NEW — dev loop, Compose UI test bed)
-sample-web/              wasmJs application                                         (NEW — browser harness, reference for aardflex-web-app)
+sample-web/              wasmJs application                                         (NEW — browser harness, reference for web hosts)
 tools/consumer-smoke/    Android app, `implementation("com.aardarch:aardink:...")`  (NEW — proves the published .aar still resolves)
 ```
 
@@ -334,7 +334,7 @@ These were deliberate and are load-bearing. Do not "fix" them back to what §2.4
 
 Commits `00ec1d7` / `7f49676` (and the catalog fix after them) moved the build onto the
 non-deprecated APIs of Compose Multiplatform 1.12.1, AGP 9.4.1 and vanniktech 0.37. New
-modules (`:editor-web`, `:sample-web`, `aardflex-web-app`'s `editor-wasm/`) follow the same
+modules (`:editor-web`, `:sample-web`, a host's `editor-wasm/`) follow the same
 rules:
 
 | Instead of (deprecated) | Use |
@@ -641,8 +641,8 @@ private class EditorInputTransformation(
 trigger detection, completion-item range re-addressing) moves inside the block above,
 operating on `TextFieldBuffer` directly. Because `InputTransformation` only ever runs for
 user-originated edits (framework guarantee), no reentrancy flag is needed for the
-input side — contrast with the `applyingExternal` guard `aardflex-web-app`'s own
-`EditorPane.svelte` needs today for the same reason on the Monaco side.
+input side — contrast with the `applyingExternal` guard a Monaco host's own
+editor component needs today for the same reason on the Monaco side.
 
 ### 4.3 Programmatic edits → field (replaces the 16 `TextFieldValue(...)` construction sites)
 
@@ -909,7 +909,7 @@ kotlin {
         browser()
         // Still a library klib for publishing, but -- as in the other three libraries (§2.4a,
         // CMP-4906) -- wasmJsBrowserTest needs an executable with the Skiko runtime to run any
-        // test at all. The consuming app module (:sample-web, or aardflex-web-app's own module)
+        // test at all. The consuming app module (:sample-web, or a web host's own module)
         // declares its own binaries.executable() and links this library plus its languages.
         binaries.executable()
         generateTypeScriptDefinitions()
@@ -1073,13 +1073,13 @@ fun createAardinkEditor(containerId: String, initialText: String, optionsJson: S
 `@JsExport` boundary and avoids relying on `JsReference` semantics that are still marked
 experimental; revisit if `JsReference` proves clearly preferable during implementation.)
 `:sample-web` (§7) contains the working, compiled copy of this template and is the
-reference every downstream consumer (including `aardflex-web-app`, §11) copies from.
+reference every downstream consumer (including web hosts, §11) copies from.
 
 ### 6.4 npm packaging — Gradle task + wrapper sources
 
 `editor-web/src/npm/package.json` (version stamped from `VERSION_NAME` by the Gradle task
 below), `index.d.ts` (the TypeScript surface a Svelte/React/Vue app consumes — mirrors the
-Monaco subset `aardflex-web-app/src/lib/components/EditorPane.svelte` already uses):
+Monaco subset a typical Monaco host already uses):
 ```ts
 export interface AardinkOptions {
   language?: string; theme?: string; fontSize?: number; wordWrap?: 'on' | 'off';
@@ -1108,12 +1108,12 @@ container an id if it lacks one, and adapts the numeric-handle exports from §6.
 side expects; `onDidChangeContent`/`onDidChangeCursor` return an unsubscribe closure).
 
 This npm package's Gradle-side production, publishing, and consumption by
-`aardflex-web-app` are described fully in §11, since the actual `.mjs`/`.wasm` are built by
+a web host are described fully in §11, since the actual `.mjs`/`.wasm` are built by
 the **consumer's** executable module (§6.1's comment on `binaries.executable()`), not by
 `:editor-web` itself. `:editor-web` is what publishes to Maven Central; `:sample-web` (§7)
 is the reference for how a consumer turns it into a runnable bundle and, from *that*
 module, into an npm package — copy `:sample-web`'s `npmPackage` Gradle task and `src/npm/`
-folder verbatim into `aardflex-web-app`'s own Gradle project (§11).
+folder verbatim into a web host's own Gradle project (§11).
 
 Browser requirements to document (Wasm GC + exception handling): Chrome/Edge 119+,
 Firefox 120+, Safari 18.2+.
@@ -1201,7 +1201,7 @@ soft-wrap/gutter/toolbar placement, a "load 5,000-line file" button (performance
 template, used to smoke-test the JS-facing surface from a plain HTML page
 (`src/wasmJsMain/resources/bridge.html`) before any product repo depends on it. A scratch
 Vite project `tools/vite-smoke/` imports the built npm package output and renders it,
-proving the whole pipeline end-to-end without needing `aardflex-web-app` present.
+proving the whole pipeline end-to-end without needing a consuming host present.
 
 ### 7.3 Web verification checklist (`docs/WEB_INTEGRATION.md`)
 
@@ -1268,7 +1268,7 @@ Fixed on the way (both in `:editor`, all platforms):
    single-`BasicTextField` design: a large change touching input/IME handling, and Android. The
    options are (a) ship 0.5.0 for small documents with the limits documented, (b) make
    virtualisation a follow-up project, or (c) both. This decision belongs to the product owner.
-   For reference, the aardflex XML files it would replace Monaco for are typically a few hundred
+   For reference, the XML files a typical host would replace Monaco for are typically a few hundred
    lines.
 
 ## 8. Test strategy
@@ -1373,7 +1373,7 @@ instead and note it in AGENTS.md. Since no `.api` dump exists today, PR 3 (§10)
           path: sample-web/build/dist/wasmJs/productionExecutable
 ```
 (Keep the existing APK/test-results/lint-results upload steps; extend their paths to
-include `languages-aardflex`-equivalent modules only if any are added later — none are
+include further language modules only if any are added later — none are
 added inside this repo per §0's decision.)
 
 ### 9.4 `.github/workflows/release.yml`
@@ -1423,53 +1423,48 @@ PR's dump.
 | 8 | `:editor-web` library: `AardinkWeb` object (§6.2), export template (§6.3), wasmJs bridge test (§8) | `:editor-web:wasmJsBrowserTest` green; template compiles when pasted into `:sample-web` |
 | 9 | `:sample-web` harness (§7.2); execute checklist W-1…W-10 (§7.3) and fix findings | Checklist filled in `docs/WEB_INTEGRATION.md`; `tools/vite-smoke/` successfully renders the editor; CI uploads the web dist |
 | 10 | CI/release/scripts updates (§9.3–9.5); documentation (§11 below); release 0.5.0 | A dry-run tag (`v0.5.0-rc1`) through `release.yml` publishes all Maven artifacts across 3 targets for 3 libraries; `docs/WEB_INTEGRATION.md` complete |
-| 11 | **Separate repo, `aardflex-web-app`**: switch-over from Monaco (§11) | `pnpm check`/`pnpm test`/`pnpm build` green; ported tokenizer golden tests pass; bundle size compared and recorded |
+| 11 | **Separate repo, a Monaco web host**: switch-over from Monaco (§11) | The host's type check, tests and build green; ported tokenizer golden tests pass; bundle size compared and recorded |
 
-## 11. `aardflex-web-app` switch-over (executed in that repo, after PR 10 above ships)
+## 11. Web host switch-over from Monaco (executed in the host's repo, after PR 10 above ships)
 
-> **Superseded** by [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md): the app installs
-> `@aardarch/aardink-web` from npm and registers its grammar from TypeScript. Kept as the record
-> of the 0.5 design.
+> **Superseded** by consuming the published npm package `@aardarch/aardink-web` (see
+> [`WEB_INTEGRATION.md`](WEB_INTEGRATION.md)): a host installs it from npm and registers its
+> grammar from TypeScript. Kept as the record of the 0.5 design.
 
-This work happens in `C:\repos\aardarch\aardflex-web-app`, not in this repository, and
-depends on Aardink 0.5.0 being available (either from `mavenLocal()`/`includeBuild` during
-development, or from Maven Central once released).
+This work happens in the host's own repository, not in this one, and depends on Aardink 0.5.0
+being available (either from `mavenLocal()`/`includeBuild` during development, or from Maven
+Central once released).
 
-1. **New Gradle project** `editor-wasm/` inside `aardflex-web-app` (a JDK 21 + Gradle 9
-   toolchain living alongside the pnpm workspace — add a JDK setup step before `vp build`
-   in that repo's `.github/workflows/ci.yml` and `deploy-firebase.yml`). Depends on
-   `com.aardarch:aardink-editor-web` + `com.aardarch:aardink-languages` (Maven Central, or
+1. **New Gradle project** `editor-wasm/` inside the host (a JDK 21 + Gradle 9 toolchain living
+   alongside the pnpm workspace; the host's CI gains a JDK setup step before its build). Depends
+   on `com.aardarch:aardink-editor-web` + `com.aardarch:aardink-languages` (Maven Central, or
    `includeBuild("../aardink")` for local iteration against an unreleased Aardink change).
-2. Port `src/editor/setup.ts`'s grammar into
-   `editor-wasm/src/wasmJsMain/kotlin/.../AardflexLanguages.kt`:
-   - `AardflexXmlTokenizer` extending `com.aardarch.aardink.languages.internal.xml.XmlTokenizer`, adding token rules for `{expr}`, `{module:prop}`, `| transform`, `:format` (source: `setup.ts:261-346`'s Monarch grammar).
-   - `AardflexLanguageService` extending `TagValidator`, with completions built from the five data tables at `setup.ts:13-245` (`ELEMENTS`, `ATTRIBUTES`, `MODULE_TYPES`, `TEXT_STYLES`, `TRANSFORMS`), trigger characters `<`, space, `"`, `|`, `:` (mirrors `setup.ts:368-447`).
-   - `AardflexDarkTheme: EditorTheme` reproducing the 8 token-color rules and `#1E1E2E` background from `setup.ts:349-365`.
-   - `AardflexLanguages.register(registry: LanguageRegistry): LanguageRegistry` and a `main()`/`Exports.kt` that is the compiled copy of §6.3's template, calling `AardinkWeb.mount(..., registry = AardflexLanguages.register(LanguageRegistry.withBuiltIns()), themes = mapOf("aardflex-dark" to AardflexLanguages.AardflexDarkTheme))`.
+2. Port the host's Monarch grammar into `MyLanguages.kt`:
+   - `MyXmlTokenizer` extending `com.aardarch.aardink.languages.internal.xml.XmlTokenizer`, adding
+     token rules for the host's expression syntax.
+   - `MyLanguageService` extending `TagValidator`, with completions built from the host's data
+     tables and its own trigger characters.
+   - `MyDarkTheme: EditorTheme` reproducing the host's token colour rules and background.
+   - `MyLanguages.register(registry: LanguageRegistry): LanguageRegistry` and a `main()`/
+     `Exports.kt` that is the compiled copy of §6.3's template, calling
+     `AardinkWeb.mount(..., registry = MyLanguages.register(LanguageRegistry.withBuiltIns()), themes = mapOf("my-dark" to MyLanguages.MyDarkTheme))`.
 3. `editor-wasm/build.gradle.kts` sets `binaries.executable()` and a `dist`/`npmPackage`
    Gradle task copied from `:sample-web` (§7.2) that copies the built `.mjs`/`.wasm`/
-   `composeResources`/`.d.ts` into `aardflex-web-app/src/editor/wasm/` (add that path to
-   `.gitignore`) or packages them for GitHub Packages the same way `:editor-web`'s notes
-   describe.
-4. `src/lib/components/EditorPane.svelte`: `createEditor` becomes async
+   `composeResources`/`.d.ts` into the host's source tree (git-ignored) or packages them for
+   GitHub Packages the same way `:editor-web`'s notes describe.
+4. The host's editor component: `createEditor` becomes async
    (`onMount(async () => { instance = await createEditor(container, onChange, options) })`);
    `getValue`/`setValue`/`updateOptions`/`dispose` calls are otherwise unchanged since
    `index.d.ts` (§6.4) mirrors the existing Monaco-shaped calls.
-5. `vite.config.ts`: add `optimizeDeps: { exclude: ['@aardarch/aardink-web'] }` (so Vite's
+5. Vite config: add `optimizeDeps: { exclude: ['@aardarch/aardink-web'] }` (so Vite's
    dev-server pre-bundler does not break the wasm loader's relative asset URLs); remove the
-   Monaco-specific `optimizeDeps.include` and the `editor.worker?worker` import; keep
-   `chunkSizeWarningLimit: 3500`.
-6. Remove the `monaco-editor` dependency from `package.json`; rewrite
-   `src/editor/setup.test.ts`'s tokenizer-only tests against `AardflexXmlTokenizer`'s
-   Kotlin-side golden output (ported as fixed input/expected-token-list pairs, run through
-   the wasm bridge in a Vitest test, or — simpler — kept as Kotlin tests inside
-   `editor-wasm`'s own `wasmJsTest`, whichever this repo's test runner can execute fastest).
+   Monaco-specific `optimizeDeps.include` and the `editor.worker?worker` import.
+6. Remove the `monaco-editor` dependency; rewrite the tokenizer-only tests against
+   `MyXmlTokenizer`'s Kotlin-side golden output (ported as fixed input/expected-token-list
+   pairs, run through the wasm bridge in a Vitest test, or kept as Kotlin tests inside
+   `editor-wasm`'s own `wasmJsTest`, whichever the host's test runner can execute fastest).
 7. Ship behind a `VITE_EDITOR=monaco|aardink` build-time flag for one release so the switch
-   is instantly revertible; remove Monaco and the flag in the following release once the
-   team is confident.
-8. Update that repo's `specs/ui.md` note about phone-view Monaco limitations — the
-   motivating problem for this whole migration — to reflect that Aardink is now the editor
-   on every viewport size, not just mobile.
+   is instantly revertible; remove Monaco and the flag in the following release.
 
 ## 12. Documentation deliverables
 

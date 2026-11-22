@@ -129,6 +129,13 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
             drawRect(style.background, Offset(0f, line.textBandTop(frame)), Size(size.width, line.layout.textRows * lineHeight))
         }
     }
+    // Injected rows with a background of their own, such as a diff's deleted lines and filler rows.
+    for (line in frame.lines) {
+        val top = line.top - frame.scrollY
+        line.layout.forEachBackgroundRows { first, last, color ->
+            drawRect(color, Offset(0f, top + first * lineHeight), Size(size.width, (last - first + 1) * lineHeight))
+        }
+    }
     decorations.bracketMatch?.let { (open, close) ->
         drawBracketBox(frame, open, colors, left)
         drawBracketBox(frame, close, colors, left)

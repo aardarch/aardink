@@ -28,6 +28,13 @@
 //   node perf.mjs --semantic [--gate] [--lines 5000]   dist/perf-semantic.json
 //   node perf.mjs ... --profile                        also dist/perf*.cpuprofile, of the keys
 //
+// --diff mounts the diff editor, side by side, with the document as the modified text and the same
+// document with every 20th line edited as the original, and types in the modified side. Besides the
+// usual measurements it sets a different original and measures the diff landing: the time to the
+// update event and the longest task and frame meanwhile. It writes dist/perf-diff.json.
+//
+//   node perf.mjs --diff [--gate] [--lines 5000]       dist/perf-diff.json
+//
 // --hints types in a registered language whose provideInlayHints answers 3 hints for each line it
 // is asked about and whose provideCodeLenses puts a lens above every 20th line, with inlayHints and
 // codeLens on, through the npm package's dispatcher. Its grammar is a small Kotlin one of its own
@@ -48,11 +55,11 @@ const gate = args.includes('--gate');
 const keyCount = Number(args[args.indexOf('--keys') + 1]) || 30;
 // The gates are defined on the 5,000-line reference document; other sizes are for comparison.
 const lineCount = Number(args[args.indexOf('--lines') + 1]) || 5000;
-const mode = args.includes('--hints') ? 'hints' : args.includes('--semantic') ? 'semantic' : null;
+const mode = args.includes('--hints') ? 'hints' : args.includes('--semantic') ? 'semantic' : args.includes('--diff') ? 'diff' : null;
 // --profile records a CPU profile of the sequential keys, writes it to dist/perf-<mode>.cpuprofile
 // (DevTools opens it) and prints the functions with the most time of their own.
 const profile = args.includes('--profile');
-if (args.includes('--hints') && args.includes('--semantic')) throw new Error('--hints and --semantic are separate runs');
+if (args.filter((a) => ['--hints', '--semantic', '--diff'].includes(a)).length > 1) throw new Error('--hints, --semantic and --diff are separate runs');
 
 // Target: what 0.6.0 aims for, recorded in WEB_INTEGRATION.md. Gate: what CI enforces with
 // --gate, looser to absorb shared-runner noise. null = informational only.
@@ -76,6 +83,18 @@ const BASE_LIMITS = {
 // is the network's, and its set-value includes the server asking again.
 const MODE_LIMITS = {
   hints: {},
+  // The landing's longest task (67-96 ms here) is not the diff. A profile of the landing (--diff --profile,
+  // which also writes dist/perf-diff-landing.trace.json) puts it at the very start: the new original's full
+  // tokenization, whose first slices cannot be paced, because each rule's first regex find runs on through
+  // the text to its next match (RegexTokenizer.scan). The diff itself is a 13 ms task and publishing its
+  // marks and rows another 20 ms. So it stays gated at 100 ms until those first finds are bounded. Key to idle is informational: the diff lands 300 ms after the key, as the 20 smooth frames that end
+  // a key's time are ending, so the frame it takes either falls inside a key's window or after it.
+  diff: {
+    // Two editors and the first diff to mount (the diff lands 370 ms after the mount here).
+    mountToIdleMs: { target: 200, gate: null },
+    keyToIdleP95Ms: { target: 33, gate: null },
+    diffLandLongestTaskMs: { target: 50, gate: 100 },
+  },
   semantic: {
     mountToIdleMs: { target: 200, gate: null },
     semanticLandLongestTaskMs: { target: 0, gate: 50 },
@@ -207,6 +226,9 @@ const harness = await startHarness();
 const results = {};
 const text = largeKotlin(lineCount);
 
+/** [text] with a comment added to every [step]th line from line [first] on: what the diff run's original differs by. */
+const editedLines = (text, step, first) => text.split('\n').map((line, i) => (i % step === first ? line + ' // edited' : line)).join('\n');
+
 try {
   const page = await freshPage(harness);
   results.chrome = await harness.browser.version();
@@ -309,18 +331,92 @@ try {
   });
 
   // ── Mount → idle ────────────────────────────────────────────────────────────
-  results.mountToIdleMs = await page.evaluate(async (text, mount, language, modeOptions) => {
+  // --diff: the original is the document with every 20th line edited; keys go to the modified side.
+  const original = mode === 'diff' ? editedLines(text, 20, 0) : null;
+  results.mountToIdleMs = await page.evaluate(async (text, mount, language, modeOptions, original) => {
     const onChange = () => {
       const pending = window.__perf.keys.find((k) => k.change === null && !k.dropped);
       if (pending) pending.change = performance.now() - pending.ts;
     };
     const start = performance.now();
-    window.__perfEditor = await window.__aardink.createEditor(eval(mount), onChange, { value: text, language, ...modeOptions });
+    if (original === null) {
+      window.__perfEditor = await window.__aardink.createEditor(eval(mount), onChange, { value: text, language, ...modeOptions });
+    } else {
+      // Side by side, whatever the width of the page.
+      window.__perfDiff = await window.__aardink.createDiffEditor(eval(mount), {
+        original, modified: text, language, renderSideBySideInlineBreakpoint: 300, ...modeOptions,
+      });
+      window.__perfEditor = window.__perfDiff.getModifiedEditor();
+      window.__perfEditor.onDidChangeContent(() => onChange());
+      window.__perfDiffUpdates = { count: 0, firstMs: null };
+      window.__perfDiff.onDidUpdateDiff(() => {
+        window.__perfDiffUpdates.count++;
+        window.__perfDiffUpdates.firstMs ??= performance.now() - start;
+      });
+    }
     return window.__perf.settled(start);
-  }, text, MOUNT, language, modeOptions);
+  }, text, MOUNT, language, modeOptions, original);
 
   // Let the initial tokenization finish (it runs in chunks above 64 KB) before typing.
   await new Promise((r) => setTimeout(r, 3000));
+
+  // ── --diff: a diff landing, measured on its own ─────────────────────────────
+  // The first diff came with the mount. A different original (its edits 10 lines on) is a whole
+  // new diff of 250 changes: the time from setting it to the update event, and every long task
+  // and frame until the editor is idle again.
+  if (mode === 'diff') {
+    if (await page.evaluate(() => window.__perfDiffUpdates.count === 0)) throw new Error('The first diff never landed');
+    results.diffMountToFirstDiffMs = await page.evaluate(() => window.__perfDiffUpdates.firstMs);
+    results.diffChanges = await page.evaluate(() => window.__perfDiff.getLineChanges().length);
+    const landingProfiler = profile ? await page.createCDPSession() : null;
+    if (landingProfiler) {
+      await landingProfiler.send('Profiler.enable');
+      await landingProfiler.send('Profiler.setSamplingInterval', { interval: 100 });
+      await landingProfiler.send('Profiler.start');
+      await page.tracing.start({ path: 'dist/perf-diff-landing.trace.json', categories: ['devtools.timeline'] });
+    }
+    const landed = await page.evaluate(async (next) => {
+      const updates = window.__perfDiffUpdates;
+      const landing = { from: performance.now(), frames: [], longTasks: [], recording: true };
+      new PerformanceObserver((list) => list.getEntries().forEach((e) => {
+        if (landing.recording && e.startTime >= landing.from) landing.longTasks.push(e.duration);
+      })).observe({ type: 'longtask' });
+      let last = landing.from;
+      requestAnimationFrame(function tick(now) {
+        landing.frames.push(now - last);
+        last = now;
+        if (landing.recording) requestAnimationFrame(tick);
+      });
+      const before = updates.count;
+      let landedAt = null;
+      const subscription = window.__perfDiff.onDidUpdateDiff(() => { landedAt ??= performance.now() - landing.from; });
+      window.__perfDiff.setOriginalValue(next);
+      while (updates.count === before) await new Promise((resolve) => setTimeout(resolve, 5));
+      const idle = await window.__perf.settled(landing.from);
+      landing.recording = false;
+      subscription.dispose();
+      return {
+        update: landedAt,
+        idle,
+        longestTask: Math.max(0, ...landing.longTasks),
+        longestFrame: Math.max(0, ...landing.frames.slice(1)),
+        changes: window.__perfDiff.getLineChanges().length,
+      };
+    }, editedLines(text, 20, 10));
+    if (landingProfiler) {
+      await page.tracing.stop();
+      const { profile: recorded } = await landingProfiler.send('Profiler.stop');
+      writeFileSync('dist/perf-diff-landing.cpuprofile', JSON.stringify(recorded));
+      printHotFunctions(recorded, 'dist/perf-diff-landing.cpuprofile');
+      await landingProfiler.detach();
+    }
+    results.diffLandToUpdateMs = landed.update;
+    results.diffLandToIdleMs = landed.idle;
+    results.diffLandLongestTaskMs = landed.longestTask;
+    results.diffLandLongestFrameMs = landed.longestFrame;
+    if (landed.changes < 200) throw new Error(`The new diff has ${landed.changes} changes, not about 250`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 
   // ── --semantic: the first answer landing, measured on its own ───────────────
   // Every frame and long task from the moment it is let go until the editor is idle with its
@@ -376,7 +472,8 @@ try {
   const documentLength = () => page.evaluate(() => window.__perfEditor.getValue().length);
   // Line 6 is a line comment: typing there exercises layout and highlighting without opening
   // the completion dropdown, which would take keys of its own.
-  await page.mouse.click(600, 114);
+  // The diff's modified side is the right half of the page.
+  await page.mouse.click(mode === 'diff' ? 800 : 600, 114);
   // Focusing starts the text-input session, and End costs a frame of its own; let both settle.
   await new Promise((r) => setTimeout(r, 1500));
   await page.keyboard.press('End');
@@ -527,9 +624,11 @@ for (const [name, limit] of Object.entries(LIMITS)) {
 }
 console.log(`  ${'longestTaskMs'.padEnd(22)} ${results.longestTaskMs.toFixed(1).padStart(8)} ms`);
 if (mode) {
-  const extra = mode === 'hints'
-    ? ['hintCalls', 'hints', 'lensCalls', 'lenses']
-    : ['semanticLandToIdleMs', 'semanticLandLongestTaskMs', 'semanticLandLongestFrameMs', 'semanticAnswerTokens', 'semanticAnswerKb', 'semanticRequests', 'semanticDeltaRequests'];
+  const extra = mode === 'diff'
+    ? ['diffMountToFirstDiffMs', 'diffChanges', 'diffLandToUpdateMs', 'diffLandToIdleMs', 'diffLandLongestTaskMs', 'diffLandLongestFrameMs']
+    : mode === 'hints'
+      ? ['hintCalls', 'hints', 'lensCalls', 'lenses']
+      : ['semanticLandToIdleMs', 'semanticLandLongestTaskMs', 'semanticLandLongestFrameMs', 'semanticAnswerTokens', 'semanticAnswerKb', 'semanticRequests', 'semanticDeltaRequests'];
   for (const name of extra) {
     if (results[name] !== undefined) console.log(`  ${name.padEnd(26)} ${Number(results[name]).toFixed(name.endsWith('Ms') ? 1 : 0).padStart(8)}`);
   }

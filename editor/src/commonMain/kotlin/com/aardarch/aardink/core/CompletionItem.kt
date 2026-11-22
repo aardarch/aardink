@@ -68,8 +68,8 @@ data class CompletionItem(
 )
 
 /**
- * What a [CompletionItem] completes, for its icon: the eight kinds the aardflex markup language
- * needs, then the rest of Monaco's `CompletionItemKind` (and LSP's) for code.
+ * What a [CompletionItem] completes, for its icon: the eight kinds markup languages
+ * need, then the rest of Monaco's `CompletionItemKind` (and LSP's) for code.
  */
 enum class CompletionKind {
     /** XML element name (e.g. `text`, `layer`). */

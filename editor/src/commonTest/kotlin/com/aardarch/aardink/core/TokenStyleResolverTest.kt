@@ -42,7 +42,7 @@ class TokenStyleResolverTest {
         assertEquals(green, resolver.color(TokenType.Comment))
         assertEquals(blue, resolver.color(NamedTokenType("comment.doc.kotlin")))
         assertEquals(green, resolver.color(NamedTokenType("comment.line")))
-        assertEquals(red, resolver.color(NamedTokenType("tag.aardflex")))
+        assertEquals(red, resolver.color(NamedTokenType("tag.mylang")))
         assertNull(resolver.color(NamedTokenType("text.toy")))
     }
 
@@ -56,7 +56,7 @@ class TokenStyleResolverTest {
     @Test
     fun `Monaco's standard names fall back to the built-in type that colours them`() {
         val resolver = TokenStyleResolver(theme(mapOf(TokenType.TypeName to green, TokenType.StringLiteral to red)))
-        assertEquals(green, resolver.color(NamedTokenType("tag.aardflex")))
+        assertEquals(green, resolver.color(NamedTokenType("tag.mylang")))
         assertEquals(red, resolver.color(NamedTokenType("attribute.value.xml")))
         assertEquals(red, resolver.color(NamedTokenType("regexp")))
     }
@@ -79,7 +79,7 @@ class TokenStyleResolverTest {
     @Test
     fun `bold and decorations reach the span style`() {
         val resolver = TokenStyleResolver(theme(emptyMap(), mapOf(NamedTokenType("tag") to TokenFontStyle(bold = true, underline = true))))
-        val style = resolver.spanStyle(NamedTokenType("tag.aardflex"))!!
+        val style = resolver.spanStyle(NamedTokenType("tag.mylang"))!!
         assertEquals(FontWeight.Bold, style.fontWeight)
         assertTrue(style.textDecoration!!.contains(androidx.compose.ui.text.style.TextDecoration.Underline))
     }

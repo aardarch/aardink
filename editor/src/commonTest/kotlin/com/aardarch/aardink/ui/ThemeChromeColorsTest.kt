@@ -171,4 +171,37 @@ class ThemeChromeColorsTest {
         val scheme = chrome.colorScheme()
         assertEquals(Color(0xFF252526), scheme.surfaceContainerHigh)
     }
+
+    @Test
+    fun `the parser reads the diff keys, and unset ones keep the lane's colours`() {
+        val theme = EditorThemeParser.fromMonacoJson(
+            """{
+              "base": "vs-dark",
+              "rules": [],
+              "colors": {
+                "diffEditor.insertedLineBackground": "#00FF0011",
+                "diffEditor.removedLineBackground": "#FF000012",
+                "diffEditor.insertedTextBackground": "#00FF0023",
+                "diffEditor.removedTextBackground": "#FF000024",
+                "diffEditor.diagonalFill": "#CCCCCC33",
+                "editorGutter.addedBackground": "#00AA00",
+                "editorGutter.modifiedBackground": "#0000AA",
+                "editorGutter.deletedBackground": "#AA0000"
+              }
+            }""",
+        )!!
+        val chrome = theme.chromeColors
+        assertEquals(Color(0x1100FF00), chrome.diffInsertedLine)
+        assertEquals(Color(0x12FF0000), chrome.diffRemovedLine)
+        assertEquals(Color(0x2300FF00), chrome.diffInsertedText)
+        assertEquals(Color(0x24FF0000), chrome.diffRemovedText)
+        assertEquals(Color(0x33CCCCCC), chrome.diffFiller)
+        assertEquals(Color(0xFF00AA00), chrome.gutterAdded)
+        assertEquals(Color(0xFF0000AA), chrome.gutterModified)
+        assertEquals(Color(0xFFAA0000), chrome.gutterDeleted)
+        assertEquals(Color(0xFF00AA00), DiffColors.of(theme).gutterAdded)
+        val plain = DiffColors.of(EditorThemes.VsCodeDark)
+        assertEquals(DiffColors.Default.gutterAdded, plain.gutterAdded, "an unset key draws the lane as before")
+        assertEquals(DiffColors.Default.gutterModified, plain.gutterModified)
+    }
 }

@@ -1126,6 +1126,215 @@ async function triggerCheck(page) {
 }
 
 /**
+ * The extreme pixels of a colour in a screenshot of the page: how far left and right a pure red
+ * (a removed line's background in the theme below) and a pure green (an inserted line's) reach.
+ */
+async function diffPixels(page) {
+  const png = await page.screenshot({ encoding: 'base64' });
+  return page.evaluate(async (png) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, image.width, image.height);
+    const extent = { width: image.width, red: null, green: null };
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const i = (y * image.width + x) * 4;
+        const colour = data[i] > 200 && data[i + 1] < 60 && data[i + 2] < 60 ? 'red'
+          : data[i + 1] > 200 && data[i] < 60 && data[i + 2] < 60 ? 'green' : null;
+        if (!colour) continue;
+        const seen = (extent[colour] ??= { min: x, max: x, count: 0 });
+        seen.min = Math.min(seen.min, x);
+        seen.max = Math.max(seen.max, x);
+        seen.count++;
+      }
+    }
+    return extent;
+  }, png);
+}
+
+/**
+ * createDiffEditor: Monaco's line changes, the next and previous change, a revert, the update event,
+ * typing into the modified side, both sides as editors, the side-by-side and inline views (by the
+ * colour of their lines, from the theme's diffEditor keys), and dispose.
+ */
+async function diffCheck(page) {
+  setPhase('diff editor');
+  const original = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'].join('\n');
+  const modified = ['one', '2', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'].join('\n');
+  const state = await page.evaluate(async (mount, original, modified) => {
+    window.__smokeEditor?.dispose();
+    document.getElementById('check')?.remove();
+    const { createDiffEditor, defineTheme } = window.__aardink;
+    await defineTheme('toy-diff', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'diffEditor.removedLineBackground': '#ff0000',
+        'diffEditor.insertedLineBackground': '#00ff00',
+        'diffEditor.removedTextBackground': '#ff0000',
+        'diffEditor.insertedTextBackground': '#00ff00',
+      },
+    });
+    const updates = { count: 0 };
+    const box = eval(mount);
+    // A breakpoint below the page's width: side by side.
+    const diff = await createDiffEditor(box, { original, modified, theme: 'toy-diff', language: 'plaintext', renderSideBySideInlineBreakpoint: 300 });
+    window.__smokeDiff = diff;
+    window.__diffUpdates = updates;
+    const subscription = diff.onDidUpdateDiff(() => updates.count++);
+    const stray = diff.onDidUpdateDiff(() => {});
+    stray.dispose();
+    window.__diffSubscription = subscription;
+    const started = performance.now();
+    while (updates.count === 0 && performance.now() - started < 10000) await new Promise((resolve) => setTimeout(resolve, 20));
+    return { changes: diff.getLineChanges(), updates: updates.count };
+  }, MOUNT, original, modified);
+  const checks = {};
+  const [first, second] = state.changes;
+  checks['a diff editor reports its changes as Monaco\'s ILineChange'] = state.changes.length === 2 &&
+    first.originalStartLineNumber === 2 && first.originalEndLineNumber === 2 && first.modifiedStartLineNumber === 2 && first.modifiedEndLineNumber === 2 &&
+    first.charChanges?.length >= 1 && first.charChanges[0].originalStartLineNumber === 2 && first.charChanges[0].originalStartColumn === 1 &&
+    first.charChanges[0].modifiedEndColumn === 2;
+  checks['an insertion ends at 0 in the original and has no character changes'] = second.originalStartLineNumber === 8 &&
+    second.originalEndLineNumber === 0 && second.modifiedStartLineNumber === 9 && second.modifiedEndLineNumber === 9 && second.charChanges === undefined;
+
+  await sleep(500);
+  const sideBySide = await diffPixels(page);
+  checks['side by side: removed lines on the left, inserted on the right'] = !!sideBySide.red && !!sideBySide.green &&
+    sideBySide.red.max < sideBySide.width * 0.6 && sideBySide.green.min > sideBySide.width * 0.4;
+
+  const sides = await page.evaluate(() => {
+    const diff = window.__smokeDiff;
+    const left = diff.getOriginalEditor();
+    const right = diff.getModifiedEditor();
+    left.setPosition({ lineNumber: 3, column: 2 });
+    right.setSelections([{ selectionStartLineNumber: 1, selectionStartColumn: 1, positionLineNumber: 1, positionColumn: 4 }]);
+    return {
+      left: left.getValue(),
+      right: right.getValue(),
+      leftPosition: left.getPosition(),
+      rightSelection: right.getSelections()[0],
+      distinct: left !== right,
+      leftReadOnlyEdit: left.executeEdits('smoke', [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, text: 'x' }]),
+    };
+  });
+  checks['both sides are editors: their text, caret and selection'] = sides.left.startsWith('one\ntwo') && sides.right.endsWith('nine') &&
+    sides.leftPosition.lineNumber === 3 && sides.rightSelection.endColumn === 4 && sides.distinct;
+  checks['the original is read-only'] = sides.leftReadOnlyEdit === false;
+
+  // goToDiff and trigger: the caret of the modified side goes to a change.
+  const moves = await page.evaluate(() => {
+    const diff = window.__smokeDiff;
+    const right = diff.getModifiedEditor();
+    right.setPosition({ lineNumber: 1, column: 1 });
+    const lines = [];
+    diff.goToDiff('next'); lines.push(right.getPosition().lineNumber);
+    diff.goToDiff('next'); lines.push(right.getPosition().lineNumber);
+    diff.goToDiff('next'); lines.push(right.getPosition().lineNumber);
+    diff.goToDiff('previous'); lines.push(right.getPosition().lineNumber);
+    right.trigger('smoke', 'editor.action.accessibleDiffViewer.prev', null); lines.push(right.getPosition().lineNumber);
+    const triggered = diff.getOriginalEditor().trigger('smoke', 'workbench.action.compareEditor.nextChange', null);
+    return { lines, triggered, action: right.getAction('editor.action.diffReview.next')?.isSupported() };
+  });
+  checks['goToDiff and the diff editor\'s trigger ids go through the changes, round at the ends'] =
+    JSON.stringify(moves.lines) === JSON.stringify([2, 9, 2, 9, 2]) && moves.triggered === true && moves.action === true;
+
+  // A key into the modified side: the diff is worked out again.
+  const before = await page.evaluate(() => window.__diffUpdates.count);
+  await page.mouse.click(700, 40);
+  await sleep(300);
+  await page.keyboard.down('Control');
+  await page.keyboard.press('End');
+  await page.keyboard.up('Control');
+  await page.keyboard.type('!');
+  await page.waitForFunction((n) => window.__diffUpdates.count > n, { timeout: 10000 }, before);
+  const typed = await page.evaluate(() => ({
+    value: window.__smokeDiff.getModifiedEditor().getValue(),
+    original: window.__smokeDiff.getOriginalEditor().getValue(),
+    last: window.__smokeDiff.getLineChanges().at(-1),
+  }));
+  if (!typed.value.endsWith('nine!')) console.log('  typed into the diff editor:', JSON.stringify(typed));
+  checks['typing in the modified side lands a new diff'] = typed.value.endsWith('nine!') && typed.original.endsWith('eight') &&
+    typed.last.modifiedEndLineNumber === 9 && typed.last.charChanges === undefined;
+
+  // Reverting the first change puts the original's line back, as one undo step.
+  const reverted = await page.evaluate(() => {
+    const diff = window.__smokeDiff;
+    const right = diff.getModifiedEditor();
+    const ok = diff.revertChange(0);
+    const text = right.getValue();
+    const refused = diff.revertChange(99);
+    right.undo();
+    return { ok, text, refused, undone: right.getValue() };
+  });
+  checks['revertChange puts the original\'s lines back, as an undo step'] = reverted.ok === true && reverted.text.split('\n')[1] === 'two' &&
+    reverted.refused === false && reverted.undone.split('\n')[1] === '2';
+
+  // New text, from the host: the update event fires and the changes follow.
+  const replaced = await page.evaluate(async () => {
+    const diff = window.__smokeDiff;
+    const updates = window.__diffUpdates;
+    const n = updates.count;
+    diff.setOriginalValue(diff.getModifiedEditor().getValue());
+    while (updates.count === n) await new Promise((resolve) => setTimeout(resolve, 20));
+    const same = diff.getLineChanges().length;
+    const m = updates.count;
+    diff.setModifiedValue('something\nelse');
+    while (updates.count === m) await new Promise((resolve) => setTimeout(resolve, 20));
+    return { same, now: diff.getLineChanges().length };
+  });
+  checks['setOriginalValue and setModifiedValue land a new diff, and no changes for equal text'] = replaced.same === 0 && replaced.now === 1;
+
+  // Inline, by option and by the breakpoint.
+  await page.evaluate(async () => {
+    const diff = window.__smokeDiff;
+    diff.setOriginalValue('one\ntwo\nthree\nfour');
+    diff.setModifiedValue('one\n2\nthree\nfour');
+    const updates = window.__diffUpdates;
+    const n = updates.count;
+    while (updates.count === n) await new Promise((resolve) => setTimeout(resolve, 20));
+    diff.updateOptions({ renderSideBySide: false });
+  });
+  await sleep(1000);
+  const inline = await diffPixels(page);
+  checks['renderSideBySide: false shows the removed line above the inserted, across the width'] = !!inline.red && !!inline.green &&
+    inline.red.max > inline.width * 0.8 && inline.green.max > inline.width * 0.8;
+  await page.evaluate(() => window.__smokeDiff.updateOptions({ renderSideBySide: true, renderSideBySideInlineBreakpoint: 5000 }));
+  await sleep(1000);
+  const narrow = await diffPixels(page);
+  checks['a container under renderSideBySideInlineBreakpoint shows inline'] = !!narrow.red && narrow.red.max > narrow.width * 0.8;
+  await page.evaluate(() => window.__smokeDiff.updateOptions({ renderSideBySideInlineBreakpoint: 300, hideUnchangedRegions: { enabled: true, contextLineCount: 1 }, originalEditable: true }));
+  await sleep(1000);
+  const back = await diffPixels(page);
+  checks['updateOptions takes the diff editor\'s options back to side by side'] = !!back.red && back.red.max < back.width * 0.6;
+
+  // Dispose: both sides, the elements, and a second call.
+  const disposed = await page.evaluate(async () => {
+    const diff = window.__smokeDiff;
+    const left = diff.getOriginalEditor();
+    const box = document.getElementById('check');
+    diff.dispose();
+    diff.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    let leftThrows = false;
+    try { left.getValue(); } catch { leftThrows = true; }
+    const left2 = (() => { try { diff.getLineChanges(); return false; } catch { return true; } })();
+    const emptied = box.querySelector('[data-aardink-editor]') === null;
+    box.remove();
+    return { leftThrows, left2, emptied };
+  });
+  checks['dispose ends both sides and takes the viewport out'] = disposed.leftThrows && disposed.left2 && disposed.emptied;
+  return checks;
+}
+
+/**
  * A grammar and a theme registered from JavaScript, in Monaco's shapes, colour the text: the
  * keyword `shout` in the theme's magenta, counted by pixel in a screenshot of the editor.
  */
@@ -1247,6 +1456,7 @@ try {
     ...(await searchAndAltKeyCheck(desktop)),
     ...(await providersCheck(desktop)),
     ...(await fontCheck(desktop)),
+    ...(await diffCheck(desktop)),
   };
   Object.assign(interactions, editorChecks);
   for (const [name, ok] of Object.entries(editorChecks)) console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}`);

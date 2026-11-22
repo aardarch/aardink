@@ -1,0 +1,13 @@
+{
+  "defaultToken": "",
+  "tokenPostfix": ".tpl",
+  "tokenizer": {
+    "root": [
+      ["(\\{)([a-zA-Z_]\\w*)(\\.)([a-zA-Z_][\\w.]*)", ["delimiter.expression", "variable.expression", "delimiter", "variable.property"]],
+      ["(\\{)(\\$?[a-zA-Z_]\\w*)", ["delimiter.expression", "variable.expression"]],
+      ["(\\|)(\\s*)([a-zA-Z_]\\w*)", ["operator.pipe", "", "function.filter"]],
+      ["(:)([^|}]*)", ["delimiter", "string.argument"]],
+      [".", ""]
+    ]
+  }
+}

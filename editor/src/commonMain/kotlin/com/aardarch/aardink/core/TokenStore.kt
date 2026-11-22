@@ -116,16 +116,43 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
      * The answer can be as long as the document, and is not an edit's worth of work: this runs on
      * the thread that edits the document, in slices paced by [pacer], and an edit between slices
      * ends it. A line that comes out the same keeps its [LineTokens], and with them its layout, so
-     * what an answer costs on screen is the lines it really changes.
+     * what an answer costs on screen is the lines it really changes. With [onlyLines], the answer is
+     * about those lines alone and the others keep what they had.
      */
-    suspend fun overlay(tokens: List<Token>, snapshot: CodeDocument, pacer: CooperativePacer = CooperativePacer()): Boolean {
+    suspend fun overlay(
+        tokens: List<Token>,
+        snapshot: CodeDocument,
+        pacer: CooperativePacer = CooperativePacer(),
+        onlyLines: IntRange? = null,
+    ): Boolean {
         val lastLine = snapshot.lineCount - 1
-        val buckets = Buckets(snapshot, 0, lastLine)
+        val firstLine = onlyLines?.first?.coerceAtLeast(0) ?: 0
+        val endLine = onlyLines?.last?.coerceAtMost(lastLine) ?: lastLine
+        if (firstLine > endLine) return false
+        val buckets = Buckets(snapshot, firstLine, endLine)
         var steps = 0
         for (token in tokens) {
             buckets.add(token)
             pacer.onProgress(++steps)
             if (document.version != snapshot.version) return false
+        }
+        if (onlyLines != null) {
+            // Committed into the lines as they are now, with nothing suspended between reading and
+            // writing them: another range's answer that landed while this one was paced keeps its own.
+            if (document.version != snapshot.version) return false
+            val current = lines
+            var copy: ArrayList<LineTokens>? = null
+            for (line in firstLine..endLine) {
+                val old = current.getOrNull(line) ?: break
+                val new = buckets.build(line)
+                if (new.sameRuns(old)) continue
+                if (copy == null) copy = ArrayList(current)
+                copy[line] = new
+            }
+            if (copy == null) return false
+            lines = copy
+            flat = null
+            return true
         }
         val replaced = ArrayList<LineTokens>(lastLine + 1)
         var changed = false
@@ -133,7 +160,7 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
             pacer.onProgress(++steps)
             if (document.version != snapshot.version) return false
             val old = lineTokens(line)
-            val new = buckets.build(line)
+            val new = if (line in firstLine..endLine) buckets.build(line) else old
             if (new.sameRuns(old)) {
                 replaced.add(old)
             } else {
@@ -264,7 +291,9 @@ internal class TokenStore(private val document: CodeDocument) : DocumentChangeLi
     private class Buckets(private val document: CodeDocument, private val from: Int, private val to: Int) {
         private val builders = arrayOfNulls<Builder>(to - from + 1)
         private val length = document.length
-        private var line = 0
+
+        // From the first line asked about: a range near the end of a large document does not walk the lines above it.
+        private var line = from.coerceIn(0, (document.lineCount - 1).coerceAtLeast(0))
 
         fun add(token: Token) {
             var start = token.start.coerceAtMost(length)

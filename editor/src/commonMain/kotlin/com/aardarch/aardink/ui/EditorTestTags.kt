@@ -55,6 +55,9 @@ internal object EditorTestTags {
     const val SYMBOL_PICKER = "aardink.symbolPicker"
     const val SYMBOL_PICKER_FIELD = "aardink.symbolPicker.query"
 
+    /** The draggable divider between the two sides of a diff editor. */
+    const val DIFF_DIVIDER = "aardink.diffDivider"
+
     /** The breadcrumbs row. */
     const val BREADCRUMBS = "aardink.breadcrumbs"
 

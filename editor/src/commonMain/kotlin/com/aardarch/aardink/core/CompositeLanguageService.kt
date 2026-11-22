@@ -156,6 +156,9 @@ open class CompositeLanguageService(val primary: LanguageService, val fallback: 
     override suspend fun semanticTokens(document: CodeDocument): List<Token> =
         primary.semanticTokens(document).ifEmpty { fallback.semanticTokens(document) }
 
+    override suspend fun semanticTokens(document: CodeDocument, range: IntRange): List<Token>? =
+        primary.semanticTokens(document, range) ?: fallback.semanticTokens(document, range)
+
     override suspend fun inlayHints(document: CodeDocument, range: IntRange): List<InlayHint> {
         val own = primary.inlayHints(document, range)
         val early = currentCoroutineContext()[EarlyInlayHints] ?: return withHints(own, fallback.inlayHints(document, range))

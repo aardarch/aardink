@@ -132,6 +132,13 @@ data class OverviewRulerColors(
  * - [inlayHint] and [inlayHintBackground] (`editorInlayHint.foreground` and `.background`), and
  *   [codeLens] (`editorCodeLens.foreground`): the text colour at 60 %, a hint on a ground of 8 %.
  * - [ghostText] (`editorGhostText.foreground`): the text colour at 45 %.
+ * - [diffInsertedLine] and [diffRemovedLine] (`diffEditor.insertedLineBackground` and
+ *   `.removedLineBackground`): a diff editor's inserted and removed lines, green and red at 20 %;
+ *   [diffInsertedText] and [diffRemovedText] (`diffEditor.insertedTextBackground` and
+ *   `.removedTextBackground`): the characters that changed inside them, at 30 %; [diffFiller]
+ *   (`diffEditor.diagonalFill`): the rows that keep two sides aligned, the text colour at 8 %.
+ * - [gutterAdded], [gutterModified] and [gutterDeleted] (`editorGutter.addedBackground`,
+ *   `.modifiedBackground` and `.deletedBackground`): the gutter's diff lane, green, blue and red.
  */
 @Immutable
 data class ChromeColors(
@@ -150,6 +157,14 @@ data class ChromeColors(
     val inlayHintBackground: Color = Color.Unspecified,
     val codeLens: Color = Color.Unspecified,
     val ghostText: Color = Color.Unspecified,
+    val diffInsertedLine: Color = Color.Unspecified,
+    val diffRemovedLine: Color = Color.Unspecified,
+    val diffInsertedText: Color = Color.Unspecified,
+    val diffRemovedText: Color = Color.Unspecified,
+    val diffFiller: Color = Color.Unspecified,
+    val gutterAdded: Color = Color.Unspecified,
+    val gutterModified: Color = Color.Unspecified,
+    val gutterDeleted: Color = Color.Unspecified,
 )
 
 /** VS Code's bracket-pair colours for dark themes: gold, orchid, blue. */

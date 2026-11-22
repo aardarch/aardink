@@ -1,4 +1,4 @@
-# Aardink 0.6.0 plan: virtualised editor, feature wave, npm, aardflex switch-over
+# Aardink 0.6.0 plan: virtualised editor, feature wave, npm, web host switch-over
 
 Status: **complete except CMP 1.13** (0.6.2 released 2026-10-12; the CMP 1.13 adoption is
 tracked in [`AARDINK_ROADMAP.md`](AARDINK_ROADMAP.md) §4, which continues this plan). Drafted
@@ -25,14 +25,14 @@ stays as the record of 0.5.0.
 | 12 | Done | F12 and Ctrl/Cmd+click (`EditorPointerHandler.onLinkClick`) go to the definition: in this document it is selected, elsewhere (`Location.range == IntRange.EMPTY`) it goes to `onNavigateToLocation`. Ctrl/Cmd over a symbol with a definition underlines it (`EditorDecorations.link`, asked once per word) with a hand pointer; the text area has the I-beam. `ui/ReferencesPeekPopup.kt` (internal): the references at the caret, arrows/Enter/Escape and click. Shift+Alt+F: `formatRange` for a selection, else `format` reduced by `core/edit/MinimalEdits` (Myers line diff, each run trimmed to the characters that differ; one trimmed edit past 2,000 line edits), one undo step. Context menu: Go to Definition, Find References, Format Document/Selection. Tests: `NavigationUiTest`, `MinimalEditsTest`. |
 | 13 | Done | `ui/view/StickyScrollOverlay.kt`: up to five enclosing ranges (the host's foldable ranges, or the folding provider's when there is no fold state), outermost first, pushed up by their range's end, over the text and carets with their numbers over the gutter; a click scrolls the line to where it was drawn. `ui/view/MinimapView.kt`: 90 columns of 1 dp blocks, 2 dp a row (1 dp above 10,000 rows), `ImageBitmap` tiles of 256 rows validated per row (line, token identity, text hash) and drawn only on screen, LRU of 16; scrolls in proportion with the editor, press to jump, drag the slider. `EditorBody` has a minimap slot; the scrollbar sits at the far right. Web: `minimap` and `stickyScroll` in `WebEditorOptions` (moved up from PR 14), Monaco-shaped in `index.js`. Gate: `perf.mjs` `minimapFrameCostMs` (Chrome TaskDuration per frame with the minimap minus without, same scroll): 0.1–0.5 ms, gate 2 ms. Tests: `StickyScrollTest`, `MinimapGeometryTest`, `MinimapTilesTest`, `scene-sticky` and `scene-minimap`. |
 | 14 | Done, but CMP 1.13 | **Grammars:** `DeclarativeGrammar.parse` (Monarch subset: states, rules, `cases` with `@array`/`@default`/`@eos`/regex guards, groups, `include`, `@rematch`, `@pop`/`@push`/`@popall`, `defaultToken`, `ignoreCase`, `tokenPostfix`, `@name` regex attributes, `comments`; lookbehind rejected with its path), `DeclarativeTokenizer` (line-stateful; rescans until a line ends in its old stack), `NamedTokenType` (comments and strings get the built-in types) and `DeclarativeGrammar.tokenNames`. **Web:** `registerLanguage(definitionJson, WebLanguageProviders)` with `extends`, `registerTheme(name, json)` (base by `type` or `base`), names coloured by dotted prefix then Monaco's standard names; shared registries by default; `getSelections`/`setSelections` (`WebSelection`), `canUndo`, `canRedo`, `pushUndoStop`, `getAlternativeVersionId`, `setBaseline`, `format`, `focus`, `onContentChange`, `tokenize`, `preloadFont`; options `bracketPairColorization`, `highlightCurrentLine`, `tabSize`, `insertSpaces` (`minimap`, `stickyScroll` in PR 13); all in both export copies, `index.js` (`registerLanguage`, `defineTheme`/`registerTheme`, `tokenize`, Monaco option shapes) and `index.d.ts`. **W-9:** a new editor waits up to 500 ms for its font; **W-8:** a density or font-scale change is a new `ViewStyle`, which clears the layout cache (tested); **W-1:** the editor mounts into an element of its own that `dispose` removes; **W-5:** host CSS documented. **Still to do on CMP 1.13 (not stable yet):** adopt it, and the 50-cycle heap test. **Deviation:** the colour lookup by dotted prefix lives in `:editor-web`, next to the theme registry, so `:editor` gains no API for it. |
-| 16 | Done | `MIGRATION_0.6.md` final, with the aardflex Android upgrade as its example; CHANGELOG `[Unreleased]` ordered as the 0.6.0 notes, with known issues; README feature and platform matrix; `WEB_INTEGRATION.md` re-measured (W-1 now ~320 KB per disposed editor on CMP 1.12), npm install, Monaco rows for `revealPosition`, snippets, whitespace and fonts; `AGENTS.md` layout and rendering rules; `AARDFLEX_WEB_SWITCHOVER.md` replaces KMP §11; the npm README. KDoc: every public symbol added since 0.5.0 has it (checked against the ABI dumps). **Found while writing the runbook, and fixed:** Monarch group actions with their own `next` and `cases` (aardflex's grammar uses both; `DeclarativeGrammarTest` now runs aardflex's own Monaco test cases), `tokenize` names the editor's own types as Monaco does (`comment`, `string`, `delimiter`), and `index.d.ts` accepts `fontStyle` in theme rules. **Not done, needs an API decision:** snippet placeholders in completions (caret placement), and theme colours for `comment.*`/`string.*` sub-names. |
-| 17 | rc1 out | `v0.6.0-rc1` published 2026-09-27: Maven Central (all four libraries), npm `next` with provenance (`latest` stays 0.5.0), GitHub pre-release with the APK, the web sample and the API docs. CI on `main` caught what no local run did: Linux Chrome threw `lineIndex(1) is out of bounds [0, 1)` from the composition underline, because skiko's `getLineForOffset` and `lineCount` can disagree; rows from `getLineForOffset` are now clamped (`rowFor`), and the smoke test names the step and the `.wasm` hashes with a page error. `v0.6.0-rc2` published 2026-10-01 with PRs 18–20, the same way. `v0.6.0-rc3` published 2026-10-01 with the fixes and APIs the aardflex web app needed (load retry, container size, find focus, trigger characters, `inheritCompletions`, completion `range`/`filterText`/`sortText`, `revalidate`, `replaceValue`/`executeEdits`, themed popups). aardflex-web-app and the aardflex Android app are on rc3. Next: `v0.6.0`. |
+| 16 | Done | `MIGRATION_0.6.md` final, with an Android host upgrade as its example; CHANGELOG `[Unreleased]` ordered as the 0.6.0 notes, with known issues; README feature and platform matrix; `WEB_INTEGRATION.md` re-measured (W-1 now ~320 KB per disposed editor on CMP 1.12), npm install, Monaco rows for `revealPosition`, snippets, whitespace and fonts; `AGENTS.md` layout and rendering rules; `WEB_INTEGRATION.md` replaces KMP §11; the npm README. KDoc: every public symbol added since 0.5.0 has it (checked against the ABI dumps). **Found while writing the runbook, and fixed:** Monarch group actions with their own `next` and `cases` (`DeclarativeGrammarTest` now runs Monaco test cases that use both), `tokenize` names the editor's own types as Monaco does (`comment`, `string`, `delimiter`), and `index.d.ts` accepts `fontStyle` in theme rules. **Not done, needs an API decision:** snippet placeholders in completions (caret placement), and theme colours for `comment.*`/`string.*` sub-names. |
+| 17 | rc1 out | `v0.6.0-rc1` published 2026-09-27: Maven Central (all four libraries), npm `next` with provenance (`latest` stays 0.5.0), GitHub pre-release with the APK, the web sample and the API docs. CI on `main` caught what no local run did: Linux Chrome threw `lineIndex(1) is out of bounds [0, 1)` from the composition underline, because skiko's `getLineForOffset` and `lineCount` can disagree; rows from `getLineForOffset` are now clamped (`rowFor`), and the smoke test names the step and the `.wasm` hashes with a page error. `v0.6.0-rc2` published 2026-10-01 with PRs 18–20, the same way. `v0.6.0-rc3` published 2026-10-01 with the fixes and APIs a Monaco web host needed (load retry, container size, find focus, trigger characters, `inheritCompletions`, completion `range`/`filterText`/`sortText`, `revalidate`, `replaceValue`/`executeEdits`, themed popups). Next: `v0.6.0`. |
 | 18 | Done | Whitespace: `EditorOptions.renderWhitespace` (`RenderWhitespace` None/Boundary/Selection/Trailing/All, `Selection` by default as in VS Code), `EditorTheme.whitespaceColor` (`editorWhitespace.foreground`), dots and arrows drawn under the text per character box (`ui/view/EditorWhitespace.kt`); tabs laid out to the next `tabSize` stop (text placeholders, so offsets stay one per character); web `renderWhitespace`; `scene-whitespace`. Closes the PR 8 note. |
 | 19 | Done | Snippets as Monaco's `InsertAsSnippet`: `CompletionItem.isSnippet` / `keepWhitespace`; `core/edit/Snippet.kt` (tab stops, nested placeholders, mirrors, choices, `TM_` variables, escapes; malformed text literal), `SnippetSession` (ranges kept through edits, the current stop growing at its edges); Tab/Shift+Tab, Escape, choice list, stop highlight; built-in Kotlin/XML/TOML/JSON items and LSP `insertTextFormat` 2 as snippets; web `insertTextRules` and `CompletionItemInsertTextRule`. Closes the PR 16 snippet note. |
 | 20 | Done | Token sub-names and font styles as Monaco's token themes: `TokenType.scope`, `NamedTokenType` moved to `:editor`, longest-prefix lookup (`core/TokenStyleResolver.kt`) with Monaco's standard-name aliases, `TokenFontStyle` / `EditorTheme.tokenFontStyles`; comment/string by name part (Monaco's `StandardTokenType`); the parser takes each built-in type's most general rule and maps `keyword.control`, `comment.block.documentation`, `constant.character.escape`, `string.regexp` to Monaco's names; Kotlin/TS `comment.doc`, `keyword.flow`, `number.hex/binary/float`, `string.escape` (also JSON, TOML); Dark+/Light+ sub-name colours; `:editor-web`'s own name lookup removed. TypeScript `regexp` literals are not tokenized (division is ambiguous without a parser). Closes the PR 16 theme note. |
 | CMP | Decided 2026-10-01 | 0.6.0 ships on CMP 1.12.x with W-1 as a known issue; 1.13 in 0.6.1. |
-| A1–A3 | Done on rc2/rc3 | `aardflex-web-app` switch-over (§7.1), recorded in that repo's `specs/editor-grammar-migration.md`. A2 merged into A3 on rc2; Monaco is gone, the app runs `0.6.0-rc3` (pinned; `^0.6.0` once final ships), released as 0.3.0. The grammar is now shared: `aardflex/shared/grammar/` feeds both apps, and `AardflexGrammarTest` (`languages/src/jvmTest/`) checks a copy against its golden tokens. Still open there: phone hands-on checks, `.wasm` content type on a preview channel. |
-| B1 | Done on rc3 | `aardflex` Android upgrade 0.4.0 → 0.6.0-rc3 merged (aardflex PR #88), highlighting with `DeclarativeTokenizer` over the shared grammar. Still open: the manual Gboard, Samsung and TalkBack checks, and the bump to `0.6.0` final. |
+| A1–A3 | Done on rc2/rc3 | Web host switch-over (§7.1). A2 merged into A3 on rc2; Monaco is gone from the host and it runs `0.6.0-rc3`. Still open: phone hands-on checks, `.wasm` content type on a preview channel. |
+| B1 | Done on rc3 | Android host upgrade 0.4.0 → 0.6.0-rc3 merged, highlighting with `DeclarativeTokenizer` over a shared grammar. Still open: the manual Gboard, Samsung and TalkBack checks, and the bump to `0.6.0` final. |
 
 ## 1. Why
 
@@ -84,7 +84,7 @@ plain audit turned up more gaps behind them:
     `CodeDocument`, which is a data race on Android and JVM.
   - Changing the language on the web rebuilds `CodeEditorState` and loses undo history.
 - **Delivery:** `@aardarch/aardink-web` is built and tested but not published anywhere, and
-  `aardflex-web-app` still runs Monaco.
+  web hosts still run Monaco.
 
 ## 2. Decisions (made 2026-09-27)
 
@@ -93,7 +93,7 @@ plain audit turned up more gaps behind them:
 | Renderer | One virtualised renderer and our own text-input layer on **all** platforms (Android, desktop JVM, wasmJs). One code path; the whole-document `BasicTextField` goes away. |
 | API compatibility | **Clean break in 0.6.0** plus `docs/MIGRATION_0.6.md`. No deprecation bridge. Every new public symbol is listed in §5 for approval. |
 | Features | Multi-cursor (Ctrl/Cmd+D, Ctrl+Shift+L, Alt+click, column selection), Ctrl+/ comment toggle, minimap, go-to-definition / references peek / format UI, bracket-pair colouring, sticky scroll. Also: hover wired, automatic diagnostics, current-line highlight, bracket matching, caret-anchored popups, find replace mode. |
-| Web delivery | Publish `@aardarch/aardink-web` to **public npmjs** from `release.yml`. `aardflex-web-app` consumes it from npm and drops Monaco; this is the final phase. |
+| Web delivery | Publish `@aardarch/aardink-web` to **public npmjs** from `release.yml`. Web hosts consume it from npm and drop Monaco; this is the final phase. |
 
 ### Follow-up decisions (settled 2026-09-27)
 
@@ -251,7 +251,7 @@ and two accessibility nodes.
 
 ### 4.4a Undo and redo, modelled on Monaco
 
-Monaco (checked against `monaco-editor` 0.55.1's `editor.api.d.ts` in aardflex-web-app) keeps
+Monaco (checked against `monaco-editor` 0.55.1's `editor.api.d.ts`) keeps
 its undo stack private and gives hosts a small, stable surface:
 
 | Monaco | What it does | Aardink 0.6.0 |
@@ -392,7 +392,7 @@ composables keep their signatures.
   - `CodeEditorLayout(diagnostics = null)` means the editor runs `languageService.diagnostics`
     on a snapshot, 500 ms after the last edit, guarded by document version and cooperative on
     wasm.
-  - A non-null list means the host supplied it; the service is not asked. aardflex keeps this
+  - A non-null list means the host supplied it; the service is not asked. Hosts keep this
     behaviour.
   - Ranges are mapped through edits until the next run, and `onDiagnosticsChange` reports each
     new list.
@@ -424,7 +424,7 @@ composables keep their signatures.
 
 ### 4.8 Web: languages and themes registered from JavaScript
 
-`aardflex-web-app` needs its own grammar, theme and completions. It should get them without
+A web host needs its own grammar, theme and completions. It should get them without
 building its own wasm executable.
 
 - **`:languages` → `DeclarativeGrammar` + `DeclarativeTokenizer`**, a Monarch subset:
@@ -432,7 +432,7 @@ building its own wasm executable.
     `cases` with `@array`/`@default`; `defaultToken`.
   - The tokenizer is line-stateful, so it is truly incremental.
   - Lookbehind is **rejected at parse time**, with the offending path in the error.
-  - `NamedTokenType` resolves colours by dotted prefix, so `tag.aardflex` falls back to `tag`.
+  - `NamedTokenType` resolves colours by dotted prefix, so `tag.mylang` falls back to `tag`.
 - **`:editor-web`:**
   - `registerLanguage(definitionJson, providers)`, with `extends: "xml"` so a language
     inherits a built-in language service.
@@ -766,7 +766,7 @@ Nothing from PR 5 onward starts until S1–S3 pass.
 ### PR 15 — npmjs publishing (lands early: right after PR 1)
 
 Nothing here depends on the renderer, so it lands second. The first automated publish is then
-`0.6.0-rc1`, and aardflex-web-app can install from npm as soon as that exists.
+`0.6.0-rc1`, and web hosts can install from npm as soon as that exists.
 
 **Pattern reused from `sjohansson/astro-components`**, whose `.github/workflows/release.yml`
 publishes `@sjohansson/*` with OIDC today:
@@ -875,8 +875,8 @@ What differs here: no Changesets. Versions come from `VERSION_NAME` through the 
 
 ### PR 16 — Documentation
 
-- **`docs/MIGRATION_0.6.md`:** before/after for every §5 removal or change, plus an aardflex
-  example.
+- **`docs/MIGRATION_0.6.md`:** before/after for every §5 removal or change, plus an Android host
+  upgrade example.
 - **CHANGELOG `[0.6.0]`**, and a README feature and platform matrix.
 - **`WEB_INTEGRATION.md`:** W-1…W-10 re-run with new numbers, the Monaco mapping rows (minimap,
   bracket pairs, multi-cursor now mapped; `revealPosition` centring), and install from npmjs.
@@ -885,76 +885,69 @@ What differs here: no Changesets. Versions come from `VERSION_NAME` through the 
   - Rendering rules: never lay out the whole document; no `document.text` in per-frame paths;
     no lookbehinds, also in grammars.
 - **KDoc** for every new symbol.
-- **`docs/AARDFLEX_WEB_SWITCHOVER.md`** replaces `KMP_MIGRATION_PLAN.md` §11.
+- **`docs/WEB_INTEGRATION.md`** replaces `KMP_MIGRATION_PLAN.md` §11.
 
 ### PR 17 — Release
 
-1. Tag `v0.6.0-rc1`. It goes to Maven Central and npm `next`, and aardflex-web-app A1 tests
+1. Tag `v0.6.0-rc1`. It goes to Maven Central and npm `next`, and a web host's A1 tests
    against it.
 2. The manual real-device checklist: W-2, W-4, W-5, W-6, W-8, W-9, TalkBack and NVDA.
 3. Tag `v0.6.0` through `create-release.ps1` and `release.ps1`, as for 0.5.0.
 
 ## 7. Downstream
 
-### 7.1 aardflex-web-app (`C:\repos\aardarch\aardflex-web-app`: Svelte, Vite, pnpm, `monaco-editor ^0.55.1`)
+### 7.1 Monaco web hosts
 
-The runbook, with the code, is [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md).
+A web host that runs Monaco switches to `@aardarch/aardink-web` from npm and registers its
+language from JavaScript (§4.8). The runbook is `docs/WEB_INTEGRATION.md`.
 
-The old §11 had aardflex-web-app build its own Gradle wasm executable. That design is dropped,
-for two reasons: `XmlTokenizer` is an `object` and cannot be extended, and it would put a JDK
-and Gradle into that repo's CI. The app now consumes npm and registers its language from
-JavaScript (§4.8).
+The earlier design had each web host build its own Gradle wasm executable. That design is
+dropped, for two reasons: `XmlTokenizer` is an `object` and cannot be extended, and it would put
+a JDK and Gradle into the host's CI.
 
-**A1 — behind `VITE_EDITOR=monaco|aardink`** (default `monaco`):
+The switch-over runs in three steps:
 
-1. `pnpm add @aardarch/aardink-web@^0.6.0` (the rc from npm `next` first).
-2. Move `ELEMENTS`, `ATTRIBUTES`, `MODULE_TYPES`, `TEXT_STYLES` and `TRANSFORMS` into
-   `src/editor/aardflexData.ts`, shared by both editors.
-3. Add three files under `src/editor/aardink/`:
-   - **`aardflexGrammar.ts`:** a direct port of the Monarch states in `setup.ts:261-346` —
-     root, tag, attrValueDouble/Single, comment, metatag, expression.
-   - **`aardflexTheme.ts`:** the 8 rules plus `#1E1E2E`. Bold is dropped, because
-     `EditorTheme` is colour-only.
-   - **`aardflexCompletions.ts`:** a port of `setup.ts:368-447`. Snippet `$1` placeholders
-     become plain text plus caret placement.
-4. Register everything with `registerLanguage({ id: 'aardflex-xml', extends: 'xml', grammar, completionProvider, comments: { block: ['<!--', '-->'] } })`.
-   The language inherits XML diagnostics, auto-close and tag folding.
-5. `src/editor/index.ts` picks `import('./monaco')` or `import('./aardink')` by the flag. The
-   dynamic import keeps Monaco out of the Aardink bundle.
-6. `EditorPane.svelte`:
-   - `onMount(async …)`, with a guard for unmount before the promise resolves.
-   - Keep the `applyingExternal` echo guard.
-   - Keep one pane mounted and switch files with `setValue`, and never move its container in
-     the DOM (§4.8).
-7. `vite.config.ts`: `optimizeDeps.exclude: ['@aardarch/aardink-web']`. The Monaco include and
-   the worker import move behind the flag.
-8. `firebase.json`: `application/wasm`, and long cache headers for hashed assets.
-9. **Tests:**
-   - Keep `setup.test.ts` for Monaco.
-   - Add a browser golden test calling `tokenize('aardflex-xml', fixture)`.
-   - Record the bundle size against Monaco.
+- **A1, behind a build flag** (default Monaco):
+  1. `pnpm add @aardarch/aardink-web@^0.6.0` (the rc from npm `next` first).
+  2. Keep the language's data tables (elements, attributes, transforms and so on) in one module
+     shared by both editors.
+  3. Port the Monarch grammar, the theme and the completions to a grammar, a theme and a
+     `completionProvider` for the new editor. Bold is dropped from the theme, because
+     `EditorTheme` is colour-only, and snippet `$1` placeholders become plain text plus caret
+     placement.
+  4. Register them with `registerLanguage({ id: 'mylang-xml', extends: 'xml', grammar, completionProvider, comments: { block: ['<!--', '-->'] } })`.
+     The language inherits XML diagnostics, auto-close and tag folding.
+  5. Pick `import('./monaco')` or `import('./aardink')` by the flag. The dynamic import keeps
+     Monaco out of the Aardink bundle.
+  6. In the editor component: mount asynchronously, with a guard for unmount before the promise
+     resolves; keep the `applyingExternal` echo guard; keep one pane mounted and switch files with
+     `setValue`, and never move its container in the DOM (§4.8).
+  7. Vite: `optimizeDeps.exclude: ['@aardarch/aardink-web']`; the Monaco include and the worker
+     import move behind the flag. Serve `.wasm` as `application/wasm`, with long cache headers
+     for hashed assets.
+  8. Tests: keep the Monaco tokenizer tests, and add a browser golden test calling
+     `tokenize('mylang-xml', fixture)`. Record the bundle size against Monaco.
+- **A2:** default the flag to Aardink and soak for one release.
+- **A3:** remove Monaco and the flag.
 
-**A2** — default the flag to `aardink` and soak for one release.
+**Acceptance:** type check, tests and build green, golden tokens identical to Monaco's on the
+fixtures, and bundle size recorded.
 
-**A3** — remove Monaco, the Monaco half of `setup.ts`, and the flag; update `specs/ui.md`.
+### 7.2 Android hosts
 
-**Acceptance:** `pnpm check`, `pnpm test` and `pnpm build` green, golden tokens identical to
-Monaco's on the fixtures, and bundle size recorded.
+An Android host on Aardink 0.4.0 upgrades like this:
 
-### 7.2 aardflex Android app (`C:\repos\aardarch\aardflex`, Aardink 0.4.0)
-
-- Bump `aardink = "0.6.0"` in `apps/android/aardflex/v1.0/gradle/libs.versions.toml`, skipping
-  0.5.0. The artifacts resolve to `-android` automatically.
-- `ui/screen/XmlEditorScreen.kt:195`: move to `EditorOptions` if decision 1 is A. Its explicit
-  `diagnostics` list keeps its host-supplied meaning.
-- `ui/theme/AardflexEditorTheme.kt`: drop any `fontFamily`/`fontSize`/`lineHeight` arguments.
-- `ui/screen/XmlEditorScreen.kt:94,100`: `codeEditorState.undoManager.canUndo`/`canRedo` become
-  `codeEditorState.canUndo`/`canRedo`.
-- `service/XmlIncrementalTokenizer.kt` still compiles and stays correct: it passes its own augmented
-  list back as `previousTokens`, which the built-in XML tokenizer does not recognise, so every
-  pass is a full scan (as in 0.5). Replace it with `DeclarativeTokenizer` over the web app's
-  grammar JSON, so there is one grammar and it is incremental.
-- Re-run its screenshots, plus a manual IME and TalkBack pass. This upgrade is also the proof of
+- Bump `aardink = "0.6.0"` in its version catalogue, skipping 0.5.0. The artifacts resolve to
+  `-android` automatically.
+- Move any boolean flags to `EditorOptions` if decision 1 is A. An explicit `diagnostics` list
+  keeps its host-supplied meaning.
+- Drop any `fontFamily`/`fontSize`/`lineHeight` arguments from its `EditorTheme`.
+- `codeEditorState.undoManager.canUndo`/`canRedo` become `codeEditorState.canUndo`/`canRedo`.
+- A host tokenizer that passes its own augmented list back as `previousTokens` still compiles and
+  stays correct, but the built-in XML tokenizer does not recognise that list, so every pass is a
+  full scan (as in 0.5). Replace it with `DeclarativeTokenizer` over a shared grammar JSON, so
+  there is one grammar and it is incremental.
+- Re-run its screenshots, plus a manual IME and TalkBack pass. The upgrade is also the proof of
   the migration guide.
 
 ## 8. Risks
@@ -972,7 +965,7 @@ Monaco's on the fixtures, and bundle size recorded.
 | Slow regexes in registered grammars on wasm. | Lookbehind rejected; a line-stateful tokenizer scans only the current state's rules; the cooperative pass. |
 | Scope creep. | Cut line after PR 12; features are independent PRs after the switch-over. |
 | npm publish failures (trusted-publisher mismatch, provenance, npm CLI version). | The bootstrap runbook in PR 15; `repository.url` pinned; `npm@latest` in the job; publint and attw in CI; an idempotent publish step; the rc goes to `next` first. |
-| The clean break hurts consumers. | The migration guide, and we do the aardflex upgrade ourselves (§7.2). |
+| The clean break hurts consumers. | The migration guide, and we upgrade a consumer ourselves (§7.2). |
 
 ## 9. Verification
 
@@ -985,6 +978,6 @@ Monaco's on the fixtures, and bundle size recorded.
   CDP IME, clipboard and touch.
 - **Pixels:** Roborazzi, under the §6 PR 7 re-baseline policy.
 - **Devices, before `v0.6.0`:** Android (Gboard, Samsung), Windows and macOS desktop, Chrome,
-  Firefox and Safari; iOS Safari and Android Chrome for W-2/W-4/W-5; TalkBack and NVDA.
-- **Downstream:** aardflex-web-app A1 green against `0.6.0-rc1` from npm `next`; aardflex
+- **Downstream:** a web host green against `0.6.0-rc1` from npm `next`; an Android host
+  builds and passes its screenshots on 0.6.0.
   Android builds and passes its screenshots on 0.6.0.

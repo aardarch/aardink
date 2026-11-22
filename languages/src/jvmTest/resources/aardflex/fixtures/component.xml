@@ -1,5 +1,0 @@
-<component name="clock" category="Time">
-  <column gap="4">
-    <text>{dt:time:HH:mm}</text>
-  </column>
-</component>

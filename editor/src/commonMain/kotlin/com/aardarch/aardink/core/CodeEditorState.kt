@@ -146,6 +146,19 @@ class CodeEditorState(
         if (store.overlay(tokens, snapshot)) semanticVersion++
     }
 
+    /**
+     * Shows [tokens], the language service's answer about lines [lines] of [snapshot] alone, ahead of
+     * its answer about the whole text: the other lines keep what they show. An answer with no
+     * tokens clears the lines it covers of tokens an earlier answer left there.
+     */
+    internal suspend fun applySemanticTokensToLines(tokens: List<Token>, snapshot: CodeDocument, lines: IntRange) {
+        if (document.version != snapshot.version) return
+        // An empty answer says the lines have no tokens: it clears what an earlier answer left there, if anything.
+        if (tokens.isEmpty() && semanticStore == null) return
+        val store = semanticStore ?: TokenStore(document).also { semanticStore = it }
+        if (store.overlay(tokens, snapshot, onlyLines = lines)) semanticVersion++
+    }
+
     /** Back to the syntax colours alone. */
     internal fun clearSemanticTokens() {
         val store = semanticStore ?: return
@@ -611,6 +624,90 @@ class CodeEditorState(
         if (lenses == lensTracker.items) return
         lensTracker.replace(lenses)
         inlineChanged()
+    }
+
+    /**
+     * Rows a diff shows on lines of this document that are not its text: another document's deleted
+     * lines and blank filler rows, by line, each already styled. Rows above a line are
+     * [com.aardarch.aardink.ui.view.Injection.isRowAbove]; rows after the last line are injected at
+     * its end. An edit moves them with the lines below it and drops those on the lines it replaced,
+     * until the diff is worked out again.
+     */
+    internal val diffRows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>> get() = rowTable
+
+    /** [diffRows], changed in place: a patch or an edit within a line touches only its own lines. */
+    private var rowTable = HashMap<Int, List<com.aardarch.aardink.ui.view.Injection>>()
+
+    /**
+     * What runs [EditorCommand.NextChange], [EditorCommand.PreviousChange] and
+     * [EditorCommand.RevertChange], installed by a diff editor while it shows this state; null
+     * elsewhere, which leaves their keys to the host.
+     */
+    internal var diffCommands: ((EditorCommand) -> Boolean)? by mutableStateOf(null)
+
+    /** Told which lines' [diffRows] changed, other than by an edit moving them. */
+    internal var diffListeners: List<(lines: List<Int>) -> Unit> = emptyList()
+
+    /** Shows [rows] in place of those before. */
+    internal fun publishDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>>) {
+        val before = rowTable
+        if (rows == before) return
+        rowTable = HashMap(rows)
+        val changed = (before.keys + rows.keys).filter { before[it] != rows[it] }.sorted()
+        if (changed.isNotEmpty()) diffListeners.forEach { it(changed) }
+    }
+
+    /**
+     * Puts [rows] on their lines in place of what those had, a null or empty list clearing one, and
+     * leaves every other line as it is. What [publishDiffRows] does for a few lines, without
+     * comparing the rest.
+     */
+    internal fun patchDiffRows(rows: Map<Int, List<com.aardarch.aardink.ui.view.Injection>?>) {
+        if (rows.isEmpty()) return
+        val changed = ArrayList<Int>()
+        for ((line, list) in rows) {
+            if (list.isNullOrEmpty()) {
+                if (rowTable.remove(line) != null) changed += line
+            } else if (rowTable[line] != list) {
+                rowTable[line] = list
+                changed += line
+            }
+        }
+        if (changed.isEmpty()) return
+        changed.sort()
+        diffListeners.forEach { it(changed) }
+    }
+
+    private val diffRowMover = DocumentChangeListener { change ->
+        if (rowTable.isEmpty()) return@DocumentChangeListener
+        if (change.isReset) {
+            rowTable = HashMap()
+            return@DocumentChangeListener
+        }
+        if (change.lineDelta == 0 && change.removedLines == 0) {
+            // Typing within a line: only that line's rows can change, and no other line moves.
+            val rows = rowTable[change.startLine] ?: return@DocumentChangeListener
+            val kept = rows.filter { it.isRowAbove }
+            when {
+                kept.size == rows.size -> Unit
+                kept.isEmpty() -> rowTable.remove(change.startLine)
+                else -> rowTable[change.startLine] = kept
+            }
+            return@DocumentChangeListener
+        }
+        val replacedEnd = change.startLine + change.removedLines
+        val moved = HashMap<Int, List<com.aardarch.aardink.ui.view.Injection>>(diffRows.size)
+        for ((line, rows) in diffRows) {
+            when {
+                line < change.startLine -> moved[line] = rows
+
+                line > replacedEnd -> moved[line + change.lineDelta] = rows
+
+                // Rows above the first changed line stay with it; any others there went with the text.
+                line == change.startLine -> rows.filter { it.isRowAbove }.takeIf { it.isNotEmpty() }?.let { moved[line] = it }
+            }
+        }
+        rowTable = moved
     }
 
     /** Told which lines' ghost text changed, other than by an edit moving it. */
@@ -1671,6 +1768,7 @@ class CodeEditorState(
         document.addChangeListener(contentRecorder)
         document.addChangeListener(symbolTracker)
         document.addChangeListener(decorationMover)
+        document.addChangeListener(diffRowMover)
         document.addChangeListener(hintTracker)
         document.addChangeListener(lensTracker)
         document.addChangeListener(colorTracker)

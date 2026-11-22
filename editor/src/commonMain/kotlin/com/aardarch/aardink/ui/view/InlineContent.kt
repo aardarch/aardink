@@ -135,7 +135,8 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
 
     /** Whether no line has anything to show. */
     val isEmpty: Boolean
-        get() = lenses.all.isEmpty() && state.inlineCompletions.shown == null && current().let { it.lines.isEmpty() && it.wide.isEmpty() }
+        get() = lenses.all.isEmpty() && state.inlineCompletions.shown == null && state.diffRows.isEmpty() &&
+            current().let { it.lines.isEmpty() && it.wide.isEmpty() }
 
     /** What [line] shows besides its text: what [EditorView.injections] is set to, and always this one function. */
     val lookup: (Int) -> LineInjections? = { line -> lineAnswer(line) }
@@ -253,6 +254,15 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
     }
 
     /**
+     * What [line] shows, [others] being all but a diff's rows. Those come first: a deleted line is
+     * above everything that belongs to the line below it, its lenses too.
+     */
+    private fun withDiff(line: Int, others: LineInjections?): LineInjections? {
+        val rows = state.diffRows[line] ?: return others
+        return LineInjections.of(rows + others?.items.orEmpty(), others?.colors.orEmpty())
+    }
+
+    /**
      * What [line] shows, [others] being all but its ghost text. That comes first among what is at its
      * column, so that it follows the caret straight away, with a hint there after it.
      */
@@ -298,7 +308,7 @@ internal class InlineContent(private val state: CodeEditorState, private val onC
 
     private fun lineAnswer(line: Int): LineInjections? {
         val shown = current()
-        val own = withGhost(line, withLenses(line, shown.lines[line]))
+        val own = withDiff(line, withGhost(line, withLenses(line, shown.lines[line])))
         if (shown.wide.isEmpty()) return own
         val lineStart = document.lineStart(line)
         val lineEnd = document.lineEnd(line)

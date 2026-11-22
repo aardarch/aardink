@@ -1,0 +1,8 @@
+<note><![CDATA[ literal {user.name} | x
+a ] b ]] c
+]]></note>
+<!-- <![CDATA[ not cdata --><item/>
+<note>
+  {count
+  | pad}
+</note>

@@ -14,12 +14,12 @@
   limitations under the License.
 -->
 
-# Aardink roadmap: 0.6.3 to 1.0
+# Aardink roadmap
 
-Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-14. Continues
-[`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §10, facts
-about the code are as of `v0.6.2` (commit `3fbaef6`) and facts about the aardflex apps are as of
-the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 0.6.2 open).
+Status: **in progress**, drafted 2026-10-22; the table below is current as of 2026-11-22. Continues
+[`AARDINK_0.6_PLAN.md`](AARDINK_0.6_PLAN.md), which stays as the record of 0.6. In §1 to §8, facts
+about the code are as of `v0.6.2` (commit `3fbaef6`); §9, from 0.12 on, is as of `v0.11.0`. There
+is no 1.0: each release raises the minor (§9).
 
 ## Progress
 
@@ -28,9 +28,14 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
 | 0.6.3 | Released 2026-10-22 | §4 items 1–5: function keys on the web, regex replacement groups, the semantics `setText` window, the `updateOptions` KDoc, CMP 1.12.2. CMP 1.13 waits for its stable release. |
 | 0.7 | Released 2026-10-24 (0.7.1 on 2026-11-01) | §5 items 5.1 to 5.10, with the web side of each. Ledger approved 2026-10-22 (§11); what was built where it differs from it, and the symbols the ledger did not name, are in §11.1. `docs/MIGRATION_0.7.md`. JVM 706 tests, browser 648, all green. |
 | 0.8 | Released 2026-11-02 | §6 items 6.1 to 6.10, with the web side of each. Ledger approved as a whole 2026-11-01 (§14); what was built where it differs, and the symbols it did not name, are in §14.1. `docs/MIGRATION_0.8.md`. JVM 798 tests, browser 726, all green; pre-push passes. Scope: document symbols, decorations, overview ruler, occurrences, linked editing, links, colour decorators, folding markers, keybindings as data, zoom. |
-| 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. Still open after release: the Android device check (§15.1) and the aardflex apps' builds against 0.9 (§13); the two opt-in performance costs are in §8.4. |
-| 0.10 | Built on branch `feat/0.10`, all 11 units of the ledger approved 2026-11-14 (§16; as built in §16.1); not yet released. `semanticTokens/range` goes to a 0.10 patch | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. |
-| 1.0 | Planned | §9: API freeze, diff editor, accessibility, i18n, models and view state, device validation. |
+| 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. The two opt-in performance costs left open after release went to §8.4. |
+| 0.10 | Released 2026-11-16 | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. Built on one branch, `feat/0.10`; ledger approved as a whole 2026-11-14 (§16); what was built where it differs is in §16.1. `docs/MIGRATION_0.10.md`. `semanticTokens/range` and the rescan of only an HTML body's changed lines were not built: moved to 0.12 (§9.1). |
+| 0.11 | Released 2026-11-20 | Not in the roadmap: stylus handwriting on Android 14 and later, handed to the input method as `BasicTextField` does, and a stylus tip that taps, long-presses and scrolls as a finger does. |
+| 0.12 | Built on branch `feat/0.12`; spike 2026-11-22 (`docs/spikes/0.12-diff-rows.md`), ledger approved as a whole 2026-11-22 (§17; as built in §17.1); not yet released | §9.1: the diff editor, side by side and inline, with the web's `createDiffEditor`; `semanticTokens/range` and the HTML body rescan carried in. |
+| 0.13 | Planned | §9.2: models and view state. |
+| 0.14 | Planned | §9.3: accessibility. |
+| 0.15 | Planned | §9.4: i18n. |
+| 0.16 | Planned | §9.5: the API stability policy. |
 
 ## 1. Where 0.6.2 stands
 
@@ -93,97 +98,33 @@ the same day (Android on 0.6.2, aardflex-web-app on 0.6.1 with a Renovate PR to 
   CI's 156.0.8078.47 measures 15 ms with the same code (2026-10-21, the v0.6.3 run included), so
   the gate is unchanged; a machine still on Chrome 155 fails it locally until Chrome updates. If
   key to idle comes back on a later Chrome, trace the pass that follows the debounce.
-- The manual Gboard, Samsung, TalkBack and NVDA passes have not been run. Not carried into 0.10
-  (decided 2026-11-14): checks on devices and by hand belong to 1.0's platform validation (§9.6)
-  alone.
 - TypeScript regexp literals are not tokenized.
 - The KDoc of `AardinkWeb.updateOptions` says a language change starts a fresh undo history; the
   code keeps it.
 
-## 2. What the aardflex apps need
+## 2. (Removed)
 
-The roadmap is weighted by what the two aardflex apps would use. Both were audited against the
-current API.
-
-### 2.1 The Android app
-
-`aardflex/apps/android/aardflex/v1.0`: one `ui/screen/XmlEditorScreen.kt` behind four screens
-(wallpaper, widget, component, theme). The sample documents are small (61 files, the largest
-438 lines), soft wrap is on, the editor is always dark, and the app's own action bar and status
-line sit under it.
-
-- **Missing host events.** The app refreshes its text and preview from `onCursorChange`, runs its
-  own 500 ms diagnostics timer from the same callback (an edit that leaves the caret in place is
-  missed), and copies the document with `CodeDocument(document.text)` because `snapshot()` is
-  internal.
-- **No phone access to editor features.** Format, suggest, hover and code actions have no public
-  commands; the touch menu and keyboard toolbar take no host items; `insertSnippet` is internal.
-  There is no Format button. The toolbar's characters lack `|`, `:` and `$`.
-- **The built-in XML checks are lost.** `service/language/AardflexXmlLanguageService.kt` (427
-  lines plus a 194-line context detector) replaces the built-in XML service entirely, so precise
-  tag diagnostics, closing tags on `>` and closing quotes do not run. The web's `extends: 'xml'`
-  composition has no Kotlin equivalent.
-- **Whole-line diagnostics.** `ValidationDiagnostic` carries only a line; the original spec asked
-  for exact ranges and the friendly messages the save path uses.
-- **Theme by hand.** The web theme JSON is copied into `ui/theme/AardflexEditorTheme.kt` because
-  `EditorThemeParser` reads VS Code `tokenColors` but not Monaco `rules`. The editor ignores the
-  app's light and dark setting and its Material 3 scheme. No font size setting or pinch zoom,
-  which the original spec asked for.
-- **No preview sync.** Nothing maps the caret to an element or an element to a range. Validate
-  shows a snackbar with counts; there is no next-problem.
-- **Structural elements get no completions.** `<page>`, `<module>`, `<var>` and the rest are not
-  offered; the visual builder's descriptors and `shared/generated/reference.json` (171 KB of
-  machine-readable schema) are unused by the editor.
-- The reference screens show XML in a plain `Text`.
-
-### 2.2 The web app
-
-`aardflex-web-app`: Svelte 5, `@aardarch/aardink-web` 0.6.1. About 2,900 lines of TypeScript
-language service mirror the Android Kotlin one; both read the shared grammar and `reference.json`.
-
-- The app ranks completions itself because the editor's filter would drop its matches. Letters
-  do not open the list. F8 types a `w` (`platform/TypedTextDecoder.wasmJs.kt:32` accepts any
-  code point from 0x20, and the browser reports F8 as key code 119). The editor has no inline
-  peek, so F8 opens the Problems panel instead. Diagnostics are cut to one line. Hover puts
-  diagnostics first because the editor shows no tooltip of its own for a squiggle.
-- Wanted: `fontFamily`; CMP 1.13 so the pane can remount; decorations for the assistant's edits
-  and for preview hover; caret-to-element sync; colour swatches and a picker for `@color`, hex and
-  theme colours; command and keybinding registration (Ctrl+S and F8 are captured in
-  `AppShell.svelte`); selection events; focus and blur; reveal APIs. Accepted losses:
-  `automaticLayout` and `scrollBeyondLastLine`.
-- Bundle: 13 MB of wasm, 4.7 MB gzipped (Monaco was 2.5 MB and 650 KB).
-- The AI assistant writes XML through `replaceValue`; ghost-text completions and change-highlight
-  decorations would serve it directly.
-
-### 2.3 The shared opportunity
-
-The aardflex-xml language service exists twice (about 1,200 lines of Kotlin and 2,900 of
-TypeScript) and the two already differ. Most of it (elements, attributes, enums, nesting,
-required attributes, hover documentation, unknown-element diagnostics) follows from
-`reference.json` plus structural rules. A **schema-driven XML language service in `:languages`**,
-usable from Kotlin and through `registerLanguage({ extends: 'xml', schema })` on the web, removes
-most of the duplication and fills the Android gaps in one move. It is pure `:languages` work with
-no `:editor` API change (the built-in Android lists become the default schema), so it ships in
-0.7. The expression language (`{module:prop | transform}`) stays the app's overlay and becomes
-an embedded Monarch grammar in 0.9.
+This section audited two consumer apps against the 0.6.2 API. What each version builds is
+planned below on its own terms.
 
 ## 3. Principles and order
 
 Carried over from 0.6:
 
-- SemVer before 1.0: a minor may break the API, a patch never does. Breaking commits carry `!`.
+- SemVer, with versions staying 0.x (there is no 1.0, §9): each release raises the minor and may
+  break the API; a patch, kept for a fix that cannot wait, never does. Breaking commits carry `!`.
 - Every public symbol lands in the current version's ledger (§11) with updated ABI dumps, and a
   `MIGRATION_0.x.md` entry when it breaks a consumer.
 - The performance gates hold on every PR. No new runtime dependencies. `expect`/`actual` only
   under `platform/`. Never `Dispatchers.Default` or `IO` directly. No lookbehind. Never lay out
   the whole document.
 - Each minor is one 0.6-style wave of about ten to fifteen PRs; the estimates below are per
-  item. Performance and accessibility run as threads through every version (§10).
+  item. Performance runs as a thread through every version (§10).
 
-Order of value for aardflex: 0.6.3 (bugs the web app hits today), then 0.7 (host integration and
-the schema service), 0.8 (symbols and decorations, which give preview sync, and colours), 0.9
-(LSP, ghost text, embedded expressions), 0.10 (languages, web parity, performance), 1.0 (freeze,
-diff, accessibility).
+Order: 0.6.3 (bugs a web host hits today), then 0.7 (host integration and the schema service),
+0.8 (symbols, decorations and colours), 0.9 (LSP, ghost text, embedded grammars), 0.10 (languages,
+web parity, performance), then from 0.12 one feature set per minor (§9): the diff editor, models
+and view state, accessibility, i18n and the API stability policy.
 
 ## 4. 0.6.3: internal fixes, no API change
 
@@ -205,8 +146,8 @@ pre-release gate. This is not tied to 0.7.
 ## 5. 0.7: host integration and the shared XML schema
 
 About fourteen PRs. Theme: the editor becomes controllable and observable by its host, on a phone
-as well as with a keyboard, and `:languages` gains the one feature that collapses the aardflex
-duplication.
+as well as with a keyboard, and `:languages` gains a schema-driven XML service, so a host need not
+write the same XML language service twice, once in Kotlin and once in TypeScript.
 
 ### 5.1 Content and selection changes (`:editor`, `:editor-web`; 2 to 3 PRs)
 
@@ -292,7 +233,7 @@ duplication.
 ### 5.8 Themes (`:editor`; 1 PR)
 
 - `EditorThemeParser` reads Monaco `defineTheme` data (`base`, `inherit`, `rules`, `colors`) as
-  well as VS Code JSON, so one theme file serves both aardflex apps. A rule's `background` is
+  well as VS Code JSON, so one theme file serves a host's web and Kotlin editors. A rule's `background` is
   honoured.
 
 ### 5.9 Keys (`:editor`; 1 PR)
@@ -306,13 +247,6 @@ duplication.
 - The built-in formatters and `LspLanguageService.format(document, options)` honour `tabSize` and
   `insertSpaces`.
 - `loadText` records the line ending: `EditorOptions.eol` and `document.eol`.
-
-**What aardflex gets.** Android drops its cursor-callback workarounds, gains a Format button and
-phone access to suggest, hover and format, precise squiggles with the friendly messages,
-next-problem, the built-in XML checks back under its own service, one shared theme file, and
-structural-element completions from `reference.json`. The web app gets a native F8 peek,
-selection and focus events, `addCommand` for Ctrl+S, quick suggestions, and can delete its own
-ranking code and most of `completions.ts`, `schema.ts` and the unknown-element checks.
 
 ## 6. 0.8: structure and decoration
 
@@ -332,7 +266,7 @@ it.
 - A Go to Symbol picker (Ctrl+Shift+O), an optional breadcrumbs row, sticky scroll preferring
   symbols over fold ranges, `CodeEditorState.symbolAt(offset)` and `onSymbolAtCaretChange`.
 - The built-in XML, HTML, JSON, TOML, Kotlin and Markdown services and the schema service provide
-  them. **This is the caret-to-preview mapping both aardflex apps lack.**
+  them. A host can map the caret to an element of its own preview with them.
 
 ### 6.3 Decorations (`:editor`, `:editor-web`; 3 PRs)
 
@@ -364,7 +298,7 @@ it.
 - `LanguageService.documentColors()` draws a swatch before the token; a click opens a colour
   picker popup (hex, HSV, alpha); `colorPresentations` writes back as a `TextEdit`.
 - Built in for `#rgb`, `#rgba`, `#rrggbb` and `#rrggbbaa` in CSS, XML, JSON and TOML, and for
-  colour-typed schema attributes. aardflex supplies `@color` and theme colours.
+  colour-typed schema attributes. A host's service supplies its own colour references.
 
 ### 6.7 Folding (`:editor`, `:languages`; 1 PR)
 
@@ -394,11 +328,6 @@ it.
 
 - `getVisibleRanges`, `onDidScrollChange`, `getScrollTop` and `setScrollTop`, `layout()`, and
   diagnostic owners (host, language and others) in the shape of Monaco's `setModelMarkers`.
-
-**What aardflex gets.** Preview and code in sync both ways (symbols plus decorations), colour
-swatches and a picker on `@color`, hex and theme tokens, tag-pair rename, clickable includes,
-problems in the ruler, Ctrl+S and F8 bound without capture-phase handlers, pinch zoom and
-Material 3 light and dark theming on Android.
 
 ## 7. 0.9: language depth
 
@@ -434,8 +363,8 @@ that changes line layout, and it gets a spike first, as the 0.6 renderer did.
   and LSP; code lens rows above declarations with host commands; semantic tokens overlaying
   syntax tokens as a `TokenStore` layer; and **inline completions (ghost text)** through an
   `InlineCompletionProvider`, Tab to accept and Alt+] to cycle, with
-  `registerInlineCompletionsProvider` on the web. Ghost text is the natural surface for the
-  aardflex AI assistant on both platforms.
+  `registerInlineCompletionsProvider` on the web. Ghost text is the natural surface for an AI
+  assistant in the host.
 
 ### 7.4 Monarch and language configuration as data (`:languages`; 3 PRs)
 
@@ -448,7 +377,6 @@ that changes line layout, and it gets a spike first, as the 0.6 renderer did.
   `language-configuration.json`, giving every grammar-only language auto-close, surround and
   Enter indentation.
 - TypeScript regexp literals by a lookbehind-free heuristic. Not built in 0.9: moved to §8.1.
-- The aardflex expression language becomes an embedded grammar with its own catalog.
 
 ## 8. 0.10: languages, web parity, performance
 
@@ -513,31 +441,138 @@ About fifteen PRs.
   `--gate`.
 - An edit in an HTML `<script>` or `<style>` body rescans only its changed lines: keep each
   block's own scan, which the CSS, TypeScript and JSON tokenizers' caches of four cannot hold
-  for them (§16.1, CSS and JS inside HTML; PR #45 review).
+  for them (§16.1, CSS and JS inside HTML; PR #45 review). Not built in 0.10: moved to 0.12
+  (§9.1).
 
-## 9. 1.0: stable API, diff editor, accessibility, i18n
+## 9. After 0.11: one feature set per minor
 
-About fifteen PRs.
+There is no 1.0 (decided 2026-11-22). Each release raises the minor, and each minor carries one
+feature set, as 0.7 to 0.10 did. What was planned for 1.0 is spread over 0.12 to 0.16 below, the
+diff editor first. A minor's ledger is drafted from its section here when its wave starts and is
+approved before any code, as §11, §14, §15 and §16 were.
 
-1. **API freeze.** Review every public symbol against the ledgers, mark what is not ready
-   `@ExperimentalAardinkApi`, publish a deprecation policy (one minor of `@Deprecated` before
-   removal), stabilise `EditorKeyBindings` and the npm `index.d.ts`, and treat the ABI dumps as
-   the contract.
-2. **Diff editor.** `CodeDiffEditorLayout(original, modified)` side by side and inline,
-   deleted-line markers in the gutter lane, revert and accept a hunk, F7 and Shift+F7; web
-   `createDiffEditor`. Serves the aardflex "review the assistant's rewrite" flow.
-3. **Accessibility.** A screen-reader mode (`accessibilitySupport`), semantics for popups, the
-   gutter, diagnostics and folds, live-region announcements (line and column, problem count, the
-   selected completion), an accessible diff, high-contrast themes, scripted TalkBack and NVDA
-   checks where possible and a documented manual matrix for the rest.
-4. **i18n.** An `EditorStrings` CompositionLocal with every UI string, English by default, and a
-   `locale` option on the web.
-5. **Models and view state.** `saveViewState()` and `restoreViewState()` (scroll, selections,
-   folds), several documents behind one layout (`setModel`), URIs on documents for multi-file
-   navigation and LSP; web `getModel`, `setModel` and `createModel`.
-6. **Platform validation before the tag.** Gboard, Samsung, SwiftKey, CJK and dead keys; Windows
-   and macOS desktop; Chrome, Firefox and Safari on desktop and iOS; TalkBack and NVDA; the tablet
-   and foldable postures the aardflex app uses.
+### 9.1 0.12: diff editor (`:editor`, `:editor-web`; about fifteen PRs)
+
+What exists to build on, as of `v0.11.0`:
+
+- The gutter's diff lane compares the text with the host's `savedText` through
+  `SimpleDiffProvider` (`core/SimpleDiffProvider.kt`), which trims the common first and last lines
+  and compares the rest line by line in place. It reports `Added` and `Modified` lines only, never
+  a deletion, and only on the current side. The layout calls it directly, 300 ms after typing
+  stops, so a host cannot supply its own `DiffProvider`, and the lane's green and blue are fixed
+  colours (`ui/view/EditorGutterView.kt`), not theme keys.
+- A real line diff, Myers's, exists only inside `MinimalEdits` (`core/edit/MinimalEdits.kt`,
+  internal), which turns a format or a `replaceValue` into small edits. Past 2,000 line edits it
+  gives up and returns one edit over the whole text.
+- Rows inside a line's layout exist for code lenses (`Injection.rowAbove` in `ui/view/OffsetMap.kt`,
+  `ui/view/InlineContent.kt`), but they carry text only, with no full-width background.
+- Decorations already colour whole lines, the gutter and the overview ruler, and
+  `CodeEditorState.viewport` reports the scroll. `EditorCommand.ScrollTo(top)` scrolls vertically
+  only.
+
+The work:
+
+1. **Computing the diff.** A public diff over two texts in `:editor`, on Myers's algorithm: line
+   changes with their line ranges on each side, and the changed characters inside each changed
+   pair of lines. Options as Monaco's: `ignoreTrimWhitespace`, `maxComputationTimeMs`, and a size
+   past which the answer is one change over the region. It runs on `computeDispatcher`, never
+   while a key is handled. `MinimalEdits` then uses the same core.
+2. **The gutter lane.** Markers for deleted lines; `DiffProvider` as a `CodeEditorLayout`
+   parameter; the lane's colours from the theme (`ChromeColors`, read from Monaco's
+   `editorGutter.addedBackground`, `modifiedBackground` and `deletedBackground`). `LineDiffKind`
+   gains `Deleted`, which breaks an exhaustive `when` in a consumer.
+3. **`CodeDiffEditorLayout(original, modified)`**, two `CodeEditorState`s, side by side or inline:
+   - Side by side, the two sides stay line for line through filler rows: a new internal kind of
+     injected row, blank and full width, with a background. Vertical and horizontal scrolling are
+     shared, which needs a horizontal scroll command (`ScrollTo` with a `left`, or a command of its
+     own; the ledger decides). The split can be dragged. The original is read-only unless
+     `originalEditable`.
+   - Inline, the deleted lines are read-only rows above the modified line, coloured by the
+     original's tokens.
+   - Below a width (`renderSideBySideInlineBreakpoint`) a side-by-side editor shows inline, so a
+     phone gets the inline view.
+   - Inserted and removed lines and characters take their backgrounds from the theme (Monaco's
+     `diffEditor.insertedTextBackground`, `removedTextBackground`, `insertedLineBackground` and
+     `removedLineBackground`), drawn as decorations. Each change has a mark in the overview ruler.
+   - `hideUnchangedRegions` folds long unchanged runs, with a few lines of context either side and
+     a row that shows them again.
+   - The inline view's rows of another document's text inside a line's layout are the risk, as the
+     inline layout was in 0.9. A spike (`docs/spikes/0.12-diff-rows.md`) answers it before the
+     ledger is approved.
+4. **Moving through changes and acting on them.** `EditorCommand.NextChange` and `PreviousChange`,
+   bound to F7 and Shift+F7 in `EditorKeyBindings.Default`. Revert a change on the modified side,
+   or accept it into the original when the original is editable, from the gutter and the context
+   menu, each as one undo step. The host hears of each new diff and can read the current one.
+5. **Web.** `createDiffEditor(container, options)` returning an `AardinkDiffEditor`:
+   `getOriginalEditor()` and `getModifiedEditor()` (each an `AardinkEditor`),
+   `setOriginalValue` and `setModifiedValue` until 0.13's models, `getLineChanges()`,
+   `onDidUpdateDiff`, `goToDiff('next' | 'previous')` and `updateOptions` with
+   `renderSideBySide`, `ignoreTrimWhitespace`, `originalEditable` and `hideUnchangedRegions`. A
+   new template export, `aardinkCreateDiff`, in `Exports.kt` and `ExportsTemplate.kt` alike, which
+   breaks template copies.
+6. **Tests and samples.** The diff against a brute-force longest common subsequence on random
+   texts, whitespace ignored, and the size fallback; Roborazzi scenes for side by side, inline,
+   filler rows and folded regions; a diff page in `:sample` and `sample-web`; the smoke test
+   drives `createDiffEditor`; `perf.mjs --diff` on the reference document with edits scattered
+   through it, gated as the plain run is.
+7. **Carried in from 0.10.**
+   - `semanticTokens/range`, which needs an `:editor` symbol that gives a service the lines on
+     screen (§16.1).
+   - An edit in an HTML `<script>` or `<style>` body rescans only its changed lines (§8.4).
+
+### 9.2 0.13: models and view state (`:editor`, `:editor-web`, `:languages-lsp`)
+
+- `saveViewState()` and `restoreViewState()`: scroll, selections and folds.
+- Several documents behind one layout (`setModel`), and URIs on documents.
+- On the web, `getModel`, `setModel` and `createModel`, and the diff editor's `setModel` in place
+  of its two values.
+- A location in another file is followed: a definition, reference or rename across files opens the
+  document through a host hook, where today it is left out (§16.1).
+- `registerLanguage` takes `filenames` on the web, as `LanguageDefinition.fileNames` does in
+  Kotlin.
+- LSP over several open documents: one client, `didOpen` and `didClose` per model.
+
+### 9.3 0.14: accessibility (`:editor`, `:editor-web`)
+
+- A screen-reader mode (`accessibilitySupport`).
+- Semantics for the popups, the gutter, diagnostics and folds.
+- Live-region announcements: line and column, the problem count, the selected completion.
+- An accessible diff viewer for 0.12's diff editor, as Monaco's.
+- Outline decorations, so the high-contrast themes can draw the current line, the selection and
+  find matches as outlines (§16.1).
+- Checked by tests over the semantics tree.
+
+### 9.4 0.15: i18n (`:editor`, `:editor-web`)
+
+- An `EditorStrings` CompositionLocal with every string the editor shows, English by default.
+- A `locale` option on the web, and strings registered from JavaScript.
+
+### 9.5 0.16: API stability policy (all modules)
+
+- Every public symbol reviewed against the ledgers; what is not ready is marked
+  `@ExperimentalAardinkApi`.
+- A deprecation policy: one minor of `@Deprecated` before a removal, still within 0.x.
+- `EditorKeyBindings` and the npm `index.d.ts` declared stable, and the ABI dumps the contract.
+
+### 9.6 Backlog, not in a version
+
+- Compose Multiplatform 1.13, which fixes the W-1 leak, and a W-1 heap check that fails on a leak:
+  in the first minor after 1.13's stable release (§4).
+- On the web, a document of 60,000 lines with code lenses takes about 400 ms to settle after a key
+  (§16.1).
+- TypeScript colours a template literal as one string, `${}` and all; CSS reads the `.png` in
+  `url(x.png)` as a class (§16.1).
+- An inlay hint's label parts: their tooltips, commands and locations (§16.1).
+- `signatureHelpTriggerCharacters` is accepted on the web and not used (§16.1).
+- A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an
+  edit more than 256 characters after it closed it; in JSON, TypeScript, CSS and HTML bodies (§17.1).
+- A diff's character changes are by character, so two different lines can share scattered letters
+  (`pr`, `intln(`) and a run across lines takes the next line's indentation; Monaco extends them
+  to word boundaries (§17.1).
+- A full highlighting pass's first slices can run one task of 65 to 100 ms on the web after
+  `setValue` or a new diff original: a regex rule's first search can run far through the text before
+  the pacer, which checks the clock every 256 tokens, can yield. Bound each rule's first search, or
+  search in windows with the pacer between them (§17.1, `perf.mjs --diff --profile`).
 
 ## 10. Threads through every version
 
@@ -617,7 +652,7 @@ design or found while building it:
 | `smartIndent` returns `String` | `smartIndent(document, lineIndex, options: FormattingOptions): String` | Tabs or spaces need the editor's options; the same `FormattingOptions` as `format` |
 | `FormattingOptions(tabSize, insertSpaces)` | With `indentUnit`, `indentOf`, `indentWidth`, `indentAfter` | So a service turns columns into the editor's whitespace without its own code |
 | `EditorThemeParser.parseMonaco` | `EditorThemeParser.fromMonacoJson` | Named as the existing `fromJson`. A rule's `background` is still not drawn: `EditorTheme` has no field for it |
-| `KeyboardToolbarItem.Action` | Sealed `KeyboardToolbarItem` with `Character` and `Action`; `CodeEditorLayout(keyboardToolbarItems)`; `KeyboardToolbarRow(items, onAction)` | The items need a way into the layout; a host also adds characters (aardflex's pipe, colon and dollar) |
+| `KeyboardToolbarItem.Action` | Sealed `KeyboardToolbarItem` with `Character` and `Action`; `CodeEditorLayout(keyboardToolbarItems)`; `KeyboardToolbarRow(items, onAction)` | The items need a way into the layout; a host also adds characters of its own, such as a pipe, a colon and a dollar |
 | Commands as pending requests | `execute` hands UI commands to a handler the layout installs while it shows the state | A synchronous result for `execute`'s return value; the same lifetime rule |
 | `EditorCommand` members | Also `Reveal(offset, center)` | The web's `revealLine` and `revealRange` reach the view only through `:editor`'s public API |
 | Completions filtered by the editor always | Ordered always; filtered only for a service with `completionsAreIncomplete = false` | The web app showed a word-start filter dropping matches a service had chosen; filtering is opt-in with the flag that also stops the re-asking |
@@ -633,45 +668,10 @@ Also changed without new API: the gutter dot shows a line's most severe diagnost
 least); Escape closes the hover and the diagnostic banner; the find field selects its query when
 the panel opens; the built-in XML completions come from a default `XmlSchema`.
 
-## 12. Downstream follow-ups (in the aardflex repositories)
+## 12. (Removed)
 
-Found during the audits; none of them is Aardink's to fix.
-
-- **Android app, fixable on 0.6.2:** `knownColorNames` is never passed, so `@` colour
-  completions are always empty; module completions ignore the document's own module ids;
-  completions for `{theme:colors.` paths, format parts and `{$var}` are missing; the theme
-  editor offers wallpaper components; hover only matches the last character of a name (and so
-  the touch menu's "Info"); the preview re-parses on the main thread with no delay; the
-  `file_editor` route is dead code. On 0.7: pass precise ranges and the friendly messages, let
-  the editor collect diagnostics itself, add a Format button, and extend the toolbar characters
-  with `|`, `:` and `$`.
-- **Web app:** merge the Renovate bump to 0.6.2; after 0.6.3, remove the F8 workaround; after
-  0.7, delete the ranking code and the schema-derived parts of `completions.ts`, `schema.ts` and
-  `diagnostics.ts`.
-- **aardflex specs:** `specs/index.md` still lists the syntax highlighter as in progress and the
-  Monaco web editor as built; `specs/roadmap.md` row 0.6 still says "regex-based highlighting".
-
-On 0.9, from its Markdown documentation and embedded grammars:
-
-- **Web app, hover:** `src/editor/aardflex/hover.ts` says in its header that Aardink shows hover
-  text as written, and `hover.test.ts` asserts there is no Markdown. Hover `contents` are Markdown
-  now: lines joined with a single newline (`problems.join('\n')`) run into one paragraph and need a
-  blank line or a trailing backslash, and text built from the document or sample data, such as an
-  expression's preview, needs `*`, `_`, `` ` ``, `[`, `<` and line-start `#`, `-` and `1.` escaped.
-- **Both apps, schema documentation:** schema `doc` strings and the catalogue descriptions are
-  Markdown on hover and in the completion list. A scan on 2026-11-07 of `shared/generated/reference.json`
-  (960 documentation strings) and the web app's `reference.json` (896) found no emphasis, no line
-  that starts a heading or list, and no single newline; backticks now show as code, which is
-  intended. Strings built at run time, and any added later, need the same check.
-- **Template copies:** neither app copies `ExportsTemplate.kt` (both use the published npm package or
-  the Kotlin API), so `aardinkRegisterLanguage`'s dispatcher needs nothing there. Check again before
-  either builds its own wasm module.
-- **`tokenNames`:** the Android app's `AardflexXmlTokenizerTest.everyGrammarTokenHasAColour` reads
-  `AardflexXmlGrammar.grammar.tokenNames`. When the expression language moves into a grammar of its
-  own through `nextEmbedded`, that set loses the expression names (`function.transform.xml`,
-  `variable.module.xml`, `operator.pipe.xml`), and the test goes on passing while it checks less.
-  It must read the union of both grammars' `tokenNames`, and the expression grammar needs
-  `tokenPostfix: '.xml'` to keep today's names. The web app has no such test.
+This section listed follow-ups in a consumer's own repositories. A consumer's work is not tracked
+here.
 
 ## 14. API ledger for 0.8
 
@@ -774,7 +774,7 @@ rules out moves to 0.10 and its line is struck here.
 | Web provider callbacks | `aardinkRegisterLanguage` takes one `(method, text, argsJson)` dispatcher | Agreed 2026-11-06. Positional callbacks break template consumers with each provider, and §8.2 adds more |
 | `$S0` and `$#` | In guards and `next`; rejected in token names with a clear error | Token names are resolved once at parse, and `tokenNames` promises every name a grammar can produce |
 | `language-configuration.json` | Read as JSONC, through `allowComments` and `allowTrailingComma` | VS Code's files use both, and the JSON library already has them |
-| `ExperimentalAardinkApi` | Stays in 1.0 (§9) | SemVer before 1.0 already allows a break, and the marker would be one more symbol |
+| `ExperimentalAardinkApi` | Stays in the API stability minor (§9.5) | A 0.x minor already allows a break, and the marker would be one more symbol |
 | `positionEncoding` | Declares UTF-16 only | `ContentChange` columns are UTF-16; every server must accept it |
 | Server capabilities (§7.1) | Decided inside `LspLanguageService`: an unsupported request returns empty without being sent. No new `supportsX` flags in `:editor` | An empty answer already turns a passive feature off. Commands stay listed, as they do for built-in services, except Rename, which keeps its `supportsRename` gate: `LspLanguageService.supportsRename` follows `LspClient.serverCapabilities` when the host passed no `serverRenameSupport` |
 | `onEnterRules` actions | Honoured through `smartIndent`: `none`, `indent`, `outdent`, `appendText` and `removeText`. `indentOutdent` adds no second line: the closer stays at the opener's indentation with the caret before it, as the built-in services do today | `smartIndent` inserts one string with the caret after it, so it cannot put the caret between two lines. A new Enter hook is not worth it for 0.9 |
@@ -854,8 +854,7 @@ New wire types stay internal unless a public signature needs them.
   `inlayHints`, `codeLenses`, `semanticTokens` or `resolveCompletion`: each is tested through its
   `LspLanguageService` override, and `inlayHints` and `codeLenses` also through their web
   providers. §13's rule of a built-in and a web provider per method is waived for these in 0.9.
-- `onTypeFormatting`, moved to §8.3: it needs three more `:editor` symbols, and neither aardflex
-  app uses it.
+- `onTypeFormatting`, moved to §8.3: it needs three more `:editor` symbols.
 - If the wave overruns, in this order: TypeScript regexp literals to §8.1, pull diagnostics,
   `goBack`, then multi-line ghost text and code lens.
 
@@ -869,8 +868,6 @@ These need no public symbol, and are kept here so they are not worked out twice:
 - An LSP lens's `onClick` sends `workspace/executeCommand` through `LspClient.sendRequest`.
 - A feature registered through `client/registerCapability`, or a server whose capabilities are
   unknown, counts as supported, as `serverRenameSupport = null` does today.
-- The aardflex expression language's own grammar and catalog are downstream (§12). Here, only the
-  test fixture and its goldens change.
 - Kotlin symbols behind an npm line, and types behind `LspClientHost`, go in §15.1 as they land,
   as §11.1 and §14.1 did.
 
@@ -1009,14 +1006,8 @@ held earlier 0.9 work.
 
 #### Still open
 
-0.9 shipped on 2026-11-08 with these open; the performance items are carried in §8.4. The device
-check is not carried into 0.10 (decided 2026-11-14); it belongs to §9.6.
+0.9 shipped on 2026-11-08 with these open; the performance items are carried in §8.4.
 
-- **Android on a device.** Code lens rows and multi-line ghost text rest on hard breaks inside a
-  line's layout. They pass under Robolectric with native graphics, but the spike's device check
-  (`docs/spikes/0.9-inline-layout.md`) has not been done: the `rowShift` branch, Gboard and Samsung
-  Keyboard on a line with a hint, and ghost text while a keyboard composes, which on Android may be
-  every word.
 - **Timing with real hosts**, measured on 2026-11-08 with nothing else running on the machine:
   medians of three interleaved runs in headless Chrome 157. With nothing opted in, 0.9 matches 0.8.0:
   key-to-idle p95 272.1 ms against 270.3, key-to-change p95 4.1 ms against 4.3, and the same at
@@ -1064,8 +1055,6 @@ lands.
 
 Not carried:
 
-- Checks on devices and by hand: 0.9's Android device check and the Gboard, Samsung, TalkBack and
-  NVDA passes (decided 2026-11-14). They belong to §9.6.
 - CMP 1.13 and a W-1 heap check that fails on a leak (§4). 1.13 is at `1.13.0-beta02` on
   2026-11-14 and still goes in the patch after its stable release, not tied to 0.10.
 
@@ -1146,7 +1135,7 @@ follows `format`: the primary's when it has edits, else the fallback's. The char
 
 ### If the wave overruns
 
-In this order, each to 1.0 or a 0.10 patch: Groovy, Dockerfile, diff, SCSS and LESS; the replace
+In this order, each to a 0.10 patch or a later minor: Groovy, Dockerfile, diff, SCSS and LESS; the replace
 preview and search history; drag and drop; `semanticTokens/range`; inlay hint tooltips; Kotlin's
 hover and signature help.
 
@@ -1174,7 +1163,7 @@ design or found while building it.
 | `provideOnTypeFormattingEdits` (with `autoFormatTriggerCharacters`) | `provideOnTypeFormattingEdits(text, line, column, ch, { tabSize, insertSpaces })`, answering Monaco's `TextEdit`s (npm `AardinkTextEdit`); `autoFormatTriggerCharacters` goes with the definition, as `triggerCharacters` does, and counts only with the provider. `WebLanguageProviders.formatOnType: suspend (text, line, column, ch, optionsJson) -> String?`, through the dispatcher as `formatOnType` | The shape of the other providers, which take the text and a 1-based place rather than a model |
 | `EditorTheme.chromeColors: ChromeColors(...)` | As listed, each unspecified by default and following the theme as before, so the six existing themes draw as they did. The parser also reads the older `editorIndentGuide.background` and `.activeBackground`, and `contrastBorder` where `editorWidget.border` is missing. `bracketPairGuide` is one colour for every depth (`editorBracketPairGuide.background1`), in place of the bracket-pair colours at half strength. The scrollbar colours reach desktop and the web; Android draws no scrollbar. `widgetBackground` is the cards' surface (Material's `surfaceContainerHigh`), the shades either side step from it, and `widgetForeground` is still moved towards white or black where it would not read. `widgetBorder` draws a 1 dp border on the cards, menus and find panel, not on the completion strip | A theme that sets nothing must look the same after the upgrade |
 | `EditorTheme.tokenBackgrounds` | Filled from a Monaco rule's `background`, keyed by the rule's token, and found by the longest scope prefix, as token colours are; drawn as the token's span background. The empty token's `background` sets the editor's background unless `editor.background` is given, as in Monaco. A VS Code theme's `tokenColors` `background` is not read, as VS Code ignores it | |
-| `EditorThemes.HighContrastDark`, `HighContrastLight` | Colours after VS Code's High Contrast and High Contrast Light, every token colour at 7:1 or more on the background (a test holds it), with a border on the cards. The current line, the selection and find matches stay fills, where VS Code draws outlines. Monaco's `base: 'hc-black'` and `'hc-light'` now fill in from these, where they took Dark+ and Light+ before | The editor draws no outline decorations; an outline style is 1.0's accessibility work (§9) |
+| `EditorThemes.HighContrastDark`, `HighContrastLight` | Colours after VS Code's High Contrast and High Contrast Light, every token colour at 7:1 or more on the background (a test holds it), with a border on the cards. The current line, the selection and find matches stay fills, where VS Code draws outlines. Monaco's `base: 'hc-black'` and `'hc-light'` now fill in from these, where they took Dark+ and Light+ before | The editor draws no outline decorations; an outline style is 0.14's accessibility work (§9.3) |
 | `FindReplaceState.inSelection` | Searches the text selected when the option goes on, or the caret's line with nothing selected, and again on each opening of the panel with text selected (not when the selection is the current match, which find itself selected). The place moves with edits and is shaded, under the selection. A match must lie wholly inside it; a regular expression still sees the text around it (`\b` at its edge). A chip in the panel | VS Code's behaviour with `editor.find.autoFindInSelection` at its default, `never` |
 | `FindReplaceState.preserveCase` | VS Code's rules: all capitals, all small letters, else the first letter's case; part by part where the match and the replacement have as many `-` or `_` separated parts. Applies to regex replacements after `$1` is expanded. A chip shown in replace mode | |
 | `CodeEditorLayout(onSearchWorkspace)` | Called by the new `EditorCommand.SearchWorkspace`, bound to Ctrl+Shift+F (Cmd+Shift+F on macOS) in `EditorKeyBindings.Default`, and by a "Search all files" button in the find panel, both only when it is set, with the selection on one line, else the find panel's query, and the panel's options. Without it the command cannot run, so the key goes to the host. On the web, `trigger('workbench.action.findInFiles')`, VS Code's id, runs it | `EditorCommand.SearchWorkspace` is not in the ledger: added at the owner's request (2026-11-14) so the key can be rebound like any other |
@@ -1206,6 +1195,116 @@ design or found while building it.
 | `perf.mjs --hints` and `--semantic` under `--gate` | Both in CI with `--gate`. `--hints` is held to the plain run's limits. `--semantic` is held to its landing frame and longest task (gate 50 ms each) and to key to idle; its mount, which includes connecting to the server, is reported but not gated. On the dev machine: hints p95 35 ms; semantic p95 35 ms, landing frame 25 ms, no long task | |
 | Token tests for TypeScript, JSON, CSS, Markdown and HTML; tests for `RenameDialog`, `GoToLineDialog`, `KeyboardToolbarRow`; Roborazzi scenes for the find panel, rename, go to line, signature help and the keyboard toolbar (carried in) | Token tests in `:languages` for each language's text and Monaco scope, in order: 23 tests over five files (`TypeScriptTokenizerTest` and the rest). UI tests on the desktop JVM: `ChromeDialogsUiTest` covers both dialogs. For rename, the current name in the field and the question, Rename offered only for a new name that is not blank, the name trimmed, and Cancel. For go to line, the lines there are, digits only and at most seven, a line outside the document refused, and Cancel. `KeyboardToolbarRowUiTest` covers each button, undo and redo following `canUndo` and `canRedo`, the host's items after the quick characters, and the row hidden with no keyboard. New scenes are `signature-help` (two overloads, the active parameter and its documentation) and `keyboard-toolbar` (`BottomFixed`). The find panel's new chips and its replace preview are in the existing `find-replace` scene, and rulers are in `guides` and `high-contrast`. Not as scenes: rename and go to line, which are `AlertDialog`s with a field whose caret keeps Compose from ever being idle under Robolectric, even with the clock stopped; and the inlay hint tooltip, whose resting mouse Robolectric does not deliver. The UI tests above, and `InlayHintsUiTest`'s tooltip test, cover them. Found while writing the token tests and left as they are: TypeScript's template literal is one string, `${}` and all, where Monaco colours what is inside; and in CSS, `url(x.png)` reads `.png` as a class | The dialogs' and tooltip's scenes cannot be taken in the sample's Robolectric tests |
 
+## 17. API ledger for 0.12
+
+Drafted on 2026-11-22 from §9.1, against `feat/0.12` after the spike (`docs/spikes/0.12-diff-rows.md`,
+every step passed), and approved as a whole the same day. What is
+built where it differs, and the symbols it does not name, will go in §17.1.
+
+The spike's code is internal and stays so: the diff computer in `core/diff/`, rows with a
+background and token spans on the inline layout, a per-line table of a diff's rows on the state, and
+`DiffRows`, which builds them.
+
+### Choices behind the ledger
+
+| Choice | Proposed | Why |
+| --- | --- | --- |
+| How 0.12 lands | One `feat/0.12` branch and one PR, as 0.8 to 0.10 | |
+| The diff | Myers's, in linear space, over interned lines, then over the characters of each change of at most 10,000 characters a side. A time limit (5 s, as Monaco's) ends the search with the rest as one change per region, and says so | Optimal and complete (the spike's property test). Monaco's newer algorithm also finds moved code; that is not in 0.12 |
+| When it runs | On `computeDispatcher`, 300 ms after typing stops on either side, never while a key is handled. Until then an edit moves the rows with the lines | As the gutter's lane does today |
+| Side by side | Filler rows keep the two sides aligned by rows, so soft wrap and a split of any width line up (D5). One scroll position serves both sides (D3) | Monaco aligns under wrap too; nothing maps positions across |
+| Inline | The original's deleted lines are rows above the modified line, in the original's token colours, out of reach of the caret. At most 1,000 rows of a block show, then a row that shows the rest on a click | D6: a block of 10,000 lines costs 178 ms to lay out the first time on the JVM |
+| Which view | Side by side, inline below `renderSideBySideInlineBreakpoint` (900 dp, Monaco's 900 px) or with `renderSideBySide = false` | So a phone gets the inline view |
+| What can be edited | The modified side always (unless `EditorOptions.readOnly`). The original only with `originalEditable`, side by side | Monaco's defaults |
+| Revert and accept | Revert puts a change's original lines back in the modified side; accept puts its modified lines into the original (only when it is editable). One undo step each, on the side it changes | |
+| Unchanged regions | `hideUnchangedRegions` folds runs of unchanged lines longer than twice the context, on both sides at once, with a row to show them. Off by default, as Monaco | The fold machinery already hides lines and rows |
+| The gutter's lane | `SimpleDiffProvider` uses the new diff: lines are marked after Myers's, not by position, and deletions get a marker | A line moved down by an insertion was marked modified before |
+| New defaults | Nothing changes on screen for a `CodeEditorLayout` that does not use the new symbols, except the lane's marks, which are now right | |
+
+### `:editor`, new
+
+| Symbol | Item |
+| --- | --- |
+| `TextDiff.compute(original: CharSequence, modified: CharSequence, options: TextDiffOptions = TextDiffOptions()): TextDiffResult`; `TextDiffOptions(ignoreTrimWhitespace = true, maxComputationTimeMs = 5_000, computeCharChanges = true)`; `TextDiffResult(changes: List<LineChange>, identical: Boolean, hitTimeout: Boolean)`; `LineChange(originalLines: IntRange, modifiedLines: IntRange, charChanges: List<CharChange>?)` (line indices, `until` ranges, one side empty for an insertion or a deletion); `CharChange(original: IntRange, modified: IntRange)` (offsets) | §9.1 item 1 |
+| `DiffEditorState(original: CodeEditorState, modified: CodeEditorState)` and `rememberDiffEditorState(original, modified)`: `changes: List<LineChange>` and `hitTimeout` (snapshot state), `changeAt(line, modifiedSide = true)`, `revert(change)`, `accept(change)`, `addDiffListener` and `removeDiffListener` | §9.1 items 3, 4 |
+| `CodeDiffEditorLayout(state: DiffEditorState, modifier, options: DiffEditorOptions = DiffEditorOptions(), editorOptions: EditorOptions = EditorOptions(), languageService: LanguageService? = null, originalLanguageService: LanguageService? = languageService)` | §9.1 item 3 |
+| `DiffEditorOptions(renderSideBySide = true, renderSideBySideInlineBreakpoint: Dp = 900.dp, ignoreTrimWhitespace = true, maxComputationTimeMs = 5_000, originalEditable = false, hideUnchangedRegions = false, unchangedContextLines = 3, renderIndicators = true, enableSplitViewResizing = true, splitRatio = 0.5f)` | §9.1 item 3 |
+| `EditorCommand.NextChange`, `PreviousChange`, `RevertChange` (the change at the caret), bound to F7, Shift+F7 and nothing in `EditorKeyBindings.Default`; available only in a diff editor | §9.1 item 4 |
+| `ChromeColors.diffInsertedLine`, `diffRemovedLine`, `diffInsertedText`, `diffRemovedText`, `diffFiller`, `gutterAdded`, `gutterModified`, `gutterDeleted`, read by the parser from Monaco's `diffEditor.insertedLineBackground`, `removedLineBackground`, `insertedTextBackground`, `removedTextBackground`, `diagonalFill` and `editorGutter.addedBackground`, `modifiedBackground`, `deletedBackground`; unspecified colours follow the theme | §9.1 items 2, 3 |
+| `LineDiffKind.Deleted`; `CodeEditorLayout(diffProvider: DiffProvider = SimpleDiffProvider)` | §9.1 item 2 |
+| `LanguageService.semanticTokens(document: CodeDocument, range: IntRange): List<Token>?` (suspend, default null: not supported, so the whole document is asked), with a `CompositeLanguageService` rule (the primary's when not null) | §9.1 item 7, carried in |
+
+### `:languages-lsp`, new
+
+| Symbol | Item |
+| --- | --- |
+| No new symbol: `LspLanguageService` overrides `semanticTokens(document, range)` with `textDocument/semanticTokens/range` for a server that declares or registers `range`, and the editor asks for the lines on screen while the whole answer is on its way | §9.1 item 7, carried in |
+
+### `:languages`, new
+
+| Symbol | Item |
+| --- | --- |
+| No new symbol: an edit in an HTML `<script>` or `<style>` body rescans only its changed lines | §9.1 item 7, carried in |
+
+### `:editor-web` and the npm package, new
+
+| Symbol | Item |
+| --- | --- |
+| `createDiffEditor(container, options): Promise<AardinkDiffEditor>`; `AardinkDiffEditor`: `getOriginalEditor()`, `getModifiedEditor()` (each an `AardinkEditor`), `setOriginalValue`, `setModifiedValue`, `getLineChanges()` in Monaco's `ILineChange` shape (1-based, with `charChanges`), `onDidUpdateDiff(listener)` returning a disposable, `goToDiff('next' \| 'previous')`, `revertChange(index)`, `updateOptions(options)`, `dispose()` | §9.1 item 5 |
+| Diff options in Monaco's names: `renderSideBySide`, `renderSideBySideInlineBreakpoint`, `ignoreTrimWhitespace`, `maxComputationTime`, `originalEditable`, `hideUnchangedRegions: { enabled, contextLineCount }`, `renderIndicators`, `enableSplitViewResizing`, with the editor options (`language`, `theme` and the rest) for both sides | §9.1 item 5 |
+| `defineTheme` reads the `diffEditor.*` and `editorGutter.*` keys above | §9.1 items 2, 3 |
+| `AardinkWeb.mountDiff`, its handle, and template exports `aardinkCreateDiff`, `aardinkDiffSetValues`, `aardinkDiffLineChanges`, `aardinkDiffGoTo`, `aardinkDiffRevert`, `aardinkDiffUpdateOptions`, `aardinkDiffDispose`, `aardinkOnDidUpdateDiff` | §9.1 item 5 |
+
+### Breaking
+
+| Symbol | Change | Item |
+| --- | --- | --- |
+| `LineDiffKind` | Gains `Deleted` (an exhaustive `when` in a consumer breaks) | §9.1 item 2 |
+| `SimpleDiffProvider` | Marks lines after Myers's diff, with deletions; the lines it marks change for the better. `MIGRATION_0.12.md` | §9.1 item 2 |
+| `ChromeColors` | Gains fields (data class signature) | §9.1 items 2, 3 |
+| `CodeEditorLayout` | Gains a defaulted parameter (recompile) | §9.1 item 2 |
+| Template copies | Copy the new exports | §9.1 item 5 |
+
+### Not in 0.12
+
+- Moved code (Monaco's `experimental.showMoves`), three-way merge, and word-level diffs other than by
+  characters.
+- The accessible diff viewer: 0.14 (§9.3).
+- Models: the diff editor takes two states, and the web's `setModel` comes with 0.13 (§9.2).
+
+### If the wave overruns
+
+In this order, each to the next minor: `hideUnchangedRegions`, the draggable split, accept into the
+original, the inline view's cap row (a block then shows in full).
+
+### 17.1 As built
+
+Approved as a whole on 2026-11-22. The 0.12 work follows the ledger above, with these differences and
+additions, each forced by the design or found while building it.
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `TextDiff.compute` | As listed. `maxComputationTimeMs` of 0 or less is no limit. With `ignoreTrimWhitespace`, texts that differ only in such whitespace have no changes and are not `identical`. `MinimalEdits`, behind formatting and `replaceValue`, runs on the same linear-space core in place of its O(D²) trace | One diff in the editor |
+| `SimpleDiffProvider` marks lines after Myers's diff | As listed, with whitespace counting (the lane is about what saving changes). Of a change that replaces lines, as many lines as it replaced are `Modified` and the rest `Added`, as before; VS Code marks them all modified. A `Deleted` mark's `lineIndex` is the line below the deleted lines, or the line count for after the last line, where the lane draws a wedge on the bottom edge | Less change for a host reading the marks |
+| Lane colours from the theme | An unset `gutterAdded`, `gutterModified` or `gutterDeleted` draws the lane's old green and blue, and red, so a theme without the keys looks as before | |
+| `LanguageService.semanticTokens(document, range)` | As listed. The range is a line's start to the end of the last line, as `inlayHints` takes it, and an answer may reach past it. While the whole answer is on its way, the editor asks for the lines on screen with a screen's margin, split where folds hide long runs as the inlay hint window is, at each pause in typing; a range answer replaces those lines' tokens only, and the whole answer replaces everything when it lands. A scroll asks nothing. An empty list is an answer; null changes nothing | |
+| LSP `semanticTokens/range` | As listed, for a server that declares or registers `range` (`true` or an object) with a legend. Its numbers are relative to the document's start, as the specification has them. It leaves the last whole answer's `resultId` alone, so the next request is still `full/delta`. `semanticTokens.requests.range` is declared. The legend of a range-only server is used for range requests; its whole requests are still not sent | |
+| An edit in an HTML body rescans only its changed lines | Each `<script>` and `<style>` body keeps its own scan. An edit inside a body rescans from a little before the edit until the body's tokenizer is back in step, and the tokens after the body are moved by the edit, not scanned again: a one-character edit in the middle of a 2,000-line body scans 270 characters where it scanned 112,001. An edit to the tag, to the closing tag, or one that makes an earlier closing tag falls back to the whole body. An edit after a body's closing tag no longer rescans the body. The bodies now share the top-level tokenizers' one limit: a string or comment opener that matched nothing can become a token's start more than 256 characters before an edit that closes it, and a partial pass misses that, as it already does in a JSON, TypeScript or CSS document (§9.6) | |
+| `DiffEditorState(original, modified)` | As listed, with `original` and `modified` as public properties, which its constructor makes them. The layout drives the diff: the first at once, then 300 ms after typing stops on either side, on the modified state's compute dispatcher, and an answer for text edited since is dropped. A state shown by no layout works nothing out, and its `changes` stay empty. `revert` and `accept` do nothing when the text has changed since the last diff, or when the side they would change is read-only, so `accept` needs `originalEditable`. `changeAt` finds a deletion at the line after it, or at the last line for one at the end | A diff is worth working out only while it is shown |
+| `CodeDiffEditorLayout` | As listed. Both sides show their overview ruler, which the change marks need. The context menu has Revert change (Accept change on an editable original), Next change and Previous change, and the lane has an arrow on each change's first line that reverts it. In the inline view the original is not shown, so `originalEditable` does nothing there. A change found after the time limit shows as any other | |
+| Filler rows and one scroll position | Each unit (a block, or an unchanged line and its other side's) gives its shorter side the rows it lacks, after its last line. Without soft wrap that is one pass over the blocks per diff. Under soft wrap every unit is worked out once per diff and when a pane keeps a new width for 100 ms; after that each frame works out only the units of the lines on screen, a search each, and moves only the lines whose filler changed, so a scroll costs one more layout pass at most. Lines off screen are aligned by the row estimate, so a long jump can show a small shift until the lines on screen settle. The side that scrolled sets the other's position, on both axes | The rendering rule: never a pass over the whole document per frame |
+| `hideUnchangedRegions` | A hidden run is a fold on each side, its first line the last line of context, with "N unchanged lines" after it. Opening one opens the other side's. A region opened stays open when the diff is worked out again; new ones start folded. `unchangedContextLines` is at least 1 | The fold machinery hides lines and rows already |
+| The inline view's cap | 1,000 rows of a block, then a row with the number of lines left, which shows them all when clicked. The deleted lines take the original's token colours, and follow them as the original is highlighted | §17's choice |
+| — | `EditorView.attach` shows rows published before the view was attached, which it missed before | Found by the layout's first UI test |
+| — | The inline view's deleted rows mark the characters a change removed, as the original side does | Found looking at the `diff-inline` scene |
+| `createDiffEditor` and `AardinkDiffEditor` | As listed. The options take `original` and `modified`, the two texts, until 0.13's models; `hideUnchangedRegions` is `true` or `{ enabled, contextLineCount }`, and Monaco's `minimumLineCount` and `revealLineCount` are taken and ignored. `getLineChanges()` is Monaco's legacy `ILineChange`, 1-based and inclusive, with an end line of 0 and the line before the change as the start on the side of an insertion or a deletion, and `charChanges` left out where the editor has none; it is `[]` before the first diff. Both sides share one set of editor options, as `CodeDiffEditorLayout` takes one; the original's own options choose only its language. A side's host diagnostics, markers, baseline, find state, `onOpenLink` and `onSearchWorkspace` are not shown, as the layout takes none per side, and disposing a side does nothing. `npm` also exports the types `AardinkLineChange` and `AardinkCharChange` | The layout's one `EditorOptions` |
+| `trigger` ids | `editor.action.accessibleDiffViewer.next` and `.prev`, `editor.action.diffReview.next` and `.prev`, and `workbench.action.compareEditor.nextChange` and `.previousChange` run `NextChange` and `PreviousChange`, only on a side a diff layout shows | Monaco's current and older names |
+| `AardinkWeb.mountDiff`, its handle | `mountDiff(containerId, original, modified, optionsJson, …)` takes the options as JSON, as the template passes them, and returns `AardinkDiffHandle` with `original` and `modified`, each an `AardinkEditorHandle`, so every existing per-editor export works on either side. Also public, as the Kotlin side of the approved npm lines: `diffSetValues`, `diffLineChangesJson`, `diffGoTo`, `diffRevert`, `diffUpdateOptions`, `diffDispose` and `onDidUpdateDiff` on `AardinkWeb` | The exports in `:sample-web` and in the template are in other modules |
+| `defineTheme` reads the diff keys | The Kotlin parser read them already; the npm path dropped them, as a registered theme's `ChromeColors` copied only the older fields. It copies them all now | Found by the smoke test's pixels |
+| — | A read-only original refuses `executeEdits` from the web unless `originalEditable` | The state's read-only flag stops typing, not edits through the API |
+| `perf.mjs --diff` | The 5,000-line reference document as the modified side, a change about every 20 lines, side by side; in CI with `--gate`. Key to change is held to the plain run's limits. Key to idle is reported, not gated: the diff runs 300 ms after typing stops, inside the window that ends a key's time, so a key's time takes it in. On the dev machine: about 250 changes found 370 ms after mount, key to change p95 17 to 19 ms. A new original starts with one task of 65 to 96 ms, gated at 100 ms: a profile (`--diff --profile`) shows it is the first slices of the original's full highlighting pass, not the diff, which is one task of 13 to 14 ms, with 20 ms to publish | The highlighting pass is §9.6's, and plain `setValue` has the same task |
+| — | The wasm bundle grows 2.5 % gzipped with the diff editor: `aardink-web.wasm` 1,813,565 bytes against 0.10's 1,769,514. Recorded anew in `bundle-size.json`, as a change meant to grow the bundle is | Over the 2 % ceiling |
+
 ## 13. Verification
 
 - **Per PR:** `pwsh ./scripts/pre-push.ps1 -NoFix`, CI green on `main` before the next merge, the
@@ -1218,5 +1317,3 @@ design or found while building it.
   implementation with a test and a web provider with a smoke test.
 - **Pixels:** Roborazzi, with a scene for every new piece of chrome (tooltip, peek, ruler,
   swatches, guides).
-- **Downstream:** the aardflex Android app and aardflex-web-app build and pass their tests on
-  each release candidate, as they did for 0.6.

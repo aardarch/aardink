@@ -36,6 +36,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+0.12 adds a diff editor, on Android, the desktop and the web. `docs/MIGRATION_0.12.md` covers the
+few changes that can reach an upgrade.
+
+### Added
+
+- `CodeDiffEditorLayout` and `DiffEditorState` (`rememberDiffEditorState`): two editors side by side,
+  or one with the deleted lines as rows above, below `renderSideBySideInlineBreakpoint` (900 dp) or
+  with `renderSideBySide = false`. Inserted and removed lines and characters are coloured, the two
+  sides stay aligned with filler rows, under soft wrap and at any split too, and share one scroll
+  position. F7 and Shift+F7 go through the changes; the gutter's arrow and the context menu revert a
+  change, or accept it into an editable original, as one undo step. `hideUnchangedRegions` folds long
+  runs of unchanged lines on both sides at once. `DiffEditorOptions` takes Monaco's options.
+- `TextDiff.compute`: the lines and characters that differ between two texts (Myers's diff, with a
+  time limit), as `TextDiffResult`, `LineChange` and `CharChange`.
+- On the web, `createDiffEditor(container, options)` with Monaco's diff editor API:
+  `getOriginalEditor`, `getModifiedEditor`, `getLineChanges` in Monaco's shape, `onDidUpdateDiff`,
+  `goToDiff`, `revertChange`, `updateOptions` and `dispose`; `trigger` takes Monaco's ids for the next
+  and previous change. `defineTheme` reads the `diffEditor.*` and `editorGutter.*` keys.
+- `EditorCommand.NextChange`, `PreviousChange` and `RevertChange`, run in a diff editor.
+- `ChromeColors.diffInsertedLine`, `diffRemovedLine`, `diffInsertedText`, `diffRemovedText`,
+  `diffFiller`, `gutterAdded`, `gutterModified` and `gutterDeleted`, read from Monaco's and VS Code's
+  keys.
+- `CodeEditorLayout(diffProvider)`, and `LineDiffKind.Deleted`: the lane marks deleted lines.
+- `LanguageService.semanticTokens(document, range)`: the editor asks for the lines on screen while the
+  whole document's answer is on its way. `LspLanguageService` answers it with
+  `textDocument/semanticTokens/range`.
+- A diff editor page in the Android sample and in the web sample.
+
+### Changed
+
+- The gutter's diff lane marks the lines a real diff finds, where it compared lines in place: a line
+  moved by an insertion above it is no longer marked modified.
+- An edit inside a large HTML `<script>` or `<style>` body rescans only its changed lines, where it
+  rescanned the whole body: a one-character edit in a 2,000-line script scans 270 characters, not
+  112,001.
+- Formatting and `replaceValue` work out their minimal edits with the new diff, which needs memory in
+  proportion to the texts, not to the square of the changes.
+
+### Known issues
+
+- On the web, giving a diff editor a new original text, or any editor a new value, starts with one
+  task of 65 to 100 ms: the first slices of the full highlighting pass, where a rule's first search
+  can run far through the text before the pass can yield. The diff itself is a 13 to 14 ms task.
+- A diff's character changes are by character: two different lines can share scattered letters,
+  where Monaco extends changes to whole words.
+- A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an
+  edit more than 256 characters after it closes it. This was already so in JSON, TypeScript and CSS
+  documents, and is now so in HTML bodies too.
+
 ## [0.11.0] - 2026-11-20
 
 ### Added
@@ -629,10 +678,10 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `include`, `@rematch`, `defaultToken`, `ignoreCase`, `tokenPostfix`, `@name` regex attributes),
   and `DeclarativeTokenizer(grammar)` highlights with it, a line at a time and incrementally.
   Lookbehind is refused when the grammar is read, with where it is. Tokens get a
-  `NamedTokenType(name)`, dotted as in Monaco (`tag.aardflex`, `comment.doc`); the bare names
+  `NamedTokenType(name)`, dotted as in Monaco (`tag.mylang`, `comment.doc`); the bare names
   `comment` and `string` get the editor's own types, and any name with a `comment` or `string`
-  part is a comment or a string to the editor (no bracket colours inside it). aardflex-web-app's Monaco grammar reads unchanged and passes the cases its
-  Monaco tests check.
+  part is a comment or a string to the editor (no bracket colours inside it). A Monarch grammar
+  exported from Monaco reads unchanged.
 - `CodeEditorState.tokensForLine(line)`: the syntax tokens of one line, replacing the removed
   `tokenCache`.
 - `CodeEditorState.tokenizer` is settable: switching the language of an open document keeps its
@@ -645,7 +694,7 @@ registered from JavaScript. The public API breaks where it assumed one whole-doc
   `registerLanguage` takes a Monarch grammar (with `extends: "xml"` to keep a built-in language's
   service) and JavaScript functions for completions, hover and diagnostics, answered at once or
   with a Promise; `defineTheme` / `registerTheme` take Monaco's theme data or VS Code theme JSON,
-  whose colours and font styles reach token names by dotted prefix (`tag.aardflex`, then `tag`). In
+  whose colours and font styles reach token names by dotted prefix (`tag.mylang`, then `tag`). In
   Kotlin, `AardinkWeb.registerLanguage` with `WebLanguageProviders`, and `registerTheme`.
 - **Web:** more of Monaco's editor API: `getSelections` / `setSelections`, `canUndo`, `canRedo`,
   `pushUndoStop`, `getAlternativeVersionId`, `format()`, `focus()`, `setBaseline(text)` for the

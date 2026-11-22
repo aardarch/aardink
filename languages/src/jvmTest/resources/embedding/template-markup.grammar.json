@@ -1,0 +1,56 @@
+{
+  "defaultToken": "",
+  "tokenPostfix": ".tpl",
+  "comments": { "blockComment": ["<!--", "-->"] },
+  "knownElements": ["page", "section", "list", "item", "label", "link", "image", "note"],
+  "tokenizer": {
+    "root": [
+      ["<!\\[CDATA\\[", "delimiter.cdata", "@cdata"],
+      ["<!--", "comment", "@comment"],
+      ["(<\\/?)(\\w+)", ["delimiter", { "cases": { "@knownElements": { "token": "tag.markup", "next": "@tag" }, "@default": { "token": "tag", "next": "@tag" } } }]],
+      ["\\/>", "delimiter"],
+      [">", "delimiter"],
+      ["\\{\\$?[a-zA-Z_][^}\\n]{0,500}\\}", { "token": "@rematch", "next": "@expression" }],
+      ["\\{", ""],
+      ["[^<{]+", ""]
+    ],
+    "tag": [
+      ["\\s+", ""],
+      ["(\\w[\\w.:-]*)(\\s*)(=)(\\s*)", ["attribute.name", "", "delimiter", ""]],
+      ["\"", "attribute.value", "@attrDouble"],
+      ["'", "attribute.value", "@attrSingle"],
+      ["\\/?>", "delimiter", "@pop"],
+      ["\\w[\\w.:-]*", "attribute.name"],
+      [".", ""]
+    ],
+    "attrDouble": [
+      ["\\{\\$?[a-zA-Z_][^}\"\\n]{0,500}\\}", { "token": "@rematch", "next": "@expression" }],
+      ["[^\"{]+", "attribute.value"],
+      ["\\{", "attribute.value"],
+      ["\"", "attribute.value", "@pop"]
+    ],
+    "attrSingle": [
+      ["\\{\\$?[a-zA-Z_][^}'\\n]{0,500}\\}", { "token": "@rematch", "next": "@expression" }],
+      ["[^'{]+", "attribute.value"],
+      ["\\{", "attribute.value"],
+      ["'", "attribute.value", "@pop"]
+    ],
+    "comment": [
+      ["-->", "comment", "@pop"],
+      [".", "comment"]
+    ],
+    "cdata": [
+      ["[^\\]]+", ""],
+      ["\\]\\]>", "delimiter.cdata", "@pop"],
+      ["\\]", ""]
+    ],
+    "expression": [
+      ["\\}", "delimiter.expression", "@pop"],
+      ["(\\{)([a-zA-Z_]\\w*)(\\.)([a-zA-Z_][\\w.]*)", ["delimiter.expression", "variable.expression", "delimiter", "variable.property"]],
+      ["(\\{)(\\$?[a-zA-Z_]\\w*)", ["delimiter.expression", "variable.expression"]],
+      ["(\\|)(\\s*)([a-zA-Z_]\\w*)", ["operator.pipe", "", "function.filter"]],
+      ["(:)([^|}]*)", ["delimiter", "string.argument"]],
+      [".", ""]
+    ]
+  }
+}

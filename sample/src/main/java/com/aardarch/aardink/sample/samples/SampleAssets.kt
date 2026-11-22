@@ -1127,8 +1127,8 @@ object SampleAssets {
         Aardink — a quick tour
         ===========================
 
-        Aardink started as the editor inside Aardflex, a tool for designing Android wallpapers/widgets from XML and Compose.
-        Once the editor outgrew that single use case it was extracted into its own library.
+        Aardink is a code editor for Compose Multiplatform, on Android, the desktop and the web,
+        and as an npm package with a Monaco-shaped API.
 
         The library has three goals:
 
