@@ -31,7 +31,7 @@ is no 1.0: each release raises the minor (§9).
 | 0.9 | Released 2026-11-08 | §7 items 7.1 to 7.4, with the web side of each, except TypeScript regexp literals (to §8.1) and `onTypeFormatting` (to §8.3). Ledger approved as a whole 2026-11-06 (§15), with `onOpenLink` on the web and `DismissInlineCompletion` added 2026-11-07; what was built where it differs, and the symbols it did not name, are in §15.1. `docs/MIGRATION_0.9.md`. The inline-layout spike passed every step (`docs/spikes/0.9-inline-layout.md`). Scope: the rest of LSP and `connectLanguageServer`, Markdown documentation and the detail pane, inlay hints, code lens, semantic tokens, ghost text, embedded grammars and language configuration. The two opt-in performance costs left open after release went to §8.4. |
 | 0.10 | Released 2026-11-16 | §8, and what earlier versions left open (§16, "Carried in"): more built-in languages (TypeScript regexp literals among them), web provider parity (with the order of a host, a server and a base language), view options, find extras, format on type, the perf thread. Built on one branch, `feat/0.10`; ledger approved as a whole 2026-11-14 (§16); what was built where it differs is in §16.1. `docs/MIGRATION_0.10.md`. `semanticTokens/range` and the rescan of only an HTML body's changed lines were not built: moved to 0.12 (§9.1). |
 | 0.11 | Released 2026-11-20 | Not in the roadmap: stylus handwriting on Android 14 and later, handed to the input method as `BasicTextField` does, and a stylus tip that taps, long-presses and scrolls as a finger does. |
-| 0.12 | Planned | §9.1: the diff editor, side by side and inline, with the web's `createDiffEditor`; `semanticTokens/range` and the HTML body rescan carried in. |
+| 0.12 | Spike done 2026-11-22 (`docs/spikes/0.12-diff-rows.md`); ledger drafted (§17), awaiting approval | §9.1: the diff editor, side by side and inline, with the web's `createDiffEditor`; `semanticTokens/range` and the HTML body rescan carried in. |
 | 0.13 | Planned | §9.2: models and view state. |
 | 0.14 | Planned | §9.3: accessibility. |
 | 0.15 | Planned | §9.4: i18n. |
@@ -1185,6 +1185,88 @@ design or found while building it.
 | Keep a keystroke's code lens cost off the document's size (§8.4) | Profiled first, with a new `perf.mjs --profile` (a CPU profile of the keys, read from a development build for the names). At 60,000 lines with hints and lenses, the cost was highlighting, not lenses. `DeclarativeTokenizer`'s partial pass read the whole text twice more for its line starts. The editor gave up partial passes for the document's life after one pass over 50 ms, which the first passes after a mount always were while the browser compiled, so every key highlighted the whole document again. Now the line starts come from the old ones and the edit (internal `lineStartsAfter`), and the editor gives up only after three slow passes in a row. Busy time over 10 keys at 60,000 lines went from 6.6 s to 1.8 s, and hints at p95 on the reference document from 84 ms to 30 ms. At 60,000 lines key to idle stays near 400 ms: after the 300 ms pause, the answer for about 3,000 lenses is decoded within one frame of more than 34 ms, and the measure waits for the frames to settle. Moving lenses with an edit was under 1% of the profile and is unchanged | 0.9's note blamed lenses without a profile |
 | `perf.mjs --hints` and `--semantic` under `--gate` | Both in CI with `--gate`. `--hints` is held to the plain run's limits. `--semantic` is held to its landing frame and longest task (gate 50 ms each) and to key to idle; its mount, which includes connecting to the server, is reported but not gated. On the dev machine: hints p95 35 ms; semantic p95 35 ms, landing frame 25 ms, no long task | |
 | Token tests for TypeScript, JSON, CSS, Markdown and HTML; tests for `RenameDialog`, `GoToLineDialog`, `KeyboardToolbarRow`; Roborazzi scenes for the find panel, rename, go to line, signature help and the keyboard toolbar (carried in) | Token tests in `:languages` for each language's text and Monaco scope, in order: 23 tests over five files (`TypeScriptTokenizerTest` and the rest). UI tests on the desktop JVM: `ChromeDialogsUiTest` covers both dialogs. For rename, the current name in the field and the question, Rename offered only for a new name that is not blank, the name trimmed, and Cancel. For go to line, the lines there are, digits only and at most seven, a line outside the document refused, and Cancel. `KeyboardToolbarRowUiTest` covers each button, undo and redo following `canUndo` and `canRedo`, the host's items after the quick characters, and the row hidden with no keyboard. New scenes are `signature-help` (two overloads, the active parameter and its documentation) and `keyboard-toolbar` (`BottomFixed`). The find panel's new chips and its replace preview are in the existing `find-replace` scene, and rulers are in `guides` and `high-contrast`. Not as scenes: rename and go to line, which are `AlertDialog`s with a field whose caret keeps Compose from ever being idle under Robolectric, even with the clock stopped; and the inlay hint tooltip, whose resting mouse Robolectric does not deliver. The UI tests above, and `InlayHintsUiTest`'s tooltip test, cover them. Found while writing the token tests and left as they are: TypeScript's template literal is one string, `${}` and all, where Monaco colours what is inside; and in CSS, `url(x.png)` reads `.png` as a class | The dialogs' and tooltip's scenes cannot be taken in the sample's Robolectric tests |
+
+## 17. API ledger for 0.12
+
+Drafted on 2026-11-22 from §9.1, against `feat/0.12` after the spike (`docs/spikes/0.12-diff-rows.md`,
+every step passed). **Awaiting approval**: no public symbol is written until it is approved. What is
+built where it differs, and the symbols it does not name, will go in §17.1.
+
+The spike's code is internal and stays so: the diff computer in `core/diff/`, rows with a
+background and token spans on the inline layout, a per-line table of a diff's rows on the state, and
+`DiffRows`, which builds them.
+
+### Choices behind the ledger
+
+| Choice | Proposed | Why |
+| --- | --- | --- |
+| How 0.12 lands | One `feat/0.12` branch and one PR, as 0.8 to 0.10 | |
+| The diff | Myers's, in linear space, over interned lines, then over the characters of each change of at most 10,000 characters a side. A time limit (5 s, as Monaco's) ends the search with the rest as one change per region, and says so | Optimal and complete (the spike's property test). Monaco's newer algorithm also finds moved code; that is not in 0.12 |
+| When it runs | On `computeDispatcher`, 300 ms after typing stops on either side, never while a key is handled. Until then an edit moves the rows with the lines | As the gutter's lane does today |
+| Side by side | Filler rows keep the two sides aligned by rows, so soft wrap and a split of any width line up (D5). One scroll position serves both sides (D3) | Monaco aligns under wrap too; nothing maps positions across |
+| Inline | The original's deleted lines are rows above the modified line, in the original's token colours, out of reach of the caret. At most 1,000 rows of a block show, then a row that shows the rest on a click | D6: a block of 10,000 lines costs 178 ms to lay out the first time on the JVM |
+| Which view | Side by side, inline below `renderSideBySideInlineBreakpoint` (900 dp, Monaco's 900 px) or with `renderSideBySide = false` | So a phone gets the inline view |
+| What can be edited | The modified side always (unless `EditorOptions.readOnly`). The original only with `originalEditable`, side by side | Monaco's defaults |
+| Revert and accept | Revert puts a change's original lines back in the modified side; accept puts its modified lines into the original (only when it is editable). One undo step each, on the side it changes | |
+| Unchanged regions | `hideUnchangedRegions` folds runs of unchanged lines longer than twice the context, on both sides at once, with a row to show them. Off by default, as Monaco | The fold machinery already hides lines and rows |
+| The gutter's lane | `SimpleDiffProvider` uses the new diff: lines are marked after Myers's, not by position, and deletions get a marker | A line moved down by an insertion was marked modified before |
+| New defaults | Nothing changes on screen for a `CodeEditorLayout` that does not use the new symbols, except the lane's marks, which are now right | |
+
+### `:editor`, new
+
+| Symbol | Item |
+| --- | --- |
+| `TextDiff.compute(original: CharSequence, modified: CharSequence, options: TextDiffOptions = TextDiffOptions()): TextDiffResult`; `TextDiffOptions(ignoreTrimWhitespace = true, maxComputationTimeMs = 5_000, computeCharChanges = true)`; `TextDiffResult(changes: List<LineChange>, identical: Boolean, hitTimeout: Boolean)`; `LineChange(originalLines: IntRange, modifiedLines: IntRange, charChanges: List<CharChange>?)` (line indices, `until` ranges, one side empty for an insertion or a deletion); `CharChange(original: IntRange, modified: IntRange)` (offsets) | §9.1 item 1 |
+| `DiffEditorState(original: CodeEditorState, modified: CodeEditorState)` and `rememberDiffEditorState(original, modified)`: `changes: List<LineChange>` and `hitTimeout` (snapshot state), `changeAt(line, modifiedSide = true)`, `revert(change)`, `accept(change)`, `addDiffListener` and `removeDiffListener` | §9.1 items 3, 4 |
+| `CodeDiffEditorLayout(state: DiffEditorState, modifier, options: DiffEditorOptions = DiffEditorOptions(), editorOptions: EditorOptions = EditorOptions(), languageService: LanguageService? = null, originalLanguageService: LanguageService? = languageService)` | §9.1 item 3 |
+| `DiffEditorOptions(renderSideBySide = true, renderSideBySideInlineBreakpoint: Dp = 900.dp, ignoreTrimWhitespace = true, maxComputationTimeMs = 5_000, originalEditable = false, hideUnchangedRegions = false, unchangedContextLines = 3, renderIndicators = true, enableSplitViewResizing = true, splitRatio = 0.5f)` | §9.1 item 3 |
+| `EditorCommand.NextChange`, `PreviousChange`, `RevertChange` (the change at the caret), bound to F7, Shift+F7 and nothing in `EditorKeyBindings.Default`; available only in a diff editor | §9.1 item 4 |
+| `ChromeColors.diffInsertedLine`, `diffRemovedLine`, `diffInsertedText`, `diffRemovedText`, `diffFiller`, `gutterAdded`, `gutterModified`, `gutterDeleted`, read by the parser from Monaco's `diffEditor.insertedLineBackground`, `removedLineBackground`, `insertedTextBackground`, `removedTextBackground`, `diagonalFill` and `editorGutter.addedBackground`, `modifiedBackground`, `deletedBackground`; unspecified colours follow the theme | §9.1 items 2, 3 |
+| `LineDiffKind.Deleted`; `CodeEditorLayout(diffProvider: DiffProvider = SimpleDiffProvider)` | §9.1 item 2 |
+| `LanguageService.semanticTokens(document: CodeDocument, range: IntRange): List<Token>?` (suspend, default null: not supported, so the whole document is asked), with a `CompositeLanguageService` rule (the primary's when not null) | §9.1 item 7, carried in |
+
+### `:languages-lsp`, new
+
+| Symbol | Item |
+| --- | --- |
+| No new symbol: `LspLanguageService` overrides `semanticTokens(document, range)` with `textDocument/semanticTokens/range` for a server that declares or registers `range`, and the editor asks for the lines on screen while the whole answer is on its way | §9.1 item 7, carried in |
+
+### `:languages`, new
+
+| Symbol | Item |
+| --- | --- |
+| No new symbol: an edit in an HTML `<script>` or `<style>` body rescans only its changed lines | §9.1 item 7, carried in |
+
+### `:editor-web` and the npm package, new
+
+| Symbol | Item |
+| --- | --- |
+| `createDiffEditor(container, options): Promise<AardinkDiffEditor>`; `AardinkDiffEditor`: `getOriginalEditor()`, `getModifiedEditor()` (each an `AardinkEditor`), `setOriginalValue`, `setModifiedValue`, `getLineChanges()` in Monaco's `ILineChange` shape (1-based, with `charChanges`), `onDidUpdateDiff(listener)` returning a disposable, `goToDiff('next' \| 'previous')`, `revertChange(index)`, `updateOptions(options)`, `dispose()` | §9.1 item 5 |
+| Diff options in Monaco's names: `renderSideBySide`, `renderSideBySideInlineBreakpoint`, `ignoreTrimWhitespace`, `maxComputationTime`, `originalEditable`, `hideUnchangedRegions: { enabled, contextLineCount }`, `renderIndicators`, `enableSplitViewResizing`, with the editor options (`language`, `theme` and the rest) for both sides | §9.1 item 5 |
+| `defineTheme` reads the `diffEditor.*` and `editorGutter.*` keys above | §9.1 items 2, 3 |
+| `AardinkWeb.mountDiff`, its handle, and template exports `aardinkCreateDiff`, `aardinkDiffSetValues`, `aardinkDiffLineChanges`, `aardinkDiffGoTo`, `aardinkDiffRevert`, `aardinkDiffUpdateOptions`, `aardinkDiffDispose`, `aardinkOnDidUpdateDiff` | §9.1 item 5 |
+
+### Breaking
+
+| Symbol | Change | Item |
+| --- | --- | --- |
+| `LineDiffKind` | Gains `Deleted` (an exhaustive `when` in a consumer breaks) | §9.1 item 2 |
+| `SimpleDiffProvider` | Marks lines after Myers's diff, with deletions; the lines it marks change for the better. `MIGRATION_0.12.md` | §9.1 item 2 |
+| `ChromeColors` | Gains fields (data class signature) | §9.1 items 2, 3 |
+| `CodeEditorLayout` | Gains a defaulted parameter (recompile) | §9.1 item 2 |
+| Template copies | Copy the new exports | §9.1 item 5 |
+
+### Not in 0.12
+
+- Moved code (Monaco's `experimental.showMoves`), three-way merge, and word-level diffs other than by
+  characters.
+- The accessible diff viewer: 0.14 (§9.3).
+- Models: the diff editor takes two states, and the web's `setModel` comes with 0.13 (§9.2).
+
+### If the wave overruns
+
+In this order, each to the next minor: `hideUnchangedRegions`, the draggable split, accept into the
+original, the inline view's cap row (a block then shows in full).
 
 ## 13. Verification
 

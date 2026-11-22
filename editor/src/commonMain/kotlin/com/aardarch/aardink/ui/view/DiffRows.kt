@@ -20,12 +20,7 @@ import androidx.compose.ui.text.SpanStyle
 import com.aardarch.aardink.core.CodeDocument
 import com.aardarch.aardink.core.CodeEditorState
 import com.aardarch.aardink.core.TokenType
-
-/** Original lines [originalStart, originalEnd) became modified lines [modifiedStart, modifiedEnd). */
-internal data class DiffBlock(val originalStart: Int, val originalEnd: Int, val modifiedStart: Int, val modifiedEnd: Int) {
-    val originalLines: Int get() = originalEnd - originalStart
-    val modifiedLines: Int get() = modifiedEnd - modifiedStart
-}
+import com.aardarch.aardink.core.diff.LineChange
 
 /**
  * The rows a diff adds to each side's lines, for [CodeEditorState.publishDiffRows]: blank filler rows
@@ -39,7 +34,7 @@ internal object DiffRows {
      * the difference, after its own lines, as Monaco puts them.
      */
     fun sideBySide(
-        blocks: List<DiffBlock>,
+        blocks: List<LineChange>,
         original: CodeDocument,
         modified: CodeDocument,
         filler: Color,
@@ -61,7 +56,7 @@ internal object DiffRows {
      * without any filler of the diff's own.
      */
     fun alignedByRows(
-        blocks: List<DiffBlock>,
+        blocks: List<LineChange>,
         original: CodeDocument,
         modified: CodeDocument,
         filler: Color,
@@ -80,7 +75,7 @@ internal object DiffRows {
         }
         var o = 0
         var m = 0
-        for (block in blocks + DiffBlock(original.lineCount, original.lineCount, modified.lineCount, modified.lineCount)) {
+        for (block in blocks + LineChange(original.lineCount, original.lineCount, modified.lineCount, modified.lineCount, null)) {
             while (o < block.originalStart && m < block.modifiedStart) {
                 unit(o, o + 1, m, m + 1)
                 o++
@@ -102,7 +97,7 @@ internal object DiffRows {
      * line, in the original's token colours over [background].
      */
     fun inline(
-        blocks: List<DiffBlock>,
+        blocks: List<LineChange>,
         original: CodeEditorState,
         modified: CodeDocument,
         tokenStyle: (TokenType) -> SpanStyle?,
@@ -177,3 +172,6 @@ internal object DiffRows {
         return text.toString() to spans
     }
 }
+
+private val LineChange.originalLines: Int get() = originalEnd - originalStart
+private val LineChange.modifiedLines: Int get() = modifiedEnd - modifiedStart

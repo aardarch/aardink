@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.ui.graphics.Color
+import com.aardarch.aardink.core.diff.LineChange
 import com.aardarch.aardink.ui.view.InlineFixture.viewOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,7 +40,7 @@ class DiffRowsScaleTest {
         val lines = 100_000
         val text = (0 until lines).joinToString("\n") { "line $it of the modified side" }
         val view = viewOf(text, height = 400)
-        val blocks = (0 until lines step 20).map { DiffBlock(it, it + 3, it, it + 1) }
+        val blocks = (0 until lines step 20).map { LineChange(it, it + 3, it, it + 1, null) }
         val (_, right) = DiffRows.sideBySide(blocks, InlineFixture.stateOf(text).document, view.state.document, band)
         val publish = measureTime {
             view.state.publishDiffRows(right)
@@ -64,7 +65,7 @@ class DiffRowsScaleTest {
         val originalText = "before\n" + (0 until deleted).joinToString("\n") { "deleted line $it with some text after it" } + "\nafter"
         val original = viewOf(originalText).state
         val view = viewOf("before\nafter", height = 400)
-        val rows = DiffRows.inline(listOf(DiffBlock(1, 1 + deleted, 1, 1)), original, view.state.document, { null }, band, 4)
+        val rows = DiffRows.inline(listOf(LineChange(1, 1 + deleted, 1, 1, null)), original, view.state.document, { null }, band, 4)
         view.state.publishDiffRows(rows)
         val firstLayout = measureTime { view.prepare(600, 400) }
         val shownRows = view.lineMap.rowsOf(1) - 1

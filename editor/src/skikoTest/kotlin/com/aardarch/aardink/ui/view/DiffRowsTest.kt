@@ -21,6 +21,7 @@ import com.aardarch.aardink.core.IncrementalTokenizer
 import com.aardarch.aardink.core.TextEdit
 import com.aardarch.aardink.core.Token
 import com.aardarch.aardink.core.TokenType
+import com.aardarch.aardink.core.diff.LineChange
 import com.aardarch.aardink.ui.view.InlineFixture.LINE_HEIGHT
 import com.aardarch.aardink.ui.view.InlineFixture.PADDING
 import com.aardarch.aardink.ui.view.InlineFixture.bounds
@@ -91,7 +92,7 @@ class DiffRowsTest {
     fun `deleted lines are rows above the line after them, out of reach of the caret`() {
         val original = InlineFixture.stateOf("alpha\nbeta\ngamma\ndelta")
         val view = viewOf("alpha\ndelta")
-        val rows = DiffRows.inline(listOf(DiffBlock(1, 3, 1, 1)), original, view.state.document, { null }, removed, tabSize = 4)
+        val rows = DiffRows.inline(listOf(LineChange(1, 3, 1, 1, null)), original, view.state.document, { null }, removed, tabSize = 4)
         view.publish(rows)
 
         val layout = view.shown(1).layout
@@ -107,7 +108,7 @@ class DiffRowsTest {
     fun `a deleted line keeps its token colours, on the band of its background`() {
         val original = InlineFixture.stateOf("keep\nfun x() {}\nkeep", tokenizer = Words)
         // Every word a token, each coloured as a keyword here.
-        val rows = DiffRows.inline(listOf(DiffBlock(1, 2, 1, 1)), original, InlineFixture.stateOf("keep\nkeep").document, {
+        val rows = DiffRows.inline(listOf(LineChange(1, 2, 1, 1, null)), original, InlineFixture.stateOf("keep\nkeep").document, {
             keyword
         }, removed, 4)
         val injection = rows.getValue(1).single()
@@ -121,7 +122,7 @@ class DiffRowsTest {
     fun `the band of deleted rows is painted across the whole width on exactly their rows`() {
         val original = InlineFixture.stateOf("alpha\nbeta\ngamma\ndelta")
         val view = viewOf("alpha\ndelta", width = 300, height = 200)
-        view.publish(DiffRows.inline(listOf(DiffBlock(1, 3, 1, 1)), original, view.state.document, { null }, removed, 4), 300, 200)
+        view.publish(DiffRows.inline(listOf(LineChange(1, 3, 1, 1, null)), original, view.state.document, { null }, removed, 4), 300, 200)
         val pixels = paint(300, 200) {
             drawEditorContent(view.frame, EditorDecorations(emptyList(), emptyList(), -1, emptyList(), null), colors)
         }
@@ -138,7 +139,7 @@ class DiffRowsTest {
     fun `lines deleted at the end are rows after the last line`() {
         val original = InlineFixture.stateOf("alpha\nbeta\ngamma")
         val view = viewOf("alpha")
-        view.publish(DiffRows.inline(listOf(DiffBlock(1, 3, 1, 1)), original, view.state.document, { null }, removed, 4), 300, 200)
+        view.publish(DiffRows.inline(listOf(LineChange(1, 3, 1, 1, null)), original, view.state.document, { null }, removed, 4), 300, 200)
         assertEquals(0, view.shown(0).layout.textRow)
         assertEquals(3, view.lineMap.rowsOf(0))
         assertEquals(listOf(0, 5), view.caretWalk(), "Down from alpha goes to its end: no row below it takes a caret")
@@ -163,10 +164,10 @@ class DiffRowsTest {
 
     /** The blocks of [originalText] against [modifiedText], worked out by hand. */
     private val blocks = listOf(
-        DiffBlock(10, 15, 10, 10),
-        DiffBlock(20, 21, 15, 18),
-        DiffBlock(30, 31, 27, 27),
-        DiffBlock(40, 40, 36, 37),
+        LineChange(10, 15, 10, 10, null),
+        LineChange(20, 21, 15, 18, null),
+        LineChange(30, 31, 27, 27, null),
+        LineChange(40, 40, 36, 37, null),
     )
 
     /** Each unchanged original line and the modified line it is. */
@@ -174,7 +175,7 @@ class DiffRowsTest {
         val pairs = ArrayList<Pair<Int, Int>>()
         var o = 0
         var m = 0
-        for (block in blocks + DiffBlock(60, 60, 55, 55)) {
+        for (block in blocks + LineChange(60, 60, 55, 55, null)) {
             while (o < block.originalStart) pairs += o++ to m++
             o = block.originalEnd
             m = block.modifiedEnd
@@ -225,7 +226,7 @@ class DiffRowsTest {
     fun `an edit above moves the rows with their line, and one on their line keeps those above it`() {
         val original = InlineFixture.stateOf("alpha\nbeta\ndelta")
         val view = viewOf("alpha\ndelta")
-        view.publish(DiffRows.inline(listOf(DiffBlock(1, 2, 1, 1)), original, view.state.document, { null }, removed, 4))
+        view.publish(DiffRows.inline(listOf(LineChange(1, 2, 1, 1, null)), original, view.state.document, { null }, removed, 4))
         view.state.executeEdits(listOf(TextEdit(0 until 0, "new\n")))
         view.prepare(600, 400)
         assertEquals(setOf(2), view.state.diffRows.keys)
@@ -258,7 +259,7 @@ class DiffRowsTest {
         val rightWidth = 520
         val left = viewOf(wrappingOriginal, softWrap = true, width = leftWidth, height = 600)
         val right = viewOf(wrappingModified, softWrap = true, width = rightWidth, height = 600)
-        val wrapBlocks = listOf(DiffBlock(7, 8, 7, 7))
+        val wrapBlocks = listOf(LineChange(7, 8, 7, 7, null))
         var passes = 0
         do {
             val (fillLeft, fillRight) = DiffRows.alignedByRows(
@@ -281,5 +282,38 @@ class DiffRowsTest {
             assertEquals(left.textTop(o), right.textTop(m), "original $o, modified $m")
         }
         assertEquals(left.lineMap.totalRows, right.lineMap.totalRows)
+    }
+
+    // ── D7: a computed diff, end to end ──────────────────────────────────────
+
+    @Test
+    fun `a computed diff lines up two real texts side by side, and inline shows every deleted line`() {
+        val originalText = (0 until 200).joinToString("\n") { "val v$it = compute($it)" }
+        val modifiedText = originalText.lines().mapIndexedNotNull { line, text ->
+            when {
+                line % 17 == 3 -> null
+                line % 23 == 5 -> "$text // changed\nval extra$line = 0"
+                else -> text
+            }
+        }.joinToString("\n")
+        val diff = com.aardarch.aardink.core.diff.DiffComputer.compute(originalText, modifiedText)
+        val left = viewOf(originalText, height = 6000)
+        val right = viewOf(modifiedText, height = 6000)
+        val (fillLeft, fillRight) = DiffRows.sideBySide(diff.changes, left.state.document, right.state.document, filler)
+        left.publish(fillLeft, height = 6000)
+        right.publish(fillRight, height = 6000)
+        assertEquals(left.lineMap.totalRows, right.lineMap.totalRows)
+        var o = 0
+        var m = 0
+        for (change in diff.changes + LineChange(200, 200, right.state.document.lineCount, right.state.document.lineCount, null)) {
+            while (o < change.originalStart) assertEquals(left.textTop(o++), right.textTop(m++))
+            o = change.originalEnd
+            m = change.modifiedEnd
+        }
+
+        val inline = viewOf(modifiedText, height = 6000)
+        inline.publish(DiffRows.inline(diff.changes, left.state, inline.state.document, { null }, removed, 4), height = 6000)
+        val deletedLines = diff.changes.sumOf { it.originalEnd - it.originalStart }
+        assertEquals(inline.state.document.lineCount + deletedLines, inline.lineMap.totalRows)
     }
 }
