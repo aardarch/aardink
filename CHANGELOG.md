@@ -76,7 +76,9 @@ few changes that can reach an upgrade.
 
 ### Known issues
 
-- On the web, a diff of about 250 changes in 5,000 lines lands as one task of 67 to 84 ms.
+- On the web, giving a diff editor a new original text, or any editor a new value, starts with one
+  task of 65 to 100 ms: the first slices of the full highlighting pass, where a rule's first search
+  can run far through the text before the pass can yield. The diff itself is a 13 to 14 ms task.
 - A diff's character changes are by character: two different lines can share scattered letters,
   where Monaco extends changes to whole words.
 - A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an

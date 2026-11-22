@@ -569,6 +569,10 @@ The work:
 - A diff's character changes are by character, so two different lines can share scattered letters
   (`pr`, `intln(`) and a run across lines takes the next line's indentation; Monaco extends them
   to word boundaries (§17.1).
+- A full highlighting pass's first slices can run one task of 65 to 100 ms on the web after
+  `setValue` or a new diff original: a regex rule's first search can run far through the text before
+  the pacer, which checks the clock every 256 tokens, can yield. Bound each rule's first search, or
+  search in windows with the pacer between them (§17.1, `perf.mjs --diff --profile`).
 
 ## 10. Threads through every version
 
@@ -1298,7 +1302,7 @@ additions, each forced by the design or found while building it.
 | `AardinkWeb.mountDiff`, its handle | `mountDiff(containerId, original, modified, optionsJson, …)` takes the options as JSON, as the template passes them, and returns `AardinkDiffHandle` with `original` and `modified`, each an `AardinkEditorHandle`, so every existing per-editor export works on either side. Also public, as the Kotlin side of the approved npm lines: `diffSetValues`, `diffLineChangesJson`, `diffGoTo`, `diffRevert`, `diffUpdateOptions`, `diffDispose` and `onDidUpdateDiff` on `AardinkWeb` | The exports in `:sample-web` and in the template are in other modules |
 | `defineTheme` reads the diff keys | The Kotlin parser read them already; the npm path dropped them, as a registered theme's `ChromeColors` copied only the older fields. It copies them all now | Found by the smoke test's pixels |
 | — | A read-only original refuses `executeEdits` from the web unless `originalEditable` | The state's read-only flag stops typing, not edits through the API |
-| `perf.mjs --diff` | The 5,000-line reference document as the modified side, a change about every 20 lines, side by side; in CI with `--gate`. Key to change is held to the plain run's limits. Key to idle is reported, not gated: the diff runs 300 ms after typing stops, inside the window that ends a key's time, so a key's time takes it in. On the dev machine: about 250 changes found 370 ms after mount, key to change p95 17 to 19 ms, and a new original lands as one task of 67 to 84 ms | |
+| `perf.mjs --diff` | The 5,000-line reference document as the modified side, a change about every 20 lines, side by side; in CI with `--gate`. Key to change is held to the plain run's limits. Key to idle is reported, not gated: the diff runs 300 ms after typing stops, inside the window that ends a key's time, so a key's time takes it in. On the dev machine: about 250 changes found 370 ms after mount, key to change p95 17 to 19 ms. A new original starts with one task of 65 to 96 ms, gated at 100 ms: a profile (`--diff --profile`) shows it is the first slices of the original's full highlighting pass, not the diff, which is one task of 13 to 14 ms, with 20 ms to publish | The highlighting pass is §9.6's, and plain `setValue` has the same task |
 
 ## 13. Verification
 
