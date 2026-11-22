@@ -128,8 +128,17 @@ internal fun EditorGutterView(
     val hasDiffActions = hasDiffLane && content.onDiffAction != null
     val hasFoldLane = content.reserveFoldLane || content.foldableLines.isNotEmpty()
     val hasAnnotationLane = content.reserveAnnotationLane || content.annotations.isNotEmpty()
-    val width =
-        rememberGutterWidth(lineCount, hasDiffLane, hasDiffActions, hasFoldLane, hasAnnotationLane, content.showLineNumbers, density, measurer, textStyle)
+    val width = rememberGutterWidth(
+        lineCount,
+        hasDiffLane,
+        hasDiffActions,
+        hasFoldLane,
+        hasAnnotationLane,
+        content.showLineNumbers,
+        density,
+        measurer,
+        textStyle,
+    )
     val barWidth = with(density) { if (hasDiffLane) DIFF_LANE_WIDTH.toPx() else 0f }
     val diffLane = barWidth + with(density) { if (hasDiffActions) DIFF_ACTION_WIDTH.toPx() else 0f }
     val foldLane = with(density) { if (hasFoldLane) FOLD_LANE_WIDTH.toPx() else 0f }

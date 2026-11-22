@@ -36,6 +36,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.aardarch.aardink.core.CodeEditorState
@@ -128,7 +129,7 @@ fun CodeDiffEditorLayout(
     // ── The diff: once on show, then once typing stops on either side ────────
     LaunchedEffect(state, textOptions) {
         var first = true
-        snapshotFlow { state.original.document.version to state.modified.document.version }.collectLatest {
+        snapshotFlow { state.original.textVersion to state.modified.textVersion }.collectLatest {
             if (!first) delay(DIFF_DEBOUNCE_MS)
             first = false
             state.recompute(textOptions)
@@ -194,9 +195,15 @@ fun CodeDiffEditorLayout(
             DisposableEffect(alignment) { onDispose { alignment.clear() } }
             LaunchedEffect(alignment, revision, softWrap) { alignment.rebuild(state.changes.toBlocks(), softWrap) }
             LaunchedEffect(alignment, softWrap) {
-                if (!softWrap) return@LaunchedEffect
-                snapshotFlow { originalView.frame to modifiedView.frame }.collect {
-                    if (state.isCurrent) alignment.settle()
+                snapshotFlow { originalView.frame to modifiedView.frame }.collectLatest {
+                    if (!state.isCurrent) return@collectLatest
+                    alignment.settle()
+                    // A pane that changed width (a resize, the divider) counts its lines in other rows: all of
+                    // them are worked out again, once it has stopped changing.
+                    if (alignment.needsRebuild()) {
+                        delay(WIDTH_SETTLE_MS)
+                        if (state.isCurrent) alignment.rebuild(state.changes.toBlocks(), wrap = true)
+                    }
                 }
             }
             LaunchedEffect(originalView, modifiedView) { shareScroll(originalView, modifiedView) }
@@ -207,9 +214,11 @@ fun CodeDiffEditorLayout(
         views.expand = { expanded += it }
         if (!sideBySide) {
             LaunchedEffect(state, revision, expanded, colors.removedLine, tokenStyles, editorOptions.tabSize) {
+                var first = true
                 snapshotFlow { state.original.tokenVersion }.collectLatest {
                     // The original's tokens come from its own pass, and may still be on their way.
-                    delay(INLINE_TOKENS_DEBOUNCE_MS)
+                    if (!first) delay(INLINE_TOKENS_DEBOUNCE_MS)
+                    first = false
                     state.modified.publishDiffRows(
                         DiffRows.inline(
                             state.changes.toBlocks(),
@@ -241,7 +250,13 @@ fun CodeDiffEditorLayout(
                 onView = views.onModifiedView,
                 lane = DiffMarks.modifiedLane(changes),
                 colors = colors,
-                actionLines = if (editorOptions.readOnly) emptySet() else changes.map { it.modifiedLines.first.coerceIn(0, lineCount - 1) }.toSet(),
+                actionLines = if (editorOptions.readOnly) {
+                    emptySet()
+                } else {
+                    changes.map {
+                        it.modifiedLines.first.coerceIn(0, lineCount - 1)
+                    }.toSet()
+                },
                 onAction = { line -> state.changeAt(line, modifiedSide = true)?.let(state::revert) },
             )
         }
@@ -253,7 +268,13 @@ fun CodeDiffEditorLayout(
                 lane = DiffMarks.originalLane(changes),
                 // The original's lane marks lines removed from it, in the colour of deleted lines.
                 colors = colors.copy(gutterModified = colors.gutterDeleted),
-                actionLines = if (originalEditable) changes.map { it.originalLines.first.coerceIn(0, lineCount - 1) }.toSet() else emptySet(),
+                actionLines = if (originalEditable) {
+                    changes.map {
+                        it.originalLines.first.coerceIn(0, lineCount - 1)
+                    }.toSet()
+                } else {
+                    emptySet()
+                },
                 onAction = { line -> state.changeAt(line, modifiedSide = false)?.let(state::accept) },
             )
         }
@@ -315,6 +336,7 @@ fun CodeDiffEditorLayout(
                         .width(dividerWidth)
                         .fillMaxHeight()
                         .background(dividerColor)
+                        .testTag(EditorTestTags.DIFF_DIVIDER)
                         .pointerInput(options.enableSplitViewResizing) {
                             if (!options.enableSplitViewResizing) return@pointerInput
                             detectHorizontalDragGestures { _, amount ->
@@ -369,6 +391,9 @@ internal const val DIFF_OWNER = "aardink.diff"
 
 /** How long typing must pause before the diff is worked out again, as the gutter's lane waits. */
 private const val DIFF_DEBOUNCE_MS = 300L
+
+/** How long a pane must keep its width before the filler of the whole diff is worked out for it. */
+private const val WIDTH_SETTLE_MS = 100L
 
 /** How long the inline view waits for the original's tokens to stop changing before it shows them. */
 private const val INLINE_TOKENS_DEBOUNCE_MS = 50L
@@ -572,8 +597,10 @@ private object DiffMarks {
         return marks
     }
 
-    private fun wholeLines(start: Int, end: Int, background: Color, ruler: Color) =
-        Decoration(start until end.coerceAtLeast(start), DecorationStyle(background = background, wholeLine = true, overviewRulerColor = ruler))
+    private fun wholeLines(start: Int, end: Int, background: Color, ruler: Color) = Decoration(
+        start until end.coerceAtLeast(start),
+        DecorationStyle(background = background, wholeLine = true, overviewRulerColor = ruler),
+    )
 
     fun modifiedLane(changes: List<LineChange>): DiffLane {
         if (changes.isEmpty()) return DiffLane.None

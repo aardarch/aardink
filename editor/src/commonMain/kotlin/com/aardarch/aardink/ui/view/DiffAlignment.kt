@@ -39,13 +39,13 @@ import com.aardarch.aardink.core.diff.LineChange
  * What is published here is moved with edits by the state, so [settle] does nothing between an edit
  * and the next [rebuild], which the layout runs when the diff has been worked out again.
  */
-internal class DiffAlignment(
-    private val original: EditorView,
-    private val modified: EditorView,
-    private val filler: Color,
-) {
+internal class DiffAlignment(private val original: EditorView, private val modified: EditorView, private val filler: Color) {
     private var blocks: List<LineChange> = emptyList()
     private var wrapped = false
+
+    // The widths of the panes the rows were counted for.
+    private var builtOriginalWidth = -1
+    private var builtModifiedWidth = -1
 
     // Rows of filler each unit gave each side, by the unit's first line on each side.
     private val originalGave = HashMap<Long, Int>()
@@ -59,6 +59,8 @@ internal class DiffAlignment(
     fun rebuild(blocks: List<LineChange>, wrap: Boolean) {
         this.blocks = blocks
         wrapped = wrap
+        builtOriginalWidth = original.frame.width
+        builtModifiedWidth = modified.frame.width
         originalGave.clear()
         modifiedGave.clear()
         originalAt.clear()
@@ -69,11 +71,13 @@ internal class DiffAlignment(
             val (left, right) = DiffRows.sideBySide(blocks, originalDocument, modifiedDocument, filler)
             original.state.publishDiffRows(left)
             modified.state.publishDiffRows(right)
+            armRecheck()
             return
         }
         var o = 0
         var m = 0
-        val end = LineChange(originalDocument.lineCount, originalDocument.lineCount, modifiedDocument.lineCount, modifiedDocument.lineCount, null)
+        val end =
+            LineChange(originalDocument.lineCount, originalDocument.lineCount, modifiedDocument.lineCount, modifiedDocument.lineCount, null)
         for (block in blocks + end) {
             while (o < block.originalStart && m < block.modifiedStart) {
                 unit(o, o + 1, m, m + 1, null)
@@ -88,7 +92,11 @@ internal class DiffAlignment(
         }
         original.state.publishDiffRows(injections(original, originalAt))
         modified.state.publishDiffRows(injections(modified, modifiedAt))
+        armRecheck()
     }
+
+    /** Whether a pane has another width than when [rebuild] counted its rows, under soft wrap. */
+    fun needsRebuild(): Boolean = wrapped && (original.frame.width != builtOriginalWidth || modified.frame.width != builtModifiedWidth)
 
     /** Removes the filler from both sides. */
     fun clear() {
@@ -107,7 +115,9 @@ internal class DiffAlignment(
      * views are laid out once more.
      */
     fun settle(): Boolean {
-        if (!wrapped || blocks.isEmpty() && originalGave.isEmpty()) return false
+        recheck(original, recheckOriginal)
+        recheck(modified, recheckModified)
+        if (!wrapped || (blocks.isEmpty() && originalGave.isEmpty())) return false
         val seen = HashSet<Long>()
         val touchedOriginal = HashSet<Int>()
         val touchedModified = HashSet<Int>()
@@ -123,7 +133,37 @@ internal class DiffAlignment(
         if (touchedOriginal.isEmpty() && touchedModified.isEmpty()) return false
         original.state.patchDiffRows(patchFor(original, originalAt, touchedOriginal))
         modified.state.patchDiffRows(patchFor(modified, modifiedAt, touchedModified))
+        armRecheck()
         return true
+    }
+
+    /**
+     * The lines a view had on screen when filler was published for it. The view leaves rows of a
+     * line on screen to its next layout pass, and a line that the new rows push off the screen is
+     * not laid out in it, so keeps the rows it was counted with. [recheck] tells the view about
+     * those lines again once that pass has run, when they are off screen and it can count them.
+     */
+    private class Recheck {
+        var frame: ViewFrame? = null
+        var lines = IntArray(0)
+    }
+
+    private val recheckOriginal = Recheck()
+    private val recheckModified = Recheck()
+
+    private fun armRecheck() {
+        for ((view, recheck) in listOf(original to recheckOriginal, modified to recheckModified)) {
+            recheck.frame = view.frame
+            recheck.lines = IntArray(view.frame.lines.size) { view.frame.lines[it].line }
+        }
+    }
+
+    private fun recheck(view: EditorView, recheck: Recheck) {
+        val armed = recheck.frame ?: return
+        if (view.frame === armed) return
+        recheck.frame = null
+        val stale = recheck.lines.filter { view.frame.find(it) == null }
+        if (stale.isNotEmpty()) view.injectionsChanged(stale)
     }
 
     private class Touched(val original: MutableSet<Int>, val modified: MutableSet<Int>)
@@ -140,14 +180,7 @@ internal class DiffAlignment(
         give(modifiedGave, modifiedAt, key, modifiedEnd, (left - right).coerceAtLeast(0), touched?.modified)
     }
 
-    private fun give(
-        gave: HashMap<Long, Int>,
-        at: HashMap<Int, Int>,
-        key: Long,
-        target: Int,
-        rows: Int,
-        touched: MutableSet<Int>?,
-    ) {
+    private fun give(gave: HashMap<Long, Int>, at: HashMap<Int, Int>, key: Long, target: Int, rows: Int, touched: MutableSet<Int>?) {
         val before = gave[key] ?: 0
         if (rows == before) return
         if (rows == 0) gave.remove(key) else gave[key] = rows

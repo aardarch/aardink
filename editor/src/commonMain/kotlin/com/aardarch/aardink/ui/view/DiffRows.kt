@@ -139,13 +139,12 @@ internal object DiffRows {
     }
 
     /** One row of [rows] filler lines on [document]: before line [before], or after the last line when there is none. */
-    fun filler(document: CodeDocument, before: Int, rows: Int, color: Color): Injection =
-        if (before >= document.lineCount) {
-            val last = document.lineCount - 1
-            Injection(document.lineEnd(last) - document.lineStart(last), "\n".repeat(rows), background = color)
-        } else {
-            Injection(0, "\n".repeat(rows), caretAfter = true, background = color)
-        }
+    fun filler(document: CodeDocument, before: Int, rows: Int, color: Color): Injection = if (before >= document.lineCount) {
+        val last = document.lineCount - 1
+        Injection(document.lineEnd(last) - document.lineStart(last), "\n".repeat(rows), background = color)
+    } else {
+        Injection(0, "\n".repeat(rows), caretAfter = true, background = color)
+    }
 
     /** Rows of deleted lines an inline block shows before the row that shows the rest. */
     const val MAX_INLINE_ROWS = 1_000

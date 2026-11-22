@@ -338,6 +338,8 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         state.ghostListeners += ghostChanged
         state.diffListeners += ghostChanged
         inline.changed()
+        // A diff may have published its rows before this view was there to be told.
+        if (state.diffRows.isNotEmpty()) inlineChanged(state.diffRows.keys.sorted())
         structureDirty = true
     }
 
