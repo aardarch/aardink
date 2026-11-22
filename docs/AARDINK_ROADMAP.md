@@ -564,6 +564,8 @@ The work:
   `url(x.png)` as a class (§16.1).
 - An inlay hint's label parts: their tooltips, commands and locations (§16.1).
 - `signatureHelpTriggerCharacters` is accepted on the web and not used (§16.1).
+- A regex tokenizer's partial pass can miss a string or comment opener that matched nothing until an
+  edit more than 256 characters after it closed it; in JSON, TypeScript, CSS and HTML bodies (§17.1).
 
 ## 10. Threads through every version
 
@@ -1267,6 +1269,20 @@ background and token spans on the inline layout, a per-line table of a diff's ro
 
 In this order, each to the next minor: `hideUnchangedRegions`, the draggable split, accept into the
 original, the inline view's cap row (a block then shows in full).
+
+### 17.1 As built
+
+Approved as a whole on 2026-11-22. The 0.12 work follows the ledger above, with these differences and
+additions, each forced by the design or found while building it.
+
+| Ledger | Built | Why |
+| --- | --- | --- |
+| `TextDiff.compute` | As listed. `maxComputationTimeMs` of 0 or less is no limit. With `ignoreTrimWhitespace`, texts that differ only in such whitespace have no changes and are not `identical`. `MinimalEdits`, behind formatting and `replaceValue`, runs on the same linear-space core in place of its O(D²) trace | One diff in the editor |
+| `SimpleDiffProvider` marks lines after Myers's diff | As listed, with whitespace counting (the lane is about what saving changes). Of a change that replaces lines, as many lines as it replaced are `Modified` and the rest `Added`, as before; VS Code marks them all modified. A `Deleted` mark's `lineIndex` is the line below the deleted lines, or the line count for after the last line, where the lane draws a wedge on the bottom edge | Less change for a host reading the marks |
+| Lane colours from the theme | An unset `gutterAdded`, `gutterModified` or `gutterDeleted` draws the lane's old green and blue, and red, so a theme without the keys looks as before | |
+| `LanguageService.semanticTokens(document, range)` | As listed. The range is a line's start to the end of the last line, as `inlayHints` takes it, and an answer may reach past it. While the whole answer is on its way, the editor asks for the lines on screen with a screen's margin, split where folds hide long runs as the inlay hint window is, at each pause in typing; a range answer replaces those lines' tokens only, and the whole answer replaces everything when it lands. A scroll asks nothing. An empty list is an answer; null changes nothing | |
+| LSP `semanticTokens/range` | As listed, for a server that declares or registers `range` (`true` or an object) with a legend. Its numbers are relative to the document's start, as the specification has them. It leaves the last whole answer's `resultId` alone, so the next request is still `full/delta`. `semanticTokens.requests.range` is declared. The legend of a range-only server is used for range requests; its whole requests are still not sent | |
+| An edit in an HTML body rescans only its changed lines | Each `<script>` and `<style>` body keeps its own scan. An edit inside a body rescans from a little before the edit until the body's tokenizer is back in step, and the tokens after the body are moved by the edit, not scanned again: a one-character edit in the middle of a 2,000-line body scans 270 characters where it scanned 112,001. An edit to the tag, to the closing tag, or one that makes an earlier closing tag falls back to the whole body. An edit after a body's closing tag no longer rescans the body. The bodies now share the top-level tokenizers' one limit: a string or comment opener that matched nothing can become a token's start more than 256 characters before an edit that closes it, and a partial pass misses that, as it already does in a JSON, TypeScript or CSS document (§9.6) | |
 
 ## 13. Verification
 
