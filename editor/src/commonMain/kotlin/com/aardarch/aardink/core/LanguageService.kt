@@ -252,6 +252,16 @@ interface LanguageService {
     suspend fun semanticTokens(document: CodeDocument): List<Token> = emptyList()
 
     /**
+     * The semantic tokens of [range] of [document] alone, for the editor to show on the lines on
+     * screen while [semanticTokens] is still on its way. [range] is given as for [inlayHints]: from
+     * the start of a line to the end of that or a later one. A service that can answer a part of the
+     * text more quickly than the whole overrides this; the tokens it returns may reach past [range],
+     * and the editor uses only what is on its lines. The default is null, for not supported: the
+     * editor then waits for [semanticTokens]. An empty list is an answer: no tokens in [range].
+     */
+    suspend fun semanticTokens(document: CodeDocument, range: IntRange): List<Token>? = null
+
+    /**
      * Short labels the editor shows among the characters of [range] of [document], such as a
      * parameter's name or an inferred type, with
      * [EditorOptions.inlayHints][com.aardarch.aardink.ui.EditorOptions] on. [range] runs from the

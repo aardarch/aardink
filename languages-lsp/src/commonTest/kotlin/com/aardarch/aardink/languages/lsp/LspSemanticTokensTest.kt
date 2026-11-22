@@ -34,11 +34,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 
 private const val FULL = "textDocument/semanticTokens/full"
 private const val FULL_DELTA = "textDocument/semanticTokens/full/delta"
+private const val RANGE = "textDocument/semanticTokens/range"
 private const val CONTENT_MODIFIED = -32801
 
 private const val LEGEND =
@@ -271,7 +273,7 @@ class LspSemanticTokensTest {
         open("""{"semanticTokensProvider":{"legend":$LEGEND,"range":true}}""")
 
         assertEquals(emptyList(), service.semanticTokens(doc))
-        assertNothingSent("range is not in 0.9")
+        assertNothingSent("a whole request is not for a server with no full")
     }
 
     @Test
@@ -324,13 +326,124 @@ class LspSemanticTokensTest {
     fun `the default capabilities say what the decoder can take`() {
         val semanticTokens = DefaultClientCapabilities["textDocument"]!!.jsonObject["semanticTokens"]!!.jsonObject
 
-        assertEquals(setOf("full"), semanticTokens["requests"]!!.jsonObject.keys, "no range: the editor does not say what is on screen")
+        assertEquals(setOf("full", "range"), semanticTokens["requests"]!!.jsonObject.keys)
+        assertTrue(semanticTokens["requests"]!!.jsonObject["range"]!!.jsonPrimitive.boolean)
         assertTrue(semanticTokens["requests"]!!.jsonObject["full"]!!.jsonObject["delta"]!!.jsonPrimitive.boolean)
         assertEquals(listOf("relative"), semanticTokens["formats"]!!.jsonArray.map { it.jsonPrimitive.content })
         assertTrue(semanticTokens["multilineTokenSupport"]!!.jsonPrimitive.boolean, "the store splits a token per line")
         assertFalse(semanticTokens["overlappingTokenSupport"]!!.jsonPrimitive.boolean)
         assertTrue(semanticTokens["augmentsSyntaxTokens"]!!.jsonPrimitive.boolean)
         assertFalse(semanticTokens["dynamicRegistration"]!!.jsonPrimitive.boolean)
+    }
+
+    // ── Range ────────────────────────────────────────────────────────────────
+
+    private val rangeServer = """{"semanticTokensProvider":{"legend":$LEGEND,"range":true,"full":true}}"""
+
+    @Test
+    fun `a server that declares range is asked for the lines, and the numbers count from the start of the document`() =
+        withServer("one\ntwo three\nfour") {
+            open(rangeServer)
+
+            val server = async { respond(RANGE, """{"data":[1,4,5,2,0,1,0,4,0,0]}""") }
+            val tokens = service.semanticTokens(doc, doc.lineStart(1) until doc.lineEnd(2))
+            val sent = server.await()
+
+            assertEquals(listOf(8..12 to "variable", 14..17 to "type.class"), tokens!!.spans)
+            assertEquals(URI, sent.params["textDocument"]!!.jsonObject["uri"]!!.jsonPrimitive.content)
+            assertEquals(setOf("textDocument", "range"), sent.params.keys)
+            val range = sent.params["range"]!!.jsonObject
+            assertEquals(1, range["start"]!!.jsonObject["line"]!!.jsonPrimitive.content.toInt())
+            assertEquals(0, range["start"]!!.jsonObject["character"]!!.jsonPrimitive.content.toInt())
+            assertEquals(2, range["end"]!!.jsonObject["line"]!!.jsonPrimitive.content.toInt())
+        }
+
+    @Test
+    fun `range given as an object is range supported`() = withServer("ab") {
+        open("""{"semanticTokensProvider":{"legend":$LEGEND,"range":{}}}""")
+
+        val server = async { respond(RANGE, """{"data":[0,0,2,2,0]}""") }
+        assertEquals(listOf(0..1 to "variable"), service.semanticTokens(doc, 0..1)!!.spans)
+        server.await()
+    }
+
+    @Test
+    fun `a range answer with no tokens is an answer`() = withServer("ab") {
+        open(rangeServer)
+
+        val server = async { respond(RANGE, """{"data":[]}""") }
+        assertEquals(emptyList(), service.semanticTokens(doc, 0..1))
+        server.await()
+    }
+
+    @Test
+    fun `a range request leaves the delta's starting point alone`() = withServer("ab cd") {
+        open("""{"semanticTokensProvider":{"legend":$LEGEND,"range":true,"full":{"delta":true}}}""")
+        val first = async { respond(FULL, """{"resultId":"1","data":[0,0,2,0,0]}""") }
+        service.semanticTokens(doc)
+        first.await()
+        val ranged = async { respond(RANGE, """{"data":[0,0,2,0,0]}""") }
+        service.semanticTokens(doc, 0..4)
+        ranged.await()
+
+        val second = async { respond(FULL_DELTA, """{"edits":[]}""") }
+        service.semanticTokens(doc)
+        assertEquals("1", second.await().params["previousResultId"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a server without range is sent nothing and gives null`() = withServer("ab") {
+        open(TOKENS_SERVER)
+        assertNull(service.semanticTokens(doc, 0..1))
+        assertNothingSent("full only")
+    }
+
+    @Test
+    fun `range declared false is not range`() = withServer("ab") {
+        open("""{"semanticTokensProvider":{"legend":$LEGEND,"range":false,"full":true}}""")
+        assertNull(service.semanticTokens(doc, 0..1))
+        assertNothingSent("range: false")
+    }
+
+    @Test
+    fun `a server without the provider is sent no range request`() = withServer("ab") {
+        open("{}")
+        assertNull(service.semanticTokens(doc, 0..1))
+        assertNothingSent("no provider")
+    }
+
+    @Test
+    fun `capabilities that are not known give null`() = withServer("ab") {
+        service.didOpen(doc)
+        assertEquals("textDocument/didOpen", nextSent().method)
+
+        assertNull(service.semanticTokens(doc, 0..1))
+        assertNothingSent("no handshake, no legend")
+    }
+
+    @Test
+    fun `range can be registered, and goes with the registration`() = withServer("ab") {
+        open("""{"semanticTokensProvider":{"legend":$LEGEND,"full":true}}""")
+        val method = "textDocument/semanticTokens"
+        serverRegisters(registration(method, """{"legend":$LEGEND,"range":true,"documentSelector":null}"""))
+
+        val server = async { respond(RANGE, """{"data":[0,0,2,2,0]}""") }
+        assertEquals(listOf(0..1 to "variable"), service.semanticTokens(doc, 0..1)!!.spans)
+        server.await()
+
+        serverAsks("2", "client/unregisterCapability", """{"unregisterations":[{"id":"$method","method":"$method"}]}""")
+        nextSent()
+        assertNull(service.semanticTokens(doc, 0..1))
+        assertNothingSent("taken back")
+    }
+
+    @Test
+    fun `a failed range request gives null, for the whole answer to stand`() = withServer("ab") {
+        open(rangeServer)
+
+        val server = async { respondWithError(RANGE) }
+        assertNull(service.semanticTokens(doc, 0..1))
+        server.await()
     }
 
     // ── Deltas ───────────────────────────────────────────────────────────────

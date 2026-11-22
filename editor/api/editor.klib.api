@@ -355,6 +355,7 @@ abstract interface com.aardarch.aardink.core/LanguageService { // com.aardarch.a
     open suspend fun resolveCompletion(com.aardarch.aardink.core/CompletionItem): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/LanguageService.resolveCompletion|resolveCompletion(com.aardarch.aardink.core.CompletionItem){}[0]
     open suspend fun selectionRanges(com.aardarch.aardink.core/CodeDocument, kotlin.collections/List<kotlin/Int>): kotlin.collections/List<com.aardarch.aardink.core/SelectionRange> // com.aardarch.aardink.core/LanguageService.selectionRanges|selectionRanges(com.aardarch.aardink.core.CodeDocument;kotlin.collections.List<kotlin.Int>){}[0]
     open suspend fun semanticTokens(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/LanguageService.semanticTokens|semanticTokens(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun semanticTokens(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/Token>? // com.aardarch.aardink.core/LanguageService.semanticTokens|semanticTokens(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
     open suspend fun signatureHelp(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/SignatureHelp? // com.aardarch.aardink.core/LanguageService.signatureHelp|signatureHelp(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
 }
 
@@ -1838,6 +1839,7 @@ open class com.aardarch.aardink.core/CompositeLanguageService : com.aardarch.aar
     open suspend fun resolveCompletion(com.aardarch.aardink.core/CompletionItem): com.aardarch.aardink.core/CompletionItem // com.aardarch.aardink.core/CompositeLanguageService.resolveCompletion|resolveCompletion(com.aardarch.aardink.core.CompletionItem){}[0]
     open suspend fun selectionRanges(com.aardarch.aardink.core/CodeDocument, kotlin.collections/List<kotlin/Int>): kotlin.collections/List<com.aardarch.aardink.core/SelectionRange> // com.aardarch.aardink.core/CompositeLanguageService.selectionRanges|selectionRanges(com.aardarch.aardink.core.CodeDocument;kotlin.collections.List<kotlin.Int>){}[0]
     open suspend fun semanticTokens(com.aardarch.aardink.core/CodeDocument): kotlin.collections/List<com.aardarch.aardink.core/Token> // com.aardarch.aardink.core/CompositeLanguageService.semanticTokens|semanticTokens(com.aardarch.aardink.core.CodeDocument){}[0]
+    open suspend fun semanticTokens(com.aardarch.aardink.core/CodeDocument, kotlin.ranges/IntRange): kotlin.collections/List<com.aardarch.aardink.core/Token>? // com.aardarch.aardink.core/CompositeLanguageService.semanticTokens|semanticTokens(com.aardarch.aardink.core.CodeDocument;kotlin.ranges.IntRange){}[0]
     open suspend fun signatureHelp(com.aardarch.aardink.core/CodeDocument, kotlin/Int): com.aardarch.aardink.core/SignatureHelp? // com.aardarch.aardink.core/CompositeLanguageService.signatureHelp|signatureHelp(com.aardarch.aardink.core.CodeDocument;kotlin.Int){}[0]
 }
 

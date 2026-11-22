@@ -83,6 +83,15 @@ class SemanticHighlightingUiTest {
             }
         }
 
+        /** What a range request is answered with at once: null is not supported. */
+        @Volatile var rangeAnswer: List<Token>? = null
+        val ranges = CopyOnWriteArrayList<IntRange>()
+
+        override suspend fun semanticTokens(document: CodeDocument, range: IntRange): List<Token>? {
+            ranges += range
+            return rangeAnswer
+        }
+
         override suspend fun diagnostics(document: CodeDocument) = emptyList<Diagnostic>()
 
         override val supportsRename: Boolean = false
@@ -241,6 +250,77 @@ class SemanticHighlightingUiTest {
         waitForIdle()
 
         assertNull(state.semanticStore)
+    }
+
+    @Test
+    fun `the lines on screen are shown from a range answer, and the whole answer replaces it`() = runComposeUiTest {
+        val state = CodeEditorState("word\nsecond")
+        val service = HeldTokens()
+        service.rangeAnswer = listOf(Token(0, 2, type))
+        show(state, service)
+
+        pause()
+        waitUntil { service.requests.size == 1 }
+        waitUntil { state.semanticStore != null }
+        assertEquals(listOf(0..10), service.ranges.toList(), "the whole of a short text is on screen")
+        assertEquals(listOf(Token(0, 2, type)), state.semanticStore!!.tokensForLine(0))
+
+        service.requests[0].answer.complete(listOf(Token(0, 4, type), Token(5, 11, type)))
+        waitUntil { state.semanticStore!!.tokensForLine(1).isNotEmpty() }
+        assertEquals(listOf(Token(0, 4, type)), state.semanticStore!!.tokensForLine(0))
+        assertEquals(1, service.ranges.size, "asked once for the whole answer in flight")
+    }
+
+    @Test
+    fun `a range answer leaves the lines it was not about as they were`() = runComposeUiTest {
+        val state = CodeEditorState("word\nsecond")
+        val service = HeldTokens()
+        service.rangeAnswer = listOf(Token(0, 2, type))
+        show(state, service)
+        pause()
+        waitUntil { service.requests.size == 1 }
+        waitUntil { state.semanticStore != null }
+
+        state.applySemanticTokensToLines(listOf(Token(0, 1, type), Token(5, 7, type)), state.document.snapshot(), 1..1)
+
+        assertEquals(listOf(Token(0, 2, type)), state.semanticStore!!.tokensForLine(0))
+        assertEquals(listOf(Token(5, 7, type)), state.semanticStore!!.tokensForLine(1))
+    }
+
+    @Test
+    fun `a service with no range answer shows nothing before the whole one`() = runComposeUiTest {
+        val state = CodeEditorState("word")
+        val service = HeldTokens()
+        show(state, service)
+
+        pause()
+        waitUntil { service.requests.size == 1 }
+        waitUntil { service.ranges.isNotEmpty() }
+        waitForIdle()
+
+        assertNull(state.semanticStore)
+        service.requests[0].answer.complete(listOf(Token(0, 4, type)))
+        waitUntil { state.semanticStore != null }
+        assertEquals(listOf(Token(0, 4, type)), state.semanticStore!!.tokensForLine(0))
+    }
+
+    @Test
+    fun `scrolling alone does not ask for a range again`() = runComposeUiTest {
+        val state = CodeEditorState((1..200).joinToString("\n") { "line $it" })
+        val service = HeldTokens()
+        service.rangeAnswer = emptyList()
+        show(state, service)
+        pause()
+        waitUntil { service.requests.size == 1 }
+        service.requests[0].answer.complete(listOf(Token(0, 4, type)))
+        waitUntil { state.semanticStore != null }
+        val asked = service.ranges.size
+
+        state.selection = TextRange(state.document.length)
+        pause()
+        waitForIdle()
+
+        assertEquals(asked, service.ranges.size)
     }
 
     @Test
