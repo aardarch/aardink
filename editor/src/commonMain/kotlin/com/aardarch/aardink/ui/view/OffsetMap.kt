@@ -264,20 +264,56 @@ internal class OffsetMap private constructor(private val items: List<Injection>,
     }
 
     /**
-     * Calls [action] with the background of every injected text that has one, and the layout range
-     * it is under, [start, end): an injection's own first, then its spans', as their text draws them.
+     * Calls [action] with each background of injected text and the layout range it is painted over,
+     * [start, end), in order. The ranges do not overlap: where backgrounds do, the text engine paints
+     * only the one added last, an injection's own [Injection.style] first and then its spans in
+     * order, so a transparent one paints nothing there. Neither is a transparent one passed.
      */
     fun forEachTextBackground(action: (start: Int, end: Int, color: Color) -> Unit) {
         if (!hasTextBackgrounds) return
         for (i in 0 until size) {
             val item = items[i]
-            item.style?.background?.let { if (it.isSpecified) action(starts[i], ends[i], it) }
-            for (span in item.spans) {
-                if (!span.style.background.isSpecified) continue
-                val from = (starts[i] + span.start).coerceAtMost(ends[i])
-                action(from, (starts[i] + span.end).coerceIn(from, ends[i]), span.style.background)
+            val own = item.style?.background ?: Color.Unspecified
+            if (item.spans.none { it.style.background.isSpecified }) {
+                if (own.isSpecified && own.alpha > 0f) action(starts[i], ends[i], own)
+            } else {
+                forEachLayeredBackground(starts[i], ends[i], own, item.spans, action)
             }
         }
+    }
+
+    /** [forEachTextBackground] for injected text [start, end) whose spans have backgrounds over [own]. */
+    private fun forEachLayeredBackground(
+        start: Int,
+        end: Int,
+        own: Color,
+        spans: List<InjectedSpan>,
+        action: (start: Int, end: Int, color: Color) -> Unit,
+    ) {
+        fun from(span: InjectedSpan) = (start + span.start).coerceAtMost(end)
+        fun to(span: InjectedSpan) = (start + span.end).coerceIn(from(span), end)
+        val cuts = ArrayList<Int>(2 * spans.size + 2)
+        cuts += start
+        cuts += end
+        for (span in spans) {
+            if (!span.style.background.isSpecified) continue
+            cuts += from(span)
+            cuts += to(span)
+        }
+        cuts.sort()
+        var runStart = start
+        var runColor = Color.Unspecified
+        for (k in 1 until cuts.size) {
+            val a = cuts[k - 1]
+            if (cuts[k] == a) continue
+            val top = spans.lastOrNull { it.style.background.isSpecified && from(it) <= a && to(it) > a }
+            val color = top?.style?.background ?: own
+            if (color == runColor) continue
+            if (runColor.isSpecified && runColor.alpha > 0f) action(runStart, a, runColor)
+            runStart = a
+            runColor = color
+        }
+        if (runColor.isSpecified && runColor.alpha > 0f) action(runStart, end, runColor)
     }
 
     /** Calls [action] with the document column of every injection, once per column. */

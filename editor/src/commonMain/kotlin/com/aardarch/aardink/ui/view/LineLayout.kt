@@ -95,6 +95,7 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
 
     private fun findTextBackgrounds(): List<TextBackground> {
         val found = ArrayList<TextBackground>()
+        val boxes = ArrayList<Rect>()
         val text = result.layoutInput.text
         val lastRow = result.lineCount - 1
         map.forEachTextBackground { start, end, color ->
@@ -108,16 +109,44 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
                 // A row's break is not drawn, and its box is not on the row.
                 while (to > from && text[to - 1] == '\n') to--
                 if (to <= from) continue
-                val first = result.getBoundingBox(from)
-                val last = result.getBoundingBox(to - 1)
-                val box = Rect(minOf(first.left, last.left), first.top, maxOf(first.right, last.right), first.bottom)
-                found += TextBackground(box, row, color)
+                // Right-to-left text puts characters out of order on the row, so a range can be in
+                // more than one place there: one box for each place.
+                boxes.clear()
+                for (offset in from until to) {
+                    val box = result.getBoundingBox(offset)
+                    if (box.right > box.left) boxes += box
+                }
+                boxes.sortBy { it.left }
+                var run: Rect? = null
+                for (box in boxes) {
+                    run = when {
+                        run == null -> box
+
+                        box.left <= run.right + ADJACENT -> Rect(
+                            run.left,
+                            minOf(run.top, box.top),
+                            maxOf(run.right, box.right),
+                            maxOf(run.bottom, box.bottom),
+                        )
+
+                        else -> {
+                            found += TextBackground(run, row, color)
+                            box
+                        }
+                    }
+                }
+                if (run != null) found += TextBackground(run, row, color)
             }
         }
         return found
     }
 
     private class TextBackground(val box: Rect, val row: Int, val color: Color)
+
+    private companion object {
+        /** How far apart, in pixels, two characters' boxes can be and still be one box: they meet, give or take rounding. */
+        const val ADJACENT = 0.5f
+    }
 
     /** Whether row [row] holds only injected text. */
     fun isInjectedRow(row: Int): Boolean = injectedRows?.getOrNull(row) ?: false

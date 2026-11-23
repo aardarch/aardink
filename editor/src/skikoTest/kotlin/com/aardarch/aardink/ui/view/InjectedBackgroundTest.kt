@@ -18,11 +18,13 @@ package com.aardarch.aardink.ui.view
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.drawText
 import com.aardarch.aardink.ui.view.InlineFixture.LINE_HEIGHT
+import com.aardarch.aardink.ui.view.InlineFixture.PAINT_SCALE
 import com.aardarch.aardink.ui.view.InlineFixture.bounds
 import com.aardarch.aardink.ui.view.InlineFixture.lines
 import com.aardarch.aardink.ui.view.InlineFixture.paint
@@ -37,7 +39,7 @@ import kotlin.test.assertTrue
  * The backgrounds of injected text, such as an inlay hint's, which the view paints itself rather
  * than leave to the text engine: Compose 1.13 on Android paints a span's background over less than
  * its row on a line laid out with no width limit (#54). Here, on Skia, what the view paints is
- * compared with what the text engine paints for the same text with the background as a span: the
+ * compared with what the text engine paints for the same text with the backgrounds as spans: the
  * two must be the same, so that nothing changes on the desktop and the web.
  */
 class InjectedBackgroundTest {
@@ -47,6 +49,9 @@ class InjectedBackgroundTest {
 
     /** Line 1's hint, at its end, after `names`. */
     private val hint = LineInjections.of(Injection(14, ": List<String>", SpanStyle(color = Color(0xFF111111), background = chip)))
+
+    /** A hint whose text mixes directions: `aאב` reads `aבא`, so its last character is not its rightmost. */
+    private val mixed = ": aאב"
 
     private val colors = EditorColors(
         selection = Color(0xFF000001),
@@ -61,20 +66,32 @@ class InjectedBackgroundTest {
         bracketMatch = Color(0xFF00000A),
     )
 
-    private fun EditorView.content(width: Int, height: Int): Rect? = paint(width, height) {
+    private fun EditorView.canvas(width: Int, height: Int): PixelMap = paint(width, height) {
         drawEditorContent(frame, EditorDecorations(emptyList(), emptyList(), -1, emptyList(), null), colors)
-    }.bounds(chip)
+    }
+
+    private fun EditorView.content(width: Int, height: Int): Rect? = canvas(width, height).bounds(chip)
 
     /**
-     * What the text engine paints for line [line] of this view with [chip] as the background of
-     * layout characters [start, end): the line's own layout input, measured again with the span, and
-     * drawn as the view draws the line's text, [top] in a [width] x [height] canvas: row by row at
-     * the view's pitch ([eachRow]), or, as a sticky line is, in one go when not [byRow].
+     * What the text engine paints for line [line] of this view with [backgrounds] as spans, each a
+     * colour over layout characters [start, end) and added in order: the line's own layout input,
+     * measured again with the spans, and drawn as the view draws the line's text, [top] in a
+     * [width] x [height] canvas: row by row at the view's pitch ([eachRow]), or, as a sticky line
+     * is, in one go when not [byRow].
      */
-    private fun EditorView.engine(line: Int, start: Int, end: Int, width: Int, height: Int, top: Float, byRow: Boolean = true): Rect? {
+    private fun EditorView.reference(
+        line: Int,
+        width: Int,
+        height: Int,
+        top: Float,
+        backgrounds: List<Triple<Int, Int, Color>>,
+        byRow: Boolean = true,
+    ): PixelMap {
         val layout = shown(line).layout
         val input = layout.result.layoutInput
-        val spanned = AnnotatedString.Builder(input.text).apply { addStyle(SpanStyle(background = chip), start, end) }.toAnnotatedString()
+        val spanned = AnnotatedString.Builder(input.text).apply {
+            for ((start, end, color) in backgrounds) addStyle(SpanStyle(background = color), start, end)
+        }.toAnnotatedString()
         val reference = InlineFixture.measurer.measure(
             text = spanned,
             style = input.style,
@@ -91,10 +108,21 @@ class InjectedBackgroundTest {
             } else {
                 drawText(reference, topLeft = Offset(frame.textLeft, top))
             }
-        }.bounds(chip)
+        }
     }
 
+    /** The box [reference] paints [chip] in, as the background of layout characters [start, end). */
+    private fun EditorView.engine(line: Int, start: Int, end: Int, width: Int, height: Int, top: Float, byRow: Boolean = true): Rect? =
+        reference(line, width, height, top, listOf(Triple(start, end, chip)), byRow).bounds(chip)
+
     private fun EditorView.lineTop(line: Int): Float = shown(line).top - frame.scrollY
+
+    /** The pixels of the row [top] in this canvas, row after row. */
+    private fun PixelMap.row(top: Float): List<Int> {
+        val from = (top * PAINT_SCALE).toInt()
+        val to = ((top + LINE_HEIGHT) * PAINT_SCALE).toInt().coerceAtMost(height)
+        return buildList { for (y in from until to) for (x in 0 until width) add(buffer[bufferOffset + y * stride + x]) }
+    }
 
     @Test
     fun `a hint's background is the view's to paint, not the text engine's`() {
@@ -119,6 +147,47 @@ class InjectedBackgroundTest {
         val view = viewOf(text, injections = lines(1 to LineInjections.of(spanned)))
         val expected = assertNotNull(view.engine(1, 16, 20, 300, 200, view.lineTop(1)))
         assertEquals(expected, view.content(300, 200))
+    }
+
+    @Test
+    fun `where backgrounds overlap, the one added last is the one painted, a transparent one too`() {
+        val removed = Color(0x4DFF0000)
+        val layered = Injection(
+            14,
+            ": List<String>",
+            SpanStyle(background = chip),
+            spans = listOf(
+                InjectedSpan(2, 6, SpanStyle(background = removed)),
+                InjectedSpan(8, 10, SpanStyle(background = Color.Transparent)),
+            ),
+        )
+        val view = viewOf(text, injections = lines(1 to LineInjections.of(layered)))
+        val top = view.lineTop(1)
+        val expected = view.reference(
+            1,
+            300,
+            200,
+            top,
+            listOf(Triple(14, 28, chip), Triple(16, 20, removed), Triple(22, 24, Color.Transparent)),
+        )
+        assertEquals(expected.row(top), view.canvas(300, 200).row(top))
+    }
+
+    @Test
+    fun `a hint that mixes directions has its background over all of its characters`() {
+        val view = viewOf(text, injections = lines(1 to LineInjections.of(Injection(14, mixed, SpanStyle(background = chip)))))
+        val expected = assertNotNull(view.engine(1, 14, 14 + mixed.length, 300, 200, view.lineTop(1)))
+        assertEquals(expected, view.content(300, 200))
+    }
+
+    @Test
+    fun `a background over characters apart on the row, as right-to-left text puts them, is in each place`() {
+        // `a` and `א`, with `ב` shown between them.
+        val apart = Injection(14, mixed, spans = listOf(InjectedSpan(2, 4, SpanStyle(background = chip))))
+        val view = viewOf(text, injections = lines(1 to LineInjections.of(apart)))
+        val top = view.lineTop(1)
+        val expected = view.reference(1, 300, 200, top, listOf(Triple(16, 18, chip)))
+        assertEquals(expected.row(top), view.canvas(300, 200).row(top))
     }
 
     @Test
