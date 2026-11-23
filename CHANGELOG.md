@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-23
+
 0.12 adds a diff editor, on Android, the desktop and the web. `docs/MIGRATION_0.12.md` covers the
 few changes that can reach an upgrade.
 
