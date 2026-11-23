@@ -137,6 +137,12 @@ import com.aardarch.aardink.core.LineEnding
  *   `editor.dragAndDrop`; one undo step, with the text selected where it went. A press in a selection
  *   that does not move places the caret, as a click does. Not with touch, nor read-only. Off by
  *   default, where VS Code's is on.
+ * @property hoverDelayMs How long the mouse rests on the text before its hover card (diagnostics,
+ *   documentation, decorations' messages) shows, as VS Code's `editor.hover.delay`. 500 ms by
+ *   default, as it always has been, where VS Code's is 300.
+ * @property hoverHidingDelayMs How long the hover card outlasts a mouse that moved off what it is
+ *   about, so the mouse can cross to the card for a link or a Quick Fix, as Monaco's
+ *   `hover.hidingDelay`. 300 ms by default.
  */
 @Immutable
 data class EditorOptions(
@@ -183,11 +189,15 @@ data class EditorOptions(
     val wrappingIndent: WrappingIndent = WrappingIndent.None,
     val wordWrapColumn: Int? = null,
     val dragAndDrop: Boolean = false,
+    val hoverDelayMs: Long = 500,
+    val hoverHidingDelayMs: Long = 300,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }
         require(wordWrapColumn == null || wordWrapColumn > 0) { "wordWrapColumn must be positive, was $wordWrapColumn" }
         require(cursorSurroundingLines >= 0) { "cursorSurroundingLines must not be negative, was $cursorSurroundingLines" }
+        require(hoverDelayMs >= 0) { "hoverDelayMs must not be negative, was $hoverDelayMs" }
+        require(hoverHidingDelayMs >= 0) { "hoverHidingDelayMs must not be negative, was $hoverHidingDelayMs" }
     }
 }
 

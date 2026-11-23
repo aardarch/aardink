@@ -63,6 +63,10 @@ few changes that can reach an upgrade.
   whole document's answer is on its way. `LspLanguageService` answers it with
   `textDocument/semanticTokens/range`.
 - A diff editor page in the Android sample and in the web sample.
+- `EditorOptions.hoverDelayMs` (500) and `hoverHidingDelayMs` (300): how long the mouse rests before
+  the hover card shows, and how long the card outlasts a mouse that moved off, as VS Code's
+  `editor.hover.delay` and Monaco's `hover.hidingDelay` (#46). On the web, Monaco's
+  `hover: { delay, hidingDelay }`.
 
 ### Changed
 

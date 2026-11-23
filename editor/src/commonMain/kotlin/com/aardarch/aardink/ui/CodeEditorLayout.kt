@@ -975,6 +975,8 @@ private fun CodeEditorLayoutContent(
     }
 
     // ── Hover: the decorations' messages, diagnostics and documentation under a resting mouse ─
+    val currentHoverDelay = rememberUpdatedState(options.hoverDelayMs)
+    val currentHoverHidingDelay = rememberUpdatedState(options.hoverHidingDelayMs)
     val showHover: suspend (Int, Offset?) -> Unit = hover@{ offset, restedAt ->
         val service = languageService
         val here = currentShownDiagnostics.value
@@ -1010,7 +1012,7 @@ private fun CodeEditorLayoutContent(
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
             if (at == null) return@collectLatest
-            delay(HOVER_DELAY_MS)
+            delay(currentHoverDelay.value)
             val hit = view.offsetAt(at)
             if (hover?.holding == true) return@collectLatest
             // An inlay hint with a tooltip is about itself, not the text it stands in front of.
@@ -1028,7 +1030,7 @@ private fun CodeEditorLayoutContent(
     LaunchedEffect(controller) {
         snapshotFlow { hover?.takeIf { !it.holding && controller.hoverAt != it.restedAt } }.collectLatest { leaving ->
             if (leaving == null) return@collectLatest
-            delay(HOVER_HIDE_DELAY_MS)
+            delay(currentHoverHidingDelay.value)
             hover = null
         }
     }
@@ -2078,12 +2080,6 @@ private fun Modifier.holdingHover(shown: HoverShown): Modifier = pointerInput(sh
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
 private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
-
-/** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
-private const val HOVER_DELAY_MS = 500L
-
-/** How long the card outlasts a mouse that moved off the symbol, as Monaco's `hover.hidingDelay`. */
-private const val HOVER_HIDE_DELAY_MS = 300L
 
 /**
  * What [provider] answers for the text as it is now, or null to keep the ranges there are: it had no
