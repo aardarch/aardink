@@ -171,10 +171,12 @@ class CodeDiffEditorLayoutUiTest {
 
     @Test
     fun `under soft wrap, panes of different widths still line up what is on screen`() = runComposeUiTest {
-        val lines = (0 until 40).map { if (it % 3 == 0) "line $it " + "word ".repeat(40) else "line $it" }
+        // The test scene is 768 high whatever size is asked for, so the long lines are short enough that more than
+        // ten lines fit on screen with any platform's font (Linux's wraps more), and long enough to wrap in the
+        // narrow pane more than in the wide one.
+        val lines = (0 until 40).map { if (it % 3 == 0) "line $it " + "word ".repeat(15) else "line $it" }
         val state = diffOf(lines.joinToString("\n"), lines.filterIndexed { i, _ -> i != 7 }.joinToString("\n"))
-        // Tall enough for more than ten unchanged lines on screen with any platform's font: on Linux they wrap more.
-        show(state, height = 2400.dp, options = DiffEditorOptions(splitRatio = 0.3f), editorOptions = EditorOptions(softWrap = true))
+        show(state, options = DiffEditorOptions(splitRatio = 0.3f), editorOptions = EditorOptions(softWrap = true))
         repeat(3) {
             mainClock.advanceTimeBy(200)
             waitForIdle()
@@ -182,12 +184,16 @@ class CodeDiffEditorLayoutUiTest {
         val left = assertNotNull(state.originalView)
         val right = assertNotNull(state.modifiedView)
         var compared = 0
+        var wrapsMoreOnTheLeft = 0
         for ((o, m) in unchangedPairs(state)) {
-            if (left.frame.find(o) == null || right.frame.find(m) == null) continue
+            val leftLine = left.frame.find(o) ?: continue
+            val rightLine = right.frame.find(m) ?: continue
             assertEquals(left.textTop(o), right.textTop(m), "original $o, modified $m")
+            if (leftLine.layout.textRows > rightLine.layout.textRows) wrapsMoreOnTheLeft++
             compared++
         }
         assertTrue(compared > 10, "compared $compared lines")
+        assertTrue(wrapsMoreOnTheLeft > 0, "no line on screen wraps more in the narrow pane")
         assertEquals(left.totalRows, right.totalRows)
     }
 

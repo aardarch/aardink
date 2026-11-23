@@ -74,6 +74,13 @@ few changes that can reach an upgrade.
 - Formatting and `replaceValue` work out their minimal edits with the new diff, which needs memory in
   proportion to the texts, not to the square of the changes.
 
+### Fixed
+
+- YAML highlighting (#47): a `#` inside a word, as in `http://x.org/#part`, is no longer a comment;
+  in a flow mapping such as `{ type: number, required: true }` each key is a key of its own; and a
+  list item's `-` is an operator, no longer part of the key after it. Outside `[...]` and `{...}`,
+  commas and brackets are part of a scalar, so `title: Hello, world` is one string.
+
 ### Known issues
 
 - On the web, giving a diff editor a new original text, or any editor a new value, starts with one

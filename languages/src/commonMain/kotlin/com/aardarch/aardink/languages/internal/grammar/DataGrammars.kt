@@ -20,7 +20,11 @@ package com.aardarch.aardink.languages.internal.grammar
 // `number`, `keyword` for a literal such as `true`, `comment`, `delimiter`, `operator`.
 // In these raw strings a dollar sign is never followed by a letter or `{`, so nothing is a template.
 
-/** YAML: keys, the three kinds of scalar, anchors, tags, documents and flow collections. */
+/**
+ * YAML: keys, the three kinds of scalar, anchors, tags, documents and flow collections. `root` is
+ * the block context and `flow` the inside of `[...]` and `{...}`, where a comma or a bracket ends
+ * a scalar; outside them, both are text. A `#` starts a comment only after whitespace, as in YAML.
+ */
 internal const val YAML_GRAMMAR = """
 {
   "tokenPostfix": ".yaml",
@@ -31,20 +35,38 @@ internal const val YAML_GRAMMAR = """
       { "include": "@whitespace" },
       ["^%\\w+.*$", "meta.directive"],
       ["^(?:---|\\.\\.\\.)(?=\\s|$)", "operator.document"],
-      ["(\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^']|'')*'|[^\\s#'\"\\[\\]{},>|!&*][^#:]*?)(\\s*)(:)(?=\\s|$)", ["type", "", "delimiter"]],
       ["[-?:](?=\\s|$)", "operator"],
+      ["(\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^']|'')*'|[^\\s#'\"\\[\\]{},>|!&*](?:[^\\s:]|\\s+(?![\\s#]))*?)(\\s*)(:)(?=\\s|$)", ["type", "", "delimiter"]],
       ["[&*][^\\s,\\[\\]{}]+", "tag"],
       ["!\\S*", "tag"],
-      ["[|>][-+0-9]*(?=\\s*(?:#|$))", "operator"],
-      ["[\\[\\]{},]", "delimiter"],
-      ["\"", "string", "@doubleQuoted"],
-      ["'", "string", "@singleQuoted"],
-      ["[-+]?(?:0x[0-9a-fA-F]+|0o[0-7]+|\\d+(?:\\.\\d*)?(?:[eE][-+]?\\d+)?|\\.inf|\\.nan)(?=\\s*(?:#|$|[,\\]}]))", "number"],
-      ["[^\\s#,\\[\\]{}]+(?:\\s+[^\\s#,\\[\\]{}]+)*", { "cases": { "@keywords": "keyword", "@default": "string" } }]
+      ["[|>][-+0-9]*(?=\\s+#|\\s*$)", "operator"],
+      ["[\\[{]", "delimiter", "@flow"],
+      ["[\\]},]", "delimiter"],
+      { "include": "@quoted" },
+      ["[-+]?(?:0x[0-9a-fA-F]+|0o[0-7]+|\\d+(?:\\.\\d*)?(?:[eE][-+]?\\d+)?|\\.inf|\\.nan)(?=\\s+#|\\s*$)", "number"],
+      ["[^\\s#,\\[\\]{}]\\S*(?:\\s+[^\\s#]\\S*)*", { "cases": { "@keywords": "keyword", "@default": "string" } }]
+    ],
+    "flow": [
+      { "include": "@whitespace" },
+      ["[\\[{]", "delimiter", "@push"],
+      ["[\\]}]", "delimiter", "@pop"],
+      [",", "delimiter"],
+      ["[?:](?=[\\s,\\[\\]{}]|$)", "operator"],
+      ["(\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^']|'')*'|[^\\s#'\"\\[\\]{},>|!&*](?:[^\\s:,\\[\\]{}]|\\s+(?![\\s#]))*?)(\\s*)(:)(?=[\\s,\\[\\]{}]|$)", ["type", "", "delimiter"]],
+      ["[&*][^\\s,\\[\\]{}]+", "tag"],
+      ["!<[^>\\s]*>", "tag"],
+      ["![^\\s,\\[\\]{}]*", "tag"],
+      { "include": "@quoted" },
+      ["[-+]?(?:0x[0-9a-fA-F]+|0o[0-7]+|\\d+(?:\\.\\d*)?(?:[eE][-+]?\\d+)?|\\.inf|\\.nan)(?=\\s+#|\\s*(?:$|[,\\]}]))", "number"],
+      ["[^\\s#,\\[\\]{}][^\\s,\\[\\]{}]*(?:\\s+[^\\s#,\\[\\]{}][^\\s,\\[\\]{}]*)*", { "cases": { "@keywords": "keyword", "@default": "string" } }]
     ],
     "whitespace": [
       ["\\s+", ""],
       ["#.*$", "comment"]
+    ],
+    "quoted": [
+      ["\"", "string", "@doubleQuoted"],
+      ["'", "string", "@singleQuoted"]
     ],
     "doubleQuoted": [
       ["[^\\\\\"]+", "string"],
