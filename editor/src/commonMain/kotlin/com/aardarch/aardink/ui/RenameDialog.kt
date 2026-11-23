@@ -36,16 +36,17 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDismiss: () -> Unit) {
+    val strings = currentEditorStrings()
     var newName by remember(currentName) { mutableStateOf(currentName) }
 
     EditorChromeTheme {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text(text = "Rename Symbol") },
+            title = { Text(text = strings.renameTitle) },
             text = {
                 Column {
                     Text(
-                        text = "Enter new name for '$currentName':",
+                        text = strings.renamePrompt(currentName),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -55,7 +56,7 @@ fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDi
                         onValueChange = { newName = it },
                         // The sentence above is a sibling, not this field's name; the label is what a
                         // screen reader announces for the edit box.
-                        label = { Text("New name") },
+                        label = { Text(strings.renameNewNameLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -70,12 +71,12 @@ fun RenameDialog(currentName: String, onConfirm: (newName: String) -> Unit, onDi
                     },
                     enabled = newName.isNotBlank() && newName != currentName,
                 ) {
-                    Text("Rename")
+                    Text(strings.renameConfirm)
                 }
             },
             dismissButton = {
                 TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text(strings.cancel)
                 }
             },
         )

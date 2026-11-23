@@ -58,6 +58,7 @@ internal fun CodeActionCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = currentEditorStrings()
     EditorChromeTheme {
         Surface(
             modifier = modifier
@@ -70,7 +71,7 @@ internal fun CodeActionCard(
         ) {
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
                 Text(
-                    text = "Quick Fixes & Actions",
+                    text = strings.quickFixesAndActions,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

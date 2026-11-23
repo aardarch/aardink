@@ -88,6 +88,7 @@ internal fun ReferencesPeekCard(
             listState.scrollToItem(selected)
         }
     }
+    val strings = currentEditorStrings()
     EditorChromeTheme {
         Surface(
             modifier = modifier
@@ -102,7 +103,7 @@ internal fun ReferencesPeekCard(
         ) {
             Column {
                 Text(
-                    text = if (items.size == 1) "1 reference" else "${items.size} references",
+                    text = strings.referencesCount(items.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),

@@ -111,6 +111,7 @@ internal fun SymbolPickerCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = currentEditorStrings()
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
     val rows = remember(symbols, query) { symbolRows(symbols, query) }
@@ -162,7 +163,7 @@ internal fun SymbolPickerCard(
                     decorationBox = { field ->
                         if (query.isEmpty()) {
                             Text(
-                                text = "Go to symbol",
+                                text = strings.goToSymbolPlaceholder,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -173,7 +174,7 @@ internal fun SymbolPickerCard(
                 HorizontalDivider()
                 if (rows.isEmpty()) {
                     Text(
-                        text = if (symbols.isEmpty()) "No symbols" else "No matching symbols",
+                        text = if (symbols.isEmpty()) strings.noSymbols else strings.noMatchingSymbols,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -198,7 +199,7 @@ internal fun SymbolPickerCard(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = row.symbol.detail ?: row.symbol.kind.label(),
+                                text = row.symbol.detail ?: strings.symbolKindLabel(row.symbol.kind),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
