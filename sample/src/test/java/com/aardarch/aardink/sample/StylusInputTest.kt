@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026: update finger-gesture expectations for touchSlop check on upward strokes.
 package com.aardarch.aardink.sample
 
 import android.content.Context
@@ -216,10 +217,12 @@ class StylusInputTest {
         HandwritingInputMethodManager.available = false
         val state = show()
         val starts = handwritingStarts()
-        // Nothing to scroll, so the stroke ends as a finger's tap would: where it lifted.
+        // Moving past touchSlop is a scroll/drag, not a tap, even when there is nothing to scroll.
         stylusGesture(upwardStroke())
-        assertEquals("the caret is where the stroke lifted", TextRange("one".length), state.selection)
+        assertEquals("stroke past touchSlop does not move the caret", TextRange.Zero, state.selection)
         assertEquals("no handwriting request", starts, handwritingStarts())
+        stylusGesture(listOf(onTheFirstLine()))
+        assertEquals("a tap without movement places the caret", TextRange("one".length), state.selection)
     }
 
     @Test
@@ -240,9 +243,11 @@ class StylusInputTest {
     @Config(sdk = [33])
     fun `before Android 14 a stylus stroke is a finger's gesture`() {
         val state = show()
-        // Nothing to scroll, so the stroke ends as a finger's tap would: where it lifted.
+        // Moving past touchSlop is a scroll/drag, not a tap, even when there is nothing to scroll.
         stylusGesture(upwardStroke())
-        assertEquals("the caret is where the stroke lifted", TextRange("one".length), state.selection)
+        assertEquals("stroke past touchSlop does not move the caret", TextRange.Zero, state.selection)
+        stylusGesture(listOf(onTheFirstLine()))
+        assertEquals("a tap without movement places the caret", TextRange("one".length), state.selection)
     }
 
     @Test

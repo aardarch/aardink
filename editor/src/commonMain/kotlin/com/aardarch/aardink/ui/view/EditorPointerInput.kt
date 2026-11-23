@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026: check touchSlop in waitForUp so fast touch flings scroll instead of tapping.
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -351,14 +352,22 @@ private suspend fun AwaitPointerEventScope.awaitAnyDown(): PointerInputChange {
 }
 
 /**
- * The release of pointer [id], or null when something else consumed it (a scroll took over).
+ * The release of pointer [down], or null when something else consumed it (a scroll took over) or
+ * the pointer moved past [touchSlop] (a drag/fling that must not become a tap).
  * Unlike `waitForUpOrCancellation`, other pointers do not count: a mouse hovering over the page
  * (a touchscreen laptop) never lifts, and waiting for it turned every tap into a long press.
  */
-private suspend fun AwaitPointerEventScope.waitForUp(id: PointerId): PointerInputChange? {
+private suspend fun AwaitPointerEventScope.waitForUp(
+    down: PointerInputChange,
+    touchSlop: Float,
+    onCancel: () -> Unit,
+): PointerInputChange? {
     while (true) {
-        val change = awaitPointerEvent().changes.firstOrNull { it.id == id } ?: return null
-        if (change.isConsumed) return null
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+        if (change == null || change.isConsumed || (change.position - down.position).getDistance() > touchSlop) {
+            onCancel()
+            return null
+        }
         if (change.changedToUp()) return change
     }
 }
@@ -439,8 +448,13 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
         }
         // The eraser end only taps and scrolls: the connection takes no handwriting gestures.
         val writes = down.type == PointerType.Stylus && handler.handwriting()
+        var cancelled = false
         val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-            if (writes) waitForUpOrStroke(down, viewConfiguration.handwritingSlop) else waitForUp(down.id)
+            if (writes) {
+                waitForUpOrStroke(down, viewConfiguration.handwritingSlop)
+            } else {
+                waitForUp(down, viewConfiguration.touchSlop) { cancelled = true }
+            }
         }
         when {
             // A stylus moved past the handwriting slop, still down: the input method writes it.
@@ -457,7 +471,7 @@ internal suspend fun PointerInputScope.editorPointerInput(handler: EditorPointer
             }
 
             // Held still: a long press.
-            up == null && currentEvent.changes.any { it.id == down.id && it.pressed && !it.isConsumed } -> {
+            up == null && !cancelled && currentEvent.changes.any { it.id == down.id && it.pressed && !it.isConsumed } -> {
                 handler.pointer { longPress(down.position) }
                 clickCount = 0
                 drag(down.id) { change ->
