@@ -79,6 +79,75 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
         }
     }
 
+    /**
+     * The backgrounds of injected text ([OffsetMap.forEachTextBackground]), which the view paints
+     * itself under the text rather than leave to the text engine: one box per row each covers, as
+     * high as the row's characters' boxes, which on Android is the whole row. Compose 1.13 on
+     * Android paints a span's background over less than its row on a row laid out with no width
+     * limit, so a hint on a line that does not wrap lost the top and bottom of its row (#54).
+     */
+    private val textBackgrounds: List<TextBackground> = if (map.hasTextBackgrounds) findTextBackgrounds() else emptyList()
+
+    /** Calls [action] with each box of [textBackgrounds], in the layout's coordinates, with its row and colour, in drawing order. */
+    fun forEachTextBackground(action: (box: Rect, row: Int, color: Color) -> Unit) {
+        for (background in textBackgrounds) action(background.box, background.row, background.color)
+    }
+
+    private fun findTextBackgrounds(): List<TextBackground> {
+        val found = ArrayList<TextBackground>()
+        val boxes = ArrayList<Rect>()
+        val text = result.layoutInput.text
+        val lastRow = result.lineCount - 1
+        map.forEachTextBackground { start, end, color ->
+            if (end <= start) return@forEachTextBackground
+            for (row in rowAt(start)..rowAt(end - 1)) {
+                val from = maxOf(start, result.getLineStart(row))
+                val rowEnd = result.getLineEnd(row)
+                // The spaces a row is soft-wrapped after hang past its end, and are not painted.
+                val wrapped = row < lastRow && rowEnd > 0 && text[rowEnd - 1] != '\n'
+                var to = minOf(end, if (wrapped) result.getLineEnd(row, visibleEnd = true) else rowEnd)
+                // A row's break is not drawn, and its box is not on the row.
+                while (to > from && text[to - 1] == '\n') to--
+                if (to <= from) continue
+                // Right-to-left text puts characters out of order on the row, so a range can be in
+                // more than one place there: one box for each place.
+                boxes.clear()
+                for (offset in from until to) {
+                    val box = result.getBoundingBox(offset)
+                    if (box.right > box.left) boxes += box
+                }
+                boxes.sortBy { it.left }
+                var run: Rect? = null
+                for (box in boxes) {
+                    run = when {
+                        run == null -> box
+
+                        box.left <= run.right + ADJACENT -> Rect(
+                            run.left,
+                            minOf(run.top, box.top),
+                            maxOf(run.right, box.right),
+                            maxOf(run.bottom, box.bottom),
+                        )
+
+                        else -> {
+                            found += TextBackground(run, row, color)
+                            box
+                        }
+                    }
+                }
+                if (run != null) found += TextBackground(run, row, color)
+            }
+        }
+        return found
+    }
+
+    private class TextBackground(val box: Rect, val row: Int, val color: Color)
+
+    private companion object {
+        /** How far apart, in pixels, two characters' boxes can be and still be one box: they meet, give or take rounding. */
+        const val ADJACENT = 0.5f
+    }
+
     /** Whether row [row] holds only injected text. */
     fun isInjectedRow(row: Int): Boolean = injectedRows?.getOrNull(row) ?: false
 

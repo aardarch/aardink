@@ -104,6 +104,7 @@ internal fun DrawScope.drawStickyLines(view: EditorView, sticky: List<StickyLine
         clipRect(0f, line.top, size.width, line.top + lineHeight) {
             // The first row of the line's text, wherever injected rows put it in the layout.
             val y = line.top + layout.getLineTop(0) - layout.getLineTop(layout.textRow)
+            layout.forEachTextBackground { box, _, color -> drawRect(color, Offset(frame.textLeft + box.left, y + box.top), box.size) }
             drawText(layout.result, topLeft = Offset(frame.textLeft, y))
         }
     }
