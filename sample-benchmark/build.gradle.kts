@@ -18,7 +18,9 @@ plugins {
 
 android {
     namespace = "com.aardarch.aardink.sample.benchmark"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         // Baseline profiles are collected on API 28 and later.
