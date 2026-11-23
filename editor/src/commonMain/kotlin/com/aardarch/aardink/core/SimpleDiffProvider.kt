@@ -15,27 +15,37 @@
  */
 package com.aardarch.aardink.core
 
+/**
+ * The gutter's diff lane after [TextDiff]. The lines of a change that only inserts are
+ * [LineDiffKind.Added]. Of one that replaces, as many as it replaced are [LineDiffKind.Modified] and
+ * the rest [LineDiffKind.Added]. One that only deletes marks the line below it [LineDiffKind.Deleted].
+ * Whitespace counts: the lane is about what saving would change.
+ */
 object SimpleDiffProvider : DiffProvider {
+
+    private val options = TextDiffOptions(ignoreTrimWhitespace = false, computeCharChanges = false)
+
     override fun diff(baseLines: List<String>, currentLines: List<String>): List<LineDiff> {
-        // Lines the two texts share at the start and at the end are unchanged; only the span
-        // between them is compared, line by line. Comparing every line by position instead marked
-        // each line below an inserted one as modified.
-        val limit = minOf(baseLines.size, currentLines.size)
-        var prefix = 0
-        while (prefix < limit && baseLines[prefix] == currentLines[prefix]) prefix++
-        var suffix = 0
-        while (suffix < limit - prefix && baseLines[baseLines.size - 1 - suffix] == currentLines[currentLines.size - 1 - suffix]) {
-            suffix++
-        }
-        val baseMiddle = baseLines.size - prefix - suffix
-        val result = mutableListOf<LineDiff>()
-        for (i in 0 until currentLines.size - prefix - suffix) {
-            val line = prefix + i
+        val result = TextDiff.compute(baseLines.joinToString("\n"), currentLines.joinToString("\n"), options)
+        val marks = ArrayList<LineDiff>()
+        for (change in result.changes) {
             when {
-                i >= baseMiddle -> result.add(LineDiff(line, LineDiffKind.Added))
-                currentLines[line] != baseLines[prefix + i] -> result.add(LineDiff(line, LineDiffKind.Modified))
+                change.modifiedLines.isEmpty() -> marks += LineDiff(change.modifiedLines.first, LineDiffKind.Deleted)
+
+                change.originalLines.isEmpty() -> change.modifiedLines.mapTo(marks) { LineDiff(it, LineDiffKind.Added) }
+
+                else -> change.modifiedLines.mapTo(marks) { line ->
+                    val kind = if (line - change.modifiedLines.first <
+                        change.originalLines.count()
+                    ) {
+                        LineDiffKind.Modified
+                    } else {
+                        LineDiffKind.Added
+                    }
+                    LineDiff(line, kind)
+                }
             }
         }
-        return result
+        return marks
     }
 }

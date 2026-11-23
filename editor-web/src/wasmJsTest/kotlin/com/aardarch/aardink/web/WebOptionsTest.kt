@@ -60,6 +60,14 @@ class WebOptionsTest {
     }
 
     @Test
+    fun `the hover delays reach the editor's options, and a negative one is none`() {
+        assertEquals(500L, editorOptionsOf(AardinkWeb.parseOptions("{}")).hoverDelayMs)
+        val options = editorOptionsOf(AardinkWeb.parseOptions("""{ "hoverDelay": 250, "hoverHidingDelay": -5 }"""))
+        assertEquals(250L, options.hoverDelayMs)
+        assertEquals(0L, options.hoverHidingDelayMs)
+    }
+
+    @Test
     fun `Monaco's high-contrast themes are built in`() {
         assertEquals(EditorThemes.HighContrastDark, AardinkWeb.builtInThemes["hc-black"])
         assertEquals(EditorThemes.HighContrastLight, AardinkWeb.builtInThemes["hc-light"])

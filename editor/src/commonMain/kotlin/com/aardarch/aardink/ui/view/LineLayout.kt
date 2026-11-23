@@ -18,6 +18,7 @@ package com.aardarch.aardink.ui.view
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.IntSize
@@ -56,6 +57,27 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
 
     /** Where row 0 sits: rows added by a hard break keep its place in their own band. */
     private val rowBase: Float = if (map.hasBreaks) result.getLineTop(0) else 0f
+
+    /**
+     * Calls [action] with the rows of each injected text that has a background, and its colour.
+     * Rows above the line are the rows their text is on, each ended by its break. Text after the
+     * line's own starts with a break, which ends the line's last row, so its rows begin after it.
+     */
+    fun forEachBackgroundRows(action: (firstRow: Int, lastRow: Int, color: Color) -> Unit) {
+        map.forEachBackground { injection, start, end ->
+            if (end <= start) return@forEachBackground
+            val first: Int
+            val last: Int
+            if (injection.isRowAbove) {
+                first = rowAt(start)
+                last = rowAt(end - 1)
+            } else {
+                first = rowAt(start) + if (injection.text.startsWith('\n')) 1 else 0
+                last = if (injection.text.endsWith('\n')) rowAt(end - 1) + 1 else rowAt(end - 1)
+            }
+            if (first <= last) action(first, last.coerceAtMost(lineCount - 1), injection.background)
+        }
+    }
 
     /** Whether row [row] holds only injected text. */
     fun isInjectedRow(row: Int): Boolean = injectedRows?.getOrNull(row) ?: false

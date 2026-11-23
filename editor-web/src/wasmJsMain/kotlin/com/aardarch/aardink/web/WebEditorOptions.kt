@@ -82,6 +82,10 @@ import kotlinx.serialization.Serializable
  *   [AardinkWeb.registerFont] registered is the editor's font. Null, or no registered name in it,
  *   is the bundled JetBrains Mono. A font the page has only in CSS is not seen: the editor draws on
  *   a canvas, with the fonts it was given.
+ * @property hoverDelay Milliseconds the mouse rests before the hover card shows; Monaco's
+ *   `hover.delay`. 500 by default, where Monaco's is 300.
+ * @property hoverHidingDelay Milliseconds the hover card outlasts a mouse that moved off; Monaco's
+ *   `hover.hidingDelay`.
  */
 @Serializable
 data class WebEditorOptions(
@@ -124,6 +128,8 @@ data class WebEditorOptions(
     val cursorSurroundingLines: Int = 0,
     val dragAndDrop: Boolean = false,
     val fontFamily: String? = null,
+    val hoverDelay: Int = 500,
+    val hoverHidingDelay: Int = 300,
 )
 
 /**

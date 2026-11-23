@@ -286,7 +286,7 @@ const MONACO_THEMES = { vs: 'vscode-light', 'vs-dark': 'vscode-dark' };
 /**
  * Keeps only the fields the Kotlin side knows, translating Monaco's wordWrap ('on', 'off',
  * 'wordWrapColumn', 'bounded'), its { enabled } objects for minimap and stickyScroll (a plain
- * boolean works too), its guides and its lineNumbers.
+ * boolean works too), its guides, its hover delays and its lineNumbers.
  */
 function toKotlinOptions(options) {
   const out = {};
@@ -309,6 +309,12 @@ function toKotlinOptions(options) {
     if (options.guides.indentation !== undefined) out.indentGuides = !!options.guides.indentation;
     // Monaco's 'active' shows only the caret's pair; here it shows them all.
     if (options.guides.bracketPairs !== undefined) out.bracketPairGuides = !!options.guides.bracketPairs;
+  }
+  if (options.hover !== undefined && options.hover !== null) {
+    // Whole milliseconds within an Int: the Kotlin side takes one, and more would fail to decode.
+    const ms = (value) => Math.min(2147483647, Math.max(0, Math.round(value)));
+    if (Number.isFinite(options.hover.delay)) out.hoverDelay = ms(options.hover.delay);
+    if (Number.isFinite(options.hover.hidingDelay)) out.hoverHidingDelay = ms(options.hover.hidingDelay);
   }
   if (options.rulers !== undefined) {
     // Monaco's { column, color } rulers keep their column; one colour comes from the theme.
@@ -352,6 +358,14 @@ export async function createEditor(container, onChange, options = {}) {
   const k = await load();
   if (!container.id) container.id = `aardink-editor-${++generatedIds}`;
   const id = k.aardinkCreate(container.id, options.value ?? '', JSON.stringify(toKotlinOptions(options)));
+  return buildEditor(k, id, onChange, () => k.aardinkDispose(id));
+}
+
+/**
+ * The AardinkEditor for the Kotlin handle `id`. `stop` ends what the handle belongs to: for an editor
+ * of its own that is the handle, for a side of a diff editor nothing, as the diff editor ends both.
+ */
+function buildEditor(k, id, onChange, stop) {
 
   // The Kotlin side holds one listener of each kind; fan out to any number here.
   const contentListeners = new Set();
@@ -605,8 +619,76 @@ export async function createEditor(container, onChange, options = {}) {
       scrollListeners.clear();
       linkListeners.clear();
       searchListeners.clear();
-      k.aardinkDispose(id);
+      stop();
     },
   };
   return editor;
+}
+
+/** What a diff editor's own options say, in the Kotlin side's shape, with the editor options both sides share. */
+function toKotlinDiffOptions(options) {
+  const out = toKotlinOptions(options);
+  for (const key of ['renderSideBySide', 'ignoreTrimWhitespace', 'originalEditable', 'renderIndicators', 'enableSplitViewResizing']) {
+    if (options[key] !== undefined) out[key] = !!options[key];
+  }
+  for (const key of ['renderSideBySideInlineBreakpoint', 'maxComputationTime']) {
+    if (options[key] !== undefined) out[key] = Math.max(0, Math.round(Number(options[key])));
+  }
+  if (options.hideUnchangedRegions !== undefined && options.hideUnchangedRegions !== null) {
+    // Monaco's { enabled, contextLineCount, minimumLineCount, revealLineCount }: the first two are read.
+    const value = options.hideUnchangedRegions;
+    const hidden = {};
+    if (typeof value === 'object') {
+      if (value.enabled !== undefined) hidden.enabled = !!value.enabled;
+      if (value.contextLineCount !== undefined) hidden.contextLineCount = Math.max(1, Math.round(Number(value.contextLineCount)));
+    } else {
+      hidden.enabled = !!value;
+    }
+    out.hideUnchangedRegions = hidden;
+  }
+  return out;
+}
+
+/**
+ * Mounts a diff editor that fills `container`: two editors, side by side or inline, with what differs
+ * between their texts marked. See index.d.ts.
+ */
+export async function createDiffEditor(container, options = {}) {
+  const k = await load();
+  if (!container.id) container.id = `aardink-editor-${++generatedIds}`;
+  const [diffId, originalId, modifiedId] = JSON.parse(
+    k.aardinkCreateDiff(container.id, options.original ?? '', options.modified ?? '', JSON.stringify(toKotlinDiffOptions(options))),
+  );
+  // A side's dispose ends only what the host registered on it: the diff editor ends both sides.
+  const originalEditor = buildEditor(k, originalId, undefined, () => {});
+  const modifiedEditor = buildEditor(k, modifiedId, undefined, () => {});
+
+  const updateListeners = new Set();
+  k.aardinkOnDidUpdateDiff(diffId, () => updateListeners.forEach((listener) => listener()));
+
+  let disposed = false;
+  return {
+    getOriginalEditor: () => originalEditor,
+    getModifiedEditor: () => modifiedEditor,
+    setOriginalValue: (text) => k.aardinkDiffSetValues(diffId, String(text), null),
+    setModifiedValue: (text) => k.aardinkDiffSetValues(diffId, null, String(text)),
+    getLineChanges: () => JSON.parse(k.aardinkDiffLineChanges(diffId)),
+    onDidUpdateDiff(listener) {
+      updateListeners.add(listener);
+      return { dispose: () => updateListeners.delete(listener) };
+    },
+    goToDiff: (target) => {
+      k.aardinkDiffGoTo(diffId, target !== 'previous');
+    },
+    revertChange: (index) => k.aardinkDiffRevert(diffId, index),
+    updateOptions: (patch) => k.aardinkDiffUpdateOptions(diffId, JSON.stringify(toKotlinDiffOptions(patch))),
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      updateListeners.clear();
+      originalEditor.dispose();
+      modifiedEditor.dispose();
+      k.aardinkDiffDispose(diffId);
+    },
+  };
 }

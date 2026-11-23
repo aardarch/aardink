@@ -72,7 +72,7 @@ object EditorThemeParser {
      * Parses [json] as Monaco's `defineTheme` data, `{ base, inherit, rules, colors }`, so one theme
      * file serves a Monaco-shaped web editor and a Kotlin one alike. `base` picks what the theme
      * leaves unset: [EditorThemes.VsCodeLight] for `vs`, [EditorThemes.VsCodeDark] otherwise. Each rule's `token` names tokens as a grammar or the built-in languages do
-     * (`keyword`, `tag.aardflex`; the longest matching prefix wins), with its `foreground` (with or
+     * (`keyword`, `tag.mylang`; the longest matching prefix wins), with its `foreground` (with or
      * without `#`) and `fontStyle`; a rule with the empty token sets the default text colour (and
      * with a `background`, the editor's). A rule's `background` goes to [EditorTheme.tokenBackgrounds].
      * `base` `hc-black` and `hc-light` take [EditorThemes.HighContrastDark] and
@@ -197,6 +197,14 @@ object EditorThemeParser {
                 inlayHintBackground = colors.hexColor("editorInlayHint.background") ?: chrome.inlayHintBackground,
                 codeLens = colors.hexColor("editorCodeLens.foreground") ?: chrome.codeLens,
                 ghostText = colors.hexColor("editorGhostText.foreground") ?: chrome.ghostText,
+                diffInsertedLine = colors.hexColor("diffEditor.insertedLineBackground") ?: chrome.diffInsertedLine,
+                diffRemovedLine = colors.hexColor("diffEditor.removedLineBackground") ?: chrome.diffRemovedLine,
+                diffInsertedText = colors.hexColor("diffEditor.insertedTextBackground") ?: chrome.diffInsertedText,
+                diffRemovedText = colors.hexColor("diffEditor.removedTextBackground") ?: chrome.diffRemovedText,
+                diffFiller = colors.hexColor("diffEditor.diagonalFill") ?: chrome.diffFiller,
+                gutterAdded = colors.hexColor("editorGutter.addedBackground") ?: chrome.gutterAdded,
+                gutterModified = colors.hexColor("editorGutter.modifiedBackground") ?: chrome.gutterModified,
+                gutterDeleted = colors.hexColor("editorGutter.deletedBackground") ?: chrome.gutterDeleted,
             ),
         )
     }
@@ -214,7 +222,7 @@ object EditorThemeParser {
      * - Monaco's sub-names ([MONACO_SUB_SCOPES]) take the rule for the TextMate scope they stand
      *   for: `keyword.flow` the theme's `keyword.control`, `comment.doc` its documentation comments.
      * - Every rule's own scope is kept too, as a [NamedTokenType], so a grammar token or a Monaco
-     *   rule by that name (`tag.aardflex`) is coloured by it.
+     *   rule by that name (`tag.mylang`) is coloured by it.
      *
      * What the theme leaves out comes from [fallback], except a fallback sub-name under a type the
      * theme sets itself: a theme with its own keyword colour does not keep the fallback's

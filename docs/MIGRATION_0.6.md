@@ -11,8 +11,8 @@ Most apps need three changes: pass `EditorOptions` instead of the boolean flags,
 removed or changed public symbol, with a before/after for each.
 
 The "Landed in" column names the pull request of [AARDINK_0.6_PLAN.md](AARDINK_0.6_PLAN.md) §6
-that made each change, for anyone reading the history. [The last section](#example-the-aardflex-android-app)
-upgrades a real app.
+that made each change, for anyone reading the history. [The last section](#example-an-android-host-upgrade)
+upgrades a typical Android host.
 
 ## Dependencies
 
@@ -59,7 +59,7 @@ The web package moves to npm: `pnpm add @aardarch/aardink-web`.
 | --- | --- | --- | --- |
 | `FindReplaceState.show()` | Opened the panel with its replace row always shown | `show(replace = false)`: the replace row shows only with `replace = true` (Ctrl+H) or the panel's new toggle; `replaceMode` holds it | PR 3 |
 | Find panel | Every match | At most `EditorLimits.maxFindMatches` (10,000), shown as "N+"; a new query cancels a running search | PR 3 |
-| Built-in tokenizers' `tokenizeLines` | Returned tokens for the whole document | Returns only the lines it rescanned, with zero-length tokens marking the span, and expects `previousTokens` to be its own last result. A wrapper that passes its *own* earlier result back as `previousTokens` (as aardflex's `XmlIncrementalTokenizer` does) is not recognised, so the built-in one answers with a full scan: still correct, just not incremental. To get the speed-up, return the built-in tokenizer's list unchanged or pass that list back | PR 3 |
+| Built-in tokenizers' `tokenizeLines` | Returned tokens for the whole document | Returns only the lines it rescanned, with zero-length tokens marking the span, and expects `previousTokens` to be its own last result. A wrapper that passes its *own* earlier result back as `previousTokens` (as a consumer's `MyXmlIncrementalTokenizer` might) is not recognised, so the built-in one answers with a full scan: still correct, just not incremental. To get the speed-up, return the built-in tokenizer's list unchanged or pass that list back | PR 3 |
 | `CodeDocument.dirtyLines` after a delete that joins lines | Ran to the end of the document | Just the line the delete started on: lines below keep their text and their tokens move with them | PR 3 |
 | `SimpleDiffProvider` | Compared lines by position, so every line below an inserted one showed as modified | Trims the shared leading and trailing lines first | PR 3 |
 | Language services and folding providers | Called with the live `CodeDocument`, which could change under a service running on another thread | Called with a read-only snapshot taken when the request was made; editing it throws `IllegalStateException` | PR 2 |
@@ -105,11 +105,10 @@ Not needed to compile, but new in 0.6:
   Monarch grammar as JSON, incrementally, with no tokenizer code. The web package's
   `registerLanguage` takes the same grammars.
 
-## Example: the aardflex Android app
+## Example: an Android host upgrade
 
-The aardflex app (`apps/android/aardflex/v1.0` in the aardflex repository) goes from 0.4.0 to
-0.6.0. It passes its own diagnostics and has no custom `EditorTheme` fonts, so most of its code
-compiles unchanged; one screen changes.
+A consumer Android app goes from 0.4.0 to 0.6.0. It passes its own diagnostics and has no custom
+`EditorTheme` fonts, so most of its code compiles unchanged; one screen changes.
 
 **`gradle/libs.versions.toml`**
 
@@ -170,18 +169,18 @@ optional improvements:
 
 - Forward the XML comment syntax, so Ctrl+/ comments lines:
   `override val commentSyntax get() = base.commentSyntax`.
-- Better: highlight with the web app's grammar, so both apps share one grammar and editing is
-  incremental. Export the Monarch grammar from `aardflex-web-app` to JSON once (a RegExp literal
+- Better: highlight with the web host's grammar, so both hosts share one grammar and editing is
+  incremental. Export the Monarch grammar from a web host to JSON once (a RegExp literal
   becomes its `source` string), keep it as an asset, and:
 
   ```kotlin
-  val grammar = DeclarativeGrammar.parse(context.assets.open("aardflex-xml.grammar.json").reader().readText())
+  val grammar = DeclarativeGrammar.parse(context.assets.open("mylang-xml.grammar.json").reader().readText())
   val tokenizer = DeclarativeTokenizer(grammar)
   ```
 
-  Its tokens are `NamedTokenType`s (`tag.aardflex.xml`, `variable.module.xml`, ...), coloured by
+  Its tokens are `NamedTokenType`s (`tag.mylang.xml`, `variable.module.xml`, ...), coloured by
   the `EditorTheme.tokenColors` entry of the longest dotted prefix of the name that has one, as
-  Monaco does: an entry for `NamedTokenType("tag.aardflex")` colours `tag.aardflex.xml`, and
+  Monaco does: an entry for `NamedTokenType("tag.mylang")` colours `tag.mylang.xml`, and
   `TokenType.TypeName` (whose `scope` is `type`, the built-in themes' colour for `tag`) colours the
   rest of the tags. `EditorTheme.tokenFontStyles` makes them bold in the same way.
   `grammar.tokenNames` lists every name the grammar can produce. `XmlTokenType.Expression` and

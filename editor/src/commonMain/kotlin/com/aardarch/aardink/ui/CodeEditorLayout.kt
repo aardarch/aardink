@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -79,6 +80,7 @@ import com.aardarch.aardink.core.DecorationStyle
 import com.aardarch.aardink.core.Diagnostic
 import com.aardarch.aardink.core.DiagnosticSeverity
 import com.aardarch.aardink.core.DiagnosticsTracker
+import com.aardarch.aardink.core.DiffProvider
 import com.aardarch.aardink.core.DocumentLink
 import com.aardarch.aardink.core.DocumentSymbol
 import com.aardarch.aardink.core.EditorCommand
@@ -122,6 +124,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -195,6 +199,7 @@ fun CodeEditorLayout(
     onFontSizeChange: ((TextUnit) -> Unit)? = null,
     inlineCompletionProvider: InlineCompletionProvider? = null,
     onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)? = null,
+    diffProvider: DiffProvider = SimpleDiffProvider,
 ) {
     // The typography with the options' size, and the size the editor zoomed to itself when it
     // owns the size (pinchToZoom without onFontSizeChange).
@@ -248,6 +253,7 @@ fun CodeEditorLayout(
             onOpenLink = onOpenLink,
             inlineCompletionProvider = inlineCompletionProvider,
             onSearchWorkspace = onSearchWorkspace,
+            diffProvider = diffProvider,
             zoom = if (zoomable) {
                 ZoomControl(
                     zoomBy = { factor -> zoomTo(currentFontSize.value * factor) },
@@ -287,11 +293,13 @@ private fun CodeEditorLayoutContent(
     onOpenLink: (target: String) -> Unit,
     inlineCompletionProvider: InlineCompletionProvider?,
     onSearchWorkspace: ((query: String, options: FindEngine.Options) -> Unit)?,
+    diffProvider: DiffProvider,
     zoom: ZoomControl?,
 ) {
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val theme = LocalEditorTheme.current
+    val diffColors = remember(theme) { DiffColors.of(theme) }
     // A theme without a default token colour falls back to the chrome's text colour, not the host's.
     val textColor = theme.tokenColors[TokenType.Default] ?: remember(theme) { EditorChromeColors(theme).foreground }
 
@@ -299,6 +307,13 @@ private fun CodeEditorLayoutContent(
     DisposableEffect(view) {
         view.attach()
         onDispose { view.detach() }
+    }
+    val diffSide = LocalDiffSide.current
+    if (diffSide != null) {
+        DisposableEffect(view, diffSide.onView) {
+            diffSide.onView(view)
+            onDispose { diffSide.onView(null) }
+        }
     }
     val controller = remember(view) { EditorController(state, view) }
 
@@ -524,10 +539,10 @@ private fun CodeEditorLayoutContent(
     }
 
     // Diff lane: compute line diffs when savedText or document changes
-    var diffAnnotations by remember { mutableStateOf<Map<Int, LineDiffKind>>(emptyMap()) }
-    LaunchedEffect(savedText, textVersion) {
-        if (savedText.isEmpty()) {
-            diffAnnotations = emptyMap()
+    var diffLane by remember { mutableStateOf(DiffLane.None) }
+    LaunchedEffect(savedText, textVersion, diffProvider, diffSide != null) {
+        if (savedText.isEmpty() || diffSide != null) {
+            diffLane = DiffLane.None
             return@LaunchedEffect
         }
         // Debounced like find and folding: the lane can lag typing by a moment, and a burst of
@@ -535,14 +550,13 @@ private fun CodeEditorLayoutContent(
         delay(DIFF_DEBOUNCE_MS)
         val current = state.document.text
         if (current == savedText) {
-            diffAnnotations = emptyMap()
+            diffLane = DiffLane.None
             return@LaunchedEffect
         }
-        diffAnnotations = withContext(state.computeDispatcher) {
-            SimpleDiffProvider.diff(savedText.lines(), current.lines())
-                .associate { it.lineIndex to it.kind }
-        }
+        diffLane = withContext(state.computeDispatcher) { DiffLane.of(diffProvider.diff(savedText.lines(), current.lines())) }
     }
+    val shownDiffLane = diffSide?.lane ?: diffLane
+    val diffAnnotations = shownDiffLane.marks
 
     // Gutter annotations: the most severe diagnostic starting on each line; hints get none.
     val gutterAnnotations = remember(shownDiagnostics) {
@@ -790,8 +804,30 @@ private fun CodeEditorLayoutContent(
                 return@collectLatest
             }
             val document = state.document.snapshot()
-            val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
-            state.applySemanticTokens(tokens, document)
+            // The lines on screen are asked about on their own while the whole answer is on its way,
+            // so that they are coloured first. A service that cannot answer a range says null, and
+            // then nothing is shown before the whole answer.
+            val frame = view.frame
+            val runs = if (frame.lines.isEmpty()) {
+                emptyList()
+            } else {
+                val shown = frame.lines
+                InlineContent.hintWindow(null, shown.first().line..shown.last().line, shown.size, view.foldLayout, frame.lineCount).runs
+            }
+            coroutineScope {
+                val early = runs.map { lines ->
+                    launch {
+                        val part = withContext(state.computeDispatcher) {
+                            service.semanticTokens(document, InlineContent.hintRange(document, lines))
+                        }
+                        if (part != null) state.applySemanticTokensToLines(part, document, lines)
+                    }
+                }
+                val tokens = withContext(state.computeDispatcher) { service.semanticTokens(document) }
+                // The whole answer replaces any part of it, and a part must not land after it.
+                early.forEach { it.cancelAndJoin() }
+                state.applySemanticTokens(tokens, document)
+            }
         }
     }
 
@@ -939,6 +975,8 @@ private fun CodeEditorLayoutContent(
     }
 
     // ── Hover: the decorations' messages, diagnostics and documentation under a resting mouse ─
+    val currentHoverDelay = rememberUpdatedState(options.hoverDelayMs)
+    val currentHoverHidingDelay = rememberUpdatedState(options.hoverHidingDelayMs)
     val showHover: suspend (Int, Offset?) -> Unit = hover@{ offset, restedAt ->
         val service = languageService
         val here = currentShownDiagnostics.value
@@ -974,7 +1012,7 @@ private fun CodeEditorLayoutContent(
     LaunchedEffect(controller, languageService) {
         snapshotFlow { controller.hoverAt }.collectLatest { at ->
             if (at == null) return@collectLatest
-            delay(HOVER_DELAY_MS)
+            delay(currentHoverDelay.value)
             val hit = view.offsetAt(at)
             if (hover?.holding == true) return@collectLatest
             // An inlay hint with a tooltip is about itself, not the text it stands in front of.
@@ -992,7 +1030,7 @@ private fun CodeEditorLayoutContent(
     LaunchedEffect(controller) {
         snapshotFlow { hover?.takeIf { !it.holding && controller.hoverAt != it.restedAt } }.collectLatest { leaving ->
             if (leaving == null) return@collectLatest
-            delay(HOVER_HIDE_DELAY_MS)
+            delay(currentHoverHidingDelay.value)
             hover = null
         }
     }
@@ -1462,6 +1500,9 @@ private fun CodeEditorLayoutContent(
 
             EditorCommand.SearchWorkspace -> searchWorkspace?.invoke() != null
 
+            EditorCommand.NextChange, EditorCommand.PreviousChange, EditorCommand.RevertChange -> state.diffCommands?.invoke(command) ==
+                true
+
             EditorCommand.ShowReplace -> findReplaceState?.let {
                 seedFind(it)
                 it.show(replace = true)
@@ -1519,6 +1560,7 @@ private fun CodeEditorLayoutContent(
         addAll(listOf(EditorCommand.NextProblem, EditorCommand.PreviousProblem, EditorCommand.GoToLine))
         if (findReplaceState != null) addAll(listOf(EditorCommand.ShowFind, EditorCommand.ShowReplace))
         if (onSearchWorkspace != null) add(EditorCommand.SearchWorkspace)
+        state.diffCommands?.let { addAll(listOf(EditorCommand.NextChange, EditorCommand.PreviousChange, EditorCommand.RevertChange)) }
         if (!options.readOnly && options.colorDecorators && colorAt(state.selection.end) != null) add(EditorCommand.ShowColorPicker)
         if (foldState != null) addAll(listOf(EditorCommand.FoldAll, EditorCommand.UnfoldAll, EditorCommand.Fold, EditorCommand.Unfold))
         if (zoom != null) addAll(listOf(EditorCommand.ZoomIn, EditorCommand.ZoomOut, EditorCommand.ZoomReset))
@@ -1795,7 +1837,11 @@ private fun CodeEditorLayoutContent(
                     foldableLines = if (options.showFoldMarkers) foldableLines else emptySet(),
                     reserveFoldLane = options.showFoldMarkers && foldState != null && foldingProvider !== NoOpFoldingProvider,
                     diffAnnotations = if (options.showDiffMarkers) diffAnnotations else emptyMap(),
-                    reserveDiffLane = options.showDiffMarkers && savedText.isNotEmpty(),
+                    deletedAbove = if (options.showDiffMarkers) shownDiffLane.deletedAbove else emptySet(),
+                    diffColors = diffSide?.colors ?: diffColors,
+                    reserveDiffLane = options.showDiffMarkers && (savedText.isNotEmpty() || diffSide != null),
+                    diffActionLines = if (options.showDiffMarkers) diffSide?.actionLines.orEmpty() else emptySet(),
+                    onDiffAction = diffSide?.onAction,
                     reserveAnnotationLane = options.showDiagnosticAnnotations && (languageService != null || !collectDiagnostics),
                     showLineNumbers = options.showLineNumbers,
                     onToggleFold = { line -> foldState?.toggle(line) },
@@ -2034,12 +2080,6 @@ private fun Modifier.holdingHover(shown: HoverShown): Modifier = pointerInput(sh
 
 /** The references list on screen: asked for at [offset], where it is anchored. */
 private class ReferencesShown(val offset: Int, val items: List<ReferenceItem>)
-
-/** How long the mouse rests on a symbol before its documentation shows, as in VS Code. */
-private const val HOVER_DELAY_MS = 500L
-
-/** How long the card outlasts a mouse that moved off the symbol, as Monaco's `hover.hidingDelay`. */
-private const val HOVER_HIDE_DELAY_MS = 300L
 
 /**
  * What [provider] answers for the text as it is now, or null to keep the ranges there are: it had no
@@ -2359,3 +2399,38 @@ internal fun replacePreviewOf(find: FindReplaceState, document: CodeDocument, re
 
 /** How much of the line the replace preview shows either side of the match. */
 private const val REPLACE_PREVIEW_CONTEXT = 30
+
+/** What the gutter's diff lane shows: a mark per line, and the lines with lines deleted above them. */
+@androidx.compose.runtime.Immutable
+internal class DiffLane(val marks: Map<Int, LineDiffKind>, val deletedAbove: Set<Int>) {
+    companion object {
+        val None = DiffLane(emptyMap(), emptySet())
+
+        fun of(diffs: List<com.aardarch.aardink.core.LineDiff>): DiffLane {
+            if (diffs.isEmpty()) return None
+            val marks = HashMap<Int, LineDiffKind>()
+            val deleted = HashSet<Int>()
+            for (diff in diffs) if (diff.kind == LineDiffKind.Deleted) deleted += diff.lineIndex else marks[diff.lineIndex] = diff.kind
+            return DiffLane(marks, deleted)
+        }
+    }
+}
+
+/**
+ * What a diff editor gives one of its two editors, through [LocalDiffSide], so that
+ * [CodeEditorLayout]'s own signature stays as it is. [onView] hands over the editor's renderer while
+ * it is composed (and null when it leaves); [lane] and [colors] replace the gutter's lane, which then
+ * does not compare with `savedText`; [actionLines] are the lines whose lane offers an arrow, and
+ * [onAction] is told which was tapped.
+ */
+@androidx.compose.runtime.Immutable
+internal class DiffSide(
+    val onView: (EditorView?) -> Unit,
+    val lane: DiffLane,
+    val colors: DiffColors,
+    val actionLines: Set<Int> = emptySet(),
+    val onAction: ((Int) -> Unit)? = null,
+)
+
+/** Set by the diff editor around each of its two editors; null in any other [CodeEditorLayout]. */
+internal val LocalDiffSide = staticCompositionLocalOf<DiffSide?> { null }

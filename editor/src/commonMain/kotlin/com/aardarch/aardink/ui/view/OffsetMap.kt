@@ -16,6 +16,7 @@
 package com.aardarch.aardink.ui.view
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 
 /**
@@ -39,6 +40,13 @@ internal data class Injection(
     val leadsRowAbove: Boolean = false,
     /** Markdown a mouse resting on this text is shown, in place of the hover of the text under it. */
     val tooltip: String? = null,
+    /**
+     * Drawn across the whole width of every row this text is on, under the text: the band of a
+     * deleted line or a filler row in a diff. [Color.Unspecified] draws nothing.
+     */
+    val background: Color = Color.Unspecified,
+    /** Styles over parts of [text], over [style]: the token colours of another document's line shown here. */
+    val spans: List<InjectedSpan> = emptyList(),
 ) {
     /** Whether this is whole rows above the line's text, as a code lens is, or a piece of such a row. */
     val isRowAbove: Boolean get() = leadsRowAbove || (column == 0 && caretAfter && text.endsWith('\n'))
@@ -53,6 +61,10 @@ internal data class Injection(
             Injection(0, text, style, caretAfter = true, id = id, leadsRowAbove = true)
     }
 }
+
+/** [style] over characters [start, end) of an [Injection]'s text. */
+@Immutable
+internal data class InjectedSpan(val start: Int, val end: Int, val style: SpanStyle)
 
 /**
  * Everything injected into one line, in layout order: by column, and at one column the text that
@@ -90,11 +102,13 @@ internal class LineInjections private constructor(val items: List<Injection>, va
         val kept = ArrayList<Injection>(items.size)
         for (item in items) {
             val column = fittedColumn(item, text, indent)
-            if (column == null || item.text.length > budget) {
+            // A diff's rows are another document's lines, all of which must show: not held to the budget.
+            val budgeted = item.background == Color.Unspecified
+            if (column == null || (budgeted && item.text.length > budget)) {
                 changed = true
                 continue
             }
-            budget -= item.text.length
+            if (budgeted) budget -= item.text.length
             if (column != item.column) changed = true
             kept += if (column == item.column) item else item.copy(column = column)
         }
@@ -232,6 +246,15 @@ internal class OffsetMap private constructor(private val items: List<Injection>,
             i = next
         }
         action(charIndex(start), rangeEnd(to))
+    }
+
+    /** Whether any injection has a [Injection.background]. */
+    val hasBackgrounds: Boolean = items.any { it.background != Color.Unspecified }
+
+    /** Calls [action] with every injection that has a [Injection.background], and where it is in the layout, [start, end). */
+    fun forEachBackground(action: (injection: Injection, start: Int, end: Int) -> Unit) {
+        if (!hasBackgrounds) return
+        for (i in 0 until size) if (items[i].background != Color.Unspecified) action(items[i], starts[i], ends[i])
     }
 
     /** Calls [action] with the document column of every injection, once per column. */

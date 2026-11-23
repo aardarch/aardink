@@ -210,10 +210,10 @@ import { createEditor, defineTheme, registerLanguage } from '@aardarch/aardink-w
 
 await registerLanguage(
   {
-    id: 'aardflex',
+    id: 'mylang',
     extends: 'xml', // XML's completions, diagnostics and folding too
     grammar: {
-      tokenPostfix: '.aardflex',
+      tokenPostfix: '.mylang',
       tokenizer: {
         root: [
           [/<\/?(layer|text)\b/, 'tag'],
@@ -231,12 +231,12 @@ await registerLanguage(
     provideDiagnostics: async (text) => validate(text), // AardinkDiagnostic[]
   },
 );
-await defineTheme('aardflex-dark', {
+await defineTheme('mylang-dark', {
   base: 'vs-dark',
   inherit: true,
-  rules: [{ token: 'tag.aardflex', foreground: 'c586c0' }],
+  rules: [{ token: 'tag.mylang', foreground: 'c586c0' }],
 });
-const editor = await createEditor(container, save, { language: 'aardflex', theme: 'aardflex-dark' });
+const editor = await createEditor(container, save, { language: 'mylang', theme: 'mylang-dark' });
 ```
 
 - **Grammars** are a subset of Monaco's Monarch: states, rules of `[regex, action, next?]`,
@@ -261,10 +261,8 @@ const editor = await createEditor(container, save, { language: 'aardflex', theme
   `$1`-style capture groups in guards, `next` and `nextEmbedded`, and `$Sn` in a rule's regex,
   which stay literal text. The grammar highlights a line at a time, so an edit
   rescans only until the lines below are back in the state they were in.
-  [`AARDFLEX_WEB_SWITCHOVER.md`](AARDFLEX_WEB_SWITCHOVER.md) moves a real Monaco language over this
-  way.
-- **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.aardflex`
-  takes the theme's `tag.aardflex` rule, else its `tag` rule, else the built-in themes' colour for
+- **Colours and font styles** follow token names by dotted prefix, as in Monaco: `tag.mylang`
+  takes the theme's `tag.mylang` rule, else its `tag` rule, else the built-in themes' colour for
   Monaco's standard names (`keyword`, `tag`, `attribute.name`, `number`, `delimiter`, ...). A
   name with a `comment` or `string` part (`comment.doc`, `string.format`) is a comment or a string
   to the editor, as in Monaco: no bracket colours or matching inside it.
@@ -425,6 +423,7 @@ files to apply them to.
 | `rulers`, `guides: { indentation, bracketPairs }` | The same | Off by default, where Monaco's indentation guides are on. A ruler's colour is the theme's `editorRuler.foreground`; `bracketPairs: 'active'` shows them all. |
 | `cursorStyle`, `cursorBlinking`, `cursorSurroundingLines`, `smoothScrolling` | The same | `'phase'` and `'expand'` blink as `'smooth'`. `smoothScrolling` animates the editor's own scrolls, not the wheel. |
 | `scrollBeyondLastLine`, `dragAndDrop` | The same | Off by default, where Monaco's are on. |
+| `hover: { delay, hidingDelay }` | The same | Milliseconds. `delay` is 500 by default, where Monaco's is 300; `hidingDelay` 300, as Monaco's. |
 | `formatOnType` | The same | With `provideOnTypeFormattingEdits` or a language server. Off by default, as Monaco's. |
 | `folding` | `showFoldMarkers` | Boolean. |
 | `glyphMargin` | `showGutter` | Hides the whole gutter. |
@@ -485,6 +484,34 @@ files to apply them to.
 | `KeyMod.chord(...)` | The same, or `'CtrlCmd+K CtrlCmd+S'` | In `addCommand` and `addAction`. |
 | `fontFamily` | The same | The first name in the list given to `registerFont`; see [Your own font](#your-own-font). |
 | `automaticLayout` | None | The editor always follows its container's size. |
+
+## A diff editor
+
+```ts
+import { createDiffEditor } from '@aardarch/aardink-web';
+
+const diff = await createDiffEditor(container, {
+  original: savedText,
+  modified: currentText,
+  language: 'typescript',
+  hideUnchangedRegions: { enabled: true, contextLineCount: 3 },
+});
+diff.onDidUpdateDiff(() => console.log(diff.getLineChanges()));
+diff.getModifiedEditor().onDidChangeContent((text) => save(text));
+```
+
+It takes Monaco's diff options (`renderSideBySide`, `renderSideBySideInlineBreakpoint`,
+`ignoreTrimWhitespace`, `maxComputationTime`, `originalEditable`, `hideUnchangedRegions`,
+`renderIndicators`, `enableSplitViewResizing`) with `createEditor`'s options for both sides. Where
+Monaco takes two models it takes the two texts, and `setOriginalValue` and `setModifiedValue` replace
+them; models come in 0.13. `getLineChanges()` answers in Monaco's `ILineChange` shape, 1-based, with
+an end line of 0 on the side of an insertion or a deletion. `goToDiff('next')`, F7 and `trigger` with
+Monaco's ids (`editor.action.accessibleDiffViewer.next` and the rest) move through the changes, and
+`revertChange(index)` puts one back as one undo step.
+
+Each side is an ordinary `AardinkEditor`, but the diff editor owns what it shows: a side's host
+diagnostics, baseline, find state, `onOpenLink` and `onSearchWorkspace` are not shown, and disposing a
+side does nothing. `dispose()` the diff editor to end both.
 
 ## Fonts
 

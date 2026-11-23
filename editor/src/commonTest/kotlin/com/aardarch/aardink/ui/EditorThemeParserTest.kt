@@ -151,14 +151,14 @@ class EditorThemeParserTest {
               "tokenColors": [
                 { "scope": "number", "settings": { "foreground": "#123456" } },
                 { "scope": "delimiter", "settings": { "foreground": "#654321" } },
-                { "scope": "tag.aardflex", "settings": { "fontStyle": "bold" } }
+                { "scope": "tag.mylang", "settings": { "fontStyle": "bold" } }
               ]
             }
         """.trimIndent()
         val theme = EditorThemeParser.fromJson(json)!!
         assertEquals(Color(0x12, 0x34, 0x56), theme.tokenColors[TokenType.Number])
         assertEquals(Color(0x65, 0x43, 0x21), theme.tokenColors[TokenType.Punctuation])
-        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.aardflex")])
+        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.mylang")])
     }
 
     @Test
@@ -242,7 +242,7 @@ class EditorThemeParserTest {
               "base": "vs-dark",
               "inherit": true,
               "rules": [
-                { "token": "tag.aardflex", "foreground": "C586C0", "fontStyle": "bold" },
+                { "token": "tag.mylang", "foreground": "C586C0", "fontStyle": "bold" },
                 { "token": "comment", "foreground": "#6A9955", "fontStyle": "italic", "background": "000000" },
                 { "token": "", "foreground": "D4D4D4" }
               ],
@@ -250,8 +250,8 @@ class EditorThemeParserTest {
             }""",
         )!!
         assertEquals(Color(0xFF1E1E2E), theme.background)
-        assertEquals(Color(0xFFC586C0), theme.tokenColors[NamedTokenType("tag.aardflex")])
-        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.aardflex")])
+        assertEquals(Color(0xFFC586C0), theme.tokenColors[NamedTokenType("tag.mylang")])
+        assertEquals(TokenFontStyle(bold = true), theme.tokenFontStyles[NamedTokenType("tag.mylang")])
         assertEquals(Color(0xFF6A9955), theme.tokenColors[TokenType.Comment])
         assertEquals(Color(0xFFD4D4D4), theme.tokenColors[TokenType.Default], "the empty token sets the default text colour")
     }

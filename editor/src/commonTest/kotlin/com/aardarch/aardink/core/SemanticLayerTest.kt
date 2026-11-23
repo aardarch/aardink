@@ -365,4 +365,46 @@ class SemanticLayerTest {
         state.clearSemanticTokens()
         assertEquals(version + 1, state.semanticVersion, "nothing was shown, so nothing changes")
     }
+
+    // ── Answers about some lines ─────────────────────────────────────────────
+
+    @Test
+    fun `a range answer paced while another lands keeps the other's lines`() = runTest {
+        val document = CodeDocument((0 until 40).joinToString("\n") { "word$it ".repeat(20).trim() })
+        val store = TokenStore(document)
+        val snapshot = document.snapshot()
+        fun wordsOn(lines: IntRange) = lines.flatMap { line ->
+            val start = document.lineStart(line)
+            (start until document.lineEnd(line)).map { Token(it, it + 1, named) }
+        }
+        // The first answer suspends at every check of its pacer; the second lands while it waits.
+        val first = async { store.overlay(wordsOn(0..19), snapshot, CooperativePacer(Duration.ZERO), onlyLines = 0..19) }
+        runCurrent()
+        assertTrue(store.overlay(wordsOn(20..39), snapshot, onlyLines = 20..39))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(first.await())
+        fun length(line: Int) = document.lineEnd(line) - document.lineStart(line)
+        assertEquals(length(10), store.tokensForLine(10).size)
+        assertEquals(length(30), store.tokensForLine(30).size, "the second answer's lines are not put back as they were")
+    }
+
+    @Test
+    fun `an empty range answer clears the lines it covers, and only those`() = runTest {
+        val state = CodeEditorState("alpha beta\ngamma delta\nepsilon")
+        val snapshot = state.document.snapshot()
+        state.applySemanticTokensToLines(listOf(Token(0, 5, named), Token(11, 16, named)), snapshot, 0..1)
+        assertEquals(1, assertNotNull(state.semanticStore).tokensForLine(1).size)
+        state.applySemanticTokensToLines(emptyList(), snapshot, 1..1)
+        val store = assertNotNull(state.semanticStore)
+        assertEquals(1, store.tokensForLine(0).size, "outside the range nothing changes")
+        assertEquals(0, store.tokensForLine(1).size, "the answer said line 1 has no tokens")
+    }
+
+    @Test
+    fun `an empty range answer with no layer yet starts none`() = runTest {
+        val state = CodeEditorState("alpha")
+        state.applySemanticTokensToLines(emptyList(), state.document.snapshot(), 0..0)
+        assertNull(state.semanticStore)
+    }
 }

@@ -1,0 +1,39 @@
+{
+  "document.xml": [
+    [["delimiter.tpl","<"],["tag.markup.tpl","page"],[""," "],["attribute.name.tpl","title"],["delimiter.tpl","="],["attribute.value.tpl","\"Home\""],["delimiter.tpl",">"]],
+    [["","  "],["comment","<!-- a note {user.name} -->"]],
+    [["","  "],["delimiter.tpl","<"],["tag.markup.tpl","section"],[""," "],["attribute.name.tpl","class"],["delimiter.tpl","="],["attribute.value.tpl","\"intro\""],[""," "],["attribute.name.tpl","hidden"],["delimiter.tpl",">"]],
+    [["","    "],["delimiter.tpl","<"],["tag.markup.tpl","label"],["delimiter.tpl",">"],["","Hello"],["delimiter.tpl","</"],["tag.markup.tpl","label"],["delimiter.tpl",">"]],
+    [["","    "],["delimiter.tpl","<"],["tag.tpl","widget"],[""," "],["attribute.name.tpl","size"],["delimiter.tpl","="],["attribute.value.tpl","\"1\""],[""," "],["delimiter.tpl","/>"]],
+    [["","  "],["delimiter.tpl","</"],["tag.markup.tpl","section"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","</"],["tag.markup.tpl","page"],["delimiter.tpl",">"]],
+    []
+  ],
+  "edges.xml": [
+    [["delimiter.tpl","<"],["tag.markup.tpl","label"],["delimiter.tpl",">"],["","a { b } c {"],["delimiter.tpl","</"],["tag.markup.tpl","label"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","link"],[""," "],["attribute.name.tpl","text"],["delimiter.tpl","="],["attribute.value.tpl","'"],["delimiter.expression.tpl","{"],["variable.expression.tpl","user"],["delimiter.tpl","."],["variable.property.tpl","name"],[""," "],["operator.pipe.tpl","|"],[""," "],["function.filter.tpl","upper"],["delimiter.expression.tpl","}"],["attribute.value.tpl","'"],[""," "],["attribute.name.tpl","alt"],["delimiter.tpl","="],["attribute.value.tpl","\"{x\""],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","item"],["delimiter.tpl",">"],["","{}"],["delimiter.tpl","</"],["tag.markup.tpl","item"],["delimiter.tpl",">"]],
+    []
+  ],
+  "expressions.xml": [
+    [["delimiter.tpl","<"],["tag.markup.tpl","label"],["delimiter.tpl",">"],["delimiter.expression.tpl","{"],["variable.expression.tpl","title"],["delimiter.expression.tpl","}"],["delimiter.tpl","</"],["tag.markup.tpl","label"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","label"],["delimiter.tpl",">"],["delimiter.expression.tpl","{"],["variable.expression.tpl","$title"],["delimiter.expression.tpl","}"],["delimiter.tpl","</"],["tag.markup.tpl","label"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","label"],[""," "],["attribute.name.tpl","for"],["delimiter.tpl","="],["attribute.value.tpl","\""],["delimiter.expression.tpl","{"],["variable.expression.tpl","user"],["delimiter.tpl","."],["variable.property.tpl","name"],["delimiter.expression.tpl","}"],["attribute.value.tpl","\""],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","link"],[""," "],["attribute.name.tpl","href"],["delimiter.tpl","="],["attribute.value.tpl","\""],["delimiter.expression.tpl","{"],["variable.expression.tpl","site"],["delimiter.tpl","."],["variable.property.tpl","url"],["delimiter.expression.tpl","}"],["attribute.value.tpl","\""],[""," "],["attribute.name.tpl","text"],["delimiter.tpl","="],["attribute.value.tpl","\""],["delimiter.expression.tpl","{"],["variable.expression.tpl","user"],["delimiter.tpl","."],["variable.property.tpl","name"],[""," "],["operator.pipe.tpl","|"],[""," "],["function.filter.tpl","upper"],["delimiter.expression.tpl","}"],["attribute.value.tpl","\""],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","item"],["delimiter.tpl",">"],["delimiter.expression.tpl","{"],["variable.expression.tpl","count"],[""," "],["operator.pipe.tpl","|"],[""," "],["function.filter.tpl","pad"],["delimiter.tpl",":"],["string.argument.tpl"," 3 "],["operator.pipe.tpl","|"],[""," "],["function.filter.tpl","suffix"],["delimiter.tpl",":"],["string.argument.tpl"," x"],["delimiter.expression.tpl","}"],["","%"],["delimiter.tpl","</"],["tag.markup.tpl","item"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","note"],["delimiter.tpl",">"],["","{oops"],["delimiter.tpl","</"],["tag.markup.tpl","note"],["delimiter.tpl",">"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","item"],[""," "],["attribute.name.tpl","id"],["delimiter.tpl","="],["attribute.value.tpl","\"x\""],["delimiter.tpl",">"],["","ok"],["delimiter.tpl","</"],["tag.markup.tpl","item"],["delimiter.tpl",">"]],
+    []
+  ],
+  "literals.xml": [
+    [["delimiter.tpl","<"],["tag.markup.tpl","note"],["delimiter.tpl",">"],["delimiter.cdata.tpl","<![CDATA["],[""," literal {user.name} | x"]],
+    [["","a ] b ]] c"]],
+    [["delimiter.cdata.tpl","]]>"],["delimiter.tpl","</"],["tag.markup.tpl","note"],["delimiter.tpl",">"]],
+    [["comment","<!-- <![CDATA[ not cdata -->"],["delimiter.tpl","<"],["tag.markup.tpl","item"],["delimiter.tpl","/>"]],
+    [["delimiter.tpl","<"],["tag.markup.tpl","note"],["delimiter.tpl",">"]],
+    [["","  {count"]],
+    [["","  | pad}"]],
+    [["delimiter.tpl","</"],["tag.markup.tpl","note"],["delimiter.tpl",">"]],
+    []
+  ]
+}

@@ -65,9 +65,12 @@ internal class LspSemanticLegend(private val tokenTypes: List<String>, private v
     }
 
     companion object {
-        /** The legend in [provider], a `SemanticTokensOptions`, or null if it has none or answers no `full` request. */
-        fun from(provider: JsonObject): LspSemanticLegend? {
-            val full = provider["full"]
+        /**
+         * The legend in [provider], a `SemanticTokensOptions`, or null if it has none or answers no
+         * request of the kind [answering]: `full`, or `range`.
+         */
+        fun from(provider: JsonObject, answering: String = "full"): LspSemanticLegend? {
+            val full = provider[answering]
             if (full !is JsonObject && (full as? JsonPrimitive)?.booleanOrNull != true) return null
             val legend = provider["legend"] as? JsonObject ?: return null
             val types = legend.strings("tokenTypes").takeIf { it.isNotEmpty() } ?: return null

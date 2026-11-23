@@ -20,6 +20,7 @@ package com.aardarch.aardink.sampleweb
 // The running copy of the @JsExport template (editor-web/src/wasmJsTest/.../ExportsTemplate.kt)
 // that the npm package's index.js calls. Keep the two in step: a change to one belongs in both.
 
+import com.aardarch.aardink.web.AardinkDiffHandle
 import com.aardarch.aardink.web.AardinkEditorHandle
 import com.aardarch.aardink.web.AardinkWeb
 import kotlinx.coroutines.DisposableHandle
@@ -305,6 +306,59 @@ fun aardinkRevealRange(id: Int, line: Int, column: Int, center: Boolean) = Aardi
 @JsExport
 fun aardinkDispose(id: Int) {
     handles.remove(id)?.let(AardinkWeb::dispose)
+}
+
+private val diffs = mutableMapOf<Int, DiffEntry>()
+private var nextDiffId = 1
+
+/** A diff editor with the ids its two sides are in [handles] by. */
+private class DiffEntry(val diff: AardinkDiffHandle, val originalId: Int, val modifiedId: Int)
+
+private fun diff(id: Int): AardinkDiffHandle =
+    diffs[id]?.diff ?: error("No Aardink diff editor with id $id; it was never created or is already disposed")
+
+/**
+ * Mounts a diff editor; see `AardinkWeb.mountDiff`. [optionsJson] holds the editor options and the diff
+ * editor's own. Returns a JSON array of three ids: the diff editor's, for the `aardinkDiff...` functions,
+ * and those of its original and modified editors, for every per-editor export such as [aardinkGetValue].
+ */
+@JsExport
+fun aardinkCreateDiff(containerId: String, original: String, modified: String, optionsJson: String): String {
+    val diff = AardinkWeb.mountDiff(containerId, original, modified, optionsJson)
+    val originalId = nextHandleId++
+    val modifiedId = nextHandleId++
+    handles[originalId] = diff.original
+    handles[modifiedId] = diff.modified
+    val id = nextDiffId++
+    diffs[id] = DiffEntry(diff, originalId, modifiedId)
+    return "[$id,$originalId,$modifiedId]"
+}
+
+/** Replaces the original text, the modified text or both, as [aardinkSetValue] does; `null` leaves a side as it is. */
+@JsExport fun aardinkDiffSetValues(id: Int, original: String?, modified: String?) = AardinkWeb.diffSetValues(diff(id), original, modified)
+
+/** The changes of the last diff as a JSON array of Monaco's `ILineChange`, 1-based. */
+@JsExport fun aardinkDiffLineChanges(id: Int): String = AardinkWeb.diffLineChangesJson(diff(id))
+
+/** Moves the caret to the next change, or the previous one; returns false when there is none. */
+@JsExport fun aardinkDiffGoTo(id: Int, next: Boolean): Boolean = AardinkWeb.diffGoTo(diff(id), next)
+
+/** Puts the original's lines of the change at [index] of [aardinkDiffLineChanges] back in the modified text; returns whether the text changed. */
+@JsExport fun aardinkDiffRevert(id: Int, index: Int): Boolean = AardinkWeb.diffRevert(diff(id), index)
+
+/** [patchJson] holds only the options to change, the editor's and the diff editor's, like Monaco's `updateOptions`. */
+@JsExport fun aardinkDiffUpdateOptions(id: Int, patchJson: String) = AardinkWeb.diffUpdateOptions(diff(id), patchJson)
+
+/** Called each time a diff has been worked out, or `null` to stop. */
+@JsExport fun aardinkOnDidUpdateDiff(id: Int, callback: (() -> Unit)?) = AardinkWeb.onDidUpdateDiff(diff(id), callback)
+
+/** Stops the diff editor and both its editors. Safe to call twice; the second call is a no-op. */
+@JsExport
+fun aardinkDiffDispose(id: Int) {
+    val entry = diffs.remove(id) ?: return
+    handles.remove(entry.originalId)
+    handles.remove(entry.modifiedId)
+    AardinkWeb.diffDispose(entry.diff)
 }
 
 @JsExport fun aardinkVersion(): String = BuildInfo.VERSION

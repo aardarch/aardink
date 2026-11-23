@@ -634,7 +634,7 @@ internal fun parseInlineCompletions(document: CodeDocument, json: String): List<
 
 /**
  * A completion's `kind` by its name in `index.d.ts`, Monaco's `CompletionItemKind` name for the
- * same thing, or Monaco's `CompletionItemKind` number. `function` and `color` stay the aardflex
+ * same thing, or Monaco's `CompletionItemKind` number. `function` and `color` stay the markup
  * names for `transform` and `colorRef` they were in 0.6.
  */
 private fun completionKind(name: String?): CompletionKind {
@@ -857,7 +857,7 @@ private fun configurationFrom(value: JsonElement): LanguageConfiguration = try {
  * colors }`, told apart by its `rules`), which [EditorThemeParser.fromMonacoJson] reads with its
  * rules' backgrounds and its `hc-black` and `hc-light` bases. What VS Code JSON does not set comes
  * from its base: `base` (a theme key) if given, else by its `type`, `vscode-light` for light themes
- * and `vscode-dark` otherwise. Its rules' scopes stay in its token colours by name (`tag.aardflex`),
+ * and `vscode-dark` otherwise. Its rules' scopes stay in its token colours by name (`tag.mylang`),
  * which the editor resolves by dotted prefix as Monaco does.
  */
 internal fun themeFrom(themeJson: String, themes: Map<String, EditorTheme>): EditorTheme {
@@ -925,6 +925,14 @@ private fun ChromeColors.orElse(base: ChromeColors): ChromeColors {
         inlayHintBackground = inlayHintBackground.or(base.inlayHintBackground),
         codeLens = codeLens.or(base.codeLens),
         ghostText = ghostText.or(base.ghostText),
+        diffInsertedLine = diffInsertedLine.or(base.diffInsertedLine),
+        diffRemovedLine = diffRemovedLine.or(base.diffRemovedLine),
+        diffInsertedText = diffInsertedText.or(base.diffInsertedText),
+        diffRemovedText = diffRemovedText.or(base.diffRemovedText),
+        diffFiller = diffFiller.or(base.diffFiller),
+        gutterAdded = gutterAdded.or(base.gutterAdded),
+        gutterModified = gutterModified.or(base.gutterModified),
+        gutterDeleted = gutterDeleted.or(base.gutterDeleted),
     )
 }
 

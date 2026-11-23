@@ -497,7 +497,7 @@ class MarkdownParserTest {
 
     @Test
     fun `a host's own scheme reaches the host`() {
-        assertEquals(listOf(Link("aardflex:open/1", listOf(Plain("a")))), inlines("[a](aardflex:open/1)"))
+        assertEquals(listOf(Link("mylang:open/1", listOf(Plain("a")))), inlines("[a](mylang:open/1)"))
     }
 
     @Test

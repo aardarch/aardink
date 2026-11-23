@@ -51,12 +51,18 @@ import kotlin.test.assertEquals
 /** Diagnostics on screen: F8 through the problems, and a squiggle's message under the mouse. */
 class DiagnosticsUiTest {
 
-    private fun ComposeUiTest.show(state: CodeEditorState, diagnostics: List<Diagnostic>, service: LanguageService? = null) {
+    private fun ComposeUiTest.show(
+        state: CodeEditorState,
+        diagnostics: List<Diagnostic>,
+        service: LanguageService? = null,
+        options: EditorOptions = EditorOptions(),
+    ) {
         setContent {
             CodeEditorLayout(
                 state = state,
                 diagnostics = diagnostics,
                 languageService = service,
+                options = options,
                 modifier = Modifier.size(600.dp, 400.dp),
             )
         }
@@ -137,6 +143,56 @@ class DiagnosticsUiTest {
         waitForIdle()
         onNodeWithText("bad word").assertExists()
         onNodeWithText("spell (S1)").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    private val badWord = listOf(Diagnostic(0..4, "bad word", DiagnosticSeverity.Error))
+
+    private fun ComposeUiTest.restOnFirstWord() {
+        onNodeWithTag(EditorTestTags.EDITOR).performMouseInput { moveTo(Offset(8.dp.toPx() + 10f, 8.dp.toPx() + 10.dp.toPx())) }
+    }
+
+    private fun ComposeUiTest.after(ms: Long) {
+        mainClock.advanceTimeBy(ms)
+        waitForIdle()
+    }
+
+    @Test
+    fun `the hover card shows after hoverDelayMs`() = runComposeUiTest {
+        show(CodeEditorState("hello world"), badWord, options = EditorOptions(hoverDelayMs = 100))
+        mainClock.autoAdvance = false
+        restOnFirstWord()
+        after(50)
+        onNodeWithText("bad word").assertDoesNotExist()
+        after(100)
+        onNodeWithText("bad word").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `by default the hover card waits half a second`() = runComposeUiTest {
+        show(CodeEditorState("hello world"), badWord)
+        mainClock.autoAdvance = false
+        restOnFirstWord()
+        after(350)
+        onNodeWithText("bad word").assertDoesNotExist()
+        after(300)
+        onNodeWithText("bad word").assertExists()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun `the hover card outlasts a mouse that moved off by hoverHidingDelayMs`() = runComposeUiTest {
+        show(CodeEditorState("hello world"), badWord, options = EditorOptions(hoverDelayMs = 0, hoverHidingDelayMs = 1_000))
+        mainClock.autoAdvance = false
+        restOnFirstWord()
+        after(100)
+        onNodeWithText("bad word").assertExists()
+        onNodeWithTag(EditorTestTags.EDITOR).performMouseInput { moveTo(Offset(500.dp.toPx(), 300.dp.toPx())) }
+        after(500)
+        onNodeWithText("bad word").assertExists()
+        after(600)
+        onNodeWithText("bad word").assertDoesNotExist()
         mainClock.autoAdvance = true
     }
 }

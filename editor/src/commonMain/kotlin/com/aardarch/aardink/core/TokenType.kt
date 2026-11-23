@@ -92,7 +92,7 @@ interface TokenType {
 }
 
 /**
- * A token type by name: `keyword.flow`, `comment.doc`, `tag.aardflex`, `attribute.name`. Grammars
+ * A token type by name: `keyword.flow`, `comment.doc`, `tag.mylang`, `attribute.name`. Grammars
  * ([com.aardarch.aardink.languages.DeclarativeGrammar]) and the built-in languages use it for what
  * the built-in types do not name. A theme colours it by its own entry in
  * [EditorTheme.tokenColors], or by the longest dotted prefix of [name] that has one ([scope]).

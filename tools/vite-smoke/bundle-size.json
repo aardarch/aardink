@@ -1,9 +1,9 @@
 {
   "files": {
     "aardink-web.import-object.mjs": {
-      "raw": 43245,
-      "gzip": 8171,
-      "brotli": 7129
+      "raw": 43326,
+      "gzip": 8183,
+      "brotli": 7141
     },
     "aardink-web.js-builtins.mjs": {
       "raw": 2095,
@@ -11,14 +11,14 @@
       "brotli": 528
     },
     "aardink-web.mjs": {
-      "raw": 4765,
-      "gzip": 1588,
-      "brotli": 1359
+      "raw": 4968,
+      "gzip": 1627,
+      "brotli": 1403
     },
     "aardink-web.wasm": {
-      "raw": 5756284,
-      "gzip": 1769514,
-      "brotli": 1292372
+      "raw": 5891376,
+      "gzip": 1813565,
+      "brotli": 1321413
     },
     "skiko.mjs": {
       "raw": 503913,
@@ -32,8 +32,8 @@
     }
   },
   "totals": {
-    "raw": 14959185,
-    "gzip": 5199541,
-    "brotli": 3975252
+    "raw": 15094561,
+    "gzip": 5243643,
+    "brotli": 4004349
   }
 }

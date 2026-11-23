@@ -89,7 +89,7 @@ internal class TokenStyleResolver(private val theme: EditorTheme) {
     internal companion object {
         /**
          * The built-in scope that colours Monaco's standard name [name] (or its first part) when it
-         * is not a built-in type's own: `tag` and `tag.aardflex` are coloured as `type`.
+         * is not a built-in type's own: `tag` and `tag.mylang` are coloured as `type`.
          */
         fun aliasOf(name: String): String? = MONACO_ALIASES[name] ?: MONACO_ALIASES[name.substringBefore('.')]
 
