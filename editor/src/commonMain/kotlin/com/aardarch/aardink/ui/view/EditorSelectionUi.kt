@@ -56,6 +56,7 @@ import com.aardarch.aardink.platform.PlatformInfo
 import com.aardarch.aardink.ui.EditorAnchoredPopup
 import com.aardarch.aardink.ui.EditorChromeTheme
 import com.aardarch.aardink.ui.EditorTestTags
+import com.aardarch.aardink.ui.currentEditorStrings
 import com.aardarch.aardink.ui.editorWidgetBorder
 import kotlin.math.roundToInt
 
@@ -192,6 +193,7 @@ internal fun EditorTouchMenu(controller: EditorController) {
 private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
     val state = controller.state
     val selection = state.selection
+    val strings = currentEditorStrings()
     Surface(
         shape = RoundedCornerShape(8.dp),
         tonalElevation = 6.dp,
@@ -207,47 +209,47 @@ private fun TouchMenuContent(controller: EditorController, done: () -> Unit) {
                 TextButton(onClick = {
                     done()
                     controller.cutToClipboard()
-                }) { Text("Cut") }
+                }) { Text(strings.cut) }
             }
             if (hasSelection) {
                 TextButton(onClick = {
                     done()
                     controller.copyToClipboard()
-                }) { Text("Copy") }
+                }) { Text(strings.copy) }
             }
             if (editable) {
                 TextButton(onClick = {
                     done()
                     controller.pasteFromClipboard()
-                }) { Text("Paste") }
+                }) { Text(strings.paste) }
             }
             TextButton(onClick = {
                 done()
                 state.withSelectionReason(SelectionChangeReason.Pointer) { state.selectAll() }
-            }) { Text("Select all") }
+            }) { Text(strings.selectAll) }
             val showInfo = controller.actions.onShowInfo
             if (showInfo != null) {
                 TextButton(onClick = {
                     done()
                     showInfo(selection.min)
-                }) { Text("Info") }
+                }) { Text(strings.info) }
             }
             // Format and quick fixes, which a phone has no keys for.
             if (editable && controller.languageService() != null) {
                 TextButton(onClick = {
                     done()
                     controller.actions.onFormat()
-                }) { Text("Format") }
+                }) { Text(strings.format) }
                 TextButton(onClick = {
                     done()
                     controller.actions.onQuickFix()
-                }) { Text("Quick Fix") }
+                }) { Text(strings.quickFix) }
             }
             if (editable && state.canExecute(EditorCommand.ShowColorPicker)) {
                 TextButton(onClick = {
                     done()
                     state.execute(EditorCommand.ShowColorPicker)
-                }) { Text("Colour") }
+                }) { Text(strings.color) }
             }
             for (item in controller.touchMenuItems) {
                 TextButton(enabled = controller.canRun(item), onClick = {
@@ -273,22 +275,23 @@ internal fun BoxScope.EditorContextMenu(controller: EditorController) {
 
 @Composable
 private fun ContextMenuContent(controller: EditorController, close: () -> Unit) {
+    val strings = currentEditorStrings()
     DropdownMenu(expanded = true, onDismissRequest = close) {
         val editable = !controller.readOnly
-        DropdownMenuItem(text = { Text("Cut") }, enabled = editable, onClick = {
+        DropdownMenuItem(text = { Text(strings.cut) }, enabled = editable, onClick = {
             close()
             controller.cutToClipboard()
         })
-        DropdownMenuItem(text = { Text("Copy") }, onClick = {
+        DropdownMenuItem(text = { Text(strings.copy) }, onClick = {
             close()
             controller.copyToClipboard()
         })
-        DropdownMenuItem(text = { Text("Paste") }, enabled = editable, onClick = {
+        DropdownMenuItem(text = { Text(strings.paste) }, enabled = editable, onClick = {
             close()
             controller.pasteFromClipboard()
         })
         HorizontalDivider()
-        DropdownMenuItem(text = { Text("Select All") }, onClick = {
+        DropdownMenuItem(text = { Text(strings.selectAllMenu) }, onClick = {
             close()
             controller.state.withSelectionReason(SelectionChangeReason.Pointer) {
                 controller.state.replaceSelections(SelectionSet.single(TextRange(0, controller.state.document.length)))
@@ -297,19 +300,19 @@ private fun ContextMenuContent(controller: EditorController, close: () -> Unit) 
         if (controller.languageService() != null) {
             val mac = PlatformInfo.isMacOs
             HorizontalDivider()
-            DropdownMenuItem(text = { Text("Go to Definition") }, trailingIcon = { Shortcut("F12") }, onClick = {
+            DropdownMenuItem(text = { Text(strings.goToDefinition) }, trailingIcon = { Shortcut("F12") }, onClick = {
                 close()
                 controller.actions.onGoToDefinition()
             })
             DropdownMenuItem(text = {
-                Text("Find References")
+                Text(strings.findReferences)
             }, trailingIcon = { Shortcut(if (mac) "⇧F12" else "Shift+F12") }, onClick = {
                 close()
                 controller.actions.onFindReferences()
             })
             val selection = controller.state.selection
             DropdownMenuItem(
-                text = { Text(if (selection.collapsed) "Format Document" else "Format Selection") },
+                text = { Text(if (selection.collapsed) strings.formatDocument else strings.formatSelection) },
                 trailingIcon = { Shortcut(if (mac) "⇧⌥F" else "Shift+Alt+F") },
                 enabled = editable,
                 onClick = {
@@ -318,13 +321,13 @@ private fun ContextMenuContent(controller: EditorController, close: () -> Unit) 
                 },
             )
             if (controller.languageService()?.supportsRename == true) {
-                DropdownMenuItem(text = { Text("Rename Symbol") }, trailingIcon = { Shortcut("F2") }, enabled = editable, onClick = {
+                DropdownMenuItem(text = { Text(strings.renameTitle) }, trailingIcon = { Shortcut("F2") }, enabled = editable, onClick = {
                     close()
                     controller.actions.onRename()
                 })
             }
             DropdownMenuItem(text = {
-                Text("Quick Fix…")
+                Text(strings.quickFixEllipsis)
             }, trailingIcon = { Shortcut(if (mac) "⌘." else "Ctrl+.") }, enabled = editable, onClick = {
                 close()
                 controller.actions.onQuickFix()

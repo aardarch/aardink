@@ -2002,60 +2002,14 @@ public final class com/aardarch/aardink/ui/CompletionDropdownKt {
 	public static final fun CompletionDropdown (Ljava/util/List;ZLkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 }
 
-public final class com/aardarch/aardink/ui/ComposableSingletons$AnnotationTooltipKt {
-	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$AnnotationTooltipKt;
-	public fun <init> ()V
-	public final fun getLambda$2054702110$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-}
-
-public final class com/aardarch/aardink/ui/ComposableSingletons$ColorPickerKt {
-	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$ColorPickerKt;
-	public fun <init> ()V
-	public final fun getLambda$-1191654949$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1366612078$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-}
-
-public final class com/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt {
-	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$EditorHoverCardKt;
-	public fun <init> ()V
-	public final fun getLambda$-1475229987$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$1948915710$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-}
-
 public final class com/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$FindReplacePanelKt;
 	public fun <init> ()V
-	public final fun getLambda$-1071760755$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1208523824$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-2127814215$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-879358342$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-886760771$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1037828969$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1279933214$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1599792862$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1943925650$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$2125406190$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$239803317$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$367700913$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$921652892$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-}
-
-public final class com/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt {
-	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$GoToLineDialogKt;
-	public fun <init> ()V
-	public final fun getLambda$-1619233343$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1671889508$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-929401853$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$1581831659$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-}
-
-public final class com/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt {
-	public static final field INSTANCE Lcom/aardarch/aardink/ui/ComposableSingletons$RenameDialogKt;
-	public fun <init> ()V
-	public final fun getLambda$-1608205315$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-996476187$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$1890765159$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$780687916$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class com/aardarch/aardink/ui/ComposableSingletons$VirtualizedEditorBodyKt {
@@ -2155,8 +2109,8 @@ public final class com/aardarch/aardink/ui/EditorMenuItem {
 public final class com/aardarch/aardink/ui/EditorOptions {
 	public static final field $stable I
 	public fun <init> ()V
-	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJIILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJLjava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJLjava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Z
 	public final fun component10 ()Z
 	public final fun component11 ()Z
@@ -2197,13 +2151,14 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun component43 ()Z
 	public final fun component44 ()J
 	public final fun component45 ()J
+	public final fun component46 ()Ljava/lang/String;
 	public final fun component5 ()Z
 	public final fun component6 ()Z
 	public final fun component7 ()Z
 	public final fun component8 ()Z
 	public final fun component9 ()Z
-	public final fun copy-mGlRzjY (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJ)Lcom/aardarch/aardink/ui/EditorOptions;
-	public static synthetic fun copy-mGlRzjY$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJIILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public final fun copy-i_qKo2s (ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJLjava/lang/String;)Lcom/aardarch/aardink/ui/EditorOptions;
+	public static synthetic fun copy-i_qKo2s$default (Lcom/aardarch/aardink/ui/EditorOptions;ZZZZZZZZZZZZIZLcom/aardarch/aardink/ui/RenderWhitespace;Lcom/aardarch/aardink/core/LineEnding;ZZZZZZLjava/util/List;JJZZZZZZLcom/aardarch/aardink/ui/LineNumberStyle;Lcom/aardarch/aardink/ui/CursorStyle;Lcom/aardarch/aardink/ui/CursorBlinking;ZZLjava/util/List;ZIZLcom/aardarch/aardink/ui/WrappingIndent;Ljava/lang/Integer;ZJJLjava/lang/String;IILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorOptions;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBracketPairColorization ()Z
 	public final fun getBracketPairGuides ()Z
@@ -2225,6 +2180,7 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun getInlayHints ()Z
 	public final fun getInsertSpaces ()Z
 	public final fun getKeyBindings ()Ljava/util/List;
+	public final fun getLanguageTag ()Ljava/lang/String;
 	public final fun getLineHeight-XSAIIZE ()J
 	public final fun getLineNumbers ()Lcom/aardarch/aardink/ui/LineNumberStyle;
 	public final fun getLinkedEditing ()Z
@@ -2252,6 +2208,211 @@ public final class com/aardarch/aardink/ui/EditorOptions {
 	public final fun getWrappingIndent ()Lcom/aardarch/aardink/ui/WrappingIndent;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/aardarch/aardink/ui/EditorStrings {
+	public abstract fun diagnosticCounter (Ljava/lang/String;II)Ljava/lang/String;
+	public abstract fun diffUnchangedLines (I)Ljava/lang/String;
+	public abstract fun getApply ()Ljava/lang/String;
+	public abstract fun getCancel ()Ljava/lang/String;
+	public abstract fun getColor ()Ljava/lang/String;
+	public abstract fun getCopy ()Ljava/lang/String;
+	public abstract fun getCut ()Ljava/lang/String;
+	public abstract fun getDiffAcceptChange ()Ljava/lang/String;
+	public abstract fun getDiffNextChange ()Ljava/lang/String;
+	public abstract fun getDiffPreviousChange ()Ljava/lang/String;
+	public abstract fun getDiffRevertChange ()Ljava/lang/String;
+	public abstract fun getDismissDiagnostic ()Ljava/lang/String;
+	public abstract fun getFindCloseDescription ()Ljava/lang/String;
+	public abstract fun getFindHideReplaceDescription ()Ljava/lang/String;
+	public abstract fun getFindInSelection ()Ljava/lang/String;
+	public abstract fun getFindMatchCaseDescription ()Ljava/lang/String;
+	public abstract fun getFindNextMatchDescription ()Ljava/lang/String;
+	public abstract fun getFindPlaceholder ()Ljava/lang/String;
+	public abstract fun getFindPreserveCase ()Ljava/lang/String;
+	public abstract fun getFindPreviousMatchDescription ()Ljava/lang/String;
+	public abstract fun getFindReferences ()Ljava/lang/String;
+	public abstract fun getFindRegexDescription ()Ljava/lang/String;
+	public abstract fun getFindSearchAllFiles ()Ljava/lang/String;
+	public abstract fun getFindShowReplaceDescription ()Ljava/lang/String;
+	public abstract fun getFindWholeWordDescription ()Ljava/lang/String;
+	public abstract fun getFormat ()Ljava/lang/String;
+	public abstract fun getFormatDocument ()Ljava/lang/String;
+	public abstract fun getFormatSelection ()Ljava/lang/String;
+	public abstract fun getGoToDefinition ()Ljava/lang/String;
+	public abstract fun getGoToLineConfirm ()Ljava/lang/String;
+	public abstract fun getGoToLineLabel ()Ljava/lang/String;
+	public abstract fun getGoToLineTitle ()Ljava/lang/String;
+	public abstract fun getGoToSymbolPlaceholder ()Ljava/lang/String;
+	public abstract fun getInfo ()Ljava/lang/String;
+	public abstract fun getNoMatchingSymbols ()Ljava/lang/String;
+	public abstract fun getNoSymbols ()Ljava/lang/String;
+	public abstract fun getPaste ()Ljava/lang/String;
+	public abstract fun getPickColor ()Ljava/lang/String;
+	public abstract fun getQuickFix ()Ljava/lang/String;
+	public abstract fun getQuickFixChip ()Ljava/lang/String;
+	public abstract fun getQuickFixEllipsis ()Ljava/lang/String;
+	public abstract fun getQuickFixesAndActions ()Ljava/lang/String;
+	public abstract fun getRenameConfirm ()Ljava/lang/String;
+	public abstract fun getRenameNewNameLabel ()Ljava/lang/String;
+	public abstract fun getRenameTitle ()Ljava/lang/String;
+	public abstract fun getReplaceAllButton ()Ljava/lang/String;
+	public abstract fun getReplaceButton ()Ljava/lang/String;
+	public abstract fun getReplacePlaceholder ()Ljava/lang/String;
+	public abstract fun getSelectAll ()Ljava/lang/String;
+	public abstract fun getSelectAllMenu ()Ljava/lang/String;
+	public abstract fun getToolbarMoveLeft ()Ljava/lang/String;
+	public abstract fun getToolbarMoveRight ()Ljava/lang/String;
+	public abstract fun getToolbarRedo ()Ljava/lang/String;
+	public abstract fun getToolbarUndo ()Ljava/lang/String;
+	public abstract fun referencesCount (I)Ljava/lang/String;
+	public abstract fun renamePrompt (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun symbolKindLabel (Lcom/aardarch/aardink/core/SymbolKind;)Ljava/lang/String;
+	public abstract fun toolbarInsertChar (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/EditorStringsEn : com/aardarch/aardink/ui/EditorStrings {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorStringsEn;
+	public fun diagnosticCounter (Ljava/lang/String;II)Ljava/lang/String;
+	public fun diffUnchangedLines (I)Ljava/lang/String;
+	public fun getApply ()Ljava/lang/String;
+	public fun getCancel ()Ljava/lang/String;
+	public fun getColor ()Ljava/lang/String;
+	public fun getCopy ()Ljava/lang/String;
+	public fun getCut ()Ljava/lang/String;
+	public fun getDiffAcceptChange ()Ljava/lang/String;
+	public fun getDiffNextChange ()Ljava/lang/String;
+	public fun getDiffPreviousChange ()Ljava/lang/String;
+	public fun getDiffRevertChange ()Ljava/lang/String;
+	public fun getDismissDiagnostic ()Ljava/lang/String;
+	public fun getFindCloseDescription ()Ljava/lang/String;
+	public fun getFindHideReplaceDescription ()Ljava/lang/String;
+	public fun getFindInSelection ()Ljava/lang/String;
+	public fun getFindMatchCaseDescription ()Ljava/lang/String;
+	public fun getFindNextMatchDescription ()Ljava/lang/String;
+	public fun getFindPlaceholder ()Ljava/lang/String;
+	public fun getFindPreserveCase ()Ljava/lang/String;
+	public fun getFindPreviousMatchDescription ()Ljava/lang/String;
+	public fun getFindReferences ()Ljava/lang/String;
+	public fun getFindRegexDescription ()Ljava/lang/String;
+	public fun getFindSearchAllFiles ()Ljava/lang/String;
+	public fun getFindShowReplaceDescription ()Ljava/lang/String;
+	public fun getFindWholeWordDescription ()Ljava/lang/String;
+	public fun getFormat ()Ljava/lang/String;
+	public fun getFormatDocument ()Ljava/lang/String;
+	public fun getFormatSelection ()Ljava/lang/String;
+	public fun getGoToDefinition ()Ljava/lang/String;
+	public fun getGoToLineConfirm ()Ljava/lang/String;
+	public fun getGoToLineLabel ()Ljava/lang/String;
+	public fun getGoToLineTitle ()Ljava/lang/String;
+	public fun getGoToSymbolPlaceholder ()Ljava/lang/String;
+	public fun getInfo ()Ljava/lang/String;
+	public fun getNoMatchingSymbols ()Ljava/lang/String;
+	public fun getNoSymbols ()Ljava/lang/String;
+	public fun getPaste ()Ljava/lang/String;
+	public fun getPickColor ()Ljava/lang/String;
+	public fun getQuickFix ()Ljava/lang/String;
+	public fun getQuickFixChip ()Ljava/lang/String;
+	public fun getQuickFixEllipsis ()Ljava/lang/String;
+	public fun getQuickFixesAndActions ()Ljava/lang/String;
+	public fun getRenameConfirm ()Ljava/lang/String;
+	public fun getRenameNewNameLabel ()Ljava/lang/String;
+	public fun getRenameTitle ()Ljava/lang/String;
+	public fun getReplaceAllButton ()Ljava/lang/String;
+	public fun getReplaceButton ()Ljava/lang/String;
+	public fun getReplacePlaceholder ()Ljava/lang/String;
+	public fun getSelectAll ()Ljava/lang/String;
+	public fun getSelectAllMenu ()Ljava/lang/String;
+	public fun getToolbarMoveLeft ()Ljava/lang/String;
+	public fun getToolbarMoveRight ()Ljava/lang/String;
+	public fun getToolbarRedo ()Ljava/lang/String;
+	public fun getToolbarUndo ()Ljava/lang/String;
+	public fun referencesCount (I)Ljava/lang/String;
+	public fun renamePrompt (Ljava/lang/String;)Ljava/lang/String;
+	public fun symbolKindLabel (Lcom/aardarch/aardink/core/SymbolKind;)Ljava/lang/String;
+	public fun toolbarInsertChar (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/EditorStringsKt {
+	public static final fun getLocalEditorStrings ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public final class com/aardarch/aardink/ui/EditorStringsParser {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorStringsParser;
+	public final fun fromJson (Ljava/lang/String;Lcom/aardarch/aardink/ui/EditorStrings;)Lcom/aardarch/aardink/ui/EditorStrings;
+	public static synthetic fun fromJson$default (Lcom/aardarch/aardink/ui/EditorStringsParser;Ljava/lang/String;Lcom/aardarch/aardink/ui/EditorStrings;ILjava/lang/Object;)Lcom/aardarch/aardink/ui/EditorStrings;
+}
+
+public final class com/aardarch/aardink/ui/EditorStringsPtBr : com/aardarch/aardink/ui/EditorStrings {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorStringsPtBr;
+	public fun diagnosticCounter (Ljava/lang/String;II)Ljava/lang/String;
+	public fun diffUnchangedLines (I)Ljava/lang/String;
+	public fun getApply ()Ljava/lang/String;
+	public fun getCancel ()Ljava/lang/String;
+	public fun getColor ()Ljava/lang/String;
+	public fun getCopy ()Ljava/lang/String;
+	public fun getCut ()Ljava/lang/String;
+	public fun getDiffAcceptChange ()Ljava/lang/String;
+	public fun getDiffNextChange ()Ljava/lang/String;
+	public fun getDiffPreviousChange ()Ljava/lang/String;
+	public fun getDiffRevertChange ()Ljava/lang/String;
+	public fun getDismissDiagnostic ()Ljava/lang/String;
+	public fun getFindCloseDescription ()Ljava/lang/String;
+	public fun getFindHideReplaceDescription ()Ljava/lang/String;
+	public fun getFindInSelection ()Ljava/lang/String;
+	public fun getFindMatchCaseDescription ()Ljava/lang/String;
+	public fun getFindNextMatchDescription ()Ljava/lang/String;
+	public fun getFindPlaceholder ()Ljava/lang/String;
+	public fun getFindPreserveCase ()Ljava/lang/String;
+	public fun getFindPreviousMatchDescription ()Ljava/lang/String;
+	public fun getFindReferences ()Ljava/lang/String;
+	public fun getFindRegexDescription ()Ljava/lang/String;
+	public fun getFindSearchAllFiles ()Ljava/lang/String;
+	public fun getFindShowReplaceDescription ()Ljava/lang/String;
+	public fun getFindWholeWordDescription ()Ljava/lang/String;
+	public fun getFormat ()Ljava/lang/String;
+	public fun getFormatDocument ()Ljava/lang/String;
+	public fun getFormatSelection ()Ljava/lang/String;
+	public fun getGoToDefinition ()Ljava/lang/String;
+	public fun getGoToLineConfirm ()Ljava/lang/String;
+	public fun getGoToLineLabel ()Ljava/lang/String;
+	public fun getGoToLineTitle ()Ljava/lang/String;
+	public fun getGoToSymbolPlaceholder ()Ljava/lang/String;
+	public fun getInfo ()Ljava/lang/String;
+	public fun getNoMatchingSymbols ()Ljava/lang/String;
+	public fun getNoSymbols ()Ljava/lang/String;
+	public fun getPaste ()Ljava/lang/String;
+	public fun getPickColor ()Ljava/lang/String;
+	public fun getQuickFix ()Ljava/lang/String;
+	public fun getQuickFixChip ()Ljava/lang/String;
+	public fun getQuickFixEllipsis ()Ljava/lang/String;
+	public fun getQuickFixesAndActions ()Ljava/lang/String;
+	public fun getRenameConfirm ()Ljava/lang/String;
+	public fun getRenameNewNameLabel ()Ljava/lang/String;
+	public fun getRenameTitle ()Ljava/lang/String;
+	public fun getReplaceAllButton ()Ljava/lang/String;
+	public fun getReplaceButton ()Ljava/lang/String;
+	public fun getReplacePlaceholder ()Ljava/lang/String;
+	public fun getSelectAll ()Ljava/lang/String;
+	public fun getSelectAllMenu ()Ljava/lang/String;
+	public fun getToolbarMoveLeft ()Ljava/lang/String;
+	public fun getToolbarMoveRight ()Ljava/lang/String;
+	public fun getToolbarRedo ()Ljava/lang/String;
+	public fun getToolbarUndo ()Ljava/lang/String;
+	public fun referencesCount (I)Ljava/lang/String;
+	public fun renamePrompt (Ljava/lang/String;)Ljava/lang/String;
+	public fun symbolKindLabel (Lcom/aardarch/aardink/core/SymbolKind;)Ljava/lang/String;
+	public fun toolbarInsertChar (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/aardarch/aardink/ui/EditorStringsRegistry {
+	public static final field $stable I
+	public static final field INSTANCE Lcom/aardarch/aardink/ui/EditorStringsRegistry;
+	public final fun registeredTags ()Ljava/util/Set;
+	public final fun resolve (Ljava/lang/String;)Lcom/aardarch/aardink/ui/EditorStrings;
 }
 
 public final class com/aardarch/aardink/ui/EditorThemeMaterialKt {
@@ -2481,24 +2642,8 @@ public final class com/aardarch/aardink/ui/WrappingIndent : java/lang/Enum {
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt {
 	public static final field INSTANCE Lcom/aardarch/aardink/ui/view/ComposableSingletons$EditorSelectionUiKt;
 	public fun <init> ()V
-	public final fun getLambda$-1266161523$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1479778609$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1541422857$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-1598717661$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1693395695$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1956749674$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-255637672$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-369368364$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-771618052$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1410328087$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$1922890805$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$1930657875$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$221578959$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$560896496$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$588031758$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$59423336$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$752144570$com_aardarch_editor ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$774513582$com_aardarch_editor ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class com/aardarch/aardink/ui/view/ComposableSingletons$EditorViewportKt {

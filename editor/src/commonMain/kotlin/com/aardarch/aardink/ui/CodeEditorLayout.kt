@@ -230,7 +230,11 @@ fun CodeEditorLayout(
             if (callback != null) callback(size) else ownFontSize = size
         }
     }
-    CompositionLocalProvider(LocalEditorTypography provides typography) {
+    val strings = currentEditorStrings(options.languageTag)
+    CompositionLocalProvider(
+        LocalEditorTypography provides typography,
+        LocalEditorStrings provides strings,
+    ) {
         CodeEditorLayoutContent(
             state = state,
             modifier = modifier,
@@ -1766,9 +1770,14 @@ private fun CodeEditorLayoutContent(
         // ── Annotation tooltip (shown when gutter dot is tapped) ─────────────
         val tooltip = tooltipDiagnostic
         if (tooltip != null) {
+            val strings = currentEditorStrings()
             val counter = problemCounter
             AnnotationTooltip(
-                message = if (counter != null) "${tooltip.message}  (${counter.first} of ${counter.second})" else tooltip.message,
+                message = if (counter != null) {
+                    strings.diagnosticCounter(tooltip.message, counter.first, counter.second)
+                } else {
+                    tooltip.message
+                },
                 severity = tooltip.severity,
                 onDismiss = { tooltipDiagnostic = null },
                 onQuickFix = if (tooltipCodeActions.isNotEmpty()) {

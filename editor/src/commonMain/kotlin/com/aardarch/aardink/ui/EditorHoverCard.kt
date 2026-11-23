@@ -104,15 +104,16 @@ internal fun EditorHoverCard(
                         }
                     }
                 }
+                val strings = currentEditorStrings()
                 if (onPickColor != null) {
                     TextButton(onClick = onPickColor) {
-                        Text(text = "Pick colour…", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
+                        Text(text = strings.pickColor, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
                 if (onQuickFix != null) {
                     TextButton(onClick = onQuickFix) {
                         Text(
-                            text = "Quick Fix…",
+                            text = strings.quickFixEllipsis,
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                         )
                     }

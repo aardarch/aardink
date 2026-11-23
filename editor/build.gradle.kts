@@ -144,6 +144,9 @@ composeCompiler {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Keep existing UI/screenshot assertions deterministic regardless of the developer machine's locale.
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
     // Screenshots from EditorViewUiTest, for looking at the renderer while working on it:
     // -Paardink.viewShots=<directory>.
     providers.gradleProperty("aardink.viewShots").orNull?.let { systemProperty("aardink.viewShots", it) }

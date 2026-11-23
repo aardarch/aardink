@@ -191,6 +191,7 @@ data class EditorOptions(
     val dragAndDrop: Boolean = false,
     val hoverDelayMs: Long = 500,
     val hoverHidingDelayMs: Long = 300,
+    val languageTag: String? = null,
 ) {
     init {
         require(tabSize in 1..16) { "tabSize must be 1..16, was $tabSize" }

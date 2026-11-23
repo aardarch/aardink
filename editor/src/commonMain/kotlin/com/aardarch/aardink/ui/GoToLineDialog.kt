@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun GoToLineDialog(totalLines: Int, onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
+    val strings = currentEditorStrings()
     var input by remember { mutableStateOf("") }
     val parsed = input.toIntOrNull()
     val valid = parsed != null && parsed in 1..totalLines
@@ -49,13 +50,13 @@ fun GoToLineDialog(totalLines: Int, onConfirm: (Int) -> Unit, onDismiss: () -> U
     EditorChromeTheme {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Go to line") },
+            title = { Text(strings.goToLineTitle) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(
                         value = input,
                         onValueChange = { new -> input = new.filter { it.isDigit() }.take(7) },
-                        label = { Text("Line number") },
+                        label = { Text(strings.goToLineLabel) },
                         singleLine = true,
                         isError = input.isNotEmpty() && !valid,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -72,10 +73,10 @@ fun GoToLineDialog(totalLines: Int, onConfirm: (Int) -> Unit, onDismiss: () -> U
                 TextButton(
                     onClick = { parsed?.takeIf { valid }?.let(onConfirm) },
                     enabled = valid,
-                ) { Text("Go") }
+                ) { Text(strings.goToLineConfirm) }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(strings.cancel) }
             },
         )
     }

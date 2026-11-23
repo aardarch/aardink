@@ -120,6 +120,7 @@ fun CodeDiffEditorLayout(
     languageService: LanguageService? = null,
     originalLanguageService: LanguageService? = languageService,
 ) {
+    val strings = currentEditorStrings(editorOptions.languageTag)
     val theme = LocalEditorTheme.current
     val colors = remember(theme) { DiffColors.of(theme) }
     val tokenStyles = remember(theme) { TokenStyleResolver(theme) }
@@ -178,7 +179,9 @@ fun CodeDiffEditorLayout(
         val hide = options.hideUnchangedRegions
         val context = options.unchangedContextLines.coerceAtLeast(1)
         if (hide) {
-            LaunchedEffect(state, revision, context) { keepRegionsFolded(state, originalFolds, modifiedFolds, context) }
+            LaunchedEffect(state, revision, context, strings) {
+                keepRegionsFolded(state, originalFolds, modifiedFolds, context, strings::diffUnchangedLines)
+            }
         } else {
             DisposableEffect(state) {
                 originalFolds.unfoldAll()
@@ -279,20 +282,20 @@ fun CodeDiffEditorLayout(
                 onAction = { line -> state.changeAt(line, modifiedSide = false)?.let(state::accept) },
             )
         }
-        val originalMenu = remember(state, originalEditable) {
+        val originalMenu = remember(state, originalEditable, strings) {
             buildList {
                 if (originalEditable) {
-                    add(EditorMenuItem("Accept change") { acceptAtCaret(state) })
+                    add(EditorMenuItem(strings.diffAcceptChange) { acceptAtCaret(state) })
                 }
-                add(EditorMenuItem("Next change", EditorCommand.NextChange))
-                add(EditorMenuItem("Previous change", EditorCommand.PreviousChange))
+                add(EditorMenuItem(strings.diffNextChange, EditorCommand.NextChange))
+                add(EditorMenuItem(strings.diffPreviousChange, EditorCommand.PreviousChange))
             }
         }
-        val modifiedMenu = remember(state, editorOptions.readOnly) {
+        val modifiedMenu = remember(state, editorOptions.readOnly, strings) {
             buildList {
-                if (!editorOptions.readOnly) add(EditorMenuItem("Revert change", EditorCommand.RevertChange))
-                add(EditorMenuItem("Next change", EditorCommand.NextChange))
-                add(EditorMenuItem("Previous change", EditorCommand.PreviousChange))
+                if (!editorOptions.readOnly) add(EditorMenuItem(strings.diffRevertChange, EditorCommand.RevertChange))
+                add(EditorMenuItem(strings.diffNextChange, EditorCommand.NextChange))
+                add(EditorMenuItem(strings.diffPreviousChange, EditorCommand.PreviousChange))
             }
         }
         val keepFolds = remember { KeepFolds }
@@ -531,7 +534,13 @@ private fun unchangedRegions(changes: List<LineChange>, originalLines: Int, cont
  * same: opening or closing one on a side does it on the other. A region the user had open stays
  * open when the diff is worked out again; a new one starts folded. Runs until cancelled.
  */
-private suspend fun keepRegionsFolded(state: DiffEditorState, originalFolds: FoldState, modifiedFolds: FoldState, context: Int) {
+private suspend fun keepRegionsFolded(
+    state: DiffEditorState,
+    originalFolds: FoldState,
+    modifiedFolds: FoldState,
+    context: Int,
+    placeholder: (Int) -> String,
+) {
     val regions = unchangedRegions(state.changes, state.original.document.lineCount, context)
     val wasOpen = regions.map { region ->
         val known = originalFolds.isFoldable(region.originalStart) && modifiedFolds.isFoldable(region.modifiedStart)
@@ -561,8 +570,6 @@ private suspend fun keepRegionsFolded(state: DiffEditorState, originalFolds: Fol
         }
     }
 }
-
-private fun placeholder(hidden: Int): String = if (hidden == 1) "1 unchanged line" else "$hidden unchanged lines"
 
 private fun setFolded(folds: FoldState, startLine: Int, folded: Boolean) {
     if (folds.isFolded(startLine) != folded) folds.toggle(startLine)

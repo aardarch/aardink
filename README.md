@@ -291,6 +291,7 @@ end-to-end check — see [AGENTS.md](AGENTS.md).
 Contributions are welcome. Please read:
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to propose changes
+- [docs/I18N.md](docs/I18N.md) — how to add or override editor translations
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community expectations
 - [SECURITY.md](SECURITY.md) — reporting vulnerabilities
 

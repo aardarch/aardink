@@ -49,6 +49,7 @@ fun AnnotationTooltip(
     modifier: Modifier = Modifier,
     onQuickFix: (() -> Unit)? = null,
 ) {
+    val strings = currentEditorStrings()
     val theme = LocalEditorTheme.current
     val chrome = remember(theme) { EditorChromeColors(theme) }
     val bg = chrome.severityContainer(severity)
@@ -69,7 +70,7 @@ fun AnnotationTooltip(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(role = Role.Button, onClickLabel = DISMISS_LABEL, onClick = onDismiss),
+                    .clickable(role = Role.Button, onClickLabel = strings.dismissDiagnostic, onClick = onDismiss),
             )
             if (onQuickFix != null) {
                 // A real button: it carries the button role and the minimum touch target, which a
@@ -79,7 +80,7 @@ fun AnnotationTooltip(
                     colors = ButtonDefaults.textButtonColors(contentColor = fg),
                 ) {
                     Text(
-                        text = "💡 Quick Fix",
+                        text = strings.quickFixChip,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                     )
                 }
@@ -87,7 +88,7 @@ fun AnnotationTooltip(
             IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = EditorIcons.Close,
-                    contentDescription = DISMISS_LABEL,
+                    contentDescription = strings.dismissDiagnostic,
                     tint = fg.copy(alpha = 0.6f),
                     modifier = Modifier.size(16.dp),
                 )
@@ -95,5 +96,3 @@ fun AnnotationTooltip(
         }
     }
 }
-
-private const val DISMISS_LABEL = "Dismiss diagnostic"

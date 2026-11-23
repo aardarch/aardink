@@ -154,6 +154,7 @@ internal fun FindReplacePanel(
                         }
                     },
             ) {
+                val strings = currentEditorStrings()
                 Column(
                     modifier = Modifier.padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -167,7 +168,8 @@ internal fun FindReplacePanel(
                         IconButton(
                             onClick = { state.replaceMode = !state.replaceMode },
                             modifier = Modifier.semantics {
-                                contentDescription = if (state.replaceMode) "Hide replace" else "Show replace"
+                                contentDescription =
+                                    if (state.replaceMode) strings.findHideReplaceDescription else strings.findShowReplaceDescription
                             },
                         ) {
                             Text(if (state.replaceMode) "▾" else "▸", modifier = Modifier.clearAndSetSemantics { })
@@ -178,7 +180,7 @@ internal fun FindReplacePanel(
                                 queryField = it
                                 state.query = it.text
                             },
-                            placeholder = { Text("Find") },
+                            placeholder = { Text(strings.findPlaceholder) },
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(
                                 fontFamily = LocalEditorTypography.current.fontFamily,
@@ -200,19 +202,19 @@ internal fun FindReplacePanel(
                         IconButton(
                             onClick = onPrev,
                             enabled = state.matches.isNotEmpty(),
-                            modifier = Modifier.semantics { contentDescription = "Previous match" },
+                            modifier = Modifier.semantics { contentDescription = strings.findPreviousMatchDescription },
                         ) {
                             Text("▲", modifier = Modifier.clearAndSetSemantics { })
                         }
                         IconButton(
                             onClick = onNext,
                             enabled = state.matches.isNotEmpty(),
-                            modifier = Modifier.semantics { contentDescription = "Next match" },
+                            modifier = Modifier.semantics { contentDescription = strings.findNextMatchDescription },
                         ) {
                             Text("▼", modifier = Modifier.clearAndSetSemantics { })
                         }
                         IconButton(onClick = onClose) {
-                            Icon(EditorIcons.Close, contentDescription = "Close find and replace")
+                            Icon(EditorIcons.Close, contentDescription = strings.findCloseDescription)
                         }
                     }
 
@@ -240,31 +242,34 @@ internal fun FindReplacePanel(
                             selected = state.caseSensitive,
                             onClick = { state.caseSensitive = !state.caseSensitive },
                             label = { Text("Aa") },
+                            modifier = Modifier.semantics { contentDescription = strings.findMatchCaseDescription },
                         )
                         FilterChip(
                             selected = state.wholeWord,
                             onClick = { state.wholeWord = !state.wholeWord },
                             label = { Text("ab") },
+                            modifier = Modifier.semantics { contentDescription = strings.findWholeWordDescription },
                         )
                         FilterChip(
                             selected = state.useRegex,
                             onClick = { state.useRegex = !state.useRegex },
                             label = { Text(".*") },
+                            modifier = Modifier.semantics { contentDescription = strings.findRegexDescription },
                         )
                         FilterChip(
                             selected = state.inSelection,
                             onClick = { state.inSelection = !state.inSelection },
-                            label = { Text("In selection", maxLines = 1, softWrap = false) },
+                            label = { Text(strings.findInSelection, maxLines = 1, softWrap = false) },
                         )
                         if (state.replaceMode) {
                             FilterChip(
                                 selected = state.preserveCase,
                                 onClick = { state.preserveCase = !state.preserveCase },
-                                label = { Text("Preserve case", maxLines = 1, softWrap = false) },
+                                label = { Text(strings.findPreserveCase, maxLines = 1, softWrap = false) },
                             )
                         }
                         if (onSearchWorkspace != null) {
-                            TextButton(onClick = onSearchWorkspace) { Text("Search all files", maxLines = 1, softWrap = false) }
+                            TextButton(onClick = onSearchWorkspace) { Text(strings.findSearchAllFiles, maxLines = 1, softWrap = false) }
                         }
                     }
                 }
@@ -275,6 +280,7 @@ internal fun FindReplacePanel(
 
 @Composable
 private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplaceAll: () -> Unit, focus: FocusRequester) {
+    val strings = currentEditorStrings()
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -282,7 +288,7 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
         OutlinedTextField(
             value = state.replacement,
             onValueChange = { state.replacement = it },
-            placeholder = { Text("Replace") },
+            placeholder = { Text(strings.replacePlaceholder) },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = LocalEditorTypography.current.fontFamily,
@@ -297,11 +303,11 @@ private fun ReplaceRow(state: FindReplaceState, onReplace: () -> Unit, onReplace
         TextButton(
             onClick = onReplace,
             enabled = state.matches.isNotEmpty() && state.currentMatchIndex >= 0,
-        ) { Text("Replace") }
+        ) { Text(strings.replaceButton) }
         TextButton(
             onClick = onReplaceAll,
             enabled = state.matches.isNotEmpty(),
-        ) { Text("All") }
+        ) { Text(strings.replaceAllButton) }
     }
 }
 

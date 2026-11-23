@@ -225,9 +225,10 @@ internal fun ColorPickerCard(initial: Color, onPick: (Color) -> Unit, onDismiss:
                     )
                     Box(Modifier.size(22.dp).background(current, RoundedCornerShape(4.dp)))
                 }
+                val strings = currentEditorStrings()
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(onClick = { onPick(hsva.toColor()) }) { Text("Apply") }
+                    TextButton(onClick = onDismiss) { Text(strings.cancel) }
+                    TextButton(onClick = { onPick(hsva.toColor()) }) { Text(strings.apply) }
                 }
             }
         }

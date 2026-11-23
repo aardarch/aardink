@@ -69,6 +69,8 @@ tasks.withType<Test> {
     // Roborazzi renders full-screen Compose layouts to bitmaps on the JVM; the default
     // 512m unit-test heap is not enough for 1080x2400 captures.
     maxHeapSize = "2g"
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
 }
 
 kotlin {

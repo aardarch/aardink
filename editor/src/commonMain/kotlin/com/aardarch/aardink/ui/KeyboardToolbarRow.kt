@@ -132,6 +132,7 @@ private fun ToolbarContent(
     items: List<KeyboardToolbarItem>,
     onAction: (KeyboardToolbarItem.Action) -> Unit,
 ) {
+    val strings = currentEditorStrings()
     val insertChar by rememberUpdatedState(onInsertChar)
     val runAction by rememberUpdatedState(onAction)
 
@@ -144,7 +145,7 @@ private fun ToolbarContent(
             IconToolbarButton(
                 icon = EditorIcons.Undo,
                 tint = style.iconColor,
-                contentDescription = "Undo",
+                contentDescription = strings.toolbarUndo,
                 enabled = canUndo,
                 style = style,
                 onClick = onUndo,
@@ -154,7 +155,7 @@ private fun ToolbarContent(
             IconToolbarButton(
                 icon = EditorIcons.Redo,
                 tint = style.iconColor,
-                contentDescription = "Redo",
+                contentDescription = strings.toolbarRedo,
                 enabled = canRedo,
                 style = style,
                 onClick = onRedo,
@@ -167,7 +168,7 @@ private fun ToolbarContent(
             IconToolbarButton(
                 icon = EditorIcons.KeyboardArrowLeft,
                 tint = style.accentColor,
-                contentDescription = "Move cursor left",
+                contentDescription = strings.toolbarMoveLeft,
                 style = style,
                 onClick = onMoveCursorLeft,
             )
@@ -176,7 +177,7 @@ private fun ToolbarContent(
             IconToolbarButton(
                 icon = EditorIcons.KeyboardArrowRight,
                 tint = style.accentColor,
-                contentDescription = "Move cursor right",
+                contentDescription = strings.toolbarMoveRight,
                 style = style,
                 onClick = onMoveCursorRight,
             )
@@ -255,7 +256,8 @@ private fun IconToolbarButton(
 
 @Composable
 private fun CharToolbarButton(char: Char, style: KeyboardToolbarStyle, onClick: () -> Unit) {
-    ToolbarSlot(style = style, contentDescription = "Insert $char", onClick = onClick) {
+    val strings = currentEditorStrings()
+    ToolbarSlot(style = style, contentDescription = strings.toolbarInsertChar(char.toString()), onClick = onClick) {
         Text(
             text = char.toString(),
             fontSize = style.charFontSize,
