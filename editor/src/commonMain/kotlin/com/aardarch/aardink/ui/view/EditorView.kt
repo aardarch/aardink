@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -787,13 +788,14 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         shownInjections?.items?.forEach { injection ->
             appendText(builder, text, appended, injection.column, indent)
             appended = injection.column
-            val injectedStyle = injection.style
+            // Backgrounds are left out: the view paints them itself ([LineLayout.forEachTextBackground]).
+            val injectedStyle = injection.style?.withoutBackground()
             if (injectedStyle != null) builder.pushStyle(injectedStyle)
             val at = builder.length
             builder.append(injection.text)
             for (span in injection.spans) {
                 val from = (at + span.start).coerceAtMost(builder.length)
-                builder.addStyle(span.style, from, (at + span.end).coerceIn(from, builder.length))
+                builder.addStyle(span.style.withoutBackground(), from, (at + span.end).coerceIn(from, builder.length))
             }
             if (injectedStyle != null) builder.pop()
         }
@@ -1168,3 +1170,6 @@ internal class EditorView(val state: CodeEditorState) : DocumentChangeListener {
         private val NO_ROWS = IntArray(0)
     }
 }
+
+/** This style without its background, or itself when it has none, so that most styles are not copied. */
+private fun SpanStyle.withoutBackground(): SpanStyle = if (background.isSpecified) copy(background = Color.Unspecified) else this

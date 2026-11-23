@@ -187,6 +187,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
         // Over the selection, as in VS Code: a match inside a selection stays visible.
         drawFindMatches(line, decorations, colors, left, top, lineHeight)
         drawWhitespace(line, decorations.renderWhitespace, decorations.selections, colors.whitespace, left, top, lineHeight)
+        drawTextBackgrounds(line.layout, left, top, lineHeight)
         eachRow(line.layout, lineHeight, top) { rowTop -> drawText(line.layout.result, topLeft = Offset(left, rowTop)) }
     }
     val shownSwatches = visibleSwatches(frame, decorations.colorSwatches)
@@ -214,7 +215,7 @@ internal fun DrawScope.drawEditorContent(frame: ViewFrame, decorations: EditorDe
  * already sit at the view's pitch, else once per row in [firstRow]..[lastRow], clipped to that
  * row's own band and moved so the row sits at `row * lineHeight` ([LineLayout.rowShift]).
  */
-private inline fun DrawScope.eachRow(
+internal inline fun DrawScope.eachRow(
     layout: LineLayout,
     lineHeight: Float,
     top: Float,
@@ -255,6 +256,16 @@ private fun DrawScope.drawFindMatches(
         val color = if (i == decorations.currentFindMatch) colors.currentFindMatch else colors.findMatch
         drawRange(line, match.first - line.start, match.last + 1 - line.start, color, left, top, lineHeight)
         i++
+    }
+}
+
+/**
+ * The backgrounds of [layout]'s injected text, such as an inlay hint's, right under its text, where
+ * the text engine would have drawn them ([LineLayout.forEachTextBackground]).
+ */
+private fun DrawScope.drawTextBackgrounds(layout: LineLayout, left: Float, top: Float, lineHeight: Float) {
+    layout.forEachTextBackground { box, row, color ->
+        eachRow(layout, lineHeight, top, row, row) { rowTop -> drawRect(color, Offset(left + box.left, rowTop + box.top), box.size) }
     }
 }
 
