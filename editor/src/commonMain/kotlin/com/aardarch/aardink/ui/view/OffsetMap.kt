@@ -17,6 +17,7 @@ package com.aardarch.aardink.ui.view
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.SpanStyle
 
 /**
@@ -255,6 +256,28 @@ internal class OffsetMap private constructor(private val items: List<Injection>,
     fun forEachBackground(action: (injection: Injection, start: Int, end: Int) -> Unit) {
         if (!hasBackgrounds) return
         for (i in 0 until size) if (items[i].background != Color.Unspecified) action(items[i], starts[i], ends[i])
+    }
+
+    /** Whether any injected text has a background of its own, in its [Injection.style] or one of its [Injection.spans]. */
+    val hasTextBackgrounds: Boolean = items.any { item ->
+        item.style?.background?.isSpecified == true || item.spans.any { it.style.background.isSpecified }
+    }
+
+    /**
+     * Calls [action] with the background of every injected text that has one, and the layout range
+     * it is under, [start, end): an injection's own first, then its spans', as their text draws them.
+     */
+    fun forEachTextBackground(action: (start: Int, end: Int, color: Color) -> Unit) {
+        if (!hasTextBackgrounds) return
+        for (i in 0 until size) {
+            val item = items[i]
+            item.style?.background?.let { if (it.isSpecified) action(starts[i], ends[i], it) }
+            for (span in item.spans) {
+                if (!span.style.background.isSpecified) continue
+                val from = (starts[i] + span.start).coerceAtMost(ends[i])
+                action(from, (starts[i] + span.end).coerceIn(from, ends[i]), span.style.background)
+            }
+        }
     }
 
     /** Calls [action] with the document column of every injection, once per column. */

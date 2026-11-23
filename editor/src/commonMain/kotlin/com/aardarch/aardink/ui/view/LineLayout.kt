@@ -79,6 +79,46 @@ internal class LineLayout(val result: TextLayoutResult, val map: OffsetMap = Off
         }
     }
 
+    /**
+     * The backgrounds of injected text ([OffsetMap.forEachTextBackground]), which the view paints
+     * itself under the text rather than leave to the text engine: one box per row each covers, as
+     * high as the row's characters' boxes, which on Android is the whole row. Compose 1.13 on
+     * Android paints a span's background over less than its row on a row laid out with no width
+     * limit, so a hint on a line that does not wrap lost the top and bottom of its row (#54).
+     */
+    private val textBackgrounds: List<TextBackground> = if (map.hasTextBackgrounds) findTextBackgrounds() else emptyList()
+
+    /** Calls [action] with each box of [textBackgrounds], in the layout's coordinates, with its row and colour, in drawing order. */
+    fun forEachTextBackground(action: (box: Rect, row: Int, color: Color) -> Unit) {
+        for (background in textBackgrounds) action(background.box, background.row, background.color)
+    }
+
+    private fun findTextBackgrounds(): List<TextBackground> {
+        val found = ArrayList<TextBackground>()
+        val text = result.layoutInput.text
+        val lastRow = result.lineCount - 1
+        map.forEachTextBackground { start, end, color ->
+            if (end <= start) return@forEachTextBackground
+            for (row in rowAt(start)..rowAt(end - 1)) {
+                val from = maxOf(start, result.getLineStart(row))
+                val rowEnd = result.getLineEnd(row)
+                // The spaces a row is soft-wrapped after hang past its end, and are not painted.
+                val wrapped = row < lastRow && rowEnd > 0 && text[rowEnd - 1] != '\n'
+                var to = minOf(end, if (wrapped) result.getLineEnd(row, visibleEnd = true) else rowEnd)
+                // A row's break is not drawn, and its box is not on the row.
+                while (to > from && text[to - 1] == '\n') to--
+                if (to <= from) continue
+                val first = result.getBoundingBox(from)
+                val last = result.getBoundingBox(to - 1)
+                val box = Rect(minOf(first.left, last.left), first.top, maxOf(first.right, last.right), first.bottom)
+                found += TextBackground(box, row, color)
+            }
+        }
+        return found
+    }
+
+    private class TextBackground(val box: Rect, val row: Int, val color: Color)
+
     /** Whether row [row] holds only injected text. */
     fun isInjectedRow(row: Int): Boolean = injectedRows?.getOrNull(row) ?: false
 

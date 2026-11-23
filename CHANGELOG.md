@@ -84,6 +84,9 @@ few changes that can reach an upgrade.
   in a flow mapping such as `{ type: number, required: true }` each key is a key of its own; and a
   list item's `-` is an operator, no longer part of the key after it. Outside `[...]` and `{...}`,
   commas and brackets are part of a scalar, so `title: Hello, world` is one string.
+- On Android with Compose 1.13, an inlay hint's background fills its row again on a line that does
+  not wrap, where it covered only the font's height (#54). The editor paints the backgrounds of
+  injected text itself now, as the text engine did before, so they no longer change with Compose.
 
 ### Known issues
 
